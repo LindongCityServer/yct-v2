@@ -10,8 +10,10 @@ import type {
   TravelTripInstance,
   TravelTripStopTime,
 } from '@yct/contracts';
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { publishAdminDataChanged } from '../lib/client-admin-data-events';
+import { requestConfirmation } from '../lib/client-dialog-events';
 import { resolveDirectionalDepartureTimes } from '../lib/transit-departure-editor';
 import { collectStopTravelTimes } from '../lib/transit-segment-minutes';
 import {
@@ -19,7 +21,25 @@ import {
   resolveTransitTripLabels,
   type TransitTripLabelTripSource,
 } from '../lib/transit-trip-labels';
-import { SecondaryPageHeader } from './app-shell';
+import { defineShortcut } from '../lib/editor/shortcut-builders';
+import { useEditorInspectorFocus } from '../lib/editor/use-editor-inspector-focus';
+import { useEditorPanels } from '../lib/editor/use-editor-panels';
+import { useEditorShortcuts } from '../lib/editor/use-editor-shortcuts';
+import { useSnapshotHistory } from '../lib/editor/use-snapshot-history';
+import type { EditorTool } from '../lib/editor/types';
+import { EditorHeaderToolbar } from './editor/editor-header-toolbar';
+import { EditorInspectorEntry } from './editor/editor-inspector-entry';
+import { EditorLayerRowActions } from './editor/editor-layer-row-actions';
+import { EditorLoadingState } from './editor/editor-loading-state';
+import { EditorPanelHeading } from './editor/editor-panel-heading';
+import { EditorRailBridge } from './editor/editor-rail-bridge';
+import { EditorToolbar } from './editor/editor-toolbar';
+import { buildEditorToolbarSections } from './editor/editor-toolbar-sections';
+import type { EditorToolbarOverflowItem } from './editor/editor-toolbar-overflow';
+import { EditorZoomControls } from './editor/editor-zoom-controls';
+import { useMobileActionRail } from './mobile-action-rail';
+import { SegmentedControl } from './segmented-control';
+import { VisualEditorShell } from './visual-editor-shell';
 import {
   buildStationRows,
   clampStopEdgeMinutes,
@@ -37,6 +57,7 @@ import {
   toClockTime,
   toDayOffset,
   toggleStopAt,
+  truncateTripStops,
   type WorkbenchDirection,
   type WorkbenchEdge,
   type WorkbenchLinkMode,
@@ -44,8 +65,8 @@ import {
   type WorkbenchTripStop,
 } from '../lib/transit-trip-workbench';
 import {
+  resolveTransitTripRunChartLayout,
   TransitTripRunChart,
-  transitTripRunChartLayout,
   type ChartTrip,
 } from './transit-trip-run-chart';
 
@@ -127,6 +148,10 @@ export function AdminTransitTripWorkbench({
   const [entries, setEntries] = useState<WorkbenchEntry[]>([]);
   const [direction, setDirection] = useState<WorkbenchDirection>('down');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** 选中的停站在所属班次 stops 中的下标；为空表示只选中了班次。 */
+  const [selectedStopIndex, setSelectedStopIndex] = useState<number | null>(null);
+  const [expandedTrips, setExpandedTrips] = useState<Set<string>>(() => new Set());
+  const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
   const [tool, setTool] = useState<WorkbenchTool>('pan');
   const [linkMode, setLinkMode] = useState<WorkbenchLinkMode>('none');
   const [viewport, setViewport] = useState({ start: 300, duration: 720 });
@@ -149,23 +174,38 @@ export function AdminTransitTripWorkbench({
   const [saving, setSaving] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
   const [chartHeight, setChartHeight] = useState(640);
+  const [viewportWidth, setViewportWidth] = useState(1280);
   const [scheduleRevisionId, setScheduleRevisionId] = useState('');
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const {
+    panelsVisible,
+    inspectorPinned,
+    panelStateClass,
+    setPanelsVisible,
+    togglePanels,
+    openInspector,
+    closeInspector,
+  } = useEditorPanels();
   const [stationScale, setStationScale] = useState(1);
   const [stationOffset, setStationOffset] = useState(0);
+  // 移动端顶部浮动工具栏与底部抽屉占用的高度，用来收紧运行图的可见绘图区。
+  const [mobileTopInset, setMobileTopInset] = useState(128);
+  const [mobileDrawerInset, setMobileDrawerInset] = useState(0);
   const [labelsNeedRefresh, setLabelsNeedRefresh] = useState(false);
   const hasPrefilledLabelsRef = useRef(false);
   const chartHostRef = useRef<HTMLDivElement | null>(null);
   const tripRowRefs = useRef(new Map<string, HTMLDivElement>());
+  const inspectorRef = useRef<HTMLElement | null>(null);
+  const layerPanelRef = useRef<HTMLElement | null>(null);
   const entriesRef = useRef<WorkbenchEntry[]>([]);
   const rulesRef = useRef<Record<WorkbenchDirection, WorkbenchRule[]>>({ down: [], up: [] });
   const duplicateTripsRef = useRef<WorkbenchEntry[]>([]);
   // 加载时的班次快照：保存时用它反推“哪些真实班次被删掉”，撤销后自动回到未删除状态。
   const loadedRealTripKeysRef = useRef<Set<string>>(new Set());
   const loadedDirectionCountsRef = useRef<Record<WorkbenchDirection, number>>({ down: 0, up: 0 });
-  const undoStackRef = useRef<WorkbenchSnapshot[]>([]);
-  const redoStackRef = useRef<WorkbenchSnapshot[]>([]);
-  const keyboardHandlerRef = useRef<(event: KeyboardEvent) => void>(() => undefined);
+  // 快照历史：撤销/重做以整份班次草稿为单位，统一走共享栈。
+  const snapshotHistory = useSnapshotHistory<WorkbenchSnapshot>();
+  // 侧边操作栏开启时浮动工具栏会隐藏，移动端顶部只需避开标题栏。
+  const mobileActionRail = useMobileActionRail();
 
   const stationById = useMemo(
     () => new Map((revision?.stations ?? []).map((station) => [station.sourceId, station])),
@@ -400,10 +440,9 @@ export function AdminTransitTripWorkbench({
           }${duplicateCount > 0 ? `；检测到 ${duplicateCount} 条重复班次，保存时自动清理` : ''}`
         : '当前线路还没有班次',
     );
-    undoStackRef.current = [];
-    redoStackRef.current = [];
+    snapshotHistory.reset();
     setDataVersion((current) => current + 1);
-  }, [normalizedRevisionId, normalizedLineSourceId]);
+  }, [normalizedRevisionId, normalizedLineSourceId, snapshotHistory.reset]);
 
   useEffect(() => {
     void loadData();
@@ -418,21 +457,48 @@ export function AdminTransitTripWorkbench({
     [directionStationIds, stationNameOf],
   );
 
-  const directionEntries = useMemo(() => {
+  const entriesByDirection = useMemo(() => {
+    const grouped: Record<WorkbenchDirection, WorkbenchEntry[]> = { down: [], up: [] };
     if (!line) {
-      return [];
+      return grouped;
     }
-    return entries
-      .filter(
-        (entry) =>
-          resolveTripDirection(
-            { stationNames: entry.stops.map((stop) => stop.stationName), stopTimes: [] },
-            line,
-            stationNameOf,
-          ) === direction,
-      )
-      .sort((left, right) => firstDeparture(left.stops) - firstDeparture(right.stops));
-  }, [direction, entries, line, stationNameOf]);
+    for (const entry of entries) {
+      const entryDirection = resolveTripDirection(
+        { stationNames: entry.stops.map((stop) => stop.stationName), stopTimes: [] },
+        line,
+        stationNameOf,
+      );
+      grouped[entryDirection].push(entry);
+    }
+    for (const value of ['down', 'up'] as const) {
+      grouped[value].sort(
+        (left, right) => firstDeparture(left.stops) - firstDeparture(right.stops),
+      );
+    }
+    return grouped;
+  }, [entries, line, stationNameOf]);
+
+  const directionEntries = entriesByDirection[direction];
+
+  const selectedEntry = useMemo(
+    () => entries.find((entry) => entry.clientId === selectedId) ?? null,
+    [entries, selectedId],
+  );
+  const selectedStop =
+    selectedEntry && selectedStopIndex !== null
+      ? (selectedEntry.stops[selectedStopIndex] ?? null)
+      : null;
+  const selectedStopPrevious =
+    selectedEntry && selectedStopIndex !== null && selectedStopIndex > 0
+      ? (selectedEntry.stops[selectedStopIndex - 1] ?? null)
+      : null;
+  const selectedStopPreviousDeparture =
+    selectedStopPrevious?.departureMinutes ?? selectedStopPrevious?.arrivalMinutes;
+  const selectedStopDwell = selectedStop ? getStopDwellMinutes(selectedStop) : 0;
+  const selectedStopSegment =
+    selectedStop?.arrivalMinutes !== undefined && selectedStopPreviousDeparture !== undefined
+      ? selectedStop.arrivalMinutes - selectedStopPreviousDeparture
+      : undefined;
 
   const countDirectionDepartures = (value: WorkbenchDirection) => {
     if (!line) {
@@ -469,29 +535,101 @@ export function AdminTransitTripWorkbench({
     () => (direction === 'down' ? segmentMinutes : [...segmentMinutes].reverse()),
     [direction, segmentMinutes],
   );
-  const chartTop = transitTripRunChartLayout.top;
-  const chartBottom = transitTripRunChartLayout.bottom;
-  const stationPlotHeight = Math.max(80, chartHeight - chartTop - chartBottom);
+  // 运行图可平移的时间范围：以全部班次的最早/最晚时刻作为内容边界。
+  const chartMinuteBounds = useMemo(() => {
+    let earliest = Number.POSITIVE_INFINITY;
+    let latest = Number.NEGATIVE_INFINITY;
+    for (const entry of entries) {
+      const range = getTripMinuteRange(entry.stops);
+      if (!range) {
+        continue;
+      }
+      earliest = Math.min(earliest, range[0]);
+      latest = Math.max(latest, range[1]);
+    }
+    return Number.isFinite(earliest) && Number.isFinite(latest) ? { earliest, latest } : null;
+  }, [entries]);
+  // 标题栏高度与 CSS 变量保持一致；运行图画布铺满窗口，坐标轴叠在可见边缘。
+  // 移动端顶部让出画布上的浮动工具栏，底部让出图层/属性抽屉。
+  const isMobileChart = viewportWidth <= 760;
+  const chartTopInset = isMobileChart ? mobileTopInset : 64;
+  const chartLayout = resolveTransitTripRunChartLayout({ topInset: chartTopInset });
+  // 底部在抽屉展开时贴住抽屉上沿，否则保留缩放条的避让高度。
+  const chartBottom = isMobileChart
+    ? Math.max(mobileDrawerInset, chartLayout.bottom)
+    : chartLayout.bottom;
+  // 可见绘图区左右边界，同时供运行图与平移边界使用。
+  const chartLeftGutter =
+    panelsVisible && viewportWidth > 760 ? (viewportWidth >= 1280 ? 352 : 372) : 16;
+  const chartRightInset = panelsVisible && viewportWidth >= 1280 ? 356 : 16;
+  // 拖动与缩放的有效范围按可见区计算，避免把站点拖到标题栏或面板后面。
+  const stationPlotHeight = Math.max(80, chartHeight - chartLayout.top - chartBottom);
+  // 站点轴以可见区顶部为基准，首站可以直接贴到标题栏下方的可见边缘。
+  const chartPlotTop = chartLayout.top;
+  const chartPlotBottom = chartPlotTop + stationPlotHeight;
+  // 时间轴平移边界：首时刻最多贴到左面板右侧，末时刻最多贴到可见区右边缘。
+  const clampChartViewport = useCallback(
+    (next: { start: number; duration: number }) => {
+      const duration = Math.min(1440, Math.max(30, next.duration));
+      if (!chartMinuteBounds) {
+        return { duration, start: Math.min(Math.max(next.start, -120), 24 * 60) };
+      }
+      const plotWidth = Math.max(1, viewportWidth);
+      const axisLeft = chartLeftGutter;
+      const axisRight = Math.max(axisLeft + 1, plotWidth - chartRightInset);
+      const minStart = chartMinuteBounds.earliest - (axisLeft / plotWidth) * duration;
+      const maxStart = chartMinuteBounds.latest - (axisRight / plotWidth) * duration;
+      // 内容窄于可见区时居中显示，避免 minStart/maxStart 反向导致抖动。
+      const start =
+        minStart > maxStart
+          ? (minStart + maxStart) / 2
+          : Math.min(Math.max(next.start, minStart), maxStart);
+      return { duration, start };
+    },
+    [chartLeftGutter, chartMinuteBounds, chartRightInset, viewportWidth],
+  );
+  // 适配时把整段时间映射到可见区宽度，避免末班藏在右侧面板下方。
+  const resolveChartFitDuration = useCallback(
+    (earliest: number, latest: number) => {
+      const plotWidth = Math.max(1, viewportWidth);
+      const visibleWidth = Math.max(160, plotWidth - chartLeftGutter - chartRightInset);
+      const visibleRatio = Math.min(1, visibleWidth / plotWidth);
+      const span = Math.max(30, latest - earliest + 30);
+      return Math.min(1440, Math.max(120, Math.ceil(span / visibleRatio / 30) * 30));
+    },
+    [chartLeftGutter, chartRightInset, viewportWidth],
+  );
   const baseRows = useMemo(
     () =>
       buildStationRows({
         stationSourceIds: chartStationIds,
         stationNameOf,
         segmentMinutes,
-        top: chartTop,
-        bottom: chartHeight - chartBottom,
+        top: chartPlotTop,
+        bottom: chartPlotBottom,
       }),
-    [chartBottom, chartHeight, chartStationIds, chartTop, segmentMinutes, stationNameOf],
+    [chartPlotBottom, chartPlotTop, chartStationIds, segmentMinutes, stationNameOf],
   );
   const rows = useMemo(
     () =>
-      baseRows.map((row) => ({
-        ...row,
-        y: chartTop + (row.y - chartTop) * stationScale - stationOffset,
-        bandTop: chartTop + (row.bandTop - chartTop) * stationScale - stationOffset,
-        bandBottom: chartTop + (row.bandBottom - chartTop) * stationScale - stationOffset,
-      })),
-    [baseRows, chartTop, stationOffset, stationScale],
+      baseRows.map((row, index) => {
+        // 首末色带延伸到窗口边缘，色带与网格继续铺满标题栏下方和缩放条区域。
+        const bandTop =
+          index === 0
+            ? 0
+            : chartPlotTop + (row.bandTop - chartPlotTop) * stationScale - stationOffset;
+        const bandBottom =
+          index === baseRows.length - 1
+            ? chartHeight
+            : chartPlotTop + (row.bandBottom - chartPlotTop) * stationScale - stationOffset;
+        return {
+          ...row,
+          y: chartPlotTop + (row.y - chartPlotTop) * stationScale - stationOffset,
+          bandTop,
+          bandBottom,
+        };
+      }),
+    [baseRows, chartHeight, chartPlotTop, stationOffset, stationScale],
   );
 
   useEffect(() => {
@@ -515,6 +653,84 @@ export function AdminTransitTripWorkbench({
     return () => observer.disconnect();
   }, [line]);
 
+  // 运行图左侧留白跟随面板列宽，避免时间轴被浮层遮住或留白过大。
+  useEffect(() => {
+    const applyWidth = () => setViewportWidth(window.innerWidth);
+    applyWidth();
+    window.addEventListener('resize', applyWidth);
+    return () => window.removeEventListener('resize', applyWidth);
+  }, []);
+
+  // 移动端底部抽屉会遮住画布，实时量出它占用的高度，让坐标轴的可见范围跟着收紧。
+  useEffect(() => {
+    if (viewportWidth > 760) {
+      setMobileTopInset(128);
+      setMobileDrawerInset(0);
+      return undefined;
+    }
+    const host = chartHostRef.current;
+    const workspace = host?.parentElement ?? null;
+    // 顶部优先量浮动工具栏的实际底边；侧栏开启时工具栏隐藏，退回标题栏底边。
+    const toolbar = workspace?.querySelector<HTMLElement>(':scope > .editor-toolbar') ?? null;
+    const topbar =
+      workspace
+        ?.closest('.visual-editor-page')
+        ?.querySelector<HTMLElement>(':scope > .secondary-topbar') ?? null;
+    let frame = 0;
+    const measure = () => {
+      if (frame) {
+        cancelAnimationFrame(frame);
+      }
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const hostRect = chartHostRef.current?.getBoundingClientRect();
+        const hostTop = hostRect?.top ?? 0;
+        const hostBottom = hostRect?.bottom ?? window.innerHeight;
+        const toolbarRect = toolbar?.getBoundingClientRect();
+        const toolbarVisible = Boolean(
+          toolbar && toolbar.offsetParent !== null && toolbarRect && toolbarRect.height > 0,
+        );
+        const topEdge =
+          toolbarVisible && toolbarRect
+            ? toolbarRect.bottom + 8
+            : (topbar?.getBoundingClientRect().bottom ?? hostTop) + 12;
+        setMobileTopInset(Math.max(0, Math.round(topEdge - hostTop)));
+
+        let drawerInset = 0;
+        for (const element of [layerPanelRef.current, inspectorRef.current]) {
+          // offsetParent 为 null 表示抽屉当前被 CSS 隐藏。
+          if (!element || element.offsetParent === null) {
+            continue;
+          }
+          const rect = element.getBoundingClientRect();
+          if (rect.height > 0) {
+            // 再留 8px 呼吸位，坐标轴刚好停在抽屉上沿之上。
+            drawerInset = Math.max(drawerInset, hostBottom - rect.top + 8);
+          }
+        }
+        setMobileDrawerInset(Math.max(0, Math.round(drawerInset)));
+      });
+    };
+    measure();
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => measure());
+    if (observer) {
+      for (const element of [layerPanelRef.current, inspectorRef.current, toolbar, topbar]) {
+        if (element) {
+          observer.observe(element);
+        }
+      }
+    }
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      if (frame) {
+        cancelAnimationFrame(frame);
+      }
+    };
+  }, [mobileActionRail?.enabled, inspectorPinned, panelsVisible, selectedId, viewportWidth]);
+
   useEffect(() => {
     const ranges = entries
       .map((entry) => getTripMinuteRange(entry.stops))
@@ -524,10 +740,12 @@ export function AdminTransitTripWorkbench({
     }
     const earliest = Math.min(...ranges.map((range) => range[0]));
     const latest = Math.max(...ranges.map((range) => range[1]));
-    setViewport({
-      start: Math.max(0, Math.floor((earliest - 15) / 15) * 15),
-      duration: Math.max(120, Math.ceil((latest - earliest + 30) / 30) * 30),
-    });
+    setViewport(
+      clampChartViewport({
+        start: earliest,
+        duration: resolveChartFitDuration(earliest, latest),
+      }),
+    );
     // 站点多时自动放大站距，保证一打开就能精确操作。
     const stationCount = chartStationIds.length;
     setStationScale(
@@ -575,26 +793,20 @@ export function AdminTransitTripWorkbench({
     up: value.up.map((rule) => ({ ...rule, departureTimes: [...rule.departureTimes] })),
   });
 
+  const captureSnapshot = (): WorkbenchSnapshot => ({
+    entries: cloneEntries(entriesRef.current),
+    rules: cloneRules(rulesRef.current),
+  });
+
   const pushHistory = () => {
-    undoStackRef.current.push({
-      entries: cloneEntries(entriesRef.current),
-      rules: cloneRules(rulesRef.current),
-    });
-    if (undoStackRef.current.length > 100) {
-      undoStackRef.current.shift();
-    }
-    redoStackRef.current = [];
+    snapshotHistory.push(captureSnapshot());
   };
 
   const undo = () => {
-    const previous = undoStackRef.current.pop();
+    const previous = snapshotHistory.undo(captureSnapshot());
     if (!previous) {
       return;
     }
-    redoStackRef.current.push({
-      entries: cloneEntries(entriesRef.current),
-      rules: cloneRules(rulesRef.current),
-    });
     setEntries(previous.entries);
     setRules(previous.rules);
     setDirty(true);
@@ -602,14 +814,10 @@ export function AdminTransitTripWorkbench({
   };
 
   const redo = () => {
-    const next = redoStackRef.current.pop();
+    const next = snapshotHistory.redo(captureSnapshot());
     if (!next) {
       return;
     }
-    undoStackRef.current.push({
-      entries: cloneEntries(entriesRef.current),
-      rules: cloneRules(rulesRef.current),
-    });
     setEntries(next.entries);
     setRules(next.rules);
     setDirty(true);
@@ -717,6 +925,59 @@ export function AdminTransitTripWorkbench({
     );
   };
 
+  /** 图层树与属性检查器移除停站时补一条撤销记录；运行图已由 onInteractionStart 记录。 */
+  const removeStop = (clientId: string, stopIndex: number) => {
+    pushHistory();
+    handleRemovePoint(clientId, stopIndex);
+  };
+
+  /** 把指定停站设为小交路起点或终点：保留一侧站序，另一侧截断。 */
+  const cropTripRange = (clientId: string, stopIndex: number, edge: 'start' | 'end') => {
+    const entry = entriesRef.current.find((item) => item.clientId === clientId);
+    if (!entry) {
+      return;
+    }
+    if (entry.stops.length <= 2) {
+      setStatus('班次至少需要保留两个站。');
+      return;
+    }
+    if (edge === 'start' && stopIndex === 0) {
+      setStatus('该站已经是当前交路起点。');
+      return;
+    }
+    if (edge === 'end' && stopIndex >= entry.stops.length - 1) {
+      setStatus('该站已经是当前交路终点。');
+      return;
+    }
+    pushHistory();
+    markLabelsStale();
+    updateEntry(
+      clientId,
+      (current) => {
+        const nextStops = truncateTripStops(current.stops, stopIndex, edge);
+        if (edge === 'start') {
+          const first = nextStops[0];
+          // 截断后的首站必须是发车站，缺少发车时刻时用到达时刻补齐。
+          if (first && first.departureMinutes === undefined) {
+            nextStops[0] = { ...first, departureMinutes: first.arrivalMinutes };
+          }
+        } else {
+          const lastIndex = nextStops.length - 1;
+          const last = nextStops[lastIndex];
+          // 新终点不应保留发车时刻，避免运行图多画一个发车端点。
+          if (last) {
+            nextStops[lastIndex] = { ...last, departureMinutes: undefined };
+          }
+        }
+        return { ...current, stops: nextStops };
+      },
+      false,
+    );
+    setSelectedId(clientId);
+    setSelectedStopIndex(edge === 'start' ? 0 : stopIndex);
+    setStatus(edge === 'start' ? '已将选中站设为交路起点' : '已将选中站设为交路终点');
+  };
+
   /** 删除整条班次：真实班次在保存时调用 DELETE，规则展开项随线路发车规则一起移除。 */
   const handleDeleteEntry = (clientId: string) => {
     const entry = entriesRef.current.find((item) => item.clientId === clientId);
@@ -742,6 +1003,7 @@ export function AdminTransitTripWorkbench({
       }
     }
     setSelectedId((current) => (current === clientId ? null : current));
+    setSelectedStopIndex((current) => (selectedId === clientId ? null : current));
     // 删除不会改变剩余班次的时刻，不需要强制重新分配标签；
     // 若删到一条不剩，也就没有标签可重排，避免保存被卡住。
     setDirty(true);
@@ -1141,24 +1403,29 @@ export function AdminTransitTripWorkbench({
     }
     const delta = nextMinutes - currentMinutes;
     markLabelsStale();
-    updateEntry(entry.clientId, (current) => ({
-      ...current,
-      ruleId: current.ruleId ? undefined : current.ruleId,
-      ruleDetached: current.ruleId ? true : current.ruleDetached,
-      stops: current.stops.map((stop) => ({
-        ...stop,
-        arrivalMinutes: stop.arrivalMinutes === undefined ? undefined : stop.arrivalMinutes + delta,
-        departureMinutes:
-          stop.departureMinutes === undefined ? undefined : stop.departureMinutes + delta,
-      })),
-    }));
+    updateEntry(
+      entry.clientId,
+      (current) => ({
+        ...current,
+        ruleId: current.ruleId ? undefined : current.ruleId,
+        ruleDetached: current.ruleId ? true : current.ruleDetached,
+        stops: current.stops.map((stop) => ({
+          ...stop,
+          arrivalMinutes:
+            stop.arrivalMinutes === undefined ? undefined : stop.arrivalMinutes + delta,
+          departureMinutes:
+            stop.departureMinutes === undefined ? undefined : stop.departureMinutes + delta,
+        })),
+      }),
+      false,
+    );
   };
 
   const zoomChart = (factor: number) => {
     setViewport((current) => {
       const duration = Math.min(1440, Math.max(30, current.duration * factor));
       const center = current.start + current.duration / 2;
-      return { duration, start: Math.min(Math.max(center - duration / 2, -120), 24 * 60) };
+      return clampChartViewport({ duration, start: center - duration / 2 });
     });
   };
 
@@ -1188,13 +1455,15 @@ export function AdminTransitTripWorkbench({
     }
     const earliest = Math.min(...ranges.map((range) => range[0]));
     const latest = Math.max(...ranges.map((range) => range[1]));
-    setViewport({
-      start: Math.max(0, Math.floor((earliest - 15) / 15) * 15),
-      duration: Math.max(120, Math.ceil((latest - earliest + 30) / 30) * 30),
-    });
+    setViewport(
+      clampChartViewport({
+        start: earliest,
+        duration: resolveChartFitDuration(earliest, latest),
+      }),
+    );
   };
 
-  const handleSelectTripFromChart = (tripId: string) => {
+  const handleSelectTripFromChart = (tripId: string, stopIndex?: number) => {
     if (!line) {
       return;
     }
@@ -1203,6 +1472,16 @@ export function AdminTransitTripWorkbench({
       return;
     }
     setSelectedId(tripId);
+    // 点到具体端点时同步选中停站，右侧检查器直接显示到/发时刻。
+    setSelectedStopIndex(stopIndex !== undefined && entry.stops[stopIndex] ? stopIndex : null);
+    setExpandedTrips((current) => {
+      if (current.has(tripId)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.add(tripId);
+      return next;
+    });
     // 图上点到反向班次时，列表跟着切到对应方向。
     const entryDirection = resolveTripDirection(
       { stationNames: entry.stops.map((stop) => stop.stationName), stopTimes: [] },
@@ -1211,6 +1490,311 @@ export function AdminTransitTripWorkbench({
     );
     setDirection((current) => (current === entryDirection ? current : entryDirection));
   };
+
+  const expandTrip = (clientId: string) => {
+    setExpandedTrips((current) => {
+      if (current.has(clientId)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.add(clientId);
+      return next;
+    });
+  };
+
+  const toggleTripExpanded = (clientId: string) => {
+    setExpandedTrips((current) => {
+      const next = new Set(current);
+      if (next.has(clientId)) {
+        next.delete(clientId);
+      } else {
+        next.add(clientId);
+      }
+      return next;
+    });
+  };
+
+  const selectTripFromLayer = (entry: WorkbenchEntry, value: WorkbenchDirection) => {
+    setSelectedId(entry.clientId);
+    setSelectedStopIndex(null);
+    setDirection(value);
+    expandTrip(entry.clientId);
+  };
+
+  const selectStopFromLayer = (entry: WorkbenchEntry, value: WorkbenchDirection, index: number) => {
+    setSelectedId(entry.clientId);
+    setSelectedStopIndex(index);
+    setDirection(value);
+    expandTrip(entry.clientId);
+  };
+
+  const clearSelection = () => {
+    setSelectedId(null);
+    setSelectedStopIndex(null);
+    closeInspector();
+  };
+
+  // 双击图层行时把焦点送进检查器的第一个字段（移动端会顺势展开属性抽屉）。
+  const focusInspector = useEditorInspectorFocus(inspectorRef);
+
+  const directionStationNamesOf = (value: WorkbenchDirection): string[] => {
+    if (!line) {
+      return [];
+    }
+    const names = line.stationSourceIds.map(stationNameOf);
+    return value === 'down' ? names : [...names].reverse();
+  };
+
+  /** 反向站序的第 i 段对应正序区间数组的倒数第 i 段。 */
+  const directionSegmentMinutesOf = (value: WorkbenchDirection, index: number): number => {
+    const resolved = value === 'down' ? index : segmentMinutes.length - 1 - index;
+    return segmentMinutes[resolved] ?? 4;
+  };
+
+  /** 整条班次的所有时刻一起平移。 */
+  const shiftStopsBy = (stops: readonly WorkbenchTripStop[], delta: number) =>
+    stops.map((stop) => ({
+      ...stop,
+      arrivalMinutes: stop.arrivalMinutes === undefined ? undefined : stop.arrivalMinutes + delta,
+      departureMinutes:
+        stop.departureMinutes === undefined ? undefined : stop.departureMinutes + delta,
+    }));
+
+  /** 创建副本：按同方向最后两班的间隔续推，冲突时向后找空档。 */
+  const duplicateTrip = (entry: WorkbenchEntry) => {
+    if (!line) {
+      return;
+    }
+    const value = resolveTripDirection(
+      { stationNames: entry.stops.map((stop) => stop.stationName), stopTimes: [] },
+      line,
+      stationNameOf,
+    );
+    const times = entriesByDirection[value]
+      .map((item) => firstDepartureOrUndefined(item.stops))
+      .filter((time): time is number => time !== undefined)
+      .sort((left, right) => left - right);
+    const base = times.at(-1) ?? firstDepartureOrUndefined(entry.stops);
+    if (base === undefined) {
+      setError('该班次缺少发车时刻，无法创建副本。');
+      return;
+    }
+    const interval = times.length >= 2 ? Math.max(1, times.at(-1)! - times.at(-2)!) : 5;
+    const occupied = new Set(times);
+    let nextDeparture = Math.round(base + interval);
+    let attempts = 0;
+    while (occupied.has(nextDeparture) && attempts < 30) {
+      nextDeparture += 1;
+      attempts += 1;
+    }
+    if (occupied.has(nextDeparture)) {
+      setError('接下来 30 分钟内没有可用的发车空档，无法创建副本。');
+      return;
+    }
+    const currentDeparture = firstDepartureOrUndefined(entry.stops);
+    if (currentDeparture === undefined) {
+      setError('该班次缺少发车时刻，无法创建副本。');
+      return;
+    }
+    pushHistory();
+    markLabelsStale();
+    const clone: WorkbenchEntry = {
+      ...entry,
+      clientId: `copy_${value}_${nextDeparture}_${Date.now().toString(36)}_${Math.random()
+        .toString(36)
+        .slice(2, 6)}`,
+      trip: {
+        ...entry.trip,
+        tripInstanceId: '',
+        departureTime: toClockTime(nextDeparture) ?? entry.trip.departureTime,
+      },
+      stops: shiftStopsBy(entry.stops, nextDeparture - currentDeparture),
+      label: '',
+      labelSource: undefined,
+      isNew: true,
+      changed: true,
+      fromRule: false,
+      materialize: false,
+      ruleId: undefined,
+      ruleDetached: false,
+    };
+    setEntries((current) => [...current, clone]);
+    setSelectedId(clone.clientId);
+    setSelectedStopIndex(null);
+    setDirection(value);
+    expandTrip(clone.clientId);
+    setDirty(true);
+    setError('');
+    setStatus(`已创建 ${toClockTime(nextDeparture) ?? ''} 的班次副本，标签需重新分配`);
+  };
+
+  /** 上移/下移：与同方向相邻班次交换发车时刻，交换后两者都脱离原批量规则。 */
+  const swapTripDeparture = (entry: WorkbenchEntry, offset: -1 | 1) => {
+    if (!line) {
+      return;
+    }
+    const value = resolveTripDirection(
+      { stationNames: entry.stops.map((stop) => stop.stationName), stopTimes: [] },
+      line,
+      stationNameOf,
+    );
+    const list = entriesByDirection[value];
+    const index = list.findIndex((item) => item.clientId === entry.clientId);
+    const target = index >= 0 ? list[index + offset] : undefined;
+    if (!target) {
+      setStatus(offset < 0 ? '已经是该方向第一个班次。' : '已经是该方向最后一个班次。');
+      return;
+    }
+    const currentDeparture = firstDepartureOrUndefined(entry.stops);
+    const targetDeparture = firstDepartureOrUndefined(target.stops);
+    if (currentDeparture === undefined || targetDeparture === undefined) {
+      setError('存在缺少发车时刻的班次，无法交换顺序。');
+      return;
+    }
+    const delta = targetDeparture - currentDeparture;
+    pushHistory();
+    markLabelsStale();
+    setEntries((current) =>
+      current.map((item) => {
+        if (item.clientId === entry.clientId) {
+          return {
+            ...item,
+            changed: true,
+            materialize: item.fromRule ? true : item.materialize,
+            ruleId: undefined,
+            ruleDetached: item.ruleId ? true : item.ruleDetached,
+            stops: shiftStopsBy(item.stops, delta),
+          };
+        }
+        if (item.clientId === target.clientId) {
+          return {
+            ...item,
+            changed: true,
+            materialize: item.fromRule ? true : item.materialize,
+            ruleId: undefined,
+            ruleDetached: item.ruleId ? true : item.ruleDetached,
+            stops: shiftStopsBy(item.stops, -delta),
+          };
+        }
+        return item;
+      }),
+    );
+    // 交换后原规则不再拥有这两条班次；仍被其它班次引用的规则保留。
+    setRules((current) => ({
+      ...current,
+      [value]: current[value].filter((rule) =>
+        entriesRef.current.some(
+          (item) =>
+            item.clientId !== entry.clientId &&
+            item.clientId !== target.clientId &&
+            item.ruleId === rule.id,
+        ),
+      ),
+    }));
+    setSelectedId(entry.clientId);
+    setSelectedStopIndex(null);
+    setDirty(true);
+    setError('');
+    setStatus(`已与 ${toClockTime(targetDeparture) ?? ''} 的班次交换发车时刻`);
+  };
+
+  /** 延长交路：只给新增站补时刻，已有站保持不动。 */
+  const extendTripRange = (edge: 'start' | 'end') => {
+    if (!selectedEntry || !line) {
+      setStatus('请先选中一个班次，再延长交路。');
+      return;
+    }
+    const value = resolveTripDirection(
+      { stationNames: selectedEntry.stops.map((stop) => stop.stationName), stopTimes: [] },
+      line,
+      stationNameOf,
+    );
+    const names = directionStationNamesOf(value);
+    const first = selectedEntry.stops[0];
+    const last = selectedEntry.stops.at(-1);
+    if (!first || !last) {
+      return;
+    }
+    const firstIndex = names.indexOf(first.stationName);
+    const lastIndex = names.indexOf(last.stationName);
+    if (edge === 'start') {
+      if (firstIndex <= 0) {
+        setStatus('已经到线路起点，无法继续向前延长。');
+        return;
+      }
+      const origin = first.departureMinutes ?? first.arrivalMinutes;
+      if (origin === undefined) {
+        setError('该班次首站缺少发车时刻，无法推算新增站。');
+        return;
+      }
+      const stationName = names[firstIndex - 1]!;
+      const segment = directionSegmentMinutesOf(value, firstIndex - 1);
+      const arrivalMinutes = Math.max(0, origin - segment);
+      const departureMinutes =
+        arrivalMinutes + defaultDwellMinutes <= origin
+          ? arrivalMinutes + defaultDwellMinutes
+          : origin;
+      pushHistory();
+      markLabelsStale();
+      updateEntry(
+        selectedEntry.clientId,
+        (entry) => ({
+          ...entry,
+          stops: [{ stationName, isStop: true, arrivalMinutes, departureMinutes }, ...entry.stops],
+        }),
+        false,
+      );
+      setStatus(`已将交路向前延长一站：${stationName}`);
+      return;
+    }
+    if (lastIndex < 0 || lastIndex >= names.length - 1) {
+      setStatus('已经到线路终点，无法继续向后延长。');
+      return;
+    }
+    const origin = last.arrivalMinutes ?? last.departureMinutes;
+    if (origin === undefined) {
+      setError('该班次末站缺少到达时刻，无法推算新增站。');
+      return;
+    }
+    const stationName = names[lastIndex + 1]!;
+    const arrivalMinutes = origin + directionSegmentMinutesOf(value, lastIndex);
+    pushHistory();
+    markLabelsStale();
+    updateEntry(
+      selectedEntry.clientId,
+      (entry) => ({
+        ...entry,
+        stops: [...entry.stops, { stationName, isStop: true, arrivalMinutes }],
+      }),
+      false,
+    );
+    setStatus(`已将交路向后延长一站：${stationName}`);
+  };
+
+  const selectedTripDirection = selectedEntry
+    ? resolveTripDirection(
+        {
+          stationNames: selectedEntry.stops.map((stop) => stop.stationName),
+          stopTimes: [],
+        },
+        line ?? { stationSourceIds: [] },
+        stationNameOf,
+      )
+    : null;
+  const selectedTripStationNames = selectedTripDirection
+    ? directionStationNamesOf(selectedTripDirection)
+    : [];
+  const selectedTripFirstStation = selectedEntry?.stops[0]?.stationName;
+  const selectedTripLastStation = selectedEntry?.stops.at(-1)?.stationName;
+  const canExtendStart =
+    Boolean(selectedEntry) &&
+    selectedTripFirstStation !== undefined &&
+    selectedTripStationNames.indexOf(selectedTripFirstStation) > 0;
+  const canExtendEnd =
+    Boolean(selectedEntry) &&
+    selectedTripLastStation !== undefined &&
+    selectedTripStationNames.indexOf(selectedTripLastStation) >= 0 &&
+    selectedTripStationNames.indexOf(selectedTripLastStation) < selectedTripStationNames.length - 1;
 
   const handleRestoreAutoTiming = () => {
     if (!selectedId) {
@@ -1288,24 +1872,25 @@ export function AdminTransitTripWorkbench({
     );
   };
 
-  const save = async () => {
+  /** 保存成功返回 true；校验或请求失败返回 false，外壳据此决定是否返回上一页。 */
+  const save = async (): Promise<boolean> => {
     if (!line || !revision) {
-      return;
+      return false;
     }
     if (labelsNeedRefresh && entries.length > 0) {
       setError('班次时刻已改动，请先重新按标签池分配班次标签，再保存。');
-      return;
+      return false;
     }
     for (const entry of entries) {
       if (entry.stops.length < 2) {
         setError(
           `班次 ${formatWorkbenchMinutes(firstDepartureOrUndefined(entry.stops))} 至少需要两个站。`,
         );
-        return;
+        return false;
       }
       if (firstDepartureOrUndefined(entry.stops) === undefined) {
         setError('存在没有发车时刻的班次，请先在运行图或列表里补齐。');
-        return;
+        return false;
       }
     }
     setSaving(true);
@@ -1441,75 +2026,208 @@ export function AdminTransitTripWorkbench({
       }
 
       await loadData();
+      setSelectedId(null);
+      setSelectedStopIndex(null);
+      // 通知后台列表与其它工作台刷新，避免跨页面仍读取旧班次。
+      publishAdminDataChanged({
+        resource: 'transit',
+        reason: 'record_updated',
+        occurredAt: new Date().toISOString(),
+      });
       setStatus('已保存班次工作台的全部改动');
+      return true;
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : '保存失败。');
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
-  // 快捷键与线路工作台保持一致：保存、撤销/重做、工具切换。
-  keyboardHandlerRef.current = (event) => {
-    const target = event.target;
-    if (
-      target instanceof HTMLElement &&
-      (target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.isContentEditable)
-    ) {
+  // 快捷键统一走注册表；保存与保存并返回由 VisualEditorShell 处理。
+  useEditorShortcuts(
+    [
+      defineShortcut('toolSelect', () => setTool('pan')),
+      defineShortcut('toolPan', () => setTool('pan')),
+      defineShortcut('tripToolMove', () => setTool('move')),
+      defineShortcut('tripToolDraw', () => setTool('draw')),
+      defineShortcut('toolDraw', () => setTool('draw')),
+      defineShortcut('tripToolPanDigit', () => setTool('pan')),
+      defineShortcut('tripToolMoveDigit', () => setTool('move')),
+      defineShortcut('tripToolDrawDigit', () => setTool('draw')),
+      defineShortcut('undo', () => undo()),
+      defineShortcut('redo', () => redo()),
+      defineShortcut('redoY', () => redo()),
+      defineShortcut('duplicateSelection', () => {
+        if (selectedEntry) {
+          duplicateTrip(selectedEntry);
+        }
+      }),
+      defineShortcut('moveUp', () => {
+        if (selectedEntry) {
+          swapTripDeparture(selectedEntry, -1);
+        }
+      }),
+      defineShortcut('moveDown', () => {
+        if (selectedEntry) {
+          swapTripDeparture(selectedEntry, 1);
+        }
+      }),
+      defineShortcut('deleteSelection', () => {
+        if (!selectedId) {
+          return;
+        }
+        // 选中停站时 Delete 表示移除该停站（改为通过不停），否则移除整条班次。
+        if (selectedStopIndex !== null) {
+          const stop = selectedEntry?.stops[selectedStopIndex];
+          if (stop?.isStop) {
+            removeStop(selectedId, selectedStopIndex);
+          } else {
+            setStatus('该站已经是通过状态，无需移除。');
+          }
+          return;
+        }
+        handleDeleteEntry(selectedId);
+      }),
+    ],
+    { enabled: !saving },
+  );
+
+  const editorTools = useMemo<EditorTool[]>(
+    () => [
+      { id: 'pan', icon: 'pan_tool', label: '选择 / 手型工具（平移画布）', shortcut: 'V' },
+      {
+        id: 'draw',
+        icon: 'add_location_alt',
+        label: '画图工具（添加 / 移除锚点）',
+        shortcut: 'D',
+      },
+      { id: 'move', icon: 'open_with', label: '拖移端点（修改区间 / 停站用时）', shortcut: 'M' },
+    ],
+    [],
+  );
+
+  /** 放弃本地草稿并重新读取服务端数据。 */
+  const discardChanges = async () => {
+    if (dirty && !(await requestConfirmation('确定放弃当前未保存的改动吗？'))) {
       return;
     }
-    const modifier = event.ctrlKey || event.metaKey;
-    if (modifier && (event.key.toLowerCase() === 's' || event.key === 'Enter')) {
-      event.preventDefault();
-      if (!saving) {
-        void save();
-      }
-      return;
-    }
-    if (modifier && event.key.toLowerCase() === 'z') {
-      event.preventDefault();
-      if (event.shiftKey) {
-        redo();
-      } else {
-        undo();
-      }
-      return;
-    }
-    if (modifier && event.key.toLowerCase() === 'y') {
-      event.preventDefault();
-      redo();
-      return;
-    }
-    if (modifier || event.altKey) {
-      return;
-    }
-    const key = event.key.toLowerCase();
-    if (key === 'v' || key === '1') {
-      setTool('pan');
-      return;
-    }
-    if (key === 'm' || key === '2') {
-      setTool('move');
-      return;
-    }
-    if (key === 'd' || key === '3') {
-      setTool('draw');
-      return;
-    }
-    if (event.key === 'Delete' && selectedId) {
-      event.preventDefault();
-      handleDeleteEntry(selectedId);
-    }
+    clearSelection();
+    await loadData();
   };
 
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => keyboardHandlerRef.current(event);
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
+  // 工具栏分组的单一来源：宽屏平铺到各自胶囊，窄屏收进各自的溢出菜单。
+  const linkActionItems: EditorToolbarOverflowItem[] = [
+    {
+      id: 'link-none',
+      icon: 'radio_button_unchecked',
+      label: '连锁：不连锁',
+      active: linkMode === 'none',
+      onClick: () => setLinkMode('none'),
+    },
+    {
+      id: 'link-before',
+      icon: 'first_page',
+      label: '连锁：之前',
+      active: linkMode === 'before',
+      onClick: () => setLinkMode('before'),
+    },
+    {
+      id: 'link-after',
+      icon: 'last_page',
+      label: '连锁：之后',
+      active: linkMode === 'after',
+      onClick: () => setLinkMode('after'),
+    },
+    {
+      id: 'link-all',
+      icon: 'select_all',
+      label: '连锁：全部',
+      active: linkMode === 'all',
+      onClick: () => setLinkMode('all'),
+    },
+  ];
+
+  const runActionItems: EditorToolbarOverflowItem[] = [
+    {
+      id: 'restore',
+      icon: 'settings_backup_restore',
+      label: '恢复自动时刻',
+      disabled: !selectedId,
+      onClick: handleRestoreAutoTiming,
+    },
+    {
+      id: 'sync',
+      icon: 'sync_alt',
+      label: '同步正向时刻到反向',
+      disabled: direction !== 'up',
+      onClick: () => setSyncDialogOpen(true),
+    },
+  ];
+
+  const historyActionItems: EditorToolbarOverflowItem[] = [
+    {
+      id: 'undo',
+      icon: 'undo',
+      label: '撤销（Ctrl+Z）',
+      onClick: undo,
+    },
+    {
+      id: 'redo',
+      icon: 'redo',
+      label: '重做（Ctrl+Shift+Z）',
+      onClick: redo,
+    },
+    {
+      id: 'discard',
+      icon: 'restart_alt',
+      label: '放弃改动',
+      disabled: !dirty || saving,
+      onClick: () => void discardChanges(),
+    },
+  ];
+
+  const viewActionItems: EditorToolbarOverflowItem[] = [
+    {
+      id: 'station-zoom-in',
+      icon: 'unfold_more',
+      label: '放大站间距（Shift + 滚轮）',
+      onClick: () => zoomStations(1.2),
+    },
+    {
+      id: 'station-zoom-out',
+      icon: 'unfold_less',
+      label: '缩小站间距（Shift + 滚轮）',
+      onClick: () => zoomStations(0.8),
+    },
+  ];
+
+  // 宽屏时工具胶囊移入标题栏；窄屏仍浮在画布上，所有非工具组统一收进一个图标菜单。
+  const renderEditorToolbar = (variant: 'full' | 'compact', inHeader: boolean) => (
+    <EditorToolbar
+      activeToolId={tool}
+      ariaLabel="班次运行图工具"
+      className={inHeader ? 'is-in-header' : undefined}
+      panels={{
+        visible: panelsVisible,
+        onToggle: togglePanels,
+        label: panelsVisible ? '隐藏全部面板' : '显示全部面板',
+      }}
+      onToolChange={(toolId) => setTool(toolId as WorkbenchTool)}
+      sections={buildEditorToolbarSections({
+        variant,
+        tools: editorTools,
+        toolsAriaLabel: '运行图工具',
+        compactAriaLabel: '运行图操作',
+        groups: [
+          { id: 'link', ariaLabel: '连锁模式', items: linkActionItems },
+          { id: 'run', ariaLabel: '恢复与同步', items: runActionItems },
+          { id: 'history', ariaLabel: '历史', items: historyActionItems },
+          { id: 'view', ariaLabel: '视图', items: viewActionItems },
+        ],
+      })}
+    />
+  );
 
   // 双向班次同时上图，颜色按班次标签取；没有标签的班次统一灰色。
   const chartTrips: ChartTrip[] = entries
@@ -1527,504 +2245,942 @@ export function AdminTransitTripWorkbench({
 
   if (!line || !revision) {
     return (
-      <main className="transit-visual-editor is-loading">
-        <span className="material-symbols-outlined" aria-hidden="true">
-          timeline
-        </span>
-        <p>{status}</p>
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <a href={backToAdminHref}>返回线路与班次后台</a>
-      </main>
+      <EditorLoadingState
+        backHref={backToAdminHref}
+        backLabel="返回线路与班次后台"
+        error={error}
+        icon="timeline"
+        status={status}
+      />
     );
   }
 
   return (
-    <main className="transit-visual-editor transit-trip-editor">
-      <SecondaryPageHeader
-        backHref={backToAdminPath}
-        secondaryActions={
-          <>
-            <button
-              className="secondary-action-button"
-              type="button"
-              disabled={saving}
-              onClick={() => void loadData()}
-            >
-              放弃改动
-            </button>
-            <button
-              className="secondary-action-button is-primary"
-              type="button"
-              title="保存（Ctrl + S）"
-              disabled={saving || !dirty}
-              onClick={() => void save()}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                save
-              </span>
-              <span>{saving ? '正在保存' : '保存'}</span>
-            </button>
-          </>
-        }
-        title={`${line.name} · 班次工作台`}
-      />
-
-      <div className="transit-trip-chart-host" ref={chartHostRef}>
-        <TransitTripRunChart
-          height={chartHeight}
-          leftGutter={panelCollapsed ? 150 : undefined}
-          linkMode={linkMode}
-          rows={rows}
-          selectedTripId={selectedId}
-          stationOffset={stationOffset}
-          stationScale={stationScale}
-          tool={tool}
-          trips={chartTrips}
-          viewport={viewport}
-          onAddPoint={handleAddPoint}
-          onInteractionStart={pushHistory}
-          onMoveStop={handleMoveStop}
-          onRemovePoint={handleRemovePoint}
-          onResizeRange={handleResizeRange}
-          onSelectTrip={handleSelectTripFromChart}
-          onStationViewportChange={({ scale, offset }) => applyStationViewport(scale, offset)}
-          onViewportChange={setViewport}
+    <VisualEditorShell
+      backHref={backToAdminPath}
+      editorKind="transit-trip"
+      headerTools={
+        <EditorHeaderToolbar
+          compact={renderEditorToolbar('compact', true)}
+          full={renderEditorToolbar('full', true)}
         />
-      </div>
-
-      <aside
-        className={`transit-visual-route-panel transit-trip-panel${panelCollapsed ? ' is-collapsed' : ''}`}
-        aria-label="班次列表"
+      }
+      isBusy={saving}
+      isDirty={dirty}
+      onSave={save}
+      sessionId={`transit-trip:${normalizedRevisionId}:${normalizedLineSourceId}`}
+      title={`${line.name} · 班次工作台`}
+      workspace
+    >
+      <div
+        className={`transit-visual-workspace transit-trip-workspace${panelStateClass}${
+          selectedEntry ? ' has-layer-selection' : ''
+        }`}
       >
-        <div className="transit-visual-route-panel-heading">
-          <div>
-            <strong>{line.name}</strong>
-            <span>{`${directionEntries.length} 个班次 · ${dirty ? '有未保存改动' : '已同步'}`}</span>
-          </div>
-          <div className="transit-visual-route-panel-actions">
-            <fieldset className="segmented-control transit-trip-direction" aria-label="方向">
-              <div>
-                {(['down', 'up'] as const).map((value) => (
-                  <button
-                    className={direction === value ? 'is-active' : ''}
-                    type="button"
-                    aria-pressed={direction === value}
-                    key={value}
-                    onClick={() => {
-                      setDirection(value);
-                      setSelectedId(null);
-                      setEditingRuleId(null);
-                      setRuleText('');
-                      setRuleDeleteTarget(null);
-                    }}
-                  >
-                    {value === 'down' ? '正向' : '反向'}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            {direction === 'up' ? (
-              <button
-                className="transit-visual-route-panel-toggle"
-                type="button"
-                title="把正向发车时刻同步到反向"
-                aria-label="把正向发车时刻同步到反向"
-                onClick={() => setSyncDialogOpen(true)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  sync_alt
-                </span>
-              </button>
-            ) : null}
-            <button
-              className="transit-visual-route-panel-toggle"
-              type="button"
-              aria-expanded={!panelCollapsed}
-              aria-label={panelCollapsed ? '展开班次列表' : '收起班次列表'}
-              title={panelCollapsed ? '展开班次列表' : '收起班次列表'}
-              onClick={() => setPanelCollapsed((current) => !current)}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {panelCollapsed ? 'expand_more' : 'expand_less'}
-              </span>
-            </button>
-          </div>
+        <div className="transit-trip-chart-host" ref={chartHostRef}>
+          <TransitTripRunChart
+            height={chartHeight}
+            bottomInset={chartBottom}
+            leftGutter={chartLeftGutter}
+            rightInset={chartRightInset}
+            topInset={chartTopInset}
+            linkMode={linkMode}
+            rows={rows}
+            selectedTripId={selectedId}
+            stationOffset={stationOffset}
+            stationScale={stationScale}
+            tool={tool}
+            trips={chartTrips}
+            viewport={viewport}
+            onAddPoint={handleAddPoint}
+            onInteractionStart={pushHistory}
+            onMoveStop={handleMoveStop}
+            onRemovePoint={handleRemovePoint}
+            onResizeRange={handleResizeRange}
+            onSelectTrip={handleSelectTripFromChart}
+            onStationViewportChange={({ scale, offset }) => applyStationViewport(scale, offset)}
+            onViewportChange={(next) => setViewport(clampChartViewport(next))}
+          />
         </div>
-        {panelCollapsed ? null : (
-          <div className="transit-trip-panel-body">
-            <div className="transit-trip-pool-row">
-              <button
-                className="transit-trip-pool-button"
-                type="button"
-                onClick={() => setPoolDialogOpen(true)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  inventory_2
-                </span>
-                <span>
-                  {selectedPoolCount > 0 ? `已选 ${selectedPoolCount} 个标签池` : '选择班次标签池'}
-                </span>
-              </button>
-              <button
-                className={`transit-trip-pool-action${labelsNeedRefresh ? ' is-warning' : ''}`}
-                type="button"
-                title={
-                  labelsNeedRefresh
-                    ? '班次已改动，点击重新按标签池分配班次标签'
-                    : '按标签池预填班次标签'
-                }
-                disabled={pools.length === 0 || entries.length === 0}
-                onClick={prefillLabels}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  auto_awesome
-                </span>
-              </button>
-            </div>
-            {rules[direction].length > 0 ? (
-              <div className="transit-trip-rules" aria-label="已添加的批量规则">
-                {rules[direction].map((rule) => {
-                  const ownedCount = directionEntries.filter(
-                    (entry) => entry.ruleId === rule.id,
-                  ).length;
+
+        {panelsVisible ? (
+          <aside className="poi-visual-layer-panel" aria-label="班次图层" ref={layerPanelRef}>
+            <EditorPanelHeading
+              meta={`${directionEntries.length} 班 · ${line.stationSourceIds.length} 站 · ${
+                dirty ? '有未保存改动' : '已同步'
+              }`}
+              title="图层"
+              toolbar={
+                // 与线路走向共用同一个紧凑分段控件，方向切换不再单独占一行。
+                <div className="transit-visual-layer-heading-actions">
+                  <span>方向</span>
+                  <div className="segmented-control">
+                    <SegmentedControl
+                      ariaLabel="方向"
+                      className="transit-visual-segmented"
+                      onChange={(value) => {
+                        setDirection(value);
+                        clearSelection();
+                      }}
+                      options={[
+                        { value: 'down' as const, label: '正向', title: '正向（下行）' },
+                        { value: 'up' as const, label: '反向', title: '反向（上行）' },
+                      ]}
+                      value={direction}
+                    />
+                  </div>
+                </div>
+              }
+              withInspectorEntry
+            >
+              <EditorInspectorEntry onOpen={openInspector} />
+            </EditorPanelHeading>
+            <div className="poi-visual-layer-body">
+              {error || status ? (
+                <p
+                  className={
+                    error ? 'transit-visual-panel-status is-error' : 'transit-visual-panel-status'
+                  }
+                  role="status"
+                >
+                  {error || status}
+                </p>
+              ) : null}
+              <ul className="poi-visual-layer-tree">
+                {directionEntries.length === 0 ? (
+                  <li>
+                    <p className="poi-visual-panel-empty">这个方向还没有班次。</p>
+                  </li>
+                ) : null}
+                {directionEntries.map((entry, tripIndex) => {
+                  const tripExpanded = expandedTrips.has(entry.clientId);
+                  const tripActive = entry.clientId === selectedId && selectedStopIndex === null;
                   return (
-                    <div
-                      className={
-                        editingRuleId === rule.id
-                          ? 'transit-trip-rule-row is-editing'
-                          : 'transit-trip-rule-row'
-                      }
-                      key={rule.id}
-                    >
-                      <code>{rule.sourceText}</code>
-                      <span className="muted">{`${ownedCount} 个班次`}</span>
-                      <button
-                        type="button"
-                        title="编辑规则（会按新规则重算时刻）"
-                        aria-label="编辑规则"
-                        onClick={() => {
-                          setEditingRuleId(rule.id);
-                          setRuleText(rule.sourceText);
-                          setError('');
+                    <li key={entry.clientId}>
+                      <div
+                        className={`poi-visual-layer-row transit-trip-layer-trip-row${
+                          tripActive ? ' is-active' : ''
+                        }`}
+                        ref={(node) => {
+                          if (node) {
+                            tripRowRefs.current.set(entry.clientId, node);
+                          } else {
+                            tripRowRefs.current.delete(entry.clientId);
+                          }
                         }}
                       >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          edit
-                        </span>
-                      </button>
-                      <button
-                        className="is-danger"
-                        type="button"
-                        title="删除规则及其生成的班次"
-                        aria-label="删除规则"
-                        onClick={() => setRuleDeleteTarget(rule)}
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          delete
-                        </span>
-                      </button>
-                    </div>
+                        <button
+                          aria-expanded={tripExpanded}
+                          aria-label={tripExpanded ? '收起停站' : '展开停站'}
+                          className="transit-trip-layer-expand"
+                          type="button"
+                          onClick={() => toggleTripExpanded(entry.clientId)}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            {tripExpanded ? 'expand_more' : 'chevron_right'}
+                          </span>
+                        </button>
+                        <button
+                          aria-pressed={tripActive}
+                          className="poi-visual-layer-group transit-trip-layer-trip"
+                          type="button"
+                          onClick={() => selectTripFromLayer(entry, direction)}
+                          onDoubleClick={() => {
+                            selectTripFromLayer(entry, direction);
+                            focusInspector();
+                          }}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="transit-trip-layer-color"
+                            style={{ background: resolveTripLabelColor(entry.label) }}
+                          />
+                          <span className="poi-visual-layer-label">
+                            {`${formatWorkbenchMinutes(
+                              firstDepartureOrUndefined(entry.stops),
+                            )} · ${entry.label || '未分配标签'}`}
+                          </span>
+                          <span className="poi-visual-layer-count">
+                            {entry.fromRule
+                              ? '规则'
+                              : entry.isNew
+                                ? '新增'
+                                : (entry.trip.tripCode ?? `${entry.stops.length} 站`)}
+                          </span>
+                        </button>
+                        <EditorLayerRowActions
+                          actions={[
+                            {
+                              id: 'duplicate',
+                              icon: 'content_copy',
+                              label: '创建副本',
+                              title: '创建副本（Ctrl+D）',
+                              onClick: () => duplicateTrip(entry),
+                            },
+                            {
+                              id: 'move-up',
+                              icon: 'arrow_upward',
+                              label: '上移',
+                              title: '上移（Ctrl+[，与上一班交换发车时刻）',
+                              disabled: tripIndex === 0,
+                              onClick: () => swapTripDeparture(entry, -1),
+                            },
+                            {
+                              id: 'move-down',
+                              icon: 'arrow_downward',
+                              label: '下移',
+                              title: '下移（Ctrl+]，与下一班交换发车时刻）',
+                              disabled: tripIndex >= directionEntries.length - 1,
+                              onClick: () => swapTripDeparture(entry, 1),
+                            },
+                            {
+                              id: 'remove',
+                              icon: 'delete',
+                              label: '移除班次',
+                              title: '移除班次（Delete，保存后生效）',
+                              danger: true,
+                              onClick: () => handleDeleteEntry(entry.clientId),
+                            },
+                          ]}
+                        />
+                      </div>
+                      {tripExpanded ? (
+                        <ul className="poi-visual-layer-points">
+                          {entry.stops.map((stop, stopIndex) => {
+                            const stopActive =
+                              entry.clientId === selectedId && selectedStopIndex === stopIndex;
+                            return (
+                              <li key={`${entry.clientId}-${stopIndex}`}>
+                                <div
+                                  className={`poi-visual-layer-row${
+                                    stopActive ? ' is-active' : ''
+                                  }`}
+                                >
+                                  <button
+                                    aria-pressed={stopActive}
+                                    className="poi-visual-layer-point"
+                                    type="button"
+                                    onClick={() => selectStopFromLayer(entry, direction, stopIndex)}
+                                    onDoubleClick={() => {
+                                      selectStopFromLayer(entry, direction, stopIndex);
+                                      focusInspector();
+                                    }}
+                                  >
+                                    <span className="poi-visual-layer-label">
+                                      {stop.stationName}
+                                    </span>
+                                    <span className="poi-visual-layer-coordinate">
+                                      {stop.isStop
+                                        ? `${toClockTime(stop.arrivalMinutes) ?? '—'} / ${
+                                            toClockTime(stop.departureMinutes) ?? '—'
+                                          }`
+                                        : '通过'}
+                                    </span>
+                                  </button>
+                                  <EditorLayerRowActions
+                                    actions={[
+                                      {
+                                        id: 'crop-start',
+                                        icon: 'vertical_align_top',
+                                        label: '设为交路起点',
+                                        title:
+                                          stopIndex === 0
+                                            ? '已经是当前交路起点'
+                                            : '把该站设为小交路起点',
+                                        disabled: stopIndex === 0 || entry.stops.length <= 2,
+                                        onClick: () =>
+                                          cropTripRange(entry.clientId, stopIndex, 'start'),
+                                      },
+                                      {
+                                        id: 'crop-end',
+                                        icon: 'vertical_align_bottom',
+                                        label: '设为交路终点',
+                                        title:
+                                          stopIndex >= entry.stops.length - 1
+                                            ? '已经是当前交路终点'
+                                            : '把该站设为小交路终点',
+                                        disabled:
+                                          stopIndex >= entry.stops.length - 1 ||
+                                          entry.stops.length <= 2,
+                                        onClick: () =>
+                                          cropTripRange(entry.clientId, stopIndex, 'end'),
+                                      },
+                                      {
+                                        id: 'remove-stop',
+                                        icon: 'delete',
+                                        label: '移除停站',
+                                        title: '移除停站（改为通过不停）',
+                                        disabled: !stop.isStop,
+                                        onClick: () => removeStop(entry.clientId, stopIndex),
+                                      },
+                                    ]}
+                                  />
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : null}
+                    </li>
                   );
                 })}
-              </div>
-            ) : null}
-            <div className="transit-trip-list">
-              {directionEntries.length === 0 ? (
-                <p className="muted">
-                  {entries.length > 0
-                    ? '这个方向还没有班次；运行图仍会显示另一方向的班次。'
-                    : '这个方向还没有班次。用左下角的新规则输入框追加。'}
-                </p>
-              ) : (
-                directionEntries.map((entry) => {
-                  const departure = firstDepartureOrUndefined(entry.stops);
-                  return (
-                    <div
-                      className={
-                        entry.clientId === selectedId
-                          ? 'transit-trip-row is-selected'
-                          : 'transit-trip-row'
-                      }
-                      key={entry.clientId}
-                      ref={(node) => {
-                        if (node) {
-                          tripRowRefs.current.set(entry.clientId, node);
-                        } else {
-                          tripRowRefs.current.delete(entry.clientId);
+              </ul>
+            </div>
+            <div className="poi-visual-layer-footer">
+              <button type="button" onClick={() => setRuleDialogOpen(true)}>
+                班次规则
+              </button>
+              <button
+                disabled={!canExtendStart}
+                title={canExtendStart ? '向前延长一站' : '已到线路起点或未选中班次'}
+                type="button"
+                onClick={() => extendTripRange('start')}
+              >
+                向前延长一站
+              </button>
+              <button
+                disabled={!canExtendEnd}
+                title={canExtendEnd ? '向后延长一站' : '已到线路终点或未选中班次'}
+                type="button"
+                onClick={() => extendTripRange('end')}
+              >
+                向后延长一站
+              </button>
+            </div>
+          </aside>
+        ) : null}
+
+        {panelsVisible ? (
+          <aside className="poi-visual-inspector" aria-label="属性检查器" ref={inspectorRef}>
+            <EditorPanelHeading
+              meta={
+                selectedStop && selectedEntry
+                  ? `${selectedStop.stationName} · ${
+                      toClockTime(selectedStop.arrivalMinutes) ?? '—'
+                    } / ${toClockTime(selectedStop.departureMinutes) ?? '—'}`
+                  : selectedEntry
+                    ? `${formatWorkbenchMinutes(
+                        firstDepartureOrUndefined(selectedEntry.stops),
+                      )} · ${selectedEntry.label || '未分配标签'}`
+                    : `${line.name} · ${direction === 'down' ? '正向' : '反向'}`
+              }
+              title={selectedStop ? '停站属性' : selectedEntry ? '班次属性' : '全局属性'}
+            >
+              {/* 全局属性状态下也要能关闭检查器，否则中等宽度下打开后无法退出。 */}
+              <button
+                aria-label={selectedEntry ? '返回图层' : '关闭属性面板'}
+                className="poi-visual-inspector-back"
+                title={selectedEntry ? '返回图层' : '关闭属性面板'}
+                type="button"
+                onClick={clearSelection}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  arrow_back
+                </span>
+              </button>
+            </EditorPanelHeading>
+            <div className="poi-visual-coordinate-panel-body">
+              {selectedStop && selectedEntry ? (
+                <>
+                  <div className="poi-visual-inspector-heading">
+                    <strong>{selectedStop.stationName}</strong>
+                    <span>{selectedStop.isStop ? '停靠站' : '通过站'}</span>
+                  </div>
+                  <label className="material-field">
+                    <span>到站时刻</span>
+                    <input
+                      disabled={!selectedStop.isStop}
+                      type="time"
+                      value={toClockTime(selectedStop.arrivalMinutes) ?? ''}
+                      onFocus={pushHistory}
+                      onChange={(event) => {
+                        const next = clockToMinutes(event.currentTarget.value);
+                        if (next === undefined || selectedStopIndex === null) {
+                          return;
                         }
+                        handleMoveStop(
+                          selectedEntry.clientId,
+                          selectedStopIndex,
+                          'arrival',
+                          next,
+                          'none',
+                        );
                       }}
-                      style={
-                        {
-                          '--trip-color': resolveTripLabelColor(entry.label),
-                        } as CSSProperties
+                    />
+                  </label>
+                  <label className="material-field">
+                    <span>发车时刻</span>
+                    <input
+                      disabled={!selectedStop.isStop}
+                      type="time"
+                      value={toClockTime(selectedStop.departureMinutes) ?? ''}
+                      onFocus={pushHistory}
+                      onChange={(event) => {
+                        const next = clockToMinutes(event.currentTarget.value);
+                        if (next === undefined || selectedStopIndex === null) {
+                          return;
+                        }
+                        handleMoveStop(
+                          selectedEntry.clientId,
+                          selectedStopIndex,
+                          'departure',
+                          next,
+                          'none',
+                        );
+                      }}
+                    />
+                  </label>
+                  <div className="poi-visual-point-fields">
+                    <label className="material-field">
+                      <span>停站用时</span>
+                      <input
+                        disabled={!selectedStop.isStop}
+                        inputMode="numeric"
+                        min={0}
+                        type="number"
+                        value={selectedStop.isStop ? Math.round(selectedStopDwell) : ''}
+                        onFocus={pushHistory}
+                        onChange={(event) => {
+                          const minutes = Number(event.currentTarget.value);
+                          if (
+                            !Number.isFinite(minutes) ||
+                            minutes < 0 ||
+                            selectedStopIndex === null ||
+                            selectedStop.arrivalMinutes === undefined
+                          ) {
+                            return;
+                          }
+                          handleMoveStop(
+                            selectedEntry.clientId,
+                            selectedStopIndex,
+                            'departure',
+                            selectedStop.arrivalMinutes + minutes,
+                            'none',
+                          );
+                        }}
+                      />
+                    </label>
+                    <label className="material-field">
+                      <span>区间用时</span>
+                      <input
+                        disabled={!selectedStop.isStop}
+                        inputMode="numeric"
+                        min={0}
+                        type="number"
+                        value={
+                          selectedStopSegment === undefined ? '' : Math.round(selectedStopSegment)
+                        }
+                        onFocus={pushHistory}
+                        onChange={(event) => {
+                          const minutes = Number(event.currentTarget.value);
+                          if (
+                            !Number.isFinite(minutes) ||
+                            minutes < 0 ||
+                            selectedStopIndex === null ||
+                            selectedStopPreviousDeparture === undefined
+                          ) {
+                            return;
+                          }
+                          handleMoveStop(
+                            selectedEntry.clientId,
+                            selectedStopIndex,
+                            'arrival',
+                            selectedStopPreviousDeparture + minutes,
+                            'none',
+                          );
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <dl className="poi-visual-global-summary">
+                    <div>
+                      <dt>所属班次</dt>
+                      <dd>
+                        {`${formatWorkbenchMinutes(
+                          firstDepartureOrUndefined(selectedEntry.stops),
+                        )} · ${selectedEntry.label || '未分配标签'}`}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>上下行方向</dt>
+                      <dd>{selectedTripDirection === 'up' ? '反向' : '正向'}</dd>
+                    </div>
+                    <div>
+                      <dt>停靠状态</dt>
+                      <dd>{selectedStop.isStop ? '停靠' : '通过不停'}</dd>
+                    </div>
+                  </dl>
+                  <div className="poi-visual-inspector-actions">
+                    <button
+                      disabled={
+                        selectedStopIndex === null ||
+                        selectedStopIndex === 0 ||
+                        selectedEntry.stops.length <= 2
+                      }
+                      type="button"
+                      onClick={() =>
+                        selectedStopIndex !== null
+                          ? cropTripRange(selectedEntry.clientId, selectedStopIndex, 'start')
+                          : undefined
                       }
                     >
-                      <div className="transit-trip-row-main">
-                        <input
-                          type="time"
-                          aria-label="首站发车时间"
-                          value={toClockTime(departure) ?? ''}
-                          onChange={(event) => updateDeparture(entry, event.currentTarget.value)}
-                        />
-                        <input
-                          type="text"
-                          aria-label="班次标签"
-                          placeholder="标签"
-                          maxLength={40}
-                          value={entry.label}
-                          onChange={(event) => {
-                            // 事件对象在 React 状态更新回调执行前就会被置空，必须先取值再更新。
-                            const value = event.currentTarget.value;
-                            updateEntry(
-                              entry.clientId,
-                              (current) => ({
-                                ...current,
-                                label: value,
-                                labelSource: value.trim() ? 'manual' : undefined,
-                              }),
-                              true,
-                              false,
-                            );
-                          }}
-                        />
-                        <button
-                          className={entry.clientId === selectedId ? 'is-active' : ''}
-                          type="button"
-                          aria-pressed={entry.clientId === selectedId}
-                          title={entry.clientId === selectedId ? '取消编辑' : '设为编辑中的班次'}
-                          onClick={() =>
-                            setSelectedId((current) =>
-                              current === entry.clientId ? null : entry.clientId,
-                            )
-                          }
-                        >
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            edit
-                          </span>
-                        </button>
-                        <button
-                          className="is-danger"
-                          type="button"
-                          aria-label="删除班次"
-                          title="删除班次（保存后生效）"
-                          onClick={() => handleDeleteEntry(entry.clientId)}
-                        >
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            delete
-                          </span>
-                        </button>
-                      </div>
-                      <div className="transit-trip-row-meta">
-                        <input
-                          type="text"
-                          aria-label="班次性质"
-                          placeholder="性质（如快速/直达）"
-                          maxLength={20}
-                          value={entry.trip.serviceNature ?? ''}
-                          onChange={(event) => {
-                            const value = event.currentTarget.value;
-                            // 性质由线路特殊班次标注承载，不必物化班次实例。
-                            updateEntry(
-                              entry.clientId,
-                              (current) => ({
-                                ...current,
-                                trip: { ...current.trip, serviceNature: value },
-                              }),
-                              true,
-                              false,
-                            );
-                          }}
-                        />
-                        <input
-                          type="text"
-                          aria-label="班次备注"
-                          placeholder="备注（如并入说明）"
-                          maxLength={200}
-                          value={entry.trip.routeNote ?? ''}
-                          onChange={(event) => {
-                            const value = event.currentTarget.value;
-                            updateEntry(
-                              entry.clientId,
-                              (current) => ({
-                                ...current,
-                                trip: { ...current.trip, routeNote: value },
-                              }),
-                              true,
-                              false,
-                            );
-                          }}
-                        />
-                        <span className="muted">
-                          {entry.fromRule
-                            ? '规则'
-                            : entry.isNew
-                              ? '新增'
-                              : (entry.trip.tripCode ?? '未编号')}
-                        </span>
-                      </div>
+                      设为交路起点
+                    </button>
+                    <button
+                      disabled={
+                        selectedStopIndex === null ||
+                        selectedStopIndex >= selectedEntry.stops.length - 1 ||
+                        selectedEntry.stops.length <= 2
+                      }
+                      type="button"
+                      onClick={() =>
+                        selectedStopIndex !== null
+                          ? cropTripRange(selectedEntry.clientId, selectedStopIndex, 'end')
+                          : undefined
+                      }
+                    >
+                      设为交路终点
+                    </button>
+                    <button
+                      disabled={!selectedStop.isStop}
+                      type="button"
+                      onClick={() =>
+                        selectedStopIndex !== null
+                          ? removeStop(selectedEntry.clientId, selectedStopIndex)
+                          : undefined
+                      }
+                    >
+                      移除停站（改为通过）
+                    </button>
+                  </div>
+                </>
+              ) : selectedEntry ? (
+                <>
+                  <div className="poi-visual-inspector-heading">
+                    <strong>
+                      {formatWorkbenchMinutes(firstDepartureOrUndefined(selectedEntry.stops)) ||
+                        '缺少发车时刻'}
+                    </strong>
+                    <span>{selectedEntry.label || '未分配标签'}</span>
+                  </div>
+                  <label className="material-field">
+                    <span>班次标签</span>
+                    <input
+                      maxLength={40}
+                      placeholder="标签"
+                      type="text"
+                      value={selectedEntry.label}
+                      onFocus={pushHistory}
+                      onChange={(event) => {
+                        const value = event.currentTarget.value;
+                        updateEntry(
+                          selectedEntry.clientId,
+                          (current) => ({
+                            ...current,
+                            label: value,
+                            labelSource: value.trim() ? 'manual' : undefined,
+                          }),
+                          false,
+                          false,
+                        );
+                      }}
+                    />
+                  </label>
+                  <label className="material-field">
+                    <span>首站发车时间</span>
+                    <input
+                      type="time"
+                      value={toClockTime(firstDepartureOrUndefined(selectedEntry.stops)) ?? ''}
+                      onFocus={pushHistory}
+                      onChange={(event) =>
+                        updateDeparture(selectedEntry, event.currentTarget.value)
+                      }
+                    />
+                  </label>
+                  <dl className="poi-visual-global-summary">
+                    <div>
+                      <dt>末站到达时间</dt>
+                      <dd>
+                        {formatWorkbenchMinutes(selectedEntry.stops.at(-1)?.arrivalMinutes) || '—'}
+                      </dd>
                     </div>
-                  );
-                })
+                    <div>
+                      <dt>停站数 / 通过数</dt>
+                      <dd>{`${selectedEntry.stops.filter((stop) => stop.isStop).length} / ${
+                        selectedEntry.stops.filter((stop) => !stop.isStop).length
+                      }`}</dd>
+                    </div>
+                    <div>
+                      <dt>归属规则</dt>
+                      <dd>
+                        {selectedEntry.ruleId
+                          ? (rules[selectedTripDirection === 'up' ? 'up' : 'down'].find(
+                              (rule) => rule.id === selectedEntry.ruleId,
+                            )?.sourceText ?? '规则已移除')
+                          : selectedEntry.ruleDetached
+                            ? '已脱离规则'
+                            : '未归属规则'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>落库状态</dt>
+                      <dd>
+                        {selectedEntry.isNew
+                          ? '新增草稿'
+                          : selectedEntry.fromRule && !selectedEntry.materialize
+                            ? '规则展开项'
+                            : selectedEntry.changed
+                              ? '已落库 · 本次已修改'
+                              : '已落库'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>上下行方向</dt>
+                      <dd>{selectedTripDirection === 'up' ? '反向' : '正向'}</dd>
+                    </div>
+                  </dl>
+                  <label className="material-field">
+                    <span>班次性质</span>
+                    <input
+                      maxLength={20}
+                      placeholder="如快速 / 直达"
+                      type="text"
+                      value={selectedEntry.trip.serviceNature ?? ''}
+                      onFocus={pushHistory}
+                      onChange={(event) => {
+                        const value = event.currentTarget.value;
+                        updateEntry(
+                          selectedEntry.clientId,
+                          (current) => ({
+                            ...current,
+                            trip: { ...current.trip, serviceNature: value },
+                          }),
+                          false,
+                          false,
+                        );
+                      }}
+                    />
+                  </label>
+                  <label className="material-field">
+                    <span>班次备注</span>
+                    <input
+                      maxLength={200}
+                      placeholder="如并入说明"
+                      type="text"
+                      value={selectedEntry.trip.routeNote ?? ''}
+                      onFocus={pushHistory}
+                      onChange={(event) => {
+                        const value = event.currentTarget.value;
+                        updateEntry(
+                          selectedEntry.clientId,
+                          (current) => ({
+                            ...current,
+                            trip: { ...current.trip, routeNote: value },
+                          }),
+                          false,
+                          false,
+                        );
+                      }}
+                    />
+                  </label>
+                  <div className="poi-visual-inspector-actions">
+                    <button type="button" onClick={handleRestoreAutoTiming}>
+                      恢复自动时刻
+                    </button>
+                    <button type="button" onClick={() => duplicateTrip(selectedEntry)}>
+                      创建副本
+                    </button>
+                    <button type="button" onClick={() => handleDeleteEntry(selectedEntry.clientId)}>
+                      移除班次
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="transit-visual-field">
+                    <span>当前方向</span>
+                    <p className="transit-visual-summary-text">
+                      {direction === 'down' ? '正向' : '反向'}
+                    </p>
+                  </div>
+                  <dl className="poi-visual-global-summary">
+                    <div>
+                      <dt>线路名</dt>
+                      <dd>{line.name}</dd>
+                    </div>
+                    <div>
+                      <dt>班次数</dt>
+                      <dd>{`正向 ${entriesByDirection.down.length} · 反向 ${
+                        entriesByDirection.up.length
+                      }`}</dd>
+                    </div>
+                    <div>
+                      <dt>线路站数</dt>
+                      <dd>{`${line.stationSourceIds.length} 站`}</dd>
+                    </div>
+                    <div>
+                      <dt>每班停靠数</dt>
+                      <dd>{describeStopCountRange(directionEntries)}</dd>
+                    </div>
+                    <div>
+                      <dt>运行区间</dt>
+                      <dd>{describeDirectionRange(directionEntries)}</dd>
+                    </div>
+                    <div>
+                      <dt>脏状态</dt>
+                      <dd>{dirty ? '有未保存改动' : '已同步'}</dd>
+                    </div>
+                    <div>
+                      <dt>批量规则</dt>
+                      <dd>
+                        {rules[direction].length > 0
+                          ? `${rules[direction].length} 条 · ${rules[direction][0]?.sourceText ?? ''}`
+                          : '暂无规则'}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="transit-visual-inspector-section">
+                    <div className="transit-visual-inspector-section-heading">
+                      <h3 className="transit-visual-inspector-section-title">班次标签</h3>
+                      <button
+                        className="transit-visual-inspector-edit"
+                        type="button"
+                        onClick={() => setPoolDialogOpen(true)}
+                      >
+                        选择标签池
+                      </button>
+                    </div>
+                    <p className="transit-visual-summary-text">
+                      {selectedPoolCount > 0
+                        ? `已选 ${selectedPoolCount} 个标签池 · ${
+                            poolConfigs[direction].mode === 'sequential' ? '顺序抽取' : '随机抽取'
+                          }`
+                        : '当前方向还没有选择标签池。'}
+                    </p>
+                    <div className="poi-visual-inspector-actions">
+                      <button
+                        className={labelsNeedRefresh ? 'is-warning' : ''}
+                        disabled={pools.length === 0 || entries.length === 0}
+                        title={
+                          labelsNeedRefresh
+                            ? '班次已改动，点击重新按标签池分配班次标签'
+                            : '按标签池预填班次标签'
+                        }
+                        type="button"
+                        onClick={prefillLabels}
+                      >
+                        {labelsNeedRefresh ? '重新分配标签' : '按标签池预填'}
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
-            <p
-              className={error ? 'transit-trip-panel-status is-error' : 'transit-trip-panel-status'}
-            >
-              {error || status}
-            </p>
-          </div>
-        )}
-      </aside>
+          </aside>
+        ) : null}
 
-      <div className="transit-trip-bottom" aria-label="班次工具">
-        <div className="transit-trip-rule">
-          {editingRuleId ? <span className="transit-trip-rule-badge">编辑规则</span> : null}
-          <input
-            type="text"
-            value={ruleText}
-            placeholder="例如：06:30 或 06:30 + 00:05 * 5"
-            onChange={(event) => setRuleText(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                appendDepartures();
-              }
+        {renderEditorToolbar('compact', false)}
+
+        <EditorZoomControls
+          fitLabel="适配全部班次"
+          onFit={fitChart}
+          onZoomIn={() => zoomChart(0.8)}
+          onZoomOut={() => zoomChart(1.25)}
+          scale={Math.min(4, Math.max(0.25, 720 / Math.max(30, viewport.duration)))}
+        />
+
+        <EditorRailBridge
+          activeToolId={tool}
+          bottom={[
+            {
+              id: 'transit-trip-editor-rail-discard',
+              label: '放弃改动',
+              icon: 'restart_alt',
+              group: 'bottom',
+              onClick: () => void discardChanges(),
+            },
+          ]}
+          ownerId="transit-trip-editor"
+          panels={{ visible: panelsVisible, onToggle: togglePanels }}
+          sections={[
+            { id: 'link', items: linkActionItems },
+            { id: 'run', priority: 60, items: runActionItems },
+            { id: 'history', priority: 70, items: historyActionItems },
+            { id: 'view', priority: 80, items: viewActionItems },
+          ]}
+          tools={editorTools}
+          onToolChange={(toolId) => setTool(toolId as WorkbenchTool)}
+        />
+
+        {ruleDialogOpen ? (
+          <TripRuleDialog
+            direction={direction}
+            editingRuleId={editingRuleId}
+            error={error}
+            ownedCountOf={(ruleId) =>
+              entriesByDirection[direction].filter((entry) => entry.ruleId === ruleId).length
+            }
+            ruleText={ruleText}
+            rules={rules[direction]}
+            onCancelEdit={cancelRuleEdit}
+            onChangeText={setRuleText}
+            onClose={() => setRuleDialogOpen(false)}
+            onDeleteRule={(rule) => setRuleDeleteTarget(rule)}
+            onEditRule={(rule) => {
+              setEditingRuleId(rule.id);
+              setRuleText(rule.sourceText);
+              setError('');
+            }}
+            onSubmit={appendDepartures}
+          />
+        ) : null}
+
+        {poolDialogOpen ? (
+          <PoolPickerDialog
+            config={poolConfigs[direction]}
+            pools={pools}
+            onCancel={() => setPoolDialogOpen(false)}
+            onConfirm={(config) => {
+              setPoolConfigs((current) => ({ ...current, [direction]: config }));
+              setPoolDialogOpen(false);
+              setDirty(true);
             }}
           />
-          <button type="button" onClick={appendDepartures}>
-            {editingRuleId ? '保存规则' : '确认追加'}
-          </button>
+        ) : null}
+
+        {syncDialogOpen ? (
+          <DirectionSyncDialog
+            downCount={countDirectionDepartures('down')}
+            upCount={countDirectionDepartures('up')}
+            onCancel={() => setSyncDialogOpen(false)}
+            onConfirm={syncForwardTimes}
+          />
+        ) : null}
+
+        {ruleDeleteTarget ? (
+          <RuleDeleteDialog
+            rule={ruleDeleteTarget}
+            ownedCount={entries.filter((entry) => entry.ruleId === ruleDeleteTarget.id).length}
+            onCancel={() => setRuleDeleteTarget(null)}
+            onConfirm={() => deleteRule(ruleDeleteTarget)}
+          />
+        ) : null}
+      </div>
+    </VisualEditorShell>
+  );
+}
+
+/** 新建班次与批量规则共用同一个弹窗：输入区负责追加，列表区负责编辑与删除。 */
+function TripRuleDialog({
+  direction,
+  editingRuleId,
+  error,
+  ownedCountOf,
+  ruleText,
+  rules,
+  onCancelEdit,
+  onChangeText,
+  onClose,
+  onDeleteRule,
+  onEditRule,
+  onSubmit,
+}: Readonly<{
+  direction: WorkbenchDirection;
+  editingRuleId: string | null;
+  error: string;
+  ownedCountOf: (ruleId: string) => number;
+  ruleText: string;
+  rules: WorkbenchRule[];
+  onCancelEdit: () => void;
+  onChangeText: (value: string) => void;
+  onClose: () => void;
+  onDeleteRule: (rule: WorkbenchRule) => void;
+  onEditRule: (rule: WorkbenchRule) => void;
+  onSubmit: () => void;
+}>) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <div
+        aria-label="班次规则"
+        aria-modal="true"
+        className="modal-panel admin-transit-dialog transit-trip-pool-dialog"
+        role="dialog"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="section-heading">
+          <h2>{`班次规则 · ${direction === 'down' ? '正向' : '反向'}`}</h2>
+          <span className="muted">{`${rules.length} 条规则`}</span>
+        </div>
+        <p className="muted">
+          支持单点 <code>06:30</code> 或批量 <code>06:30 + 00:05 * 5</code>，可多行或逗号分隔。
+          编辑已有规则会按新规则重算时刻。
+        </p>
+        {editingRuleId ? <span className="transit-trip-rule-badge">编辑规则</span> : null}
+        <textarea
+          className="transit-trip-rule-input"
+          placeholder="例如：06:30 或 06:30 + 00:05 * 5"
+          rows={3}
+          value={ruleText}
+          onChange={(event) => onChangeText(event.currentTarget.value)}
+        />
+        <div className="admin-content-actions">
           {editingRuleId ? (
-            <button className="is-secondary" type="button" onClick={cancelRuleEdit}>
-              取消
+            <button type="button" onClick={onCancelEdit}>
+              取消编辑
             </button>
           ) : null}
-        </div>
-        <nav className="transit-visual-toolbar transit-trip-toolbar" aria-label="运行图工具">
-          {(
-            [
-              ['pan', 'pan_tool', '手型工具（V）：拖动平移，滚轮缩放时间轴'],
-              ['draw', 'add_location_alt', '画图工具（D）：左键加点 / 右键或长按移除'],
-              ['move', 'open_with', '拖移端点（M）：首末点纵向拖动改交路'],
-            ] as const
-          ).map(([value, icon, label]) => (
-            <button
-              className={tool === value ? 'is-active' : ''}
-              type="button"
-              aria-pressed={tool === value}
-              title={label}
-              key={value}
-              onClick={() => {
-                setTool(value);
-                if (value !== 'pan' && !selectedId) {
-                  setStatus('请先在左侧列表里选中一个班次，再在运行图上编辑锚点。');
-                }
-              }}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {icon}
-              </span>
-            </button>
-          ))}
-          <span className="transit-visual-toolbar-divider" aria-hidden="true" />
-          {(
-            [
-              ['none', 'radio_button_unchecked', '不连锁'],
-              ['before', 'first_page', '之前'],
-              ['after', 'last_page', '之后'],
-              ['all', 'select_all', '全部'],
-            ] as const
-          ).map(([value, icon, label]) => (
-            <button
-              className={linkMode === value ? 'is-active' : ''}
-              type="button"
-              aria-label={label}
-              aria-pressed={linkMode === value}
-              title={`连锁：${label}`}
-              key={value}
-              onClick={() => setLinkMode(value)}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {icon}
-              </span>
-            </button>
-          ))}
-          <span className="transit-visual-toolbar-divider" aria-hidden="true" />
-          <button
-            type="button"
-            disabled={!selectedId}
-            title="恢复自动时刻：按线路基准区间用时与默认停站重算"
-            onClick={handleRestoreAutoTiming}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              settings_backup_restore
-            </span>
+          <button type="button" onClick={onSubmit}>
+            {editingRuleId ? '保存规则' : '确认追加'}
           </button>
-        </nav>
+        </div>
+        {error ? <p className="admin-poi-dialog-error">{error}</p> : null}
+        {rules.length > 0 ? (
+          <div className="transit-trip-rules" aria-label="已添加的批量规则">
+            {rules.map((rule) => (
+              <div
+                className={
+                  editingRuleId === rule.id
+                    ? 'transit-trip-rule-row is-editing'
+                    : 'transit-trip-rule-row'
+                }
+                key={rule.id}
+              >
+                <code>{rule.sourceText}</code>
+                <span className="muted">{`${ownedCountOf(rule.id)} 个班次`}</span>
+                <button
+                  aria-label="编辑规则"
+                  title="编辑规则（会按新规则重算时刻）"
+                  type="button"
+                  onClick={() => onEditRule(rule)}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    edit
+                  </span>
+                </button>
+                <button
+                  aria-label="删除规则"
+                  className="is-danger"
+                  title="删除规则及其生成的班次"
+                  type="button"
+                  onClick={() => onDeleteRule(rule)}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    delete
+                  </span>
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="poi-visual-panel-empty">还没有批量规则。</p>
+        )}
+        <div className="admin-content-actions">
+          <button type="button" onClick={onClose}>
+            关闭
+          </button>
+        </div>
       </div>
-
-      <div
-        className="transit-visual-viewport-controls transit-trip-viewport-controls"
-        aria-label="运行图缩放"
-      >
-        <button type="button" title="放大" onClick={() => zoomChart(0.8)}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            add
-          </span>
-        </button>
-        <button type="button" title="缩小" onClick={() => zoomChart(1.25)}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            remove
-          </span>
-        </button>
-        <button type="button" title="放大站间距（Shift + 滚轮）" onClick={() => zoomStations(1.2)}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            unfold_more
-          </span>
-        </button>
-        <button type="button" title="缩小站间距（Shift + 滚轮）" onClick={() => zoomStations(0.8)}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            unfold_less
-          </span>
-        </button>
-        <button type="button" title="适配全部班次" onClick={fitChart}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            fit_screen
-          </span>
-        </button>
-      </div>
-
-      {poolDialogOpen ? (
-        <PoolPickerDialog
-          config={poolConfigs[direction]}
-          pools={pools}
-          onCancel={() => setPoolDialogOpen(false)}
-          onConfirm={(config) => {
-            setPoolConfigs((current) => ({ ...current, [direction]: config }));
-            setPoolDialogOpen(false);
-            setDirty(true);
-          }}
-        />
-      ) : null}
-
-      {syncDialogOpen ? (
-        <DirectionSyncDialog
-          downCount={countDirectionDepartures('down')}
-          upCount={countDirectionDepartures('up')}
-          onCancel={() => setSyncDialogOpen(false)}
-          onConfirm={syncForwardTimes}
-        />
-      ) : null}
-
-      {ruleDeleteTarget ? (
-        <RuleDeleteDialog
-          rule={ruleDeleteTarget}
-          ownedCount={entries.filter((entry) => entry.ruleId === ruleDeleteTarget.id).length}
-          onCancel={() => setRuleDeleteTarget(null)}
-          onConfirm={() => deleteRule(ruleDeleteTarget)}
-        />
-      ) : null}
-    </main>
+    </div>
   );
 }
 
@@ -2428,6 +3584,36 @@ function applyTripLabelAssignments(
     }
     return entry.label ? { ...entry, label: '', labelSource: undefined } : entry;
   });
+}
+
+/** 全局属性里的每班停靠数范围。 */
+function describeStopCountRange(entries: readonly WorkbenchEntry[]): string {
+  if (entries.length === 0) {
+    return '—';
+  }
+  const counts = entries.map((entry) => entry.stops.filter((stop) => stop.isStop).length);
+  const min = Math.min(...counts);
+  const max = Math.max(...counts);
+  return min === max ? `${min} 站` : `${min}–${max} 站`;
+}
+
+/** 全局属性里的运行区间：当前方向最早发车到晚点到达。 */
+function describeDirectionRange(entries: readonly WorkbenchEntry[]): string {
+  const starts = entries
+    .map((entry) => firstDepartureOrUndefined(entry.stops))
+    .filter((minutes): minutes is number => minutes !== undefined);
+  const ends = entries
+    .map((entry) => {
+      const last = entry.stops.at(-1);
+      return last?.arrivalMinutes ?? last?.departureMinutes;
+    })
+    .filter((minutes): minutes is number => minutes !== undefined);
+  if (starts.length === 0 || ends.length === 0) {
+    return '—';
+  }
+  return `${formatWorkbenchMinutes(Math.min(...starts))} – ${formatWorkbenchMinutes(
+    Math.max(...ends),
+  )}`;
 }
 
 function buildTripPayload(entry: WorkbenchEntry, line: TransitLineSnapshot) {

@@ -315,11 +315,12 @@ function AppShellFrame({
     serverStatus.displayState === 'online'
       ? serverStatus.response?.item?.onlinePlayerCount
       : undefined;
-  const serverStatusLabel = serverStatusPillText(
-    serverStatus.displayState,
-    serverStatusOnlinePlayerCount,
-    t,
-  );
+  const serverStatusLabel =
+    serverStatusOnlinePlayerCount !== undefined && serverStatusOnlinePlayerCount > 0
+      ? `${serverStatusPillText(serverStatus.displayState, t)} · ${t('serverStatus.pill.players', {
+          count: serverStatusOnlinePlayerCount,
+        })}`
+      : serverStatusPillText(serverStatus.displayState, t);
 
   // 侧边操作栏条目：顶部工具栏 → 底部主导航，均为纯图标按钮。
   const railActions = useMemo<MobileActionRailItem[]>(
@@ -825,7 +826,9 @@ function SiteLegal({ className = '' }: Readonly<{ className?: string }>) {
 export function SecondaryPageHeader({
   backHref,
   backLabel,
+  centerContent,
   desktopBackHref,
+  hideBack = false,
   onBack,
   secondaryActions,
   title,
@@ -833,7 +836,11 @@ export function SecondaryPageHeader({
 }: Readonly<{
   backHref: string;
   backLabel?: string;
+  /** 标题栏正中央的附加内容，例如宽屏下的编辑器工具栏。 */
+  centerContent?: ReactNode;
   desktopBackHref?: string;
+  /** 移动端侧边操作栏接管返回时，隐藏标题栏里的返回按钮。 */
+  hideBack?: boolean;
   onBack?: () => void;
   secondaryActions?: ReactNode;
   title: string;
@@ -847,7 +854,9 @@ export function SecondaryPageHeader({
   return (
     <header className="topbar secondary-topbar">
       <TopbarMaterialLayers />
-      {onBack ? (
+      {hideBack ? (
+        <span className="secondary-back-placeholder" aria-hidden="true" />
+      ) : onBack ? (
         <button
           className={backClassName}
           type="button"
@@ -861,7 +870,7 @@ export function SecondaryPageHeader({
           <span className="material-symbols-outlined">arrow_back</span>
         </Link>
       )}
-      {desktopBackHref ? (
+      {!hideBack && desktopBackHref ? (
         <Link
           className="icon-button secondary-back-desktop"
           href={appPath(desktopBackHref)}
@@ -871,6 +880,9 @@ export function SecondaryPageHeader({
         </Link>
       ) : null}
       <h1 className="secondary-title">{renderedTitle}</h1>
+      <div className="secondary-center-content" data-editor-header-tools-slot>
+        {centerContent}
+      </div>
       <div className="secondary-actions">{secondaryActions}</div>
     </header>
   );

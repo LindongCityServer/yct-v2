@@ -52,10 +52,14 @@ import {
   resolveTransitStationMaterialInput,
 } from './material-transit-source';
 import {
-  buildMetroWayfindingTextSignature,
   collectMetroWayfindingTexts,
   parseMetroWayfindingLayout,
 } from './metro-wayfinding';
+import { buildMaterialTemplateTextSignature } from './material-text-signature';
+import {
+  describeMaterialCanvasLockError,
+  describeMaterialCanvasSizeError,
+} from './material-canvas-policy';
 
 export type MaterialWorkflowResult = MaterialWorkflowSuccess | MaterialWorkflowFailure;
 
@@ -115,6 +119,22 @@ export async function listPublishedMaterialTemplates(): Promise<
       return { id, template: summary };
     })
     .sort((left, right) => left.template.title.localeCompare(right.template.title, 'zh-CN'));
+}
+
+/**
+ * 已发布模板的 SVG 源码。
+ *
+ * 浏览器实时预览需要在本地合成 SVG，模板源码只在工作台初始化时取一次，
+ * 之后字段变化不再请求服务端。
+ */
+export async function listPublishedMaterialTemplateSources(): Promise<
+  Array<{ id: string; version: number; source: string }>
+> {
+  const records = await listMaterialTemplateRecords();
+  return records.flatMap((record) => {
+    const template = findPublishedMaterialTemplateVersion(record);
+    return template ? [{ id: record.id, version: template.version, source: template.source }] : [];
+  });
 }
 
 export async function listAdminMaterialState(): Promise<{
@@ -231,6 +251,15 @@ export async function createManualMaterialDraft(input: {
   });
   if (!template.ok) {
     return template;
+  }
+  const draftCanvasError = describeMaterialCanvasExportError({
+    templateId: input.draft.templateId,
+    defaultCanvas: template.template.defaultCanvas,
+    canvas: input.draft.canvas,
+    layout: input.draft.input.layout,
+  });
+  if (draftCanvasError) {
+    return invalidInputMessage(draftCanvasError);
   }
   let values: Record<string, string>;
   try {
@@ -469,6 +498,15 @@ function requiresVerifiedServerAccount(request: MaterialExportRequestInput): boo
   return request.source.kind === 'transit_station' && 'stationMarkerId' in request.source;
 }
 
+function describeMaterialCanvasExportError(input: {
+  templateId: string;
+  defaultCanvas: MaterialCanvasConfig;
+  canvas: MaterialCanvasConfig;
+  layout?: string;
+}): string | undefined {
+  return describeMaterialCanvasLockError(input) ?? describeMaterialCanvasSizeError(input.canvas);
+}
+
 const anonymousExportMaxPxPerMeter = 128;
 const anonymousExportMaxLongSidePx = 2048;
 
@@ -619,12 +657,6 @@ async function resolveMaterialExportSource(
     if (!template.ok) {
       return template;
     }
-    const isWayfindingTemplate = template.template.fields.some(
-      (field) => field.glyph?.renderer === 'metro_wayfinding',
-    );
-    if (!isWayfindingTemplate) {
-      return forbidden('只有地铁导视模板可以在未修改时免审核导出。');
-    }
     if (!serverAccountVerified && !standardTier) {
       return {
         ok: false,
@@ -633,12 +665,23 @@ async function resolveMaterialExportSource(
         message: '免审核下载无水印图片前，需要先验证服务器账号。',
       };
     }
-    // 只比较文本内容：画布尺寸、箭头/图标/空白等图形调整都视为未修改。
+    // 只比较模板定义的文本字段：画布尺寸、颜色、图标、空白等图形调整都视为未修改。
+    // 文本基线由客户端在套用模板时保存；服务端按模板定义收集字段，不接受客户端字段清单。
+    const baselineInput = baseline.input ?? (baseline.layout ? { layout: baseline.layout } : {});
     if (
-      buildMetroWayfindingTextSignature(request.input.layout ?? '') !==
-      buildMetroWayfindingTextSignature(baseline.layout)
+      buildMaterialTemplateTextSignature(template.template, request.input) !==
+      buildMaterialTemplateTextSignature(template.template, baselineInput)
     ) {
       return forbidden('模板文本已修改，未修改标签已失效。');
+    }
+    const canvasError = describeMaterialCanvasExportError({
+      templateId: request.templateId,
+      defaultCanvas: template.template.defaultCanvas,
+      canvas: request.canvas,
+      layout: request.input.layout,
+    });
+    if (canvasError) {
+      return invalidInputMessage(canvasError);
     }
     try {
       return {
@@ -673,6 +716,15 @@ async function resolveMaterialExportSource(
     if (!template.ok) {
       return template;
     }
+    const customCanvasError = describeMaterialCanvasExportError({
+      templateId: draft.templateId,
+      defaultCanvas: template.template.defaultCanvas,
+      canvas: draft.canvas,
+      layout: draft.input.layout,
+    });
+    if (customCanvasError) {
+      return invalidInputMessage(customCanvasError);
+    }
     return {
       ok: true,
       templateId: draft.templateId,
@@ -694,6 +746,15 @@ async function resolveMaterialExportSource(
   });
   if (!template.ok) {
     return template;
+  }
+  const serverCanvasError = describeMaterialCanvasExportError({
+    templateId: request.templateId,
+    defaultCanvas: template.template.defaultCanvas,
+    canvas: request.canvas,
+    layout: request.input?.layout,
+  });
+  if (serverCanvasError) {
+    return invalidInputMessage(serverCanvasError);
   }
   try {
     const resolved = await resolveServerMaterialInput({
@@ -745,6 +806,15 @@ async function resolveMaterialPreviewSource(request: MaterialPreviewRequestInput
   if (!template.ok) {
     return template;
   }
+  const previewCanvasError = describeMaterialCanvasExportError({
+    templateId: request.templateId,
+    defaultCanvas: template.template.defaultCanvas,
+    canvas: request.canvas,
+    layout: request.input?.layout,
+  });
+  if (previewCanvasError) {
+    return invalidInputMessage(previewCanvasError);
+  }
   try {
     if (request.mode === 'manual') {
       return {
@@ -781,6 +851,50 @@ async function resolveMaterialPreviewSource(request: MaterialPreviewRequestInput
         { allowMissingServerDerivedValues: true },
       ),
       canvas: request.canvas,
+      sourceKind: resolved.sourceKind,
+      sourceRef: resolved.sourceRef,
+    };
+  } catch (error) {
+    return invalidInput(error);
+  }
+}
+
+export type MaterialResolvedInputResult =
+  | {
+      ok: true;
+      values: Record<string, string>;
+      sourceKind: MaterialSourceKind;
+      sourceRef: string;
+    }
+  | { ok: false; status?: number; error?: string; message?: string };
+
+/**
+ * 只解析数据来源对应的字段值，不生成 PNG。
+ * 工作台用它把「地点 / 坐标」套用成可本地编辑的字段，之后预览走浏览器本地合成。
+ */
+export async function resolveMaterialServerInputValues(input: {
+  templateId: string;
+  templateVersion: number;
+  source: MaterialServerSourceInput;
+  networkGeometry?: MaterialPreviewRequestInput['networkGeometry'];
+}): Promise<MaterialResolvedInputResult> {
+  const template = await resolveTemplateVersion({
+    templateId: input.templateId,
+    version: input.templateVersion,
+    publishedOnly: true,
+  });
+  if (!template.ok) {
+    return template;
+  }
+  try {
+    const resolved = await resolveServerMaterialInput({
+      source: input.source,
+      fields: template.template.fields,
+      networkGeometry: input.networkGeometry,
+    });
+    return {
+      ok: true,
+      values: resolved.values,
       sourceKind: resolved.sourceKind,
       sourceRef: resolved.sourceRef,
     };

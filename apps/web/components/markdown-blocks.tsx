@@ -1,66 +1,88 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { appPath } from '../lib/app-paths';
+import {
+  extractMarkdownHeadingsFromBlocks,
+  parseMarkdownBlocks,
+  type MarkdownBlock,
+} from '../lib/editor/markdown-blocks';
 import { ProgressiveImage } from './progressive-image';
 
-type MarkdownBlock =
-  | { type: 'heading'; level: 2 | 3 | 4; text: string }
-  | { type: 'paragraph'; text: string }
-  | { type: 'divider' }
-  | { type: 'table'; headers: string[]; rows: string[][] }
-  | { type: 'list'; ordered: boolean; items: string[] }
-  | { type: 'quote'; text: string }
-  | { type: 'image'; alt: string; src: string }
-  | { type: 'ui'; body: string; closed: boolean };
-
-export interface MarkdownHeading {
-  id: string;
-  level: 2 | 3 | 4;
-  text: string;
-}
+export { extractMarkdownHeadings, parseMarkdownBlocks } from '../lib/editor/markdown-blocks';
+export type { MarkdownBlock, MarkdownHeading } from '../lib/editor/markdown-blocks';
 
 export function MarkdownBlocks({
   markdown,
   renderUiBlock,
+  activeBlockIndex,
+  editingBlockIndex,
+  onBlockSelect,
+  onBlockDoubleClick,
+  renderBlock,
 }: Readonly<{
   markdown: string;
   /** 渲染 ```ui 代码块；未提供时直接隐藏，避免把指令 JSON 漏到界面上。 */
   renderUiBlock?: (body: string) => ReactNode;
+  /** 工作台选中块下标；公开页面不传，DOM 结构与改造前一致。 */
+  activeBlockIndex?: number;
+  /** 工作台画布内联编辑中的块下标。 */
+  editingBlockIndex?: number;
+  /** 工作台点击块定位；公开页面不传，不包额外容器。 */
+  onBlockSelect?: (index: number) => void;
+  /** 工作台双击块进入属性编辑。 */
+  onBlockDoubleClick?: (index: number) => void;
+  /** 用自定义编辑器替换指定块的渲染；返回空时回退到只读渲染。 */
+  renderBlock?: (block: MarkdownBlock, index: number) => ReactNode;
 }>) {
   const blocks = parseMarkdownBlocks(markdown);
-  const headings = extractMarkdownHeadings(markdown);
-  let headingIndex = 0;
+  const headingIdByBlock = new Map(
+    extractMarkdownHeadingsFromBlocks(blocks).map((heading) => [heading.blockIndex, heading.id]),
+  );
 
   return (
     <div className="markdown-blocks">
       {blocks.map((block, index) => {
-        const headingId = block.type === 'heading' ? headings[headingIndex++]?.id : undefined;
-        return renderMarkdownBlock(block, index, headingId, renderUiBlock);
+        const content =
+          renderBlock?.(block, index) ??
+          renderMarkdownBlock(block, index, headingIdByBlock.get(index), renderUiBlock);
+        if (!onBlockSelect) {
+          return content;
+        }
+
+        return (
+          <div
+            className={`markdown-visual-block${activeBlockIndex === index ? ' is-active' : ''}${
+              editingBlockIndex === index ? ' is-editing' : ''
+            }`}
+            data-markdown-block-index={index}
+            data-markdown-block-type={block.type}
+            key={index}
+            onClick={(event) => {
+              const target = event.target;
+              if (
+                target instanceof Element &&
+                target.closest('a, button, input, select, textarea')
+              ) {
+                return;
+              }
+              onBlockSelect(index);
+            }}
+            onDoubleClick={(event) => {
+              const target = event.target;
+              if (
+                target instanceof Element &&
+                target.closest('a, button, input, select, textarea')
+              ) {
+                return;
+              }
+              onBlockDoubleClick?.(index);
+            }}
+          >
+            {content}
+          </div>
+        );
       })}
     </div>
   );
-}
-
-export function extractMarkdownHeadings(markdown: string): MarkdownHeading[] {
-  const usedIds = new Map<string, number>();
-
-  return parseMarkdownBlocks(markdown).flatMap((block) => {
-    if (block.type !== 'heading') {
-      return [];
-    }
-
-    const text = markdownInlineText(block.text);
-    const baseId = markdownHeadingId(text);
-    const occurrence = (usedIds.get(baseId) ?? 0) + 1;
-    usedIds.set(baseId, occurrence);
-
-    return [
-      {
-        id: occurrence === 1 ? baseId : `${baseId}-${occurrence}`,
-        level: block.level,
-        text,
-      },
-    ];
-  });
 }
 
 function renderMarkdownBlock(
@@ -71,7 +93,7 @@ function renderMarkdownBlock(
 ): ReactNode {
   switch (block.type) {
     case 'heading': {
-      const HeadingTag = `h${block.level}` as 'h2' | 'h3' | 'h4';
+      const HeadingTag = `h${block.level}` as 'h1' | 'h2' | 'h3' | 'h4';
       return (
         <HeadingTag id={headingId} key={index}>
           {renderInlineMarkdown(block.text)}
@@ -89,7 +111,16 @@ function renderMarkdownBlock(
       );
     }
     case 'quote':
-      return <blockquote key={index}>{renderInlineMarkdown(block.text)}</blockquote>;
+      return (
+        <blockquote key={index}>
+          {block.lines.map((line, lineIndex) => (
+            <Fragment key={`${index}-${lineIndex}`}>
+              {lineIndex > 0 ? <br /> : null}
+              {renderInlineMarkdown(line)}
+            </Fragment>
+          ))}
+        </blockquote>
+      );
     case 'divider':
       return <hr key={index} />;
     case 'table':
@@ -119,6 +150,12 @@ function renderMarkdownBlock(
       );
     case 'image':
       return renderMarkdownImage(block, index);
+    case 'code':
+      return (
+        <pre className="markdown-code-block" key={index}>
+          <code data-language={block.language || undefined}>{block.body}</code>
+        </pre>
+      );
     case 'ui': {
       // 流式过程中代码块还没闭合，先不渲染，等闭合后再交给卡片组件。
       if (!block.closed || !renderUiBlock) {
@@ -148,321 +185,6 @@ function renderMarkdownImage(block: Extract<MarkdownBlock, { type: 'image' }>, i
       {block.alt ? <figcaption>{block.alt}</figcaption> : null}
     </figure>
   );
-}
-
-function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
-  const blocks: MarkdownBlock[] = [];
-  let index = 0;
-
-  while (index < lines.length) {
-    const line = lines[index].trim();
-    if (!line) {
-      index += 1;
-      continue;
-    }
-
-    if (isMarkdownDivider(line)) {
-      blocks.push({ type: 'divider' });
-      index += 1;
-      continue;
-    }
-
-    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
-    if (heading) {
-      blocks.push({
-        type: 'heading',
-        level: (heading[1].length + 1) as 2 | 3 | 4,
-        text: heading[2].trim(),
-      });
-      index += 1;
-      continue;
-    }
-
-    const image = parseImageLine(line);
-    if (image) {
-      blocks.push(image);
-      index += 1;
-      continue;
-    }
-
-    const uiFence = parseUiFenceBlock(lines, index);
-    if (uiFence) {
-      blocks.push(uiFence.block);
-      index = uiFence.nextIndex;
-      continue;
-    }
-
-    const table = parseTableBlock(lines, index);
-    if (table) {
-      blocks.push(table.block);
-      index = table.nextIndex;
-      continue;
-    }
-
-    const list = parseListBlock(lines, index);
-    if (list) {
-      blocks.push(list.block);
-      index = list.nextIndex;
-      continue;
-    }
-
-    const quote = parseQuoteBlock(lines, index);
-    if (quote) {
-      blocks.push(quote.block);
-      index = quote.nextIndex;
-      continue;
-    }
-
-    const paragraph = collectParagraph(lines, index);
-    blocks.push({
-      type: 'paragraph',
-      text: paragraph.lines.join(' '),
-    });
-    index = paragraph.nextIndex;
-  }
-
-  return blocks;
-}
-
-function parseTableBlock(
-  lines: string[],
-  startIndex: number,
-): { block: Extract<MarkdownBlock, { type: 'table' }>; nextIndex: number } | undefined {
-  const headers = parseMarkdownTableRow(lines[startIndex]);
-  const separator = parseMarkdownTableRow(lines[startIndex + 1] ?? '');
-  if (
-    !headers ||
-    headers.length === 0 ||
-    !separator ||
-    separator.length !== headers.length ||
-    !separator.every(isMarkdownTableSeparatorCell)
-  ) {
-    return undefined;
-  }
-
-  const rows: string[][] = [];
-  let index = startIndex + 2;
-  while (index < lines.length) {
-    const row = parseMarkdownTableRow(lines[index]);
-    if (!row) {
-      break;
-    }
-    rows.push(headers.map((_, cellIndex) => row[cellIndex] ?? ''));
-    index += 1;
-  }
-
-  return {
-    block: { type: 'table', headers, rows },
-    nextIndex: index,
-  };
-}
-
-function parseMarkdownTableRow(line: string | undefined): string[] | undefined {
-  if (!line || !line.includes('|')) {
-    return undefined;
-  }
-
-  let source = line.trim();
-  if (source.startsWith('|')) {
-    source = source.slice(1);
-  }
-  if (source.endsWith('|') && !source.endsWith('\\|')) {
-    source = source.slice(0, -1);
-  }
-
-  const cells: string[] = [];
-  let cell = '';
-  let escaped = false;
-  for (const character of source) {
-    if (escaped) {
-      cell += character;
-      escaped = false;
-    } else if (character === '\\') {
-      escaped = true;
-    } else if (character === '|') {
-      cells.push(cell.trim());
-      cell = '';
-    } else {
-      cell += character;
-    }
-  }
-  if (escaped) {
-    cell += '\\';
-  }
-  cells.push(cell.trim());
-  return cells.length > 0 ? cells : undefined;
-}
-
-function isMarkdownTableSeparatorCell(value: string): boolean {
-  return /^:?-{3,}:?$/.test(value.trim());
-}
-
-/** ```ui 代码块：模型用它下发结构化卡片指令。 */
-const uiFenceOpenPattern = /^```\s*ui\s*$/i;
-const codeFenceClosePattern = /^```\s*$/;
-
-function parseUiFenceBlock(
-  lines: string[],
-  startIndex: number,
-): { block: Extract<MarkdownBlock, { type: 'ui' }>; nextIndex: number } | undefined {
-  if (!uiFenceOpenPattern.test(lines[startIndex].trim())) {
-    return undefined;
-  }
-
-  const bodyLines: string[] = [];
-  let index = startIndex + 1;
-  while (index < lines.length) {
-    if (codeFenceClosePattern.test(lines[index].trim())) {
-      return {
-        block: { type: 'ui', body: bodyLines.join('\n'), closed: true },
-        nextIndex: index + 1,
-      };
-    }
-    bodyLines.push(lines[index]);
-    index += 1;
-  }
-
-  // 流式过程中代码块还没闭合：吞掉剩余内容，等闭合后再交给卡片组件。
-  return {
-    block: { type: 'ui', body: bodyLines.join('\n'), closed: false },
-    nextIndex: index,
-  };
-}
-
-function parseImageLine(line: string): MarkdownBlock | undefined {
-  const markdownImage = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(line);
-  if (markdownImage) {
-    return {
-      type: 'image',
-      alt: markdownImage[1].trim(),
-      src: markdownImage[2].trim(),
-    };
-  }
-
-  const legacyImage = /^原始图片：(\S+)$/.exec(line);
-  if (legacyImage) {
-    return {
-      type: 'image',
-      alt: '原始图片',
-      src: legacyImage[1].trim(),
-    };
-  }
-
-  return undefined;
-}
-
-function parseListBlock(
-  lines: string[],
-  startIndex: number,
-): { block: Extract<MarkdownBlock, { type: 'list' }>; nextIndex: number } | undefined {
-  const first = parseListItem(lines[startIndex]);
-  if (!first) {
-    return undefined;
-  }
-
-  const items: string[] = [];
-  let index = startIndex;
-  while (index < lines.length) {
-    const item = parseListItem(lines[index]);
-    if (!item || item.ordered !== first.ordered) {
-      break;
-    }
-    items.push(item.text);
-    index += 1;
-  }
-
-  return {
-    block: {
-      type: 'list',
-      ordered: first.ordered,
-      items,
-    },
-    nextIndex: index,
-  };
-}
-
-function parseListItem(line: string): { ordered: boolean; text: string } | undefined {
-  const unordered = /^\s*[-*+]\s+(.+)$/.exec(line);
-  if (unordered) {
-    return {
-      ordered: false,
-      text: unordered[1].trim(),
-    };
-  }
-
-  const ordered = /^\s*\d+[.)]\s+(.+)$/.exec(line);
-  if (ordered) {
-    return {
-      ordered: true,
-      text: ordered[1].trim(),
-    };
-  }
-
-  return undefined;
-}
-
-function parseQuoteBlock(
-  lines: string[],
-  startIndex: number,
-): { block: Extract<MarkdownBlock, { type: 'quote' }>; nextIndex: number } | undefined {
-  if (!/^\s*>\s?/.test(lines[startIndex])) {
-    return undefined;
-  }
-
-  const quoteLines: string[] = [];
-  let index = startIndex;
-  while (index < lines.length && /^\s*>\s?/.test(lines[index])) {
-    quoteLines.push(lines[index].replace(/^\s*>\s?/, '').trim());
-    index += 1;
-  }
-
-  return {
-    block: {
-      type: 'quote',
-      text: quoteLines.join(' '),
-    },
-    nextIndex: index,
-  };
-}
-
-function collectParagraph(
-  lines: string[],
-  startIndex: number,
-): { lines: string[]; nextIndex: number } {
-  const paragraphLines: string[] = [];
-  let index = startIndex;
-
-  while (index < lines.length) {
-    const line = lines[index].trim();
-    if (
-      !line ||
-      isMarkdownDivider(line) ||
-      /^(#{1,3})\s+(.+)$/.test(line) ||
-      parseImageLine(line) ||
-      uiFenceOpenPattern.test(line) ||
-      parseListItem(line) ||
-      /^\s*>\s?/.test(line)
-    ) {
-      break;
-    }
-
-    if (parseTableBlock(lines, index)) {
-      break;
-    }
-
-    paragraphLines.push(line);
-    index += 1;
-  }
-
-  return {
-    lines: paragraphLines,
-    nextIndex: index,
-  };
-}
-
-function isMarkdownDivider(line: string): boolean {
-  return /^(?:-{3,}|(?:\*\s*){3,}|(?:_\s*){3,})$/.test(line);
 }
 
 function renderInlineMarkdown(text: string): ReactNode[] {
@@ -509,23 +231,6 @@ function renderInlineMarkdown(text: string): ReactNode[] {
   }
 
   return nodes.length > 0 ? nodes : [text];
-}
-
-function markdownInlineText(text: string): string {
-  return text
-    .replace(/!?\[([^\]]+)]\([^)]+\)/g, '$1')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .trim();
-}
-
-function markdownHeadingId(text: string): string {
-  const normalized = text
-    .normalize('NFKC')
-    .toLocaleLowerCase('zh-CN')
-    .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
-    .replace(/^-+|-+$/g, '');
-  return normalized || 'section';
 }
 
 function isSafeHref(href: string): boolean {

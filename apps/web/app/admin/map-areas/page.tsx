@@ -8,7 +8,13 @@ export async function generateMetadata() {
   return getPageMetadata('adminMapAreas');
 }
 
-export default function AdminMapAreasPage() {
+export default async function AdminMapAreasPage({
+  searchParams,
+}: Readonly<{
+  searchParams?: Promise<{ areaId?: string | string[] }>;
+}>) {
+  const resolved = searchParams ? await searchParams : undefined;
+  const areaId = Array.isArray(resolved?.areaId) ? resolved.areaId[0] : resolved?.areaId;
   return (
     <SecondaryShell
       title="行政区划"
@@ -16,7 +22,7 @@ export default function AdminMapAreasPage() {
       desktopBackHref="/account"
       desktopNavigation={<AdminSectionNavigation currentPath="/admin/map-areas" includeOverview />}
     >
-      <AdminAdministrativeAreaPanel />
+      <AdminAdministrativeAreaPanel initialAreaId={areaId} />
     </SecondaryShell>
   );
 }

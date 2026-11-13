@@ -1,12 +1,17 @@
 'use client';
 
-import type { MaterialTransitNetworkSnapshot, TileProviderDescriptor } from '@yct/contracts';
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import type {
+  MaterialGlyphConfig,
+  MaterialTransitNetworkSnapshot,
+  TileProviderDescriptor,
+} from '@yct/contracts';
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { trackAnalyticsEvent } from '../lib/analytics/client';
 import { appPath } from '../lib/app-paths';
 import {
   createMaterialOfflineDraftId,
   readLatestMaterialOfflineDraft,
+  readMaterialOfflineDraftForTemplate,
   upsertMaterialOfflineDraft,
   type MaterialOfflineDraftRecord,
 } from '../lib/client-material-offline-drafts';
@@ -25,6 +30,7 @@ import {
 } from '../lib/client-metro-wayfinding-events';
 import {
   publishTransitNetworkLineNameEditorRequested,
+  publishTransitNetworkSourceChanged,
   subscribeTransitNetworkProjectSnapshotChanged,
   subscribeTransitNetworkSourceChanged,
   type TransitNetworkProjectOrigin,
@@ -34,14 +40,25 @@ import {
   buildMetroWayfindingTextSignature,
   createMetroWayfindingProjectFile,
   METRO_WAYFINDING_TEMPLATE_ID,
+  metroWayfindingBackgroundPalette,
   parseMetroWayfindingLayout,
   serializeMetroWayfindingLayout,
   serializeMetroWayfindingProjectFile,
 } from '../lib/metro-wayfinding';
 import {
+  BUS_STOP_DETAIL_TEMPLATE_ID,
+  BUS_STOP_HORIZONTAL_DETAIL_TEMPLATE_ID,
   BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID,
+  BUS_STOP_OVERVIEW_TEMPLATE_ID,
   BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID,
+  BUS_STOP_TERMINAL_TEMPLATE_ID,
+  METRO_LINE_MAP_NEW_TEMPLATE_ID,
+  METRO_LINE_MAP_OLD_TEMPLATE_ID,
+  METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID,
   METRO_PLATFORM_SIGN_TEMPLATE_ID,
+  ROAD_NAME_DIRECTION_TEMPLATE_ID,
+  BUILDING_ADDRESS_TEMPLATE_ID,
+  NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID,
   isMetroLineMapVerticalTemplateId,
 } from '../lib/material-template-ids';
 import {
@@ -50,6 +67,20 @@ import {
   type MetroWayfindingExampleStation,
 } from '../lib/metro-wayfinding-examples';
 import { formatServiceTimeRange, parseServiceTimeRange } from '../lib/material-service-time';
+import { composeMaterialTemplateSvg } from '../lib/material-svg';
+import {
+  resolveMetroSignTextRegions,
+  resolveTransitHorizontalStationRegions,
+} from '../lib/material-glyphs';
+import { createBrowserMaterialGlyphAssets } from '../lib/material-glyph-browser-assets';
+import {
+  resolveMaterialCanvasLocks,
+  resolveMaterialMaxPxPerMeter,
+} from '../lib/material-canvas-policy';
+import { buildMaterialTemplateTextSignature } from '../lib/material-text-signature';
+import { parseMaterialTransitLineDisplay } from '../lib/material-line-display';
+import { toUppercasePinyin } from '../lib/chinese-pinyin';
+import { resolveMaterialWorkspaceAdapter } from '../lib/material-workspace-adapter';
 import {
   findMaterialTransitNetworkLineByKey,
   listMaterialTransitNetworkLines,
@@ -61,9 +92,21 @@ import {
 } from '../lib/rmp-transit-network';
 import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
-import { MetroWayfindingEditor } from './metro-wayfinding-editor';
+import { publishToastRequested } from '../lib/client-toast-events';
+import { MetroWayfindingEditor, mergeMetroColorOptions } from './metro-wayfinding-editor';
 import { MetroWayfindingInspector } from './metro-wayfinding-inspector';
+import { SegmentedControl } from './segmented-control';
+import { TransitWayfindingWorkspace } from './transit-wayfinding-workspace';
+import {
+  TransitMaterialFormWorkspace,
+  type TransitMaterialFormGroup,
+  type TransitMaterialFormRegion,
+  type TransitMaterialFormStationNode,
+} from './transit-material-form-workspace';
+import { VisualEditorShell } from './visual-editor-shell';
+import { EditorDialogPortal } from './editor/editor-dialog-portal';
 import { TransitNetworkSourceControl } from './transit-network-source-control';
+import { MaterialPreviewErrorNotice } from './material-save-download-dialog';
 
 type MaterialFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'metro_line' | 'custom';
 
@@ -91,6 +134,14 @@ export interface MaterialTemplateGroup {
 }
 type MaterialServerSource = 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
 
+/** 路牌落点提示使用的中文方位文案（翻译键）。 */
+const roadSideLabelKeys: Record<'north' | 'south' | 'east' | 'west', CommonMessageKey> = {
+  north: 'materialStudio.roadSideNorth',
+  south: 'materialStudio.roadSideSouth',
+  east: 'materialStudio.roadSideEast',
+  west: 'materialStudio.roadSideWest',
+};
+
 /** 首末班车时间字段：项目线网来源下需要用户补录（见 `offerProjectServiceTimeInput`）。 */
 const SERVICE_TIME_FIELD_KEY = 'routeServiceTime';
 
@@ -106,6 +157,8 @@ interface MaterialField {
   minimum?: number;
   maximum?: number;
   options?: Array<{ value: string; label: string }>;
+  /** 地铁线路图 / 导视牌等专用字形渲染配置。 */
+  glyph?: MaterialGlyphConfig;
 }
 
 interface MaterialCanvas {
@@ -164,6 +217,8 @@ interface TransitStationOption {
   markerId: string;
   stationSourceId: string;
   stationName: string;
+  /** 导入项目里的副站名（通常为英文）；服务器线网没有该字段。 */
+  stationSecondaryName?: string;
   coordinate?: [number, number];
   directionOptions: Array<{
     value: 'east' | 'west' | 'north' | 'south';
@@ -223,6 +278,29 @@ function arraysEqual(left: readonly string[], right: readonly string[]): boolean
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+/** 安全读取 JSON：401 / 重定向可能返回 HTML，直接 `json()` 会抛解析异常。 */
+async function readJsonResponse<T>(response: Response): Promise<T | undefined> {
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    return undefined;
+  }
+  try {
+    return (await response.json()) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 输入防抖：本地 SVG 合成按最后一次输入执行，避免逐字重复排版长站点列表。 */
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(timeoutId);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 function listRmpLineTerminalStations(
   snapshot: MaterialTransitNetworkSnapshot,
   lineKey: string,
@@ -250,8 +328,10 @@ export function MaterialStudioPanel({
   serverFamilies,
   includedTemplateIds,
   templateGroups,
+  defaultTemplateId,
   compactCanvasControls = false,
   allowTransitNetworkImport = false,
+  workspace = false,
 }: Readonly<{
   studioId: string;
   title: string;
@@ -262,15 +342,21 @@ export function MaterialStudioPanel({
   serverFamilies?: MaterialFamily[];
   includedTemplateIds?: string[];
   templateGroups?: MaterialTemplateGroup[];
+  /** 工作台首次加载优先选中的模板；未指定时沿用「地铁导视牌优先」。 */
+  defaultTemplateId?: string;
   /** 仅保留「长度 + 对齐单位」，隐藏宽高输入（公交导视工作台使用）。 */
   compactCanvasControls?: boolean;
   allowTransitNetworkImport?: boolean;
+  /** 使用统一可视化工作台外壳（标题栏 + 三栏 + 面板开关 + 保存语义）。 */
+  workspace?: boolean;
 }>) {
   const [items, setItems] = useState<PublishedMaterialTemplate[]>([]);
   const [drafts, setDrafts] = useState<MaterialDraft[]>([]);
   const [transitLines, setTransitLines] = useState<TransitLineOption[]>([]);
   const [transitStations, setTransitStations] = useState<TransitStationOption[]>([]);
   const [locations, setLocations] = useState<MaterialLocationOption[]>([]);
+  /** 门牌模板专用：只包含地址里带可解析门牌号的 POI。 */
+  const [addressPoiLocations, setAddressPoiLocations] = useState<MaterialLocationOption[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [mode, setMode] = useState<StudioMode>('manual');
   const [input, setInput] = useState<Record<string, string>>({});
@@ -282,11 +368,23 @@ export function MaterialStudioPanel({
   const [transitDirection, setTransitDirection] = useState<'east' | 'west' | 'north' | 'south'>(
     'east',
   );
-  const [transitTerminalRole, setTransitTerminalRole] = useState<'origin' | 'terminal'>('origin');
+  const [transitTerminalRole, setTransitTerminalRole] = useState<
+    'origin' | 'terminal' | ''
+  >('origin');
   const [selectedTransitLineIds, setSelectedTransitLineIds] = useState<string[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState('');
   const [locationQuery, setLocationQuery] = useState('');
   const [roadCoordinate, setRoadCoordinate] = useState<[number, number] | null>(null);
+  /** 路牌落点提示：最近道路名、所在侧与安装点，由服务端按地图几何计算。 */
+  const [roadSideHint, setRoadSideHint] = useState<{
+    roadName: string;
+    side: 'north' | 'south' | 'east' | 'west';
+    installation: [number, number];
+    distance: number;
+  } | null>(null);
+  const [isRoadSideHintLoading, setIsRoadSideHintLoading] = useState(false);
+  /** 至少完成过一次落点匹配，避免请求返回前先显示“附近没有道路”。 */
+  const [isRoadSideHintChecked, setIsRoadSideHintChecked] = useState(false);
   const [freshTileTemplate, setFreshTileTemplate] = useState<string | null>(null);
   const [tileTemplate, setTileTemplate] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -295,8 +393,22 @@ export function MaterialStudioPanel({
   const [isSingleColumnViewport, setIsSingleColumnViewport] = useState(false);
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [isApplyWizardOpen, setIsApplyWizardOpen] = useState(false);
+  /** 模板库当前预览的模板入口（可能与当前画布模板不同，用于跨入口切换）。 */
+  const [applyWizardEntryId, setApplyWizardEntryId] = useState('');
+  const [applyWizardStyleIndex, setApplyWizardStyleIndex] = useState(0);
+  const [applyWizardTemplateId, setApplyWizardTemplateId] = useState('');
+  const [pendingWizardApply, setPendingWizardApply] = useState<{
+    templateId: string;
+    values: Record<string, string>;
+    /** reset：以新模板默认值为底合并；merge：在用户当前输入上增量合并服务端补充值。 */
+    mode?: 'reset' | 'merge';
+  } | null>(null);
   const [workspaceBlockMessage, setWorkspaceBlockMessage] = useState('');
+  const [isResolvingSource, setIsResolvingSource] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  /** 工作台初始数据（模板 / 车站 / 线路）加载中：此时控件不可用属于「加载中」而非「彻底不可用」。 */
+  const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
   const [isPreviewRendering, setIsPreviewRendering] = useState(false);
   const [transitNetworkSource, setTransitNetworkSource] = useState<'server' | 'rmp'>('rmp');
   // RMP 项目来源：示例线网 vs 用户导入，线路选项按它区分。
@@ -310,6 +422,8 @@ export function MaterialStudioPanel({
   const { t, locale } = useI18n();
   const panelTitle = titleKey ? t(titleKey) : title;
   const localDraftRef = useRef<MaterialOfflineDraftRecord | null>(null);
+  // 路牌 / 门牌来回切样式时，目标模板没有的同名字段（如怀旧没有拼音）靠这里保留。
+  const materialFieldMemoryRef = useRef<Record<string, string>>({});
   const transitNetworkSourceIntentRevisionRef = useRef(0);
   // 数据源切换时按来源切到公交站牌的默认样式，这里保存最新的版式与模板，避免闭包取到旧值。
   const activeLayoutGroupRef = useRef<MaterialTemplateLayoutGroup | undefined>(undefined);
@@ -319,11 +433,14 @@ export function MaterialStudioPanel({
   const [metroExampleLineId, setMetroExampleLineId] = useState('');
   const [metroLineMapProjectLineKey, setMetroLineMapProjectLineKey] = useState('');
   const [metroLineMapProjectNodeId, setMetroLineMapProjectNodeId] = useState('');
-  /** 套用示例 / 导入外部模板时的原始内容，用于「未修改」免审核判断。 */
-  const [wayfindingBaseline, setWayfindingBaseline] = useState<{
-    layout: string;
-    widthM: number;
-    heightM: number;
+  /** 模板源码：键为 `${templateId}:${version}`，初始化时一次性拉取，用于本地 SVG 预览。 */
+  const [templateSources, setTemplateSources] = useState<Record<string, string>>({});
+  /** 最近一次本地渲染失败原因；同时用于预览区常驻提示。 */
+  const [previewError, setPreviewError] = useState('');
+  /** 套用模板时的文本基线：「未修改」免审核判断的唯一依据。 */
+  const [materialBaseline, setMaterialBaseline] = useState<{
+    signature: string;
+    input: Record<string, string>;
   } | null>(null);
   const [accountSession, setAccountSession] = useState<{
     accountStatus?: 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
@@ -374,37 +491,158 @@ export function MaterialStudioPanel({
   const selectedEntryVariantLabel = selectedEntry?.variantLabelKey
     ? t(selectedEntry.variantLabelKey)
     : (selectedEntry?.variantLabel ?? t('materialStudio.variant'));
+  // 模板库可以跨入口切换：入口、变体与版式都按「目标入口」派生，而不是当前画布入口。
+  const applyWizardEntry =
+    templateEntries.find((entry) => entry.id === applyWizardEntryId) ?? selectedEntry;
+  const applyWizardVariants = applyWizardEntry?.templateIds
+    .map((templateId) => templates.find((item) => item.id === templateId))
+    .filter((item): item is PublishedMaterialTemplate => Boolean(item));
+  const applyWizardLayoutGroups = applyWizardEntry?.layoutGroups?.filter((group) =>
+    group.templateIds.some((templateId) =>
+      applyWizardVariants?.some((item) => item.id === templateId),
+    ),
+  );
   const activeCanvas = canvas ?? selected?.template.defaultCanvas ?? null;
-  const isMetroWayfinding = selected?.id === METRO_WAYFINDING_TEMPLATE_ID;
+  // 特殊画布模板统一走 adapter，未来高可塑性路牌模板只需在 adapter 里登记。
+  const workspaceAdapter = resolveMaterialWorkspaceAdapter(selected?.id);
+  const isMetroWayfinding = workspaceAdapter.usesDedicatedCanvas;
   const isMetroLineMap = selected?.template.family === 'metro_line';
-  // 站台站名标志是固定 512×512 的方形版面，不提供宽高或长度调节。
-  const isMetroPlatformSign = selected?.id === METRO_PLATFORM_SIGN_TEMPLATE_ID;
   // 竖版地铁线路图宽度固定 1 米，只允许调节高度。
   const isMetroVerticalLineMap = selected ? isMetroLineMapVerticalTemplateId(selected.id) : false;
   // 拟真公交站牌画布高 180（128×180），对齐到 128 的整数倍会改变比例，因此禁用该选项。
   const isRealisticBusStop =
     selected?.id === BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID ||
     selected?.id === BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID;
-  const canvasSizeMode: 'full' | 'length' | 'none' = isMetroPlatformSign
-    ? 'none'
-    : isMetroWayfinding || isMetroLineMap
-      ? 'length'
-      : compactCanvasControls
-        ? 'none'
-        : 'full';
-  // 地铁导视：套用示例 / 导入外部模板后未改文本；只改尺寸、箭头、图标、空白等都不算修改。
+  // 画布锁规则：被锁维度不显示输入，服务端也会拒绝修改。
+  const canvasLocks = resolveMaterialCanvasLocks({
+    templateId: selected?.id ?? '',
+    layout: input.layout,
+  });
+  const canvasSizeMode: 'full' | 'length' | 'none' =
+    canvasLocks.width && canvasLocks.height
+      ? 'none'
+      : canvasLocks.width || canvasLocks.height
+        ? 'length'
+        : compactCanvasControls
+          ? 'none'
+          : 'full';
+  // 浏览器本地 SVG 合成：字段变化后防抖重算，不再请求预览接口。
+  const browserGlyphAssets = useMemo(() => createBrowserMaterialGlyphAssets(), []);
+  const templateSource = selected
+    ? templateSources[`${selected.id}:${selected.template.version}`]
+    : undefined;
+  const debouncedPreviewInput = useDebouncedValue(input, 120);
+  /** 字体加载完成后重算一次，避免首帧用回退字体测量字形宽度。 */
+  const [previewFontEpoch, setPreviewFontEpoch] = useState(0);
+  useEffect(() => {
+    void document.fonts?.ready.then(() => setPreviewFontEpoch((current) => current + 1));
+  }, []);
+  const localPreview = useMemo<{
+    svg: string;
+    error: string;
+    invalidFieldKeys: string[];
+  }>(() => {
+    if (!workspace || !selected || !activeCanvas || isMetroWayfinding) {
+      return { svg: '', error: '', invalidFieldKeys: [] };
+    }
+    if (!templateSource) {
+      return { svg: '', error: '模板源码尚未加载完成，请稍候。', invalidFieldKeys: [] };
+    }
+    try {
+      // 只保留当前模板的字段，避免切换模板的瞬间旧模板字段触发「字段不属于当前模板」。
+      const previewValues = Object.fromEntries(
+        selected.template.fields.map((field) => [field.key, debouncedPreviewInput[field.key] ?? '']),
+      );
+      const result = composeMaterialTemplateSvg({
+        template: { ...selected.template, source: templateSource },
+        values: previewValues,
+        canvas: activeCanvas,
+        assets: browserGlyphAssets,
+        validation: { allowMissingRequiredValues: true },
+        // 字段级错误不清空整张画布：保留版面并在出错位置画占位，同时把问题汇总到预览提示。
+        tolerateFieldErrors: true,
+      });
+      // 必填但用户可填的字段为空时也标红：预览继续出图，由用户补齐内容。
+      const missingFieldKeys = new Set<string>();
+      const missingLabels: string[] = [];
+      for (const field of selected.template.fields) {
+        if (!field.required || field.defaultValue !== undefined) {
+          continue;
+        }
+        if ((previewValues[field.key] ?? '').trim()) {
+          continue;
+        }
+        const userCanFill =
+          mode !== 'server' || (field.serverOverride === true && field.userEditable !== false);
+        if (!userCanFill) {
+          continue;
+        }
+        missingFieldKeys.add(field.key);
+        missingLabels.push(field.label);
+      }
+      const problems: string[] = [];
+      if (result.errors.length) {
+        problems.push(
+          `以下区域渲染失败：${result.errors
+            .map((item) => `${item.label}（${item.message}）`)
+            .join('；')}`,
+        );
+      }
+      if (missingLabels.length) {
+        problems.push(`以下必填内容尚未填写：${missingLabels.join('、')}`);
+      }
+      return {
+        svg: result.svg,
+        error: problems.join('；'),
+        invalidFieldKeys: [
+          ...new Set([...result.errors.map((item) => item.fieldKey), ...missingFieldKeys]),
+        ],
+      };
+    } catch (error) {
+      return {
+        svg: '',
+        error: error instanceof Error ? error.message : '预览渲染失败。',
+        invalidFieldKeys: [],
+      };
+    }
+  }, [
+    activeCanvas,
+    browserGlyphAssets,
+    debouncedPreviewInput,
+    isMetroWayfinding,
+    mode,
+    previewFontEpoch,
+    selected,
+    templateSource,
+    workspace,
+  ]);
+  useEffect(() => {
+    if (!workspace) {
+      return;
+    }
+    setPreviewError(localPreview.error);
+    // 字段级错误已经画在画布上并在预览区常驻提示；只有整张预览无法生成时才弹 toast。
+    if (!localPreview.svg && localPreview.error && !localPreview.error.includes('模板源码尚未加载')) {
+      publishToastRequested({
+        dedupeKey: `material-preview-error:${studioId}`,
+        message: `预览失败：${localPreview.error}`,
+        tone: 'warning',
+      });
+    }
+  }, [localPreview.error, localPreview.svg, studioId, workspace]);
+  const maxPxPerMeter = activeCanvas ? resolveMaterialMaxPxPerMeter(activeCanvas) : 4096;
+  // 所有模板统一按「文本签名」判断是否未修改：只改尺寸、颜色、图标、空白都不算修改。
   const serverAccountReady =
     accountSession.accountStatus === 'active' && accountSession.serverAccountVerified === true;
-  const wayfindingTemplateUnmodified =
-    isMetroWayfinding &&
-    wayfindingBaseline !== null &&
-    buildMetroWayfindingTextSignature(input.layout ?? '') ===
-      buildMetroWayfindingTextSignature(wayfindingBaseline.layout);
-  // 服务器线网导出需要已验证账号；文本未修改的地铁导视则对所有访问者开放免水印下载，
+  const currentTextSignature = selected
+    ? buildMaterialTemplateTextSignature(selected.template, input)
+    : null;
+  const materialTextUnmodified =
+    materialBaseline !== null && currentTextSignature === materialBaseline.signature;
+  // 服务器线网导出需要已验证账号；文本未修改的手动物料对所有访问者开放免水印下载，
   // 未验证账号由服务端压到标准清晰度（≤128 px/m、长边 ≤2048 px）。
   const canDownloadWatermarkFree =
-    (mode === 'manual' && wayfindingTemplateUnmodified) ||
-    (serverAccountReady && mode === 'server');
+    (mode === 'manual' && materialTextUnmodified) || (serverAccountReady && mode === 'server');
   // 宽屏（≥960px）时预览区以独立面板常驻页面，此时把插入建议/宽度警告下移到预览下方。
   // 窄屏时预览退化为弹窗，页面上没有预览面板可依附，改由编辑器本体就地渲染。
   const isMetroInspectorDetached = isMetroWayfinding && !isPreviewDialogViewport;
@@ -461,10 +699,23 @@ export function MaterialStudioPanel({
     () => [...drafts].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
     [drafts],
   );
+  // 地铁线路图 / 导视牌也允许套用有轨与专用线；换乘信息在解析时只取同类型线路。
   const serverTransitLineOptions = useMemo(
-    () => (isMetroLineMap ? transitLines.filter((line) => line.mode === 'metro') : transitLines),
+    () =>
+      isMetroLineMap
+        ? transitLines.filter(
+            (line) => line.mode === 'metro' || line.mode === 'tram' || line.mode === 'custom',
+          )
+        : transitLines,
     [isMetroLineMap, transitLines],
   );
+  /** 模板库跨家族套用时的线路候选：目标为地铁线路图时只列轨道类线路。 */
+  const resolveStudioSourceLineOptions = (sourceKindOverride?: MaterialServerSource) =>
+    sourceKindOverride === 'transit_line' && !isMetroLineMap
+      ? transitLines.filter(
+          (line) => line.mode === 'metro' || line.mode === 'tram' || line.mode === 'custom',
+        )
+      : serverTransitLineOptions;
   const selectedLine =
     serverTransitLineOptions.find((line) => line.id === selectedLineId) ??
     (isMetroLineMap ? undefined : transitLines.find((line) => line.id === selectedLineId));
@@ -683,6 +934,7 @@ export function MaterialStudioPanel({
           markerId: node.id,
           stationSourceId: '',
           stationName: node.names[0]!,
+          stationSecondaryName: node.names[1],
           coordinate: [node.x, node.y] as [number, number],
           directionOptions: listDiagramDirectionOptions(t).filter((option) =>
             directions.has(option.value),
@@ -757,49 +1009,169 @@ export function MaterialStudioPanel({
       (line) => line.isOriginAtStation || line.isTerminalAtStation,
     );
   }, [activeTransitStation, importedTransitNetwork, mode, transitNetworkSource]);
-  // 站点属性由「行车方向 + 线路」自动判定：线路在本站是起点即始发，是终点即终到。
-  useEffect(() => {
-    if (mode !== 'server' || !requiresTransitTerminalRole) {
-      return;
-    }
-    const lineId = selectedTransitLineIds[0];
-    if (!lineId) {
-      return;
-    }
-    let nextRole: 'origin' | 'terminal' | undefined;
+  /** 单条线路在本站的角色：起点→始发，终点→终到，中途站→未定。 */
+  const resolveLineTerminalRole = (lineId: string): 'origin' | 'terminal' | undefined => {
     if (transitNetworkSource === 'rmp') {
       const lineKey = lineId.split('\u0000')[0];
-      if (importedTransitNetwork && selectedImportedTransitStation && lineKey) {
-        const stations = listMaterialTransitNetworkLineStations(importedTransitNetwork, lineKey);
-        const index = stations.findIndex(
-          (station) => station.id === selectedImportedTransitStation.markerId,
-        );
-        if (index === 0) {
-          nextRole = 'origin';
-        } else if (index >= 0 && index === stations.length - 1) {
-          nextRole = 'terminal';
-        }
+      if (!importedTransitNetwork || !selectedImportedTransitStation || !lineKey) {
+        return undefined;
       }
-    } else {
-      const line = selectedTransitStation?.lines.find((item) => item.id === lineId);
-      if (line?.isOriginAtStation) {
-        nextRole = 'origin';
-      } else if (line?.isTerminalAtStation) {
-        nextRole = 'terminal';
+      const stations = listMaterialTransitNetworkLineStations(importedTransitNetwork, lineKey);
+      const index = stations.findIndex(
+        (station) => station.id === selectedImportedTransitStation.markerId,
+      );
+      if (index === 0) {
+        return 'origin';
       }
+      if (index >= 0 && index === stations.length - 1) {
+        return 'terminal';
+      }
+      return undefined;
     }
-    if (nextRole && nextRole !== transitTerminalRole) {
-      setTransitTerminalRole(nextRole);
+    const line = selectedTransitStation?.lines.find((item) => item.id === lineId);
+    if (line?.isOriginAtStation) {
+      return 'origin';
     }
+    if (line?.isTerminalAtStation) {
+      return 'terminal';
+    }
+    return undefined;
+  };
+
+  /**
+   * 多条线路的统一判定：
+   * 全部始发→始发站；全部终到→终点站；方向混合→保持未选并提示用户手动选择。
+   */
+  const derivedTerminalRole = useMemo<{
+    role?: 'origin' | 'terminal';
+    mixed: boolean;
+  }>(() => {
+    // 表单模板工作台统一以 manual 模式编辑，数据来源通过「模板库」套用，
+    // 因此这里不能再用 mode === 'server' 作为门槛。
+    if (!requiresTransitTerminalRole || !selectedTransitLineIds.length) {
+      return { mixed: false };
+    }
+    const roles = selectedTransitLineIds
+      .map((lineId) => resolveLineTerminalRole(lineId))
+      .filter((role): role is 'origin' | 'terminal' => Boolean(role));
+    if (!roles.length) {
+      return { mixed: false };
+    }
+    if (roles.every((role) => role === 'origin')) {
+      return { role: 'origin', mixed: false };
+    }
+    if (roles.every((role) => role === 'terminal')) {
+      return { role: 'terminal', mixed: false };
+    }
+    return { mixed: true };
   }, [
     importedTransitNetwork,
-    mode,
     requiresTransitTerminalRole,
     selectedImportedTransitStation,
     selectedTransitLineIds,
     selectedTransitStation,
     transitNetworkSource,
-    transitTerminalRole,
+  ]);
+
+  useEffect(() => {
+    if (!requiresTransitTerminalRole) {
+      return;
+    }
+    if (derivedTerminalRole.mixed) {
+      // 方向混合时不猜：清空选择，由用户在「其他 → 站点属性」里手动指定。
+      setTransitTerminalRole((current) => (current ? '' : current));
+      return;
+    }
+    if (derivedTerminalRole.role && derivedTerminalRole.role !== transitTerminalRole) {
+      setTransitTerminalRole(derivedTerminalRole.role);
+    }
+  }, [derivedTerminalRole, requiresTransitTerminalRole, transitTerminalRole]);
+
+  /**
+   * 把自动判定结果写进真实字段 `terminalRole`（模板里是「始发站 / 终点站」）。
+   * 用户手动改过之后不再覆盖；方向混合时清空为未选。
+   */
+  const terminalRoleAutoRef = useRef('');
+  useEffect(() => {
+    if (!requiresTransitTerminalRole) {
+      return;
+    }
+    const autoValue = derivedTerminalRole.mixed
+      ? ''
+      : derivedTerminalRole.role === 'origin'
+        ? '始发站'
+        : derivedTerminalRole.role === 'terminal'
+          ? '终点站'
+          : '';
+    setInput((current) => {
+      const currentValue = current.terminalRole ?? '';
+      if (!autoValue) {
+        return currentValue && currentValue === terminalRoleAutoRef.current
+          ? { ...current, terminalRole: '' }
+          : current;
+      }
+      // 用户手动选过（且与上次自动值不同）时尊重用户选择。
+      if (currentValue && currentValue !== terminalRoleAutoRef.current) {
+        return current;
+      }
+      return currentValue === autoValue ? current : { ...current, terminalRole: autoValue };
+    });
+    terminalRoleAutoRef.current = autoValue;
+  }, [derivedTerminalRole, requiresTransitTerminalRole]);
+
+  /** 线路详情模板：行车方向决定起终点与下一站，切换方向时自动重算。 */
+  useEffect(() => {
+    if (!selected || selected.template.family !== 'bus_stop') {
+      return;
+    }
+    const fieldKeys = new Set(selected.template.fields.map((field) => field.key));
+    if (!fieldKeys.has('travelDirection') || !fieldKeys.has('routeOrigin')) {
+      return;
+    }
+    const stations = (input.routeStations ?? '')
+      .split(/\r?\n|\s*\/\s*/u)
+      .map((station) => station.trim())
+      .filter(Boolean);
+    if (stations.length < 2) {
+      return;
+    }
+    const index = Number(input.currentStationIndex ?? 0);
+    if (!Number.isFinite(index) || index < 0 || index >= stations.length) {
+      return;
+    }
+    const direction = input.travelDirection === 'first' ? 'first' : 'last';
+    const nextIndex = direction === 'first' ? index - 1 : index + 1;
+    const nextName = stations[nextIndex];
+    const isBoundary = nextIndex < 0 || nextIndex >= stations.length;
+    const terminalName =
+      direction === 'first' ? (stations[0] ?? '') : (stations.at(-1) ?? '');
+    const candidates: Record<string, string> = {
+      travelDirection: direction,
+      routeOrigin: direction === 'first' ? (stations.at(-1) ?? '') : (stations[0] ?? ''),
+      routeTerminal: direction === 'first' ? (stations[0] ?? '') : (stations.at(-1) ?? ''),
+      nextStation: isBoundary ? '终 点 站' : (nextName ?? ''),
+      nextStationName: isBoundary ? '' : (nextName ?? ''),
+      routeStationState: isBoundary ? 'terminal_station' : 'next_station',
+      stationNamePinyin: toUppercasePinyin(stations[index] ?? ''),
+      nextStationPinyin: toUppercasePinyin(nextName ?? ''),
+      terminalNamePinyin: toUppercasePinyin(terminalName),
+      // 底部行车方向文字随方向自动推断，不再让用户手填。
+      footerText: terminalName ? `开往 ${terminalName}` : '',
+    };
+    const updates = Object.fromEntries(
+      Object.entries(candidates).filter(([key]) => fieldKeys.has(key)),
+    );
+    setInput((current) => {
+      const changed = Object.entries(updates).some(
+        ([key, value]) => current[key] !== undefined && current[key] !== value,
+      );
+      return changed ? { ...current, ...updates } : current;
+    });
+  }, [
+    input.currentStationIndex,
+    input.routeStations,
+    input.travelDirection,
+    selected?.id,
   ]);
   const availableEntryVariants = selectedEntryVariants?.filter(
     (item) =>
@@ -809,19 +1181,37 @@ export function MaterialStudioPanel({
   const travelDirectionStationNames = useMemo(() => {
     if (mode === 'server' && isMetroLineMap) {
       if (transitNetworkSource === 'rmp') {
-        return metroLineMapProjectStations.map((station) => station.name);
+        const projectStations = metroLineMapProjectStations.map((station) => station.name);
+        if (projectStations.length >= 2) {
+          return projectStations;
+        }
+      } else {
+        const lineStations = selectedLine?.stations.map((station) => station.stationName) ?? [];
+        if (lineStations.length >= 2) {
+          return lineStations;
+        }
       }
-      return selectedLine?.stations.map((station) => station.stationName) ?? [];
+      // 站台站名标志等模板没有完整站序字段，继续走下面的真实站序兜底。
     }
-    return (input.routeStations ?? '')
+    const manualStations = (input.routeStations ?? '')
       .split(/\r?\n|\s*\/\s*/u)
       .map((station) => station.trim())
       .filter(Boolean);
+    if (manualStations.length >= 2) {
+      return manualStations;
+    }
+    // 只有公交站牌模板允许回落到公交站所属线路的站序；
+    // 地铁模板不能拿公交线路的站名当地铁方向选项。
+    return selected?.template.family === 'bus_stop'
+      ? (activeTransitStation?.lines[0]?.stationNames ?? manualStations)
+      : manualStations;
   }, [
+    activeTransitStation,
     input.routeStations,
     isMetroLineMap,
     metroLineMapProjectStations,
     mode,
+    selected?.template.family,
     selectedLine,
     transitNetworkSource,
   ]);
@@ -835,12 +1225,58 @@ export function MaterialStudioPanel({
           { value: 'first', label: `开往${travelDirectionStationNames[0]}` },
         ]
       : undefined;
+  // 地铁站名 / 方向版式：开往终点由行车方向与线路站序自动推断，不再手填。
+  useEffect(() => {
+    if (!selected || selected.template.family !== 'metro_line') {
+      return;
+    }
+    const fieldKeys = new Set(selected.template.fields.map((field) => field.key));
+    if (!fieldKeys.has('terminalName') || !fieldKeys.has('travelDirection')) {
+      return;
+    }
+    if (travelDirectionStationNames.length < 2) {
+      return;
+    }
+    const direction = input.travelDirection === 'first' ? 'first' : 'last';
+    const terminal =
+      direction === 'first'
+        ? travelDirectionStationNames[0]!
+        : travelDirectionStationNames[travelDirectionStationNames.length - 1]!;
+    const terminalPinyin = toUppercasePinyin(terminal);
+    setInput((current) => {
+      const nextTerminal = current.terminalName ?? '';
+      const nextPinyin = current.terminalNamePinyin ?? '';
+      if (nextTerminal === terminal && (!fieldKeys.has('terminalNamePinyin') || nextPinyin === terminalPinyin)) {
+        return current;
+      }
+      return {
+        ...current,
+        terminalName: terminal,
+        ...(fieldKeys.has('terminalNamePinyin') ? { terminalNamePinyin: terminalPinyin } : {}),
+      };
+    });
+  }, [input.travelDirection, selected, travelDirectionStationNames]);
   const verticalTrackPosition = isMetroVerticalLineMap
     ? input.trackPosition === 'right' || input.trackPosition === 'both'
       ? input.trackPosition
       : 'left'
     : undefined;
   const isVerticalBothTracks = verticalTrackPosition === 'both';
+  // 旧版竖版线路图只提供「两侧」轨道样式，其余取值统一收敛到两侧。
+  const isVerticalOldLineMap = selected?.id === METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID;
+  const trackPositionOptions = isVerticalOldLineMap
+    ? [{ value: 'both', label: '两侧' }]
+    : undefined;
+  useEffect(() => {
+    if (!isVerticalOldLineMap) {
+      return;
+    }
+    // 依赖 trackPosition：切换旧版模板时 pendingWizardApply 会用默认值覆盖一次，
+    // 这里在覆盖后再次收敛回「两侧」。
+    setInput((current) =>
+      current.trackPosition === 'both' ? current : { ...current, trackPosition: 'both' },
+    );
+  }, [input.trackPosition, isVerticalOldLineMap]);
   const verticalPrimaryDirection = input.travelDirection === 'first' ? 'first' : 'last';
   const verticalSecondaryDirectionOptions = (
     travelDirectionOptions ??
@@ -848,7 +1284,9 @@ export function MaterialStudioPanel({
     []
   ).filter((option) => option.value !== verticalPrimaryDirection);
   const isMaterialFieldVisible = (field: MaterialField) =>
-    field.key !== 'travelDirectionSecondary' || isVerticalBothTracks;
+    (field.key !== 'travelDirectionSecondary' || isVerticalBothTracks) &&
+    // 站台站名标志改用「相邻站选择」控制方向，不再显示原始方向下拉。
+    !(selected?.id === METRO_PLATFORM_SIGN_TEMPLATE_ID && field.key === 'travelDirection');
   const materialFieldLabelOverride = (field: MaterialField) => {
     if (!isMetroVerticalLineMap) {
       return undefined;
@@ -861,7 +1299,11 @@ export function MaterialStudioPanel({
     }
     return undefined;
   };
-  const updateMaterialFieldValue = (key: string, value: string) => {
+  const updateMaterialFieldValue = (
+    key: string,
+    value: string,
+    options?: { keepPreview?: boolean },
+  ) => {
     setInput((current) => {
       const next = { ...current, [key]: value };
       if (!isMetroVerticalLineMap) {
@@ -883,7 +1325,9 @@ export function MaterialStudioPanel({
       }
       return next;
     });
-    clearPreview();
+    if (!options?.keepPreview) {
+      clearPreview();
+    }
   };
   const selectableImportedTransitLines = useMemo<ImportedTransitLineOption[]>(() => {
     if (!importedTransitNetwork || !selectedImportedTransitStation) return [];
@@ -963,9 +1407,12 @@ export function MaterialStudioPanel({
     selected &&
     (!serverFamilies || serverFamilies.includes(selected.template.family)),
   );
+  // 门牌模板只列「带门牌号的 POI」，其余模板仍用完整地点列表。
+  const usesAddressPoiSource = selected?.template.family === 'address_sign';
+  const locationOptions = usesAddressPoiSource ? addressPoiLocations : locations;
   const visibleLocations = useMemo(() => {
     const query = locationQuery.trim().toLocaleLowerCase();
-    return locations
+    return locationOptions
       .filter((location) => {
         if (!query) {
           return true;
@@ -977,25 +1424,270 @@ export function MaterialStudioPanel({
           .includes(query);
       })
       .slice(0, 100);
-  }, [locationQuery, locations]);
+  }, [locationQuery, locationOptions]);
   const maximumTransitLineCount = useMemo(() => {
-    const slots = selected?.template.fields
+    // 套用向导里可能切换到线路概览等 6 线路版式，线路选择上限取整个模板入口的最大值。
+    const templates = isApplyWizardOpen
+      ? (applyWizardVariants?.map((item) => item.template) ?? [])
+      : selected
+        ? [selected.template]
+        : [];
+    const slots = templates.flatMap((template) =>
+      template.fields
+        .map((field) => field.key.match(/^route(\d+)Number$/)?.[1])
+        .filter((value): value is string => Boolean(value))
+        .map(Number),
+    );
+    return slots.length ? Math.max(...slots) : 1;
+  }, [applyWizardVariants, isApplyWizardOpen, selected?.id, selected?.template.fields]);
+  const usesSingleTransitLineSelection = maximumTransitLineCount === 1;
+
+  /**
+   * 把当前站点 / 线路数据换算成目标模板的字段值。
+   * 不做拼音推导（客户端没有可靠拼音源），其余无法推导的字段保持用户原值。
+   */
+  const buildTransitNetworkFieldValues = (
+    fields: ReadonlyArray<MaterialField>,
+    /** 目标模板家族：模板库跨入口切换时按目标模板的数据来源口径换算。 */
+    templateFamily?: MaterialFamily,
+  ): Record<string, string> => {
+    const sourceKind = templateFamily
+      ? (serverSources?.[templateFamily] ?? serverSource)
+      : activeServerSource;
+    const fieldKeys = new Set(fields.map((field) => field.key));
+    const lineSlots = fields
       .map((field) => field.key.match(/^route(\d+)Number$/)?.[1])
       .filter((value): value is string => Boolean(value))
       .map(Number);
-    return slots?.length ? Math.max(...slots) : 1;
-  }, [selected?.id, selected?.template.fields]);
-  const usesSingleTransitLineSelection = maximumTransitLineCount === 1;
+    const maxLineCount = lineSlots.length ? Math.max(...lineSlots) : 1;
+    const values: Record<string, string> = {};
+    const setField = (key: string, value: string | number | undefined) => {
+      if (!fieldKeys.has(key) || value === undefined || value === null) {
+        return;
+      }
+      values[key] = String(value);
+    };
+
+    // 线路图 / 线路类模板：数据来源是「线路」，不是站点。
+    if (sourceKind === 'transit_line') {
+      const lineName =
+        transitNetworkSource === 'rmp'
+          ? (metroLineMapProjectLine?.lineName ?? '')
+          : (selectedLine?.name ?? '');
+      const lineNumber = resolveMetroLineNumber(lineName);
+      const lineEnglish =
+        transitNetworkSource === 'rmp'
+          ? metroLineMapProjectLine?.secondaryLineName?.trim() || `Line ${lineNumber}`.trim()
+          : `Line ${lineNumber}`.trim();
+      const stationNames =
+        transitNetworkSource === 'rmp'
+          ? metroLineMapProjectStations.map((station) => station.name)
+          : (selectedLine?.stations.map((station) => station.stationName) ?? []);
+      const currentIndex =
+        transitNetworkSource === 'rmp'
+          ? metroLineMapProjectStations.findIndex(
+              (station) => station.id === metroLineMapProjectNodeId,
+            )
+          : (selectedLine?.stations.findIndex(
+              (station) => station.stationSourceId === selectedStationSourceId,
+            ) ?? -1);
+      setField('lineLabel', lineNumber);
+      setField('lineEnglishLabel', lineEnglish);
+      setField('routeNumber', lineNumber);
+      setField('stationName', stationNames[currentIndex]);
+      setField('routeStations', stationNames.join('\n'));
+      // 换乘线路：用同站名出现在其它线路里的事实推导，格式「站名=编号:颜色」。
+      if (transitNetworkSource !== 'rmp') {
+        const transferEntries = stationNames.flatMap((stationName) => {
+          // 换乘只写与当前线路同类型的线路（地铁不写公交接驳，公交不写地铁）。
+          const otherLines = transitLines.filter(
+            (line) =>
+              line.id !== selectedLine?.id &&
+              line.mode === selectedLine?.mode &&
+              line.stations.some((station) => station.stationName === stationName),
+          );
+          if (!otherLines.length) {
+            return [];
+          }
+          const tokens = otherLines.map((line) => {
+            const display = parseMaterialTransitLineDisplay(line.name);
+            return line.color ? `${display.number}:${line.color.toUpperCase()}` : display.number;
+          });
+          return [`${stationName}=${tokens.join(',')}`];
+        });
+        setField('transferLines', transferEntries.join(';'));
+      }
+      if (currentIndex >= 0) {
+        setField('currentStationIndex', currentIndex);
+        setField('nextStationName', stationNames[currentIndex + 1]);
+        // 地铁站名拼音没有现成数据时用统一拼音工具兜底。
+        setField('stationNamePinyin', toUppercasePinyin(stationNames[currentIndex] ?? ''));
+        setField('nextStationPinyin', toUppercasePinyin(stationNames[currentIndex + 1] ?? ''));
+        setField('terminalNamePinyin', toUppercasePinyin(stationNames.at(-1) ?? ''));
+      }
+      setField(
+        'accentColor',
+        (transitNetworkSource === 'rmp'
+          ? metroLineMapProjectLine?.color
+          : selectedLine?.color
+        )?.toUpperCase(),
+      );
+      setField('operator', selectedLine?.operator);
+      return values;
+    }
+
+    setField('stationName', activeTransitStation?.stationName);
+    setField(
+      'stationNamePinyin',
+      activeTransitStation?.stationSecondaryName ||
+        toUppercasePinyin(activeTransitStation?.stationName ?? ''),
+    );
+
+    // 不再回落到“全部可选线路”：没选线路时宁可留空让用户补选，
+    // 否则跨模板切换会静默套用默认的第一条线路。
+    const lineIds = selectedTransitLineIds.slice(0, maxLineCount);
+    const lineNames = lineIds.map((lineId) =>
+      transitNetworkSource === 'rmp'
+        ? (selectableImportedTransitLines.find((line) => line.id === lineId)?.name ?? '')
+        : (selectedTransitStation?.lines.find((line) => line.id === lineId)?.name ?? ''),
+    );
+    lineNames.forEach((name, index) => {
+      const display = parseMaterialTransitLineDisplay(name);
+      if (display.number) {
+        setField(`route${index + 1}Number`, display.number);
+        setField(`route${index + 1}Suffix`, display.suffix);
+      }
+    });
+
+    const primaryLineId = lineIds[0];
+    if (transitNetworkSource === 'rmp') {
+      const primaryLine = selectableImportedTransitLines.find((line) => line.id === primaryLineId);
+      const lineKey = primaryLineId?.split('\u0000')[0];
+      if (primaryLine && lineKey && importedTransitNetwork && selectedImportedTransitStation) {
+        const stations = listMaterialTransitNetworkLineStations(importedTransitNetwork, lineKey);
+        const currentIndex = stations.findIndex(
+          (station) => station.id === selectedImportedTransitStation.markerId,
+        );
+        // 到终点站时按「开往首站」方向取下一站与起终点。
+        const direction = currentIndex >= 0 && currentIndex === stations.length - 1 ? 'first' : 'last';
+        const nextIndex = direction === 'first' ? currentIndex - 1 : currentIndex + 1;
+        const nextName = stations[nextIndex]?.name;
+        const isBoundary = nextIndex < 0 || nextIndex >= stations.length;
+        const display = parseMaterialTransitLineDisplay(primaryLine.name);
+        setField('routeNumber', display.number);
+        setField('routeSuffix', display.suffix);
+        setField('lineLabel', resolveMetroLineNumber(primaryLine.name));
+        setField(
+          'lineEnglishLabel',
+          primaryLine.secondaryName?.trim() ||
+            `Line ${resolveMetroLineNumber(primaryLine.name)}`.trim(),
+        );
+        setField('routeStations', stations.map((station) => station.name).join('\n'));
+        if (currentIndex >= 0) {
+          setField('currentStationIndex', currentIndex);
+          setField('nextStation', isBoundary ? '终 点 站' : nextName);
+          setField('nextStationName', isBoundary ? '' : nextName);
+          setField('routeStationState', isBoundary ? 'terminal_station' : 'next_station');
+          setField('stationNamePinyin', toUppercasePinyin(stations[currentIndex]?.name ?? ''));
+          setField('nextStationPinyin', toUppercasePinyin(nextName ?? ''));
+        }
+        const originName = direction === 'first' ? stations.at(-1)?.name : stations[0]?.name;
+        const terminalName = direction === 'first' ? stations[0]?.name : stations.at(-1)?.name;
+        setField('travelDirection', direction);
+        setField('routeOrigin', originName);
+        setField('routeTerminal', terminalName);
+        setField('terminalName', terminalName);
+        setField('terminalNamePinyin', toUppercasePinyin(terminalName ?? ''));
+        setField('accentColor', primaryLine.color);
+      }
+    } else {
+      const primaryLine = selectedTransitStation?.lines.find((line) => line.id === primaryLineId);
+      if (primaryLine) {
+        const stationNames = primaryLine.stationNames;
+        const direction = primaryLine.isTerminalAtStation ? 'first' : 'last';
+        const nextIndex =
+          direction === 'first'
+            ? primaryLine.currentStationIndex - 1
+            : primaryLine.currentStationIndex + 1;
+        const nextName = stationNames[nextIndex];
+        const isBoundary = nextIndex < 0 || nextIndex >= stationNames.length;
+        const display = parseMaterialTransitLineDisplay(primaryLine.name);
+        setField('routeNumber', display.number);
+        setField('routeSuffix', display.suffix);
+        setField('lineLabel', resolveMetroLineNumber(primaryLine.name));
+        setField('lineEnglishLabel', `Line ${resolveMetroLineNumber(primaryLine.name)}`.trim());
+        setField('routeStations', stationNames.join('\n'));
+        setField('currentStationIndex', primaryLine.currentStationIndex);
+        setField(
+          'routeOrigin',
+          direction === 'first' ? stationNames.at(-1) : stationNames[0],
+        );
+        setField('routeTerminal', direction === 'first' ? stationNames[0] : stationNames.at(-1));
+        setField('nextStation', isBoundary ? '终 点 站' : nextName);
+        setField('nextStationName', isBoundary ? '' : nextName);
+        setField(
+          'terminalName',
+          direction === 'first'
+            ? stationNames[0]
+            : (primaryLine.destinationName || stationNames.at(-1)),
+        );
+        setField('travelDirection', direction);
+        setField('routeStationState', isBoundary ? 'terminal_station' : 'next_station');
+        setField('stationNamePinyin', toUppercasePinyin(stationNames[primaryLine.currentStationIndex] ?? ''));
+        setField('nextStationPinyin', toUppercasePinyin(nextName ?? ''));
+        setField(
+          'terminalNamePinyin',
+          toUppercasePinyin(
+            direction === 'first' ? stationNames[0] ?? '' : stationNames.at(-1) ?? '',
+          ),
+        );
+        setField('routeFirstLast', primaryLine.firstLastBus);
+        setField('operator', primaryLine.operator);
+        setField('accentColor', primaryServerTransitLine?.color?.toUpperCase());
+      }
+    }
+
+    // 站点属性自动回填：与界面上的「站点属性」下拉保持一致；方向混合时留空。
+    setField(
+      'terminalRole',
+      derivedTerminalRole.role === 'origin'
+        ? '始发站'
+        : derivedTerminalRole.role === 'terminal'
+          ? '终点站'
+          : '',
+    );
+
+    return values;
+  };
+
+  const applyTransitNetworkToFields = () => {
+    if (!selected || !activeTransitStation) {
+      blockAction('请先在数据来源中选择站点。');
+      return;
+    }
+    const values = buildTransitNetworkFieldValues(selected.template.fields);
+    if (!Object.keys(values).length) {
+      blockAction('当前模板没有可套用的线网字段。');
+      return;
+    }
+    setInput((current) => ({ ...current, ...values }));
+    clearPreview();
+    publishToastRequested({
+      message: `已从线网套用 ${Object.keys(values).length} 个字段。`,
+      tone: 'success',
+    });
+  };
 
   const loadWorkspace = async () => {
+    setIsWorkspaceLoading(true);
     try {
       const templateResponse = await fetch(appPath('/api/materials/templates'), {
         cache: 'no-store',
       });
-      const templateData = (await templateResponse.json()) as {
+      const templateData = (await readJsonResponse<{
         items?: PublishedMaterialTemplate[];
         message?: string;
-      };
+      }>(templateResponse)) ?? {};
       if (!templateResponse.ok) {
         setWorkspaceBlockMessage(templateData.message ?? t('materialStudio.templateReadFailed'));
         return;
@@ -1008,8 +1700,15 @@ export function MaterialStudioPanel({
           families.includes(item.template.family) ||
           includedTemplateIds?.includes(item.id) === true,
       );
-      // 有合并入口时，默认选第一个入口里的第一套版式，而不是按 ID 排序的第一条。
+      // 工作台以导视牌编辑为主入口，默认选中它；路牌等工作台可通过 defaultTemplateId 覆盖。
+      const configuredDefaultTemplateId =
+        defaultTemplateId ?? (workspace ? METRO_WAYFINDING_TEMPLATE_ID : undefined);
       const preferredTemplateId =
+        (configuredDefaultTemplateId &&
+        availableTemplates.some((item) => item.id === configuredDefaultTemplateId)
+          ? configuredDefaultTemplateId
+          : undefined) ??
+        // 有合并入口时，默认选第一个入口里的第一套版式，而不是按 ID 排序的第一条。
         (templateGroups ?? [])
           .flatMap((group) => group.templateIds)
           .find((templateId) => availableTemplates.some((item) => item.id === templateId)) ??
@@ -1021,7 +1720,7 @@ export function MaterialStudioPanel({
       const pendingRequests: Array<Promise<void>> = [
         fetch(appPath('/api/materials/drafts'), { cache: 'no-store' })
           .then(async (response) => {
-            const data = (await response.json()) as { items?: MaterialDraft[] };
+            const data = (await readJsonResponse<{ items?: MaterialDraft[] }>(response)) ?? {};
             if (response.ok) {
               setDrafts(data.items ?? []);
             }
@@ -1043,7 +1742,7 @@ export function MaterialStudioPanel({
         pendingRequests.push(
           fetch(appPath('/api/materials/transit-lines'), { cache: 'no-store' })
             .then(async (response) => {
-              const data = (await response.json()) as { items?: TransitLineOption[] };
+              const data = (await readJsonResponse<{ items?: TransitLineOption[] }>(response)) ?? {};
               if (response.ok) {
                 const lines = data.items ?? [];
                 setTransitLines(lines);
@@ -1063,7 +1762,7 @@ export function MaterialStudioPanel({
         pendingRequests.push(
           fetch(appPath('/api/materials/transit-stations'), { cache: 'no-store' })
             .then(async (response) => {
-              const data = (await response.json()) as { items?: TransitStationOption[] };
+              const data = (await readJsonResponse<{ items?: TransitStationOption[] }>(response)) ?? {};
               if (response.ok) {
                 const stations = data.items ?? [];
                 setTransitStations(stations);
@@ -1086,11 +1785,25 @@ export function MaterialStudioPanel({
         pendingRequests.push(
           fetch(appPath('/api/materials/locations'), { cache: 'no-store' })
             .then(async (response) => {
-              const data = (await response.json()) as { items?: MaterialLocationOption[] };
+              const data = (await readJsonResponse<{ items?: MaterialLocationOption[] }>(response)) ?? {};
               if (response.ok) {
                 const nextLocations = data.items ?? [];
                 setLocations(nextLocations);
                 setSelectedLocationId((current) => current || nextLocations[0]?.id || '');
+              }
+            })
+            .catch(() => undefined),
+        );
+      }
+      // 门牌模板只列「带门牌号的 POI」：服务端按地址解析结果过滤，前端不再重复判断。
+      if (families.includes('address_sign')) {
+        pendingRequests.push(
+          fetch(appPath('/api/materials/locations?kind=address'), { cache: 'no-store' })
+            .then(async (response) => {
+              const data =
+                (await readJsonResponse<{ items?: MaterialLocationOption[] }>(response)) ?? {};
+              if (response.ok) {
+                setAddressPoiLocations(data.items ?? []);
               }
             })
             .catch(() => undefined),
@@ -1106,7 +1819,7 @@ export function MaterialStudioPanel({
         pendingRequests.push(
           fetch(appPath('/api/map/tile-providers'), { cache: 'no-store' })
             .then(async (response) => {
-              const data = (await response.json()) as { items?: TileProviderDescriptor[] };
+              const data = (await readJsonResponse<{ items?: TileProviderDescriptor[] }>(response)) ?? {};
               if (!response.ok) {
                 return;
               }
@@ -1122,11 +1835,37 @@ export function MaterialStudioPanel({
     } catch {
       setItems([]);
       setWorkspaceBlockMessage(t('materialStudio.workspaceUnavailable'));
+    } finally {
+      setIsWorkspaceLoading(false);
     }
   };
 
   useEffect(() => {
     void loadWorkspace();
+  }, []);
+
+  // 模板源码只在初始化时取一次：之后字段变化由浏览器本地合成 SVG，不再请求预览接口。
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(appPath('/api/materials/template-sources'), { cache: 'no-store' })
+      .then(async (response) => {
+        const data =
+          (await readJsonResponse<{
+            items?: Array<{ id: string; version: number; source: string }>;
+          }>(response)) ?? {};
+        if (!response.ok || cancelled) {
+          return;
+        }
+        const next: Record<string, string> = {};
+        for (const item of data.items ?? []) {
+          next[`${item.id}:${item.version}`] = item.source;
+        }
+        setTemplateSources(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -1144,6 +1883,31 @@ export function MaterialStudioPanel({
         if (transitNetworkSourceIntentRevisionRef.current === sourceIntentRevision) {
           setTransitNetworkSource(record.transitNetworkSource);
           setImportedTransitNetwork(record.importedTransitNetwork);
+        }
+        // 恢复上次套用的车站 / 线路，模板库打开时才能预填。
+        const selection = record.transitSelection;
+        if (selection) {
+          if (selection.stationMarkerId) {
+            setSelectedTransitStationMarkerId(selection.stationMarkerId);
+          }
+          if (selection.importedStationNodeId) {
+            setSelectedImportedStationNodeId(selection.importedStationNodeId);
+          }
+          if (selection.direction) {
+            setTransitDirection(selection.direction);
+          }
+          if (selection.lineIds?.length) {
+            setSelectedTransitLineIds(selection.lineIds);
+          }
+          if (selection.projectLineKey) {
+            setMetroLineMapProjectLineKey(selection.projectLineKey);
+          }
+          if (selection.projectNodeId) {
+            setMetroLineMapProjectNodeId(selection.projectNodeId);
+          }
+          if (selection.terminalRole !== undefined) {
+            setTransitTerminalRole(selection.terminalRole);
+          }
         }
       }
       setLocalDraftReady(true);
@@ -1231,18 +1995,45 @@ export function MaterialStudioPanel({
       localDraft.templateVersion === selected.template.version
         ? localDraft
         : undefined;
-    setInput(
-      savedDraft?.input ??
-        Object.fromEntries(
-          selected.template.fields.map((field) => [field.key, field.defaultValue ?? '']),
-        ),
-    );
+    const fieldKeys = new Set(selected.template.fields.map((field) => field.key));
+    const restoredInput = savedDraft?.input
+      ? Object.fromEntries(
+          Object.entries(savedDraft.input).filter(([key]) => fieldKeys.has(key)),
+        )
+      : undefined;
+    const nextInput =
+      restoredInput ??
+      Object.fromEntries(
+        selected.template.fields.map((field) => [field.key, field.defaultValue ?? '']),
+      );
+    setInput(nextInput);
+    // 初始化 / 恢复草稿即视为「套用完成」，此刻的文本就是免审核基线。
+    setMaterialBaseline({
+      signature: buildMaterialTemplateTextSignature(selected.template, nextInput),
+      input: nextInput,
+    });
     setCanvas((current) => {
+      const locked = resolveMaterialCanvasLocks({
+        templateId: selected.id,
+        layout: nextInput.layout,
+      });
+      // 导视牌双行版式的高度由版式决定（2 米）。
+      const lockedHeightM =
+        selected.id === METRO_WAYFINDING_TEMPLATE_ID &&
+        parseMetroWayfindingLayout(nextInput.layout ?? '').mode === 'double'
+          ? 2
+          : selected.template.defaultCanvas.heightM;
       if (savedDraft?.canvas) {
-        return savedDraft.canvas;
+        // 旧草稿可能保存了被锁维度的旧值：恢复时按当前模板规则纠正。
+        return {
+          ...savedDraft.canvas,
+          widthM: locked.width ? selected.template.defaultCanvas.widthM : savedDraft.canvas.widthM,
+          heightM: locked.height ? lockedHeightM : savedDraft.canvas.heightM,
+        };
       }
       const base = {
         ...selected.template.defaultCanvas,
+        heightM: locked.height ? lockedHeightM : selected.template.defaultCanvas.heightM,
         pxPerMeter: selected.template.defaultCanvas.tileSizePx,
       };
       // 切换模板/版式时保留当前对齐单位，只重置版式自身的默认尺寸。
@@ -1280,6 +2071,15 @@ export function MaterialStudioPanel({
         mode,
         transitNetworkSource,
         importedTransitNetwork,
+        transitSelection: {
+          stationMarkerId: selectedTransitStationMarkerId || undefined,
+          importedStationNodeId: selectedImportedStationNodeId || undefined,
+          direction: transitDirection,
+          lineIds: selectedTransitLineIds.length ? selectedTransitLineIds : undefined,
+          projectLineKey: metroLineMapProjectLineKey || undefined,
+          projectNodeId: metroLineMapProjectNodeId || undefined,
+          terminalRole: transitTerminalRole,
+        },
         createdAt: isDifferentTemplate || !current ? now : current.createdAt,
         updatedAt: now,
         syncStatus: 'local',
@@ -1295,10 +2095,17 @@ export function MaterialStudioPanel({
     importedTransitNetwork,
     input,
     localDraftReady,
+    metroLineMapProjectLineKey,
+    metroLineMapProjectNodeId,
     mode,
     selected,
+    selectedImportedStationNodeId,
+    selectedTransitLineIds,
+    selectedTransitStationMarkerId,
     studioId,
+    transitDirection,
     transitNetworkSource,
+    transitTerminalRole,
   ]);
 
   useEffect(() => {
@@ -1318,6 +2125,13 @@ export function MaterialStudioPanel({
     }
   }, [canUseServerSource, mode]);
 
+  // 非地铁模板改为「从线网套用」向导，不再保留隐藏的服务器模式。
+  useEffect(() => {
+    if (workspace && !isMetroWayfinding && mode === 'server') {
+      setMode('manual');
+    }
+  }, [isMetroWayfinding, mode, workspace]);
+
   useEffect(() => {
     if (activeServerSource === 'road_coordinate' && !roadCoordinate) {
       const initialCoordinate = locations.find((location) => location.coordinate)?.coordinate;
@@ -1327,8 +2141,69 @@ export function MaterialStudioPanel({
     }
   }, [activeServerSource, locations, roadCoordinate]);
 
+  // 路牌落点提示：坐标变化后去服务端匹配最近道路，告诉用户将套用到哪条路的哪一侧。
   useEffect(() => {
-    if (transitNetworkSource !== 'rmp') return;
+    if (!roadCoordinate) {
+      setRoadSideHint(null);
+      setIsRoadSideHintLoading(false);
+      setIsRoadSideHintChecked(false);
+      return undefined;
+    }
+    let cancelled = false;
+    const [x, z] = roadCoordinate;
+    setIsRoadSideHintLoading(true);
+    setIsRoadSideHintChecked(false);
+    const timer = window.setTimeout(() => {
+      void fetch(appPath(`/api/materials/road-match?x=${x}&z=${z}`), { cache: 'no-store' })
+        .then((response) =>
+          response.ok
+            ? readJsonResponse<{
+                hint?: {
+                  roadName: string;
+                  side: 'north' | 'south' | 'east' | 'west';
+                  installation: [number, number];
+                  distance: number;
+                } | null;
+              }>(response)
+            : null,
+        )
+        .then((data) => {
+          if (!cancelled) {
+            setRoadSideHint(data?.hint ?? null);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setRoadSideHint(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsRoadSideHintLoading(false);
+            setIsRoadSideHintChecked(true);
+          }
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [roadCoordinate]);
+
+  // 门牌模板：当前选中的地点如果不在「带门牌号 POI」列表里，自动落到第一条可用项。
+  useEffect(() => {
+    if (!usesAddressPoiSource || !addressPoiLocations.length) {
+      return;
+    }
+    setSelectedLocationId((current) =>
+      addressPoiLocations.some((location) => location.id === current)
+        ? current
+        : addressPoiLocations[0]!.id,
+    );
+  }, [usesAddressPoiSource, addressPoiLocations]);
+
+  useEffect(() => {
+    if (transitNetworkSource !== 'rmp' || !importedTransitStations.length) return;
     setSelectedImportedStationNodeId((current) =>
       importedTransitStations.some((station) => station.markerId === current)
         ? current
@@ -1337,6 +2212,10 @@ export function MaterialStudioPanel({
   }, [importedTransitStations, transitNetworkSource]);
 
   useEffect(() => {
+    // 数据尚未加载时不清理已恢复的线路选择，否则会丢掉草稿里预填的车站 / 线路。
+    if (!selectableTransitLines.length) {
+      return;
+    }
     const selectableIds = new Set(selectableTransitLines.map((line) => line.id));
     setSelectedTransitLineIds((current) => {
       const retained = current.filter((lineId) => selectableIds.has(lineId));
@@ -1475,7 +2354,7 @@ export function MaterialStudioPanel({
       )
       .find((item): item is PublishedMaterialTemplate => Boolean(item));
     if (next) {
-      selectTemplate(next.id);
+      applyTemplateDirect(next.id);
     }
   };
 
@@ -1494,6 +2373,436 @@ export function MaterialStudioPanel({
       clearPreview();
     }
   }, [selected?.id, selectedEntryVariants, stationSupportsTerminalVariant]);
+
+  /**
+   * 模板库跨入口切换时把已选线路 / 站点带到目标数据来源。
+   *
+   * 线路图来源选的是「线路 + 该线路上的站」，公交站牌来源选的是「站点 + 该站的线路」，
+   * 两者字段口径不同；不做映射的话，向导里看起来就像“已选内容忽然变成另一条线”。
+   */
+  const carryTransitSelectionToSourceKind = (nextSourceKind: MaterialServerSource | undefined) => {
+    if (!nextSourceKind || nextSourceKind === activeServerSource) {
+      return;
+    }
+    // 项目线网与服务器线网是两套数据，无法按名称可靠映射。
+    if (transitNetworkSource !== 'server') {
+      return;
+    }
+    if (nextSourceKind === 'transit_station') {
+      // 只认当前「线路来源」上真正选中的那个站；当前来源不是线路时不拿站点来源的
+      // 默认值凑数，否则又会变相套用一条没选过的公交线路。
+      const stationName =
+        activeServerSource === 'transit_line'
+          ? (selectedLine?.stations.find(
+              (station) => station.stationSourceId === selectedStationSourceId,
+            )?.stationName ?? '')
+          : '';
+      const station = stationName
+        ? transitStations.find((item) => item.stationName === stationName)
+        : undefined;
+      if (!station) {
+        // 目标站点网络里没有同名站点（例如地铁站切到公交站牌）：
+        // 清空选择而不是静默套用默认的第一条公交线路。
+        setSelectedTransitStationMarkerId('');
+        setSelectedTransitLineIds([]);
+        return;
+      }
+      setSelectedTransitStationMarkerId(station.markerId);
+      const lineIds = selectedLineId
+        ? station.lines.filter((line) => line.lineId === selectedLineId).map((line) => line.id)
+        : station.lines
+            .filter((line) => line.direction === transitDirection)
+            .map((line) => line.id);
+      setSelectedTransitLineIds(lineIds.slice(0, maximumTransitLineCount));
+      const primaryLine = station.lines.find((line) => line.id === lineIds[0]);
+      if (primaryLine && primaryLine.direction !== 'unknown') {
+        setTransitDirection(primaryLine.direction);
+      }
+      return;
+    }
+    if (nextSourceKind === 'transit_line') {
+      const station = selectedTransitStation;
+      const lineId = primarySelectedTransitLine?.lineId ?? station?.lines[0]?.lineId;
+      if (!lineId) {
+        return;
+      }
+      setSelectedLineId(lineId);
+      if (station?.stationSourceId) {
+        setSelectedStationSourceId(station.stationSourceId);
+      }
+    }
+  };
+
+  /**
+   * 打开「模板库」：预填当前（或目标）模板的版式 / 样式，确认后才真正切换。
+   * 取消不做任何修改，字段与画布因此自然保持切换前的状态。
+   */
+  const openApplyWizard = (targetTemplateId?: string) => {
+    if (!selected) {
+      return;
+    }
+    const targetId = targetTemplateId ?? selected.id;
+    const targetEntry =
+      templateEntries.find((entry) => entry.templateIds.includes(targetId)) ?? selectedEntry;
+    const targetGroup = targetEntry?.layoutGroups?.find((group) =>
+      group.templateIds.includes(targetId),
+    );
+    const targetTemplate = templates.find((item) => item.id === targetId);
+    carryTransitSelectionToSourceKind(
+      targetTemplate ? (serverSources?.[targetTemplate.template.family] ?? serverSource) : undefined,
+    );
+    setApplyWizardEntryId(targetEntry?.id ?? '');
+    setApplyWizardStyleIndex(
+      targetGroup ? Math.max(targetGroup.templateIds.indexOf(targetId), 0) : 0,
+    );
+    setApplyWizardTemplateId(targetId);
+    setIsApplyWizardOpen(true);
+  };
+
+  /** 切换到地铁导视牌：不弹套用向导，直接恢复该模板上次的本机草稿。 */
+  const openWayfindingTemplate = (templateId: string) => {
+    setMode('manual');
+    setPendingWizardApply(null);
+    selectTemplate(templateId);
+    void readMaterialOfflineDraftForTemplate(studioId, templateId).then((record) => {
+      if (!record) {
+        return;
+      }
+      // 草稿版本可能落后于当前发布版本：按当前版本号恢复，避免被初始化逻辑当成不匹配。
+      const targetVersion = templates.find((item) => item.id === templateId)?.template.version;
+      setLocalDraft(
+        targetVersion !== undefined ? { ...record, templateVersion: targetVersion } : record,
+      );
+    });
+  };
+
+  /** 跨模板切换：弹新模板的模板库确认，避免直接把旧模板字段搬过去。 */
+  const requestTemplateChange = (templateId: string) => {
+    if (!templateId || templateId === selected?.id) {
+      return;
+    }
+    if (templateId === METRO_WAYFINDING_TEMPLATE_ID) {
+      setIsApplyWizardOpen(false);
+      openWayfindingTemplate(templateId);
+      return;
+    }
+    openApplyWizard(templateId);
+  };
+
+  /** 路牌与门牌共用道路名称/拼音：切模板时把目标模板里存在的同名字段带过去。 */
+  const buildCarriedRoadValues = (
+    targetFields: ReadonlyArray<{ key: string }>,
+    targetFamily: MaterialFamily | undefined,
+  ) => {
+    if (targetFamily !== 'road_sign' && targetFamily !== 'address_sign') {
+      return {};
+    }
+    const targetKeys = new Set(targetFields.map((field) => field.key));
+    const source = { ...materialFieldMemoryRef.current, ...input };
+    return Object.fromEntries(
+      Object.entries(source).filter(([key, value]) => targetKeys.has(key) && Boolean(value)),
+    );
+  };
+
+  /** 同入口内改版式 / 样式：直接切换，并按当前套用的车站重新套入字段。 */
+  const applyTemplateDirect = (templateId: string) => {
+    if (!templateId || templateId === selected?.id) {
+      return;
+    }
+    const target = templates.find((item) => item.id === templateId);
+    if (!target) {
+      selectTemplate(templateId);
+      return;
+    }
+    // 先记住当前模板的全部输入，再切走；否则目标模板没有的字段（如怀旧没有拼音）会丢失。
+    materialFieldMemoryRef.current = { ...materialFieldMemoryRef.current, ...input };
+    const values = {
+      ...buildCarriedRoadValues(target.template.fields, target.template.family),
+      ...buildTransitNetworkFieldValues(target.template.fields, target.template.family),
+    };
+    setPendingWizardApply({ templateId, values });
+    setMode('manual');
+    selectTemplate(templateId);
+  };
+
+  // 样式维度：方块 / 拟真、新版 / 旧版等，取自模板标题后缀。
+  // 只从「含多个样式变体」的版式组里取，避免把「线路详情」这种版式名误当成样式。
+  const applyWizardStyleOptions = useMemo(() => {
+    const labels = new Map<string, number>();
+    // 没有版式分组时（如门牌），样式变体就是入口下的全部模板。
+    const styleGroups = applyWizardLayoutGroups?.length
+      ? applyWizardLayoutGroups
+      : [{ id: 'all', templateIds: applyWizardVariants?.map((item) => item.id) ?? [] }];
+    for (const group of styleGroups) {
+      if (group.templateIds.length < 2) {
+        continue;
+      }
+      group.templateIds.forEach((templateId, index) => {
+        const item = applyWizardVariants?.find((candidate) => candidate.id === templateId);
+        const label = item?.template.title.match(/（([^）]+)）\s*$/u)?.[1];
+        if (label && !labels.has(label)) {
+          labels.set(label, index);
+        }
+      });
+    }
+    if (!labels.size) {
+      return [{ value: '0', label: '默认样式' }];
+    }
+    return [...labels.entries()].map(([label, index]) => ({
+      value: String(index),
+      label,
+    }));
+  }, [applyWizardLayoutGroups, applyWizardVariants]);
+
+  const applyWizardLayoutCards = useMemo(() => {
+    const groups = applyWizardLayoutGroups?.length
+      ? applyWizardLayoutGroups
+      : [
+          {
+            id: 'all',
+            label: t('materialStudio.preview'),
+            templateIds: applyWizardVariants?.map((item) => item.id) ?? [],
+          },
+        ];
+    return groups.flatMap((group) => {
+      const templateId =
+        group.templateIds[applyWizardStyleIndex] ??
+        group.templateIds.find((candidate) => candidate) ??
+        '';
+      const item = applyWizardVariants?.find((candidate) => candidate.id === templateId);
+      if (!item) {
+        return [];
+      }
+      return [
+        {
+          id: group.id,
+          label: group.labelKey ? t(group.labelKey) : (group.label ?? group.id),
+          templateId: item.id,
+          template: item.template,
+        },
+      ];
+    });
+  }, [applyWizardStyleIndex, applyWizardLayoutGroups, applyWizardVariants, t]);
+
+  useEffect(() => {
+    if (!isApplyWizardOpen) {
+      return;
+    }
+    if (!applyWizardLayoutCards.some((card) => card.templateId === applyWizardTemplateId)) {
+      setApplyWizardTemplateId(applyWizardLayoutCards[0]?.templateId ?? '');
+    }
+  }, [applyWizardLayoutCards, applyWizardTemplateId, isApplyWizardOpen]);
+
+  /**
+   * 按目标模板家族构建数据来源：模板库允许公交 ↔ 地铁互转，
+   * 不能沿用当前画布家族的数据来源类型。
+   */
+  const buildServerSourceForFamily = (
+    family: MaterialFamily,
+    fields: ReadonlyArray<MaterialField>,
+  ): { source: unknown; networkGeometry?: MaterialTransitNetworkSnapshot } | undefined => {
+    const sourceKind = serverSources?.[family] ?? serverSource;
+    const networkGeometry = transitNetworkSource === 'rmp' ? importedTransitNetwork : undefined;
+    if (sourceKind === 'transit_line') {
+      if (transitNetworkSource === 'rmp') {
+        if (!metroLineMapProjectLine) {
+          return undefined;
+        }
+        return {
+          source: {
+            kind: 'transit_line',
+            lineId: metroLineMapProjectLine.lineKey,
+            networkLineKey: metroLineMapProjectLine.lineKey,
+            networkNodeId: metroLineMapProjectNodeId || undefined,
+          },
+          networkGeometry,
+        };
+      }
+      if (!selectedLine) {
+        return undefined;
+      }
+      return {
+        source: {
+          kind: 'transit_line',
+          lineId: selectedLine.id,
+          stationSourceId: selectedStationSourceId || undefined,
+        },
+      };
+    }
+    if (sourceKind === 'transit_station') {
+      const requiresTerminalRole = fields.some((field) => field.key === 'terminalRole');
+      if (transitNetworkSource === 'rmp') {
+        if (!selectedImportedStationNodeId) {
+          return undefined;
+        }
+        const lineSelections = selectedTransitLineIds.flatMap((lineId) => {
+          const line = selectableImportedTransitLines.find((candidate) => candidate.id === lineId);
+          return line ? [{ lineKey: line.lineKey, direction: line.direction }] : [];
+        });
+        return {
+          source: {
+            kind: 'transit_station',
+            networkNodeId: selectedImportedStationNodeId,
+            lineSelections,
+            terminalRole: requiresTerminalRole ? transitTerminalRole : undefined,
+          },
+          networkGeometry,
+        };
+      }
+      if (!selectedTransitStationMarkerId || !selectedTransitLineIds.length) {
+        return undefined;
+      }
+      return {
+        source: {
+          kind: 'transit_station',
+          stationMarkerId: selectedTransitStationMarkerId,
+          direction: transitDirection,
+          lineIds: selectedTransitLineIds,
+          terminalRole: requiresTerminalRole ? transitTerminalRole : undefined,
+        },
+      };
+    }
+    // 路牌 / 门牌：地点或坐标同样可以交给服务端解析出完整字段。
+    if (sourceKind === 'map_location' && selectedLocationId) {
+      return { source: { kind: 'map_location', locationId: selectedLocationId } };
+    }
+    if (sourceKind === 'road_coordinate' && roadCoordinate) {
+      return { source: { kind: 'road_coordinate', x: roadCoordinate[0], z: roadCoordinate[1] } };
+    }
+    return undefined;
+  };
+
+  const confirmApplyWizard = (templateIdOverride?: string) => {
+    const targetTemplateId = templateIdOverride ?? applyWizardTemplateId;
+    const card =
+      applyWizardLayoutCards.find((item) => item.templateId === targetTemplateId) ??
+      applyWizardLayoutCards[0];
+    if (!card) {
+      blockAction('当前没有可套用的模板版式。');
+      return;
+    }
+    // 地铁导视牌有独立工作台与草稿，切过去时直接恢复上次编辑内容。
+    if (card.templateId === METRO_WAYFINDING_TEMPLATE_ID) {
+      setIsApplyWizardOpen(false);
+      openWayfindingTemplate(card.templateId);
+      return;
+    }
+    const isSwitching = card.templateId !== selected?.id;
+    // 切模板前先记住当前输入，保证来回切换时目标模板缺少的字段也能还原。
+    materialFieldMemoryRef.current = { ...materialFieldMemoryRef.current, ...input };
+    const clientValues = {
+      ...buildCarriedRoadValues(card.template.fields, card.template.family),
+      ...buildTransitNetworkFieldValues(card.template.fields, card.template.family),
+    };
+    // 切换模板允许在没有站点数据时先进入编辑；只在「不换模板」时要求有可套用数据。
+    if (!isSwitching && !activeTransitStation && activeServerSource === 'transit_station') {
+      blockAction('请先在数据来源中选择站点。');
+      return;
+    }
+    // 路牌等工作台没有线网字段，套用只负责切换模板，不要求存在可套用值。
+    if (allowTransitNetworkImport && !isSwitching && !Object.keys(clientValues).length) {
+      blockAction('当前模板没有可套用的线网字段。');
+      return;
+    }
+    setIsApplyWizardOpen(false);
+    setMode('manual');
+    if (!isSwitching && selected) {
+      setInput((current) => {
+        const next = { ...current, ...clientValues };
+        // 套用后的文本就是新的免审核基线。
+        setMaterialBaseline({
+          signature: buildMaterialTemplateTextSignature(selected.template, next),
+          input: next,
+        });
+        return next;
+      });
+      clearPreview();
+      publishToastRequested({
+        message: `已从线网套用 ${Object.keys(clientValues).length} 个字段。`,
+        tone: 'success',
+      });
+      return;
+    }
+
+    // 换模板：先用客户端推导值立即完成切换，不阻塞在服务端解析上；
+    // 服务端字段（线路走向、换乘、开往终点等）返回后再增量合并进当前输入。
+    setPendingWizardApply({
+      templateId: card.templateId,
+      values: clientValues,
+      mode: 'reset',
+    });
+    selectTemplate(card.templateId);
+    const targetSource = buildServerSourceForFamily(card.template.family, card.template.fields);
+    if (!targetSource) {
+      return;
+    }
+    void (async () => {
+      try {
+        const response = await fetch(appPath('/api/materials/resolved-input'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            templateId: card.templateId,
+            templateVersion: card.template.version,
+            source: targetSource.source,
+            networkGeometry: targetSource.networkGeometry,
+          }),
+        });
+        const data = await readJsonResponse<{ values?: Record<string, string> }>(response);
+        if (!response.ok || !data?.values) {
+          return;
+        }
+        setPendingWizardApply({
+          templateId: card.templateId,
+          values: data.values,
+          mode: 'merge',
+        });
+      } catch {
+        // 解析失败时保留客户端推导值，模板切换已经完成。
+      }
+    })();
+  };
+
+  useEffect(() => {
+    if (!pendingWizardApply) {
+      return;
+    }
+    if (!selected || selected.id !== pendingWizardApply.templateId) {
+      // 用户又切到了别的模板：丢弃这次异步补充值，避免之后切回来时被旧数据覆盖。
+      setPendingWizardApply(null);
+      return;
+    }
+    const appliedValues = pendingWizardApply.values;
+    // reset：以新模板默认值为底再合并，避免跨模板切换时带入旧模板字段。
+    // merge：模板已经切换完成，服务端补充值只增量覆盖到当前输入上。
+    const next =
+      pendingWizardApply.mode === 'merge'
+        ? { ...input, ...appliedValues }
+        : {
+            ...Object.fromEntries(
+              selected.template.fields.map((field) => [field.key, field.defaultValue ?? '']),
+            ),
+            ...appliedValues,
+          };
+    materialFieldMemoryRef.current = { ...materialFieldMemoryRef.current, ...next };
+    setInput(next);
+    setMaterialBaseline({
+      signature: buildMaterialTemplateTextSignature(selected.template, next),
+      input: next,
+    });
+    setPendingWizardApply(null);
+    clearPreview();
+    const appliedCount = Object.keys(appliedValues).length;
+    publishToastRequested({
+      message:
+        pendingWizardApply.mode === 'merge'
+          ? t('materialStudio.serverFieldsMerged', { count: appliedCount })
+          : appliedCount
+            ? `已从线网套用 ${appliedCount} 个字段。`
+            : '已切换模板，请选择站点后套用数据。',
+      tone: 'success',
+    });
+  }, [pendingWizardApply, selected]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1526,10 +2835,11 @@ export function MaterialStudioPanel({
           return;
         }
         const preview = event.payload.preview;
-        setWayfindingBaseline({
-          layout: serializeMetroWayfindingLayout(preview.layout),
-          widthM: preview.canvas.widthM,
-          heightM: preview.canvas.heightM,
+        const importedLayout = serializeMetroWayfindingLayout(preview.layout);
+        // 导入工程后，导入时的文本就是新的免审核基线。
+        setMaterialBaseline({
+          signature: buildMetroWayfindingTextSignature(importedLayout),
+          input: { layout: importedLayout },
         });
       }),
     [],
@@ -1544,10 +2854,9 @@ export function MaterialStudioPanel({
       layout,
     }));
     setCanvas({ ...example.project.canvas });
-    setWayfindingBaseline({
-      layout,
-      widthM: example.project.canvas.widthM,
-      heightM: example.project.canvas.heightM,
+    setMaterialBaseline({
+      signature: buildMetroWayfindingTextSignature(layout),
+      input: { layout },
     });
     clearPreview();
   };
@@ -1699,6 +3008,60 @@ export function MaterialStudioPanel({
       }),
     );
 
+  /**
+   * 把地点 / 坐标解析成模板字段值，再由本地 SVG 出图。
+   * 仅解析字段、不生成 PNG，所以不会进入预览审计链路。
+   */
+  const applyResolvedSourceValues = async () => {
+    if (!selected) {
+      return;
+    }
+    const source = buildServerSource();
+    if (!source) {
+      blockAction('请先选择地点或填写坐标。');
+      return;
+    }
+    setIsResolvingSource(true);
+    try {
+      const response = await fetch(appPath('/api/materials/resolved-input'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateId: selected.id,
+          templateVersion: selected.template.version,
+          source,
+        }),
+      });
+      const data =
+        (await readJsonResponse<{ values?: Record<string, string>; message?: string }>(
+          response,
+        )) ?? {};
+      if (!response.ok || !data.values) {
+        publishToastRequested({
+          message: data.message ?? '数据来源解析失败。',
+          tone: 'error',
+        });
+        return;
+      }
+      const nextInput = { ...input, ...data.values };
+      setInput(nextInput);
+      // 套用后的文本就是新的免审核基线。
+      setMaterialBaseline({
+        signature: buildMaterialTemplateTextSignature(selected.template, nextInput),
+        input: nextInput,
+      });
+      clearPreview();
+      publishToastRequested({
+        message: `已套用 ${Object.keys(data.values).length} 个字段。`,
+        tone: 'success',
+      });
+    } catch {
+      publishToastRequested({ message: '数据来源解析失败。', tone: 'error' });
+    } finally {
+      setIsResolvingSource(false);
+    }
+  };
+
   const blockAction = (message: string) => {
     publishMaterialStudioActionBlocked({ studioId, message });
   };
@@ -1711,17 +3074,17 @@ export function MaterialStudioPanel({
     return false;
   };
 
-  const syncLocalDraft = async () => {
+  const syncLocalDraft = async (): Promise<boolean> => {
     if (!selected || !activeCanvas) {
       blockAction(workspaceBlockMessage || t('materialStudio.noSyncTemplate'));
-      return;
+      return false;
     }
     if (!requireOnline()) {
-      return;
+      return false;
     }
     if (mode !== 'manual') {
       blockAction(t('materialStudio.serverSubmitOnlineOnly'));
-      return;
+      return false;
     }
 
     const current = localDraftRef.current;
@@ -1736,6 +3099,15 @@ export function MaterialStudioPanel({
       mode,
       transitNetworkSource,
       importedTransitNetwork,
+      transitSelection: {
+        stationMarkerId: selectedTransitStationMarkerId || undefined,
+        importedStationNodeId: selectedImportedStationNodeId || undefined,
+        direction: transitDirection,
+        lineIds: selectedTransitLineIds.length ? selectedTransitLineIds : undefined,
+        projectLineKey: metroLineMapProjectLineKey || undefined,
+        projectNodeId: metroLineMapProjectNodeId || undefined,
+        terminalRole: transitTerminalRole,
+      },
       createdAt: current?.createdAt ?? now,
       updatedAt: now,
       syncStatus: 'syncing',
@@ -1769,7 +3141,7 @@ export function MaterialStudioPanel({
         localDraftRef.current = failed;
         setLocalDraft(failed);
         await upsertMaterialOfflineDraft(failed);
-        return;
+        return false;
       }
       if (!response.ok || !data.id) {
         const status = response.status === 409 ? 'conflict' : 'failed';
@@ -1782,7 +3154,7 @@ export function MaterialStudioPanel({
         setLocalDraft(failed);
         await upsertMaterialOfflineDraft(failed);
         blockAction(data.message ?? t('materialStudio.localSyncFailed'));
-        return;
+        return false;
       }
       const synced: MaterialOfflineDraftRecord = {
         ...record,
@@ -1796,6 +3168,7 @@ export function MaterialStudioPanel({
       await upsertMaterialOfflineDraft(synced);
       setDrafts((currentDrafts) => [data, ...currentDrafts.filter((item) => item.id !== data.id)]);
       blockAction(t('materialStudio.localSyncedSubmitHint'));
+      return true;
     } catch {
       const failed = {
         ...record,
@@ -1806,9 +3179,85 @@ export function MaterialStudioPanel({
       setLocalDraft(failed);
       await upsertMaterialOfflineDraft(failed);
       blockAction(t('materialStudio.localSyncNetworkError'));
+      return false;
     } finally {
       setIsSyncingLocalDraft(false);
     }
+  };
+
+  /**
+   * 工作台脏状态：以「模板 + 版本 + 输入 + 画布」的签名对比最近一次保存。
+   * 本地草稿本来就会自动落库，这里只用于离开确认与 Ctrl+S 是否真的有改动。
+   */
+  const workspaceStateSignature = useMemo(
+    () =>
+      JSON.stringify({
+        templateId: selected?.id,
+        templateVersion: selected?.template.version,
+        input,
+        canvas: activeCanvas,
+      }),
+    [activeCanvas, input, selected?.id, selected?.template.version],
+  );
+  const workspaceBaselineRef = useRef<string | null>(null);
+  const [isWorkspaceDirty, setIsWorkspaceDirty] = useState(false);
+  useEffect(() => {
+    if (!workspace || !localDraftReady || !selected || !activeCanvas) {
+      return;
+    }
+    if (workspaceBaselineRef.current === null) {
+      workspaceBaselineRef.current = workspaceStateSignature;
+      setIsWorkspaceDirty(false);
+      return;
+    }
+    setIsWorkspaceDirty(workspaceStateSignature !== workspaceBaselineRef.current);
+  }, [
+    activeCanvas,
+    isMetroWayfinding,
+    localDraftReady,
+    selected,
+    workspace,
+    workspaceStateSignature,
+  ]);
+
+  const saveWorkspace = async (): Promise<boolean> => {
+    if (isBusy || isSyncingLocalDraft) {
+      return false;
+    }
+    if (mode !== 'manual') {
+      // 链接数据模式每次出图都从服务器线网实时解析，没有可保存的草稿。
+      publishToastRequested({ message: '链接数据模式无需保存草稿。', tone: 'info' });
+      return true;
+    }
+    const saved = await syncLocalDraft();
+    if (!saved) {
+      return false;
+    }
+    workspaceBaselineRef.current = workspaceStateSignature;
+    setIsWorkspaceDirty(false);
+    return true;
+  };
+
+  /** 工作台工具条的一键切换：服务器线网 ↔ 自定义项目（示例 / 导入）。 */
+  const toggleTransitSource = () => {
+    const next = transitNetworkSource === 'server' ? 'rmp' : 'server';
+    if (next === 'rmp' && !importedTransitNetwork) {
+      blockAction('当前没有自定义项目或示例线网，已保持在服务器线网。');
+      publishTransitNetworkSourceChanged({
+        studioId,
+        source: 'server',
+        reason: 'selection',
+        projectOrigin: 'none',
+      });
+      return;
+    }
+    publishTransitNetworkSourceChanged({
+      studioId,
+      source: next,
+      reason: 'selection',
+      snapshot: next === 'rmp' ? importedTransitNetwork : undefined,
+      projectOrigin: next === 'rmp' ? transitProjectOrigin : 'none',
+    });
   };
 
   const getServerSelectionBlockMessage = (): string | null => {
@@ -1920,6 +3369,10 @@ export function MaterialStudioPanel({
 
   const livePreviewRequestKey = JSON.stringify(buildPreviewRequestBody() ?? null);
   useEffect(() => {
+    // 工作台使用浏览器本地 SVG 实时预览，不再轮询服务端预览接口。
+    if (workspace) {
+      return;
+    }
     if (!isOnline || livePreviewRequestKey === 'null') {
       setIsPreviewRendering(false);
       return;
@@ -1954,7 +3407,7 @@ export function MaterialStudioPanel({
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [isOnline, livePreviewRequestKey]);
+  }, [isOnline, livePreviewRequestKey, workspace]);
 
   const downloadWatermarkedPreview = async () => {
     const response = await fetchWatermarkedPreview();
@@ -1978,8 +3431,8 @@ export function MaterialStudioPanel({
   const requestPreview = async () => {
     const startedAt = Date.now();
     let succeeded = false;
-    if (isPreviewDialogViewport) {
-      // 窄屏预览在弹窗里：先打开弹窗承载加载动画，拿到结果后再替换为图片。
+    if (isPreviewDialogViewport || workspace) {
+      // 窄屏 / 工作台没有常驻预览区：先打开弹窗承载加载动画，拿到结果后再替换为图片。
       setIsPreviewDialogOpen(true);
     }
     setIsBusy(true);
@@ -2070,6 +3523,12 @@ export function MaterialStudioPanel({
         return;
       }
       setDrafts((current) => [submitted, ...current.filter((item) => item.id !== submitted.id)]);
+      // 提交成功必须给出唯一一次明确反馈，否则用户会误以为没提交而重复点击。
+      publishToastRequested({
+        dedupeKey: `material-submit-success:${studioId}`,
+        message: '已提交审核',
+        tone: 'success',
+      });
     } catch {
       blockAction(t('materialStudio.submitNetworkError'));
     } finally {
@@ -2123,7 +3582,7 @@ export function MaterialStudioPanel({
     if (!requireOnline()) {
       return;
     }
-    if (!selected || !activeCanvas || !wayfindingBaseline) {
+    if (!selected || !activeCanvas || !materialBaseline) {
       blockAction(t('materialStudio.downloadFailed'));
       return;
     }
@@ -2143,7 +3602,14 @@ export function MaterialStudioPanel({
           templateVersion: selected.template.version,
           canvas: activeCanvas,
           input,
-          unmodifiedTemplateBaseline: wayfindingBaseline,
+          unmodifiedTemplateBaseline: {
+            ...(materialBaseline.input.layout !== undefined
+              ? { layout: materialBaseline.input.layout }
+              : {}),
+            input: materialBaseline.input,
+            widthM: activeCanvas.widthM,
+            heightM: activeCanvas.heightM,
+          },
         }),
       });
       if (!response.ok) {
@@ -2248,8 +3714,13 @@ export function MaterialStudioPanel({
     }
     const modifier = event.ctrlKey || event.metaKey;
     if (modifier && event.key === 'Enter') {
+      // 工作台下的 Ctrl+Enter 由 VisualEditorShell 统一接管为「保存并返回」。
+      if (workspace) {
+        return;
+      }
+      // 旧版非工作台页面仍以 Ctrl+Enter 触发服务端预览。
       event.preventDefault();
-      requestMaterialStudioAction({ studioId, action: 'preview' });
+      void requestPreview();
       return;
     }
     if (modifier && event.shiftKey && event.key.toLowerCase() === 'e') {
@@ -2277,7 +3748,7 @@ export function MaterialStudioPanel({
         currentIndex < 0
           ? 0
           : (currentIndex + offset + layoutStyleVariants.length) % layoutStyleVariants.length;
-      selectTemplate(layoutStyleVariants[nextIndex].id);
+      applyTemplateDirect(layoutStyleVariants[nextIndex].id);
     }
   };
 
@@ -2292,7 +3763,7 @@ export function MaterialStudioPanel({
       studioId,
       mode,
       transitNetworkSource,
-      hasPreview: Boolean(previewUrl),
+      hasPreview: workspace ? Boolean(localPreview.svg) : Boolean(previewUrl),
       isBusy,
       canExportProject: isMetroWayfinding && mode === 'manual',
       canDownloadWatermarkFree,
@@ -2301,10 +3772,12 @@ export function MaterialStudioPanel({
     canDownloadWatermarkFree,
     isBusy,
     isMetroWayfinding,
+    localPreview.svg,
     mode,
     previewUrl,
     studioId,
     transitNetworkSource,
+    workspace,
   ]);
 
   useEffect(() =>
@@ -2315,10 +3788,6 @@ export function MaterialStudioPanel({
       }
       if (isBusy) {
         blockAction(t('materialStudio.operationBusy'));
-        return;
-      }
-      if (action === 'preview') {
-        void requestPreview();
         return;
       }
       if (action === 'submit') {
@@ -2341,7 +3810,610 @@ export function MaterialStudioPanel({
     }),
   );
 
-  return (
+  /**
+   * 导视牌编辑器实例。
+   *
+   * - `engine=false`：原有「表单 + 行列表 + 元素面板」完整形态，供非工作台页面使用。
+   * - `engine=true`：只保留编辑内核（版式状态、撤销栈、导入生命周期、快照广播与弹窗），
+   *   工具条 / 行列表 / 元素面板全部关闭，由工作台的三栏接管；实例本身隐藏挂载。
+   */
+  const renderMetroWayfindingEditor = (engine: boolean) => (
+    <MetroWayfindingEditor
+      editorId={METRO_WAYFINDING_EDITOR_ID}
+      value={input.layout ?? ''}
+      canvasWidth={activeCanvas ? activeCanvas.widthM * 128 : 128}
+      canvasHeight={activeCanvas?.heightM ?? 1}
+      disabled={isBusy}
+      lineColorOptions={metroLineColorOptions}
+      lineKeysByColor={metroLineKeysByColor}
+      textSuggestions={metroTextSuggestions}
+      examples={metroWayfindingExamples}
+      onLoadExample={loadMetroWayfindingExample}
+      stationOptions={metroExampleStationOptions}
+      selectedStationName={metroExampleStationName}
+      onStationChange={setMetroExampleStationName}
+      lineOptions={metroExampleLineOptions}
+      selectedLineId={selectedMetroExampleLineId}
+      onLineChange={setMetroExampleLineId}
+      onCanvasHeightChange={(height) => updateCanvas('heightM', height)}
+      onCanvasWidthChange={(width) => updateCanvas('widthM', width)}
+      onChange={(value) => {
+        setInput((current) => ({ ...current, layout: value }));
+        clearPreview();
+      }}
+      rendersElementPanel={!engine}
+      rendersInspector={engine ? false : !isMetroInspectorDetached}
+      rendersRowLists={!engine}
+      rendersToolbar={!engine}
+    />
+  );
+
+  const studioDialogs = (
+    <>
+      {(isPreviewDialogViewport || workspace) && isPreviewDialogOpen ? (
+        <EditorDialogPortal>
+          <div
+            className="modal-backdrop editor-dialog-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.currentTarget === event.target) {
+                setIsPreviewDialogOpen(false);
+              }
+            }}
+          >
+            <section
+              className="modal-panel material-preview"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="material-preview-dialog-heading"
+              style={{ width: 'min(760px, 100%)' }}
+            >
+              <div className="material-preview-heading">
+                <div style={{ display: 'grid', gap: 2 }}>
+                  <h2 id="material-preview-dialog-heading">{t('materialStudio.preview')}</h2>
+                  <MaterialPreviewDescription
+                    previewSize={previewSize}
+                    isRendering={isPreviewRendering}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={t('materialStudio.closePreview')}
+                  title={t('materialStudio.closePreview')}
+                  autoFocus
+                  onClick={() => setIsPreviewDialogOpen(false)}
+                  style={{ flex: '0 0 40px', width: 40 }}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    close
+                  </span>
+                </button>
+              </div>
+              <MaterialPreviewStage
+                previewUrl={previewUrl}
+                isRendering={isPreviewRendering}
+                alt={t('materialStudio.previewAlt', {
+                  title: selected?.template.title ?? title,
+                })}
+              />
+            </section>
+          </div>
+        </EditorDialogPortal>
+      ) : null}
+
+      {isHistoryDialogOpen ? (
+        <EditorDialogPortal>
+          <div
+            className="modal-backdrop editor-dialog-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.currentTarget === event.target) setIsHistoryDialogOpen(false);
+            }}
+          >
+            <section
+              className="modal-panel material-history-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="material-history-heading"
+            >
+              <div className="material-history-heading">
+                <div>
+                  <h2 id="material-history-heading">{t('materialStudio.historyTitle')}</h2>
+                  <p className="muted">{t('materialStudio.historyHint')}</p>
+                </div>
+                <div className="material-history-heading-actions">
+                  <span>{t('services.itemCount', { count: historyDrafts.length })}</span>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={t('materialStudio.closeHistory')}
+                    title={t('materialStudio.closeHistory')}
+                    autoFocus
+                    onClick={() => setIsHistoryDialogOpen(false)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      close
+                    </span>
+                  </button>
+                </div>
+              </div>
+              {historyDrafts.length ? (
+                <div className="material-history-list">
+                  {historyDrafts.map((draft) => {
+                    const template = templateVersionByKey.get(
+                      `${draft.templateId}:${draft.templateVersion}`,
+                    );
+                    return (
+                      <article className="material-history-item" key={draft.id}>
+                        <div>
+                          <strong>
+                            {template?.title ?? draft.templateId} · v{draft.templateVersion} ·{' '}
+                            {materialDraftStatusLabel(draft.status, t)}
+                          </strong>
+                          <p>{formatStudioDraftInput(draft, template, t)}</p>
+                          <small>
+                            {t('materialStudio.submittedAt', {
+                              time: formatTime(draft.submittedAt ?? draft.createdAt, locale),
+                            })}
+                            {draft.reviewedAt
+                              ? ` · ${t('materialStudio.reviewedAt', {
+                                  time: formatTime(draft.reviewedAt, locale),
+                                })}`
+                              : ''}
+                            {draft.reviewReason ? ` · ${draft.reviewReason}` : ''}
+                          </small>
+                        </div>
+                        {draft.status === 'approved' ? (
+                          <button
+                            type="button"
+                            className="is-primary"
+                            onClick={() => void exportDraft(draft)}
+                            disabled={isBusy}
+                            title={t('materialStudio.download')}
+                          >
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              download
+                            </span>
+                            {t('materialStudio.download')}
+                          </button>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="material-history-empty">{t('materialStudio.noSubmittedYet')}</p>
+              )}
+            </section>
+          </div>
+        </EditorDialogPortal>
+      ) : null}
+    </>
+  );
+
+  /**
+   * 数据来源选择器。
+   * `sourceKindOverride` 用于模板库：目标模板家族可能和当前画布不同，
+   * 必须按目标家族渲染对应的套用组件（线路 / 车站 / 地点 / 坐标）。
+   */
+  const renderStudioSourceSelection = (
+    requireServerMode: boolean,
+    sourceKindOverride?: MaterialServerSource,
+  ) =>
+    !selected ? (
+      <p className="material-studio-empty">{t('materialStudio.noTemplates')}</p>
+    ) : (!requireServerMode || mode === 'server') &&
+      (sourceKindOverride ?? activeServerSource) === 'transit_station' ? (
+      <>
+        <label className="material-field">
+          <span>
+            {transitNetworkSource === 'rmp'
+              ? t('materialStudio.projectStation')
+              : t('materialStudio.selectServerStation')}
+          </span>
+          <select
+            value={
+              transitNetworkSource === 'rmp'
+                ? selectedImportedStationNodeId
+                : selectedTransitStationMarkerId
+            }
+            onChange={(event) => {
+              if (transitNetworkSource === 'rmp') {
+                setSelectedImportedStationNodeId(event.currentTarget.value);
+              } else {
+                setSelectedTransitStationMarkerId(event.currentTarget.value);
+              }
+              setSelectedTransitLineIds([]);
+              clearPreview();
+            }}
+            disabled={
+              isBusy ||
+              (transitNetworkSource === 'rmp'
+                ? !importedTransitStations.length
+                : !transitStations.length)
+            }
+          >
+            {(transitNetworkSource === 'rmp' ? importedTransitStations : transitStations).map(
+              (station) => (
+                <option key={station.markerId} value={station.markerId}>
+                  {station.stationName} ·
+                  {transitNetworkSource === 'rmp'
+                    ? t('materialStudio.projectLineCount', {
+                        count: station.projectLines?.length ?? 0,
+                      })
+                    : t('materialStudio.busLineCount', { count: station.lines.length })}
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+        {transitNetworkSource === 'rmp' && activeTransitStation?.projectLines?.length ? (
+          <div
+            className="transit-network-station-lines"
+            aria-label={t('materialStudio.stationProjectLines')}
+          >
+            <span>{t('materialStudio.projectLines')}</span>
+            <div>
+              {activeTransitStation.projectLines.map((line) => (
+                <span key={line.id} title={`${line.lineKey} · ${line.color}`}>
+                  <i style={{ backgroundColor: line.color }} aria-hidden="true" /> {line.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="material-field">
+          <span>
+            {transitNetworkSource === 'rmp'
+              ? t('materialStudio.mapDrivingDirection')
+              : t('materialStudio.roadDrivingDirection')}
+          </span>
+          <SegmentedControl
+            ariaLabel={
+              transitNetworkSource === 'rmp'
+                ? t('materialStudio.mapDrivingDirection')
+                : t('materialStudio.roadDrivingDirection')
+            }
+            className="material-mode-switch material-variant-switch material-field-segmented"
+            value={transitDirection}
+            onChange={(next) => {
+              setTransitDirection(next as 'east' | 'west' | 'north' | 'south');
+              setSelectedTransitLineIds([]);
+              clearPreview();
+            }}
+            disabled={
+              isBusy || !activeTransitStation || !activeTransitStation.directionOptions.length
+            }
+            options={activeTransitStation?.directionOptions ?? []}
+          />
+        </div>
+        <fieldset className="material-canvas-editor" disabled={isBusy || !activeTransitStation}>
+          <legend>
+            {transitNetworkSource === 'rmp'
+              ? t('materialStudio.projectLines')
+              : t('materialStudio.sameDirectionLines')}
+            {usesSingleTransitLineSelection
+              ? t('materialStudio.singleSelect')
+              : t('materialStudio.maxLines', { count: maximumTransitLineCount })}
+          </legend>
+          {transitNetworkSource === 'rmp' && selectableTransitLines.length ? (
+            selectableImportedTransitLines
+              .filter((line) => line.direction === transitDirection)
+              .map((line) => {
+                const checked = selectedTransitLineIds.includes(line.id);
+                return (
+                  <label
+                    className={
+                      usesSingleTransitLineSelection
+                        ? 'material-radio-row'
+                        : 'material-checkbox-row'
+                    }
+                    key={line.id}
+                  >
+                    <input
+                      type={usesSingleTransitLineSelection ? 'radio' : 'checkbox'}
+                      name={
+                        usesSingleTransitLineSelection
+                          ? `material-transit-line-${activeTransitStation?.markerId ?? ''}`
+                          : undefined
+                      }
+                      checked={checked}
+                      disabled={
+                        !usesSingleTransitLineSelection &&
+                        !checked &&
+                        selectedTransitLineIds.length >= maximumTransitLineCount
+                      }
+                      onChange={(event) => {
+                        const nextChecked = event.currentTarget.checked;
+                        setSelectedTransitLineIds((current) =>
+                          usesSingleTransitLineSelection
+                            ? [line.id]
+                            : nextChecked
+                              ? [...current, line.id].slice(0, maximumTransitLineCount)
+                              : current.filter((lineId) => lineId !== line.id),
+                        );
+                        clearPreview();
+                      }}
+                    />
+                    <i
+                      className="transit-network-line-swatch"
+                      style={{ backgroundColor: line.color }}
+                      aria-hidden="true"
+                    />
+                    <span>
+                      {line.name} {line.secondaryName ? ` / ${line.secondaryName}` : ''}
+                    </span>
+                  </label>
+                );
+              })
+          ) : transitNetworkSource === 'server' && selectableServerTransitLines.length ? (
+            selectableServerTransitLines.map((line) => {
+              const checked = selectedTransitLineIds.includes(line.id);
+              return (
+                <label
+                  className={
+                    usesSingleTransitLineSelection ? 'material-radio-row' : 'material-checkbox-row'
+                  }
+                  key={line.id}
+                >
+                  <input
+                    type={usesSingleTransitLineSelection ? 'radio' : 'checkbox'}
+                    name={
+                      usesSingleTransitLineSelection
+                        ? `material-transit-line-${activeTransitStation?.markerId ?? ''}`
+                        : undefined
+                    }
+                    checked={checked}
+                    disabled={
+                      !usesSingleTransitLineSelection &&
+                      !checked &&
+                      selectedTransitLineIds.length >= maximumTransitLineCount
+                    }
+                    onChange={(event) => {
+                      const nextChecked = event.currentTarget.checked;
+                      setSelectedTransitLineIds((current) =>
+                        usesSingleTransitLineSelection
+                          ? [line.id]
+                          : nextChecked
+                            ? [...current, line.id].slice(0, maximumTransitLineCount)
+                            : current.filter((lineId) => lineId !== line.id),
+                      );
+                      clearPreview();
+                    }}
+                  />
+                  <span>
+                    {line.name} · {t('materialStudio.directionTo')}
+                    {line.destinationName || t('materialStudio.destinationPending')} ·
+                    {line.firstLastBus} {line.operator ? ` · ${line.operator}` : ''}
+                    {line.isOriginAtStation ? ` · ${t('materialStudio.originAtStation')}` : ''}
+                    {line.isTerminalAtStation ? ` · ${t('materialStudio.terminalAtStation')}` : ''}
+                  </span>
+                </label>
+              );
+            })
+          ) : (
+            <div className="transit-network-match-empty">
+              <p className="muted">
+                {transitNetworkSource === 'rmp'
+                  ? t('materialStudio.noProjectConnection')
+                  : t('materialStudio.noDirectionLine')}
+              </p>
+              {transitNetworkSource === 'rmp' && activeTransitStation?.projectLines?.length ? (
+                <button
+                  type="button"
+                  onClick={() => publishTransitNetworkLineNameEditorRequested({ studioId })}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    edit
+                  </span>
+                  {t('materialStudio.configureLineName')}
+                </button>
+              ) : null}
+            </div>
+          )}
+        </fieldset>
+      </>
+    ) : (!requireServerMode || mode === 'server') &&
+      (sourceKindOverride ?? activeServerSource) === 'transit_line' ? (
+      transitNetworkSource === 'rmp' ? (
+        <div className="material-field-grid">
+          <label className="material-field">
+            <span>{t('materialStudio.projectLines')}</span>
+            <select
+              value={metroLineMapProjectLineKey}
+              onChange={(event) => setMetroLineMapProjectLineKey(event.currentTarget.value)}
+              disabled={isBusy || !metroLineMapProjectLines.length}
+            >
+              {metroLineMapProjectLines.map((line) => (
+                <option key={line.lineKey} value={line.lineKey}>
+                  {line.label} {line.secondaryLabel ? ` / ${line.secondaryLabel}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="material-field">
+            <span>{t('materialStudio.projectCurrentStation')}</span>
+            <select
+              value={metroLineMapProjectNodeId}
+              onChange={(event) => setMetroLineMapProjectNodeId(event.currentTarget.value)}
+              disabled={isBusy || !metroLineMapProjectStations.length}
+            >
+              {metroLineMapProjectStations.map((station) => (
+                <option key={station.id} value={station.id}>
+                  {station.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : (
+        <>
+          <label className="material-field">
+            <span>{t('materialStudio.serverLines')}</span>
+            <select
+              value={selectedLineId}
+              onChange={(event) => {
+                const lineId = event.currentTarget.value;
+                const line = transitLines.find((item) => item.id === lineId);
+                setSelectedLineId(lineId);
+                setSelectedStationSourceId(line?.stations[0]?.stationSourceId ?? '');
+                clearPreview();
+              }}
+              disabled={isBusy || !resolveStudioSourceLineOptions(sourceKindOverride).length}
+            >
+              {resolveStudioSourceLineOptions(sourceKindOverride).map((line) => (
+                <option key={line.id} value={line.id}>
+                  {line.name} · {t('materialStudio.stationsCount', { count: line.stationCount })}
+                  {line.operationStatus === 'planned' ? ` · ${t('materialStudio.notOpened')}` : ''}
+                  {line.operator ? ` · ${line.operator}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="material-field">
+            <span>{t('materialStudio.serverStations')}</span>
+            <select
+              value={selectedStationSourceId}
+              onChange={(event) => {
+                setSelectedStationSourceId(event.currentTarget.value);
+                clearPreview();
+              }}
+              disabled={isBusy || !selectedLine?.stations.length}
+            >
+              {selectedLine?.stations.map((station) => (
+                <option key={station.stationSourceId} value={station.stationSourceId}>
+                  {station.stationName}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )
+    ) : (!requireServerMode || mode === 'server') &&
+      (sourceKindOverride ?? activeServerSource) === 'map_location' ? (
+      <>
+        <label className="material-field">
+          <span>
+            {t(
+              usesAddressPoiSource
+                ? 'materialStudio.addressPoiSearch'
+                : 'materialStudio.searchServerPlace',
+            )}
+          </span>
+          <input
+            value={locationQuery}
+            onChange={(event) => setLocationQuery(event.currentTarget.value)}
+            disabled={isBusy}
+          />
+        </label>
+        <label className="material-field">
+          <span>
+            {t(
+              usesAddressPoiSource
+                ? 'materialStudio.addressPoiPlaces'
+                : 'materialStudio.serverPlaces',
+            )}
+          </span>
+          <select
+            value={selectedLocationId}
+            onChange={(event) => {
+              setSelectedLocationId(event.currentTarget.value);
+              clearPreview();
+            }}
+            disabled={isBusy || !visibleLocations.length}
+          >
+            {visibleLocations.map((location) => (
+              <option key={location.id} value={location.id}>
+                {location.label} · {location.categoryId}
+                {location.address ? ` · ${location.address}` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        {usesAddressPoiSource && !addressPoiLocations.length ? (
+          <small className="material-field-hint">
+            {t('materialStudio.addressPoiEmpty')}
+          </small>
+        ) : null}
+      </>
+    ) : (!requireServerMode || mode === 'server') &&
+      (sourceKindOverride ?? activeServerSource) === 'road_coordinate' ? (
+      <>
+        <div className="material-field-grid">
+          <label className="material-field">
+            <span>{t('materialStudio.coordinateX')}</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={roadCoordinate?.[0] ?? ''}
+              disabled={isBusy}
+              onChange={(event) => {
+                const value = Number(event.currentTarget.value);
+                if (!Number.isFinite(value)) {
+                  return;
+                }
+                setRoadCoordinate((current) => [value, current?.[1] ?? 0]);
+                clearPreview();
+              }}
+            />
+          </label>
+          <label className="material-field">
+            <span>{t('materialStudio.coordinateZ')}</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={roadCoordinate?.[1] ?? ''}
+              disabled={isBusy}
+              onChange={(event) => {
+                const value = Number(event.currentTarget.value);
+                if (!Number.isFinite(value)) {
+                  return;
+                }
+                setRoadCoordinate((current) => [current?.[0] ?? 0, value]);
+                clearPreview();
+              }}
+            />
+          </label>
+        </div>
+        <EmbeddedMapLocationPicker
+          ariaLabel={t('materialStudio.pickCoordinateHint')}
+          footer={
+            roadCoordinate
+              ? t('materialStudio.clickMapCoordinate', {
+                  x: formatCoordinate(roadCoordinate[0]),
+                  z: formatCoordinate(roadCoordinate[1]),
+                })
+              : t('materialStudio.fillCoordinateFirst')
+          }
+          onChange={(coordinate) => {
+            setRoadCoordinate(coordinate);
+            clearPreview();
+          }}
+          freshTileTemplate={freshTileTemplate}
+          tileTemplate={tileTemplate}
+          value={roadCoordinate}
+        />
+        <small className="material-field-hint" role="status">
+          {isRoadSideHintLoading
+            ? t('materialStudio.roadSideHintLoading')
+            : isRoadSideHintChecked
+              ? roadSideHint
+                ? t('materialStudio.roadSideHintMatched', {
+                    road: roadSideHint.roadName,
+                    side: t(roadSideLabelKeys[roadSideHint.side]),
+                    x: formatCoordinate(roadSideHint.installation[0]),
+                    z: formatCoordinate(roadSideHint.installation[1]),
+                  })
+                : t('materialStudio.roadSideHintMissing')
+              : null}
+        </small>
+      </>
+    ) : null;
+
+  const studioSourceSelection = renderStudioSourceSelection(true);
+
+  const studioContent = (
     <section
       className={isBusy ? 'material-studio is-busy' : 'material-studio'}
       aria-label={panelTitle}
@@ -2404,7 +4476,7 @@ export function MaterialStudioPanel({
                     templates.some((item) => item.id === templateId),
                   ) ?? entry.templateIds[0];
                 if (nextTemplateId) {
-                  selectTemplate(nextTemplateId);
+                  requestTemplateChange(nextTemplateId);
                 }
               }}
               disabled={!templateEntries.length || isBusy}
@@ -2488,7 +4560,7 @@ export function MaterialStudioPanel({
                     key={item.id}
                     className={selected?.id === item.id ? 'is-active' : ''}
                     type="button"
-                    onClick={() => selectTemplate(item.id)}
+                    onClick={() => applyTemplateDirect(item.id)}
                     disabled={isBusy}
                   >
                     {item.template.title.match(/（([^）]+)）\s*$/u)?.[1] ?? item.template.title}
@@ -2547,11 +4619,13 @@ export function MaterialStudioPanel({
                     disabled={isBusy}
                     suggestions={field.key === 'roadName' ? serverLocationSuggestions : undefined}
                     optionsOverride={
-                      field.key === 'travelDirection'
-                        ? travelDirectionOptions
-                        : field.key === 'travelDirectionSecondary'
-                          ? verticalSecondaryDirectionOptions
-                          : undefined
+                      field.key === 'trackPosition'
+                        ? trackPositionOptions
+                        : field.key === 'travelDirection'
+                          ? travelDirectionOptions
+                          : field.key === 'travelDirectionSecondary'
+                            ? verticalSecondaryDirectionOptions
+                            : undefined
                     }
                     onChange={updateMaterialFieldValue.bind(null, field.key)}
                   />
@@ -2559,425 +4633,10 @@ export function MaterialStudioPanel({
               )}
             </div>
           ) : null}
-          {!selected ? (
-            <p className="material-studio-empty">{t('materialStudio.noTemplates')}</p>
-          ) : mode === 'server' && activeServerSource === 'transit_station' ? (
-            <>
-              <label className="material-field">
-                <span>
-                  {transitNetworkSource === 'rmp'
-                    ? t('materialStudio.projectStation')
-                    : t('materialStudio.selectServerStation')}
-                </span>
-                <select
-                  value={
-                    transitNetworkSource === 'rmp'
-                      ? selectedImportedStationNodeId
-                      : selectedTransitStationMarkerId
-                  }
-                  onChange={(event) => {
-                    if (transitNetworkSource === 'rmp') {
-                      setSelectedImportedStationNodeId(event.currentTarget.value);
-                    } else {
-                      setSelectedTransitStationMarkerId(event.currentTarget.value);
-                    }
-                    setSelectedTransitLineIds([]);
-                    clearPreview();
-                  }}
-                  disabled={
-                    isBusy ||
-                    (transitNetworkSource === 'rmp'
-                      ? !importedTransitStations.length
-                      : !transitStations.length)
-                  }
-                >
-                  {(transitNetworkSource === 'rmp' ? importedTransitStations : transitStations).map(
-                    (station) => (
-                      <option key={station.markerId} value={station.markerId}>
-                        {station.stationName} ·{' '}
-                        {transitNetworkSource === 'rmp'
-                          ? t('materialStudio.projectLineCount', {
-                              count: station.projectLines?.length ?? 0,
-                            })
-                          : t('materialStudio.busLineCount', { count: station.lines.length })}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </label>
-              {transitNetworkSource === 'rmp' && activeTransitStation?.projectLines?.length ? (
-                <div
-                  className="transit-network-station-lines"
-                  aria-label={t('materialStudio.stationProjectLines')}
-                >
-                  <span>{t('materialStudio.projectLines')}</span>
-                  <div>
-                    {activeTransitStation.projectLines.map((line) => (
-                      <span key={line.id} title={`${line.lineKey} · ${line.color}`}>
-                        <i style={{ backgroundColor: line.color }} aria-hidden="true" />
-                        {line.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              <label className="material-field">
-                <span>
-                  {transitNetworkSource === 'rmp'
-                    ? t('materialStudio.mapDrivingDirection')
-                    : t('materialStudio.roadDrivingDirection')}
-                </span>
-                <select
-                  value={transitDirection}
-                  onChange={(event) => {
-                    setTransitDirection(
-                      event.currentTarget.value as 'east' | 'west' | 'north' | 'south',
-                    );
-                    setSelectedTransitLineIds([]);
-                    clearPreview();
-                  }}
-                  disabled={
-                    isBusy || !activeTransitStation || !activeTransitStation.directionOptions.length
-                  }
-                >
-                  {activeTransitStation?.directionOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <fieldset
-                className="material-canvas-editor"
-                disabled={isBusy || !activeTransitStation}
-              >
-                <legend>
-                  {transitNetworkSource === 'rmp'
-                    ? t('materialStudio.projectLines')
-                    : t('materialStudio.sameDirectionLines')}
-                  {usesSingleTransitLineSelection
-                    ? t('materialStudio.singleSelect')
-                    : t('materialStudio.maxLines', { count: maximumTransitLineCount })}
-                </legend>
-                {transitNetworkSource === 'rmp' && selectableTransitLines.length ? (
-                  selectableImportedTransitLines
-                    .filter((line) => line.direction === transitDirection)
-                    .map((line) => {
-                      const checked = selectedTransitLineIds.includes(line.id);
-                      return (
-                        <label
-                          className={
-                            usesSingleTransitLineSelection
-                              ? 'material-radio-row'
-                              : 'material-checkbox-row'
-                          }
-                          key={line.id}
-                        >
-                          <input
-                            type={usesSingleTransitLineSelection ? 'radio' : 'checkbox'}
-                            name={
-                              usesSingleTransitLineSelection
-                                ? `material-transit-line-${activeTransitStation?.markerId ?? ''}`
-                                : undefined
-                            }
-                            checked={checked}
-                            disabled={
-                              !usesSingleTransitLineSelection &&
-                              !checked &&
-                              selectedTransitLineIds.length >= maximumTransitLineCount
-                            }
-                            onChange={(event) => {
-                              const nextChecked = event.currentTarget.checked;
-                              setSelectedTransitLineIds((current) =>
-                                usesSingleTransitLineSelection
-                                  ? [line.id]
-                                  : nextChecked
-                                    ? [...current, line.id].slice(0, maximumTransitLineCount)
-                                    : current.filter((lineId) => lineId !== line.id),
-                              );
-                              clearPreview();
-                            }}
-                          />
-                          <i
-                            className="transit-network-line-swatch"
-                            style={{ backgroundColor: line.color }}
-                            aria-hidden="true"
-                          />
-                          <span>
-                            {line.name}
-                            {line.secondaryName ? ` / ${line.secondaryName}` : ''}
-                          </span>
-                        </label>
-                      );
-                    })
-                ) : transitNetworkSource === 'server' && selectableServerTransitLines.length ? (
-                  selectableServerTransitLines.map((line) => {
-                    const checked = selectedTransitLineIds.includes(line.id);
-                    return (
-                      <label
-                        className={
-                          usesSingleTransitLineSelection
-                            ? 'material-radio-row'
-                            : 'material-checkbox-row'
-                        }
-                        key={line.id}
-                      >
-                        <input
-                          type={usesSingleTransitLineSelection ? 'radio' : 'checkbox'}
-                          name={
-                            usesSingleTransitLineSelection
-                              ? `material-transit-line-${activeTransitStation?.markerId ?? ''}`
-                              : undefined
-                          }
-                          checked={checked}
-                          disabled={
-                            !usesSingleTransitLineSelection &&
-                            !checked &&
-                            selectedTransitLineIds.length >= maximumTransitLineCount
-                          }
-                          onChange={(event) => {
-                            const nextChecked = event.currentTarget.checked;
-                            setSelectedTransitLineIds((current) =>
-                              usesSingleTransitLineSelection
-                                ? [line.id]
-                                : nextChecked
-                                  ? [...current, line.id].slice(0, maximumTransitLineCount)
-                                  : current.filter((lineId) => lineId !== line.id),
-                            );
-                            clearPreview();
-                          }}
-                        />
-                        <span>
-                          {line.name} · {t('materialStudio.directionTo')}{' '}
-                          {line.destinationName || t('materialStudio.destinationPending')} ·{' '}
-                          {line.firstLastBus}
-                          {line.operator ? ` · ${line.operator}` : ''}
-                          {line.isOriginAtStation
-                            ? ` · ${t('materialStudio.originAtStation')}`
-                            : ''}
-                          {line.isTerminalAtStation
-                            ? ` · ${t('materialStudio.terminalAtStation')}`
-                            : ''}
-                        </span>
-                      </label>
-                    );
-                  })
-                ) : (
-                  <div className="transit-network-match-empty">
-                    <p className="muted">
-                      {transitNetworkSource === 'rmp'
-                        ? t('materialStudio.noProjectConnection')
-                        : t('materialStudio.noDirectionLine')}
-                    </p>
-                    {transitNetworkSource === 'rmp' &&
-                    activeTransitStation?.projectLines?.length ? (
-                      <button
-                        type="button"
-                        onClick={() => publishTransitNetworkLineNameEditorRequested({ studioId })}
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          edit
-                        </span>
-                        {t('materialStudio.configureLineName')}
-                      </button>
-                    ) : null}
-                  </div>
-                )}
-              </fieldset>
-            </>
-          ) : mode === 'server' && activeServerSource === 'transit_line' ? (
-            transitNetworkSource === 'rmp' ? (
-              <div className="material-field-grid">
-                <label className="material-field">
-                  <span>{t('materialStudio.projectLines')}</span>
-                  <select
-                    value={metroLineMapProjectLineKey}
-                    onChange={(event) => setMetroLineMapProjectLineKey(event.currentTarget.value)}
-                    disabled={isBusy || !metroLineMapProjectLines.length}
-                  >
-                    {metroLineMapProjectLines.map((line) => (
-                      <option key={line.lineKey} value={line.lineKey}>
-                        {line.label}
-                        {line.secondaryLabel ? ` / ${line.secondaryLabel}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="material-field">
-                  <span>{t('materialStudio.projectCurrentStation')}</span>
-                  <select
-                    value={metroLineMapProjectNodeId}
-                    onChange={(event) => setMetroLineMapProjectNodeId(event.currentTarget.value)}
-                    disabled={isBusy || !metroLineMapProjectStations.length}
-                  >
-                    {metroLineMapProjectStations.map((station) => (
-                      <option key={station.id} value={station.id}>
-                        {station.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            ) : (
-              <>
-                <label className="material-field">
-                  <span>{t('materialStudio.serverLines')}</span>
-                  <select
-                    value={selectedLineId}
-                    onChange={(event) => {
-                      const lineId = event.currentTarget.value;
-                      const line = transitLines.find((item) => item.id === lineId);
-                      setSelectedLineId(lineId);
-                      setSelectedStationSourceId(line?.stations[0]?.stationSourceId ?? '');
-                      clearPreview();
-                    }}
-                    disabled={isBusy || !serverTransitLineOptions.length}
-                  >
-                    {serverTransitLineOptions.map((line) => (
-                      <option key={line.id} value={line.id}>
-                        {line.name} ·{' '}
-                        {t('materialStudio.stationsCount', { count: line.stationCount })}
-                        {line.operationStatus === 'planned'
-                          ? ` · ${t('materialStudio.notOpened')}`
-                          : ''}
-                        {line.operator ? ` · ${line.operator}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="material-field">
-                  <span>{t('materialStudio.serverStations')}</span>
-                  <select
-                    value={selectedStationSourceId}
-                    onChange={(event) => {
-                      setSelectedStationSourceId(event.currentTarget.value);
-                      clearPreview();
-                    }}
-                    disabled={isBusy || !selectedLine?.stations.length}
-                  >
-                    {selectedLine?.stations.map((station) => (
-                      <option key={station.stationSourceId} value={station.stationSourceId}>
-                        {station.stationName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </>
-            )
-          ) : mode === 'server' && activeServerSource === 'map_location' ? (
-            <>
-              <label className="material-field">
-                <span>{t('materialStudio.searchServerPlace')}</span>
-                <input
-                  value={locationQuery}
-                  onChange={(event) => setLocationQuery(event.currentTarget.value)}
-                  disabled={isBusy}
-                />
-              </label>
-              <label className="material-field">
-                <span>{t('materialStudio.serverPlaces')}</span>
-                <select
-                  value={selectedLocationId}
-                  onChange={(event) => {
-                    setSelectedLocationId(event.currentTarget.value);
-                    clearPreview();
-                  }}
-                  disabled={isBusy || !visibleLocations.length}
-                >
-                  {visibleLocations.map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.label} · {location.categoryId}
-                      {location.address ? ` · ${location.address}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </>
-          ) : mode === 'server' && activeServerSource === 'road_coordinate' ? (
-            <>
-              <div className="material-field-grid">
-                <label className="material-field">
-                  <span>{t('materialStudio.coordinateX')}</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={roadCoordinate?.[0] ?? ''}
-                    disabled={isBusy}
-                    onChange={(event) => {
-                      const value = Number(event.currentTarget.value);
-                      if (!Number.isFinite(value)) {
-                        return;
-                      }
-                      setRoadCoordinate((current) => [value, current?.[1] ?? 0]);
-                      clearPreview();
-                    }}
-                  />
-                </label>
-                <label className="material-field">
-                  <span>{t('materialStudio.coordinateZ')}</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={roadCoordinate?.[1] ?? ''}
-                    disabled={isBusy}
-                    onChange={(event) => {
-                      const value = Number(event.currentTarget.value);
-                      if (!Number.isFinite(value)) {
-                        return;
-                      }
-                      setRoadCoordinate((current) => [current?.[0] ?? 0, value]);
-                      clearPreview();
-                    }}
-                  />
-                </label>
-              </div>
-              <EmbeddedMapLocationPicker
-                ariaLabel={t('materialStudio.pickCoordinateHint')}
-                footer={
-                  roadCoordinate
-                    ? t('materialStudio.clickMapCoordinate', {
-                        x: formatCoordinate(roadCoordinate[0]),
-                        z: formatCoordinate(roadCoordinate[1]),
-                      })
-                    : t('materialStudio.fillCoordinateFirst')
-                }
-                onChange={(coordinate) => {
-                  setRoadCoordinate(coordinate);
-                  clearPreview();
-                }}
-                freshTileTemplate={freshTileTemplate}
-                tileTemplate={tileTemplate}
-                value={roadCoordinate}
-              />
-            </>
-          ) : (
+          {studioSourceSelection ?? (
             <>
               {isMetroWayfinding ? (
-                <MetroWayfindingEditor
-                  editorId={METRO_WAYFINDING_EDITOR_ID}
-                  value={input.layout ?? ''}
-                  canvasWidth={activeCanvas ? activeCanvas.widthM * 128 : 128}
-                  canvasHeight={activeCanvas?.heightM ?? 1}
-                  disabled={isBusy}
-                  lineColorOptions={metroLineColorOptions}
-                  lineKeysByColor={metroLineKeysByColor}
-                  textSuggestions={metroTextSuggestions}
-                  examples={metroWayfindingExamples}
-                  onLoadExample={loadMetroWayfindingExample}
-                  stationOptions={metroExampleStationOptions}
-                  selectedStationName={metroExampleStationName}
-                  onStationChange={setMetroExampleStationName}
-                  lineOptions={metroExampleLineOptions}
-                  selectedLineId={selectedMetroExampleLineId}
-                  onLineChange={setMetroExampleLineId}
-                  onCanvasHeightChange={(height) => updateCanvas('heightM', height)}
-                  onCanvasWidthChange={(width) => updateCanvas('widthM', width)}
-                  onChange={(value) => {
-                    setInput((current) => ({ ...current, layout: value }));
-                    clearPreview();
-                  }}
-                  rendersInspector={!isMetroInspectorDetached}
-                />
+                renderMetroWayfindingEditor(false)
               ) : (
                 <div className="material-field-grid">
                   {selected.template.fields
@@ -2995,11 +4654,13 @@ export function MaterialStudioPanel({
                           field.key === 'roadName' ? serverLocationSuggestions : undefined
                         }
                         optionsOverride={
-                          field.key === 'travelDirection'
-                            ? travelDirectionOptions
-                            : field.key === 'travelDirectionSecondary'
-                              ? verticalSecondaryDirectionOptions
-                              : undefined
+                          field.key === 'trackPosition'
+                            ? trackPositionOptions
+                            : field.key === 'travelDirection'
+                              ? travelDirectionOptions
+                              : field.key === 'travelDirectionSecondary'
+                                ? verticalSecondaryDirectionOptions
+                                : undefined
                         }
                         onChange={updateMaterialFieldValue.bind(null, field.key)}
                       />
@@ -3060,142 +4721,1618 @@ export function MaterialStudioPanel({
         </div>
       </div>
 
-      {isPreviewDialogViewport && isPreviewDialogOpen ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.currentTarget === event.target) {
-              setIsPreviewDialogOpen(false);
+      {studioDialogs}
+    </section>
+  );
+
+  if (!workspace) {
+    return studioContent;
+  }
+
+  const workspaceTemplateControls = (
+    <>
+      <label className="material-field">
+        <span>{t('materialStudio.templates')}</span>
+        <select
+          value={selectedEntry?.id ?? ''}
+          onChange={(event) => {
+            const entry = templateEntries.find(
+              (candidate) => candidate.id === event.currentTarget.value,
+            );
+            if (!entry) {
+              return;
+            }
+            const nextTemplateId =
+              entry.templateIds.find((templateId) =>
+                templates.some((item) => item.id === templateId),
+              ) ?? entry.templateIds[0];
+            if (nextTemplateId) {
+              requestTemplateChange(nextTemplateId);
             }
           }}
+          disabled={!templateEntries.length || isBusy}
         >
-          <section
-            className="modal-panel material-preview"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="material-preview-dialog-heading"
-            style={{ width: 'min(760px, 100%)' }}
+          {templateEntries.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.titleKey ? t(entry.titleKey) : (entry.title ?? '')}
+            </option>
+          ))}
+        </select>
+      </label>
+      {availableLayoutGroups && availableLayoutGroups.length > 1 ? (
+        <div className="material-field">
+          <span>{layoutSwitchLabel}</span>
+          <div className="segmented-control">
+            <SegmentedControl
+              ariaLabel={layoutSwitchLabel}
+              className="transit-visual-segmented"
+              disabled={isBusy}
+              value={activeLayoutGroup?.id ?? availableLayoutGroups[0]!.id}
+              options={availableLayoutGroups.map((group) => ({
+                value: group.id,
+                label: group.labelKey ? t(group.labelKey) : (group.label ?? group.id),
+              }))}
+              onChange={(groupId) => {
+                const group = availableLayoutGroups.find((item) => item.id === groupId);
+                if (group) {
+                  selectLayoutGroup(group);
+                }
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
+      {layoutStyleVariants && layoutStyleVariants.length > 1 ? (
+        <div className="material-field">
+          <span>{selectedEntryVariantLabel}</span>
+          <div className="segmented-control">
+            <SegmentedControl
+              ariaLabel={selectedEntryVariantLabel}
+              className="transit-visual-segmented"
+              disabled={isBusy}
+              value={selected?.id ?? ''}
+              options={layoutStyleVariants.map((item) => ({
+                value: item.id,
+                label: item.template.title.match(/（([^）]+)）\s*$/u)?.[1] ?? item.template.title,
+              }))}
+              onChange={applyTemplateDirect}
+            />
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+
+  // 非地铁模板：数据来源选择器常驻，配合「从线网套用」向导使用。
+  const workspaceSourceSelection = renderStudioSourceSelection(false);
+
+  const workspaceDataSourceControls = (
+    <>
+      {allowTransitNetworkImport ? (
+        <TransitNetworkSourceControl
+          studioId={studioId}
+          initialSource={localDraftReady ? localDraft?.transitNetworkSource : undefined}
+          initialSnapshot={
+            localDraftReady && localDraft?.transitNetworkSource === 'rmp'
+              ? localDraft.importedTransitNetwork
+              : undefined
+          }
+        />
+      ) : (
+        // 路牌等工作台没有线网导入，直接把地点 / 坐标选择器放进全局属性的数据来源。
+        <>
+          {workspaceSourceSelection}
+          <button
+            type="button"
+            className="secondary-action-button material-source-apply"
+            disabled={isBusy || isResolvingSource || !selected}
+            onClick={() => void applyResolvedSourceValues()}
           >
-            <div className="material-preview-heading">
-              <div style={{ display: 'grid', gap: 2 }}>
-                <h2 id="material-preview-dialog-heading">{t('materialStudio.preview')}</h2>
-                <MaterialPreviewDescription
-                  previewSize={previewSize}
-                  isRendering={isPreviewRendering}
-                />
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={t('materialStudio.closePreview')}
-                title={t('materialStudio.closePreview')}
-                autoFocus
-                onClick={() => setIsPreviewDialogOpen(false)}
-                style={{ flex: '0 0 40px', width: 40 }}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              download_done
+            </span>
+            {isResolvingSource ? '正在套用…' : '套用位置信息'}
+          </button>
+        </>
+      )}
+    </>
+  );
+
+  // 模板库内嵌的数据来源：目标模板决定选「线路」还是「车站 + 线路」，
+  // 公交 ↔ 地铁互转时也能在同一个弹窗里完成选线选站。
+  const wizardTargetCard =
+    applyWizardLayoutCards.find((card) => card.templateId === applyWizardTemplateId) ??
+    applyWizardLayoutCards[0];
+  const wizardTargetFamily = wizardTargetCard?.template.family;
+  // 模板库的目标家族可能和当前画布不同，线路候选必须按目标家族过滤，
+  // 否则公交模板切地铁时会列出公交线路。
+  const wizardMetroLineOptions = transitLines.filter(
+    (line) => line.mode === 'metro' || line.mode === 'tram' || line.mode === 'custom',
+  );
+  // 数据来源优先：先选线网来源与线路 / 车站（路牌则为地点），再看样式与版式。
+  const wizardStyleStep = 2;
+  const wizardLayoutStep = 3;
+  const wizardSourceControls =
+    wizardTargetFamily === 'metro_line' ? (
+      <div className="material-apply-wizard-source">
+        <label className="material-field">
+          <span>套用线路</span>
+          <select
+            value={
+              transitNetworkSource === 'rmp' ? metroLineMapProjectLineKey : selectedLineId
+            }
+            onChange={(event) => {
+              const lineId = event.currentTarget.value;
+              if (transitNetworkSource === 'rmp') {
+                setMetroLineMapProjectLineKey(lineId);
+                return;
+              }
+              setSelectedLineId(lineId);
+              const line = wizardMetroLineOptions.find((item) => item.id === lineId);
+              setSelectedStationSourceId(line?.stations[0]?.stationSourceId ?? '');
+            }}
+          >
+            {(transitNetworkSource === 'rmp' ? metroLineMapProjectLines : wizardMetroLineOptions).map(
+              (line) =>
+                'lineKey' in line ? (
+                  <option key={line.lineKey} value={line.lineKey}>
+                    {line.label}
+                    {line.secondaryLabel ? ` / ${line.secondaryLabel}` : ''}
+                  </option>
+                ) : (
+                  <option key={line.id} value={line.id}>
+                    {line.name}
+                    {line.mode === 'tram'
+                      ? '（有轨）'
+                      : line.mode === 'custom'
+                        ? '（专用线）'
+                        : ''}
+                  </option>
+                ),
+            )}
+          </select>
+        </label>
+        <label className="material-field">
+          <span>当前站</span>
+          <select
+            value={
+              transitNetworkSource === 'rmp' ? metroLineMapProjectNodeId : selectedStationSourceId
+            }
+            onChange={(event) => {
+              if (transitNetworkSource === 'rmp') {
+                setMetroLineMapProjectNodeId(event.currentTarget.value);
+                return;
+              }
+              setSelectedStationSourceId(event.currentTarget.value);
+            }}
+          >
+            {(transitNetworkSource === 'rmp'
+              ? metroLineMapProjectStations.map((station) => ({
+                  value: station.id,
+                  label: station.name,
+                }))
+              : (selectedLine?.stations ?? []).map((station) => ({
+                  value: station.stationSourceId,
+                  label: station.stationName,
+                }))
+            ).map((station) => (
+              <option key={station.value} value={station.value}>
+                {station.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    ) : wizardTargetFamily === 'bus_stop' ? (
+      <div className="material-apply-wizard-source">
+        <label className="material-field">
+          <span>套用车站</span>
+          <select
+            value={
+              transitNetworkSource === 'rmp'
+                ? selectedImportedStationNodeId
+                : selectedTransitStationMarkerId
+            }
+            onChange={(event) => {
+              if (transitNetworkSource === 'rmp') {
+                setSelectedImportedStationNodeId(event.currentTarget.value);
+              } else {
+                setSelectedTransitStationMarkerId(event.currentTarget.value);
+              }
+              setSelectedTransitLineIds([]);
+            }}
+          >
+            {(transitNetworkSource === 'rmp' ? importedTransitStations : transitStations).map(
+              (station) => (
+                <option key={station.markerId} value={station.markerId}>
+                  {station.stationName}
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+        <label className="material-field">
+          <span>道路方向</span>
+          <select
+            value={transitDirection}
+            onChange={(event) => {
+              setTransitDirection(event.currentTarget.value as 'east' | 'west' | 'north' | 'south');
+              setSelectedTransitLineIds([]);
+            }}
+          >
+            {(activeTransitStation?.directionOptions ?? []).map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <fieldset className="material-canvas-editor">
+          <legend>套用线路（最多 {maximumTransitLineCount} 条）</legend>
+          {selectableTransitLines.map((line) => (
+            <label key={line.id} className="material-checkbox-row">
+              <input
+                type="checkbox"
+                checked={selectedTransitLineIds.includes(line.id)}
+                onChange={() =>
+                  setSelectedTransitLineIds((current) =>
+                    current.includes(line.id)
+                      ? current.filter((id) => id !== line.id)
+                      : [...current, line.id].slice(0, maximumTransitLineCount),
+                  )
+                }
+              />
+              <span>{line.name}</span>
+            </label>
+          ))}
+          {!selectableTransitLines.length ? (
+            <p className="poi-visual-panel-empty">当前站点在该方向下没有可选线路。</p>
+          ) : null}
+        </fieldset>
+      </div>
+    ) : wizardTargetFamily ? (
+      // 路牌 / 门牌等非线网模板：按目标模板渲染对应来源组件（地点搜索或坐标选点），
+      // 避免切换模板时仍显示当前模板的套用控件。
+      <div className="material-apply-wizard-source">
+        {renderStudioSourceSelection(
+          false,
+          serverSources?.[wizardTargetFamily] ?? serverSource,
+        )}
+      </div>
+    ) : null;
+
+  const applyWizardDialog = isApplyWizardOpen ? (
+    <EditorDialogPortal>
+      <div
+        className="modal-backdrop editor-dialog-backdrop"
+        role="presentation"
+        onMouseDown={(event) => {
+          if (event.currentTarget === event.target) {
+            setIsApplyWizardOpen(false);
+          }
+        }}
+      >
+        <section
+          className="modal-panel metro-wayfinding-project-dialog material-apply-wizard"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="material-apply-wizard-title"
+        >
+          <header>
+            <div>
+              <span>{t('materialStudio.templateLibrary')}</span>
+              <h2 id="material-apply-wizard-title">{t('materialStudio.applyWizardTitle')}</h2>
             </div>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={t('materialStudio.close')}
+              title={t('materialStudio.close')}
+              onClick={() => setIsApplyWizardOpen(false)}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                close
+              </span>
+            </button>
+          </header>
+          <div className="metro-wayfinding-project-dialog-body material-apply-wizard-body">
+            <section className="material-apply-wizard-section">
+              <h3>{t('materialStudio.template')}</h3>
+              <label className="material-field">
+                <span>{t('materialStudio.templateEntry')}</span>
+                <select
+                  value={applyWizardEntry?.id ?? ''}
+                  onChange={(event) => {
+                    const entry = templateEntries.find(
+                      (candidate) => candidate.id === event.currentTarget.value,
+                    );
+                    if (!entry) {
+                      return;
+                    }
+                    const nextTemplateId =
+                      entry.templateIds.find((templateId) =>
+                        templates.some((item) => item.id === templateId),
+                      ) ?? entry.templateIds[0];
+                    const nextTemplate = templates.find((item) => item.id === nextTemplateId);
+                    // 入口跨数据来源时，把当前已选线路 / 站点映射到目标来源，避免变成另一条线。
+                    carryTransitSelectionToSourceKind(
+                      nextTemplate
+                        ? (serverSources?.[nextTemplate.template.family] ?? serverSource)
+                        : undefined,
+                    );
+                    setApplyWizardEntryId(entry.id);
+                    setApplyWizardStyleIndex(0);
+                    setApplyWizardTemplateId(nextTemplateId ?? '');
+                  }}
+                >
+                  {templateEntries.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.titleKey ? t(entry.titleKey) : (entry.title ?? '')}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </section>
+            <section className="material-apply-wizard-section">
+              <h3>{t('materialStudio.applyStepSource', { step: 1 })}</h3>
+              {allowTransitNetworkImport ? workspaceDataSourceControls : null}
+              {wizardSourceControls}
+            </section>
+            <section className="material-apply-wizard-section">
+              <h3>{t('materialStudio.applyStepStyle', { step: wizardStyleStep })}</h3>
+              <div className="material-apply-wizard-style">
+                <div className="material-field">
+                  <span>{t('materialStudio.style')}</span>
+                  <div className="segmented-control">
+                    <SegmentedControl
+                      ariaLabel={t('materialStudio.style')}
+                      className="transit-visual-segmented"
+                      value={String(applyWizardStyleIndex)}
+                      options={applyWizardStyleOptions}
+                      onChange={(value) => setApplyWizardStyleIndex(Number(value))}
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section className="material-apply-wizard-section">
+              <h3>{t('materialStudio.applyStepLayout', { step: wizardLayoutStep })}</h3>
+              <div className="material-apply-wizard-layouts">
+                {applyWizardLayoutCards.map((card) => (
+                  <button
+                    key={card.id}
+                    type="button"
+                    className={`material-template-example${
+                      card.templateId === applyWizardTemplateId ? ' is-active' : ''
+                    }`}
+                    // 点击卡片即视为确认套用，不再需要底部操作按钮。
+                    onClick={() => {
+                      setApplyWizardTemplateId(card.templateId);
+                      confirmApplyWizard(card.templateId);
+                    }}
+                  >
+                    <MaterialLayoutThumbnail
+                      source={templateSources[`${card.templateId}:${card.template.version}`]}
+                      template={card.template}
+                      values={buildTransitNetworkFieldValues(card.template.fields)}
+                    />
+                    <div className="material-template-example-heading">
+                      <strong>{card.label}</strong>
+                      <span>{card.template.title}</span>
+                    </div>
+                    <small className="material-template-example-meta">
+                      {card.template.defaultCanvas.widthM} × {card.template.defaultCanvas.heightM} m
+                    </small>
+                    <span className="material-template-example-load">
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        file_open
+                      </span>
+                      {t('materialStudio.useThisLayout')}
+                    </span>
+                  </button>
+                ))}
+                {!applyWizardLayoutCards.length ? (
+                  <p className="poi-visual-panel-empty">{t('materialStudio.noLayouts')}</p>
+                ) : null}
+              </div>
+            </section>
+          </div>
+          {/* 点击版式卡片即确认套用，不再提供底部操作按钮。 */}
+        </section>
+      </div>
+    </EditorDialogPortal>
+  ) : null;
+
+  if (!isMetroWayfinding) {
+    // 公交线路详情：起终点、下一站、当前站状态全部由「站点列表 + 行车方向」派生，
+    // 不再在属性面板提供手动输入，避免和自动计算结果打架。
+    const isBusStopDetailTemplate =
+      selected?.template.family === 'bus_stop' &&
+      selected.template.fields.some((field) => field.key === 'routeStations');
+    const derivedOnlyFieldKeys = new Set([
+      'routeOrigin',
+      'routeTerminal',
+      'nextStation',
+      'routeStationState',
+    ]);
+    const workspaceFieldDefinitions = (selected?.template.fields ?? []).filter(
+      (field) => !(isBusStopDetailTemplate && derivedOnlyFieldKeys.has(field.key)),
+    );
+    const workspaceFields = workspaceFieldDefinitions
+      .filter((field) => field.userEditable !== false && isMaterialFieldVisible(field))
+      .map((field) => ({
+        key: field.key,
+        label: materialFieldLabelOverride(field) ?? field.label,
+      }));
+    const workspaceFieldKeys = new Set(workspaceFieldDefinitions.map((field) => field.key));
+    const workspaceGroups = selected
+      ? groupMaterialFormFields(
+          selected.id,
+          selected.template,
+          workspaceFieldDefinitions.filter(
+            (field) => field.userEditable !== false && isMaterialFieldVisible(field),
+          ),
+        )
+      : [];
+    const canonicalStationNames = workspaceFieldKeys.has('routeStations')
+      ? splitMaterialStationNames(input.routeStations ?? '')
+      : [];
+    // 公交线路详情：站点列表按行车方向展示；「开往首站」时倒序显示，
+    // 但输入框里仍保存线路原始顺序，避免来回切换方向时把数据改坏。
+    const reverseWorkspaceStations =
+      selected?.template.family === 'bus_stop' &&
+      canonicalStationNames.length > 1 &&
+      selected.template.fields.some((field) => field.key === 'travelDirection') &&
+      input.travelDirection === 'first';
+    const workspaceStationNames = reverseWorkspaceStations
+      ? [...canonicalStationNames].reverse()
+      : canonicalStationNames;
+    const toCanonicalStationIndex = (displayIndex: number) =>
+      reverseWorkspaceStations
+        ? canonicalStationNames.length - 1 - displayIndex
+        : displayIndex;
+    const canonicalCurrentStationIndex = Number(input.currentStationIndex);
+    const workspaceCurrentStationIndex = Number.isFinite(canonicalCurrentStationIndex)
+      ? toCanonicalStationIndex(canonicalCurrentStationIndex)
+      : canonicalCurrentStationIndex;
+    const workspaceStations: TransitMaterialFormStationNode[] = workspaceStationNames.map(
+      (name, index) => ({
+        index,
+        name,
+        isCurrent: index === workspaceCurrentStationIndex,
+      }),
+    );
+    const hasTransferField = workspaceFieldKeys.has('transferLines');
+    const hasCurrentStationField = workspaceFieldKeys.has('currentStationIndex');
+
+    const updateWorkspaceStationName = (index: number, nextName: string) => {
+      const names = [...canonicalStationNames];
+      const canonicalIndex = toCanonicalStationIndex(index);
+      const previousName = names[canonicalIndex] ?? '';
+      names[canonicalIndex] = nextName;
+      setInput((current) => {
+        let transfer = current.transferLines ?? '';
+        if (previousName && previousName !== nextName) {
+          transfer = renameMaterialTransferStation(transfer, previousName, nextName);
+        }
+        return { ...current, routeStations: names.join('\n'), transferLines: transfer };
+      });
+    };
+
+    const updateWorkspaceStationTransfer = (stationName: string, lines: string) => {
+      setInput((current) => ({
+        ...current,
+        transferLines: setMaterialTransferLine(current.transferLines ?? '', stationName, lines),
+      }));
+    };
+
+    const updateWorkspaceCurrentStation = (index: number) => {
+      setInput((current) => ({
+        ...current,
+        currentStationIndex: String(toCanonicalStationIndex(index)),
+      }));
+    };
+
+    const renderWorkspaceStation = (index: number) => {
+      const stationName = workspaceStationNames[index] ?? '';
+      const transferLines =
+        parseMaterialTransferLines(input.transferLines ?? '').get(stationName) ?? '';
+      return (
+        <div className="material-field-grid transit-material-field-grid">
+          <label className="material-field">
+            <span>站点名称</span>
+            <input
+              value={stationName}
+              disabled={isBusy}
+              onChange={(event) => updateWorkspaceStationName(index, event.currentTarget.value)}
+            />
+          </label>
+          {hasTransferField ? (
+            <label className="material-field">
+              <span>换乘线路（如 2,4 或 2:#EC6941）</span>
+              <input
+                value={transferLines}
+                disabled={isBusy}
+                placeholder="留空表示无换乘"
+                onChange={(event) =>
+                  updateWorkspaceStationTransfer(stationName, event.currentTarget.value)
+                }
+              />
+            </label>
+          ) : null}
+          {hasCurrentStationField ? (
+            <label className="material-checkbox-row">
+              <input
+                type="checkbox"
+                checked={index === workspaceCurrentStationIndex}
+                disabled={isBusy}
+                onChange={() => updateWorkspaceCurrentStation(index)}
+              />
+              <span>设为当前站</span>
+            </label>
+          ) : null}
+        </div>
+      );
+    };
+    const workspaceRegionResult = selected
+      ? buildMaterialFormRegions(
+          selected.id,
+          selected.template,
+          activeCanvas ?? selected.template.defaultCanvas,
+          workspaceStationNames,
+          input,
+        )
+      : { regions: [], viewBox: { width: 1, height: 1 } };
+    const workspaceRegionValue = (region: TransitMaterialFormRegion) => {
+      if (region.stationIndex !== undefined) {
+        return workspaceStationNames[region.stationIndex] ?? '';
+      }
+      return region.fieldKey ? (input[region.fieldKey] ?? '') : '';
+    };
+    const editWorkspaceRegion = (region: TransitMaterialFormRegion, value: string) => {
+      if (region.stationIndex !== undefined) {
+        updateWorkspaceStationName(region.stationIndex, value);
+        return;
+      }
+      if (region.fieldKey) {
+        // 就地改字时保留当前预览，避免输入框提交后整张预览消失。
+        updateMaterialFieldValue(region.fieldKey, value, { keepPreview: true });
+      }
+    };
+
+    // 站台站名标志：当前线路当前站的前后两站，作为「下一站」的可选来源。
+    const platformSignStationNames =
+      selected?.id === METRO_PLATFORM_SIGN_TEMPLATE_ID
+        ? transitNetworkSource === 'rmp'
+          ? metroLineMapProjectStations.map((station) => station.name)
+          : (selectedLine?.stations.map((station) => station.stationName) ?? [])
+        : [];
+    const platformSignCurrentIndex =
+      selected?.id === METRO_PLATFORM_SIGN_TEMPLATE_ID
+        ? transitNetworkSource === 'rmp'
+          ? metroLineMapProjectStations.findIndex(
+              (station) => station.id === metroLineMapProjectNodeId,
+            )
+          : (selectedLine?.stations.findIndex(
+              (station) => station.stationSourceId === selectedStationSourceId,
+            ) ?? -1)
+        : -1;
+    const platformSignAdjacentStations =
+      platformSignCurrentIndex >= 0
+        ? [
+            platformSignStationNames[platformSignCurrentIndex - 1],
+            platformSignStationNames[platformSignCurrentIndex + 1],
+          ].filter((name): name is string => Boolean(name))
+        : [];
+
+    const renderWorkspaceField = (fieldKey: string) => {
+      const field =
+        workspaceFieldDefinitions.find((item) => item.key === fieldKey) ??
+        selected?.template.fields.find((item) => item.key === fieldKey);
+      if (!field) {
+        return null;
+      }
+      // 站台站名标志：下一站既可手输，也可直接从当前站的前后两站中选择。
+      if (selected?.id === METRO_PLATFORM_SIGN_TEMPLATE_ID && field.key === 'nextStationName') {
+        const hasPinyinField = workspaceFieldKeys.has('nextStationPinyin');
+        return (
+          <>
+            <MaterialFieldEditor
+              key={field.key}
+              field={field}
+              value={input[field.key] ?? field.defaultValue ?? ''}
+              disabled={isBusy}
+              onChange={updateMaterialFieldValue.bind(null, field.key)}
+            />
+            <label className="material-field" key="next-station-picker">
+              <span>从相邻站选择</span>
+              <select
+                value={input.nextStationName ?? ''}
+                disabled={isBusy || !platformSignAdjacentStations.length}
+                onChange={(event) => {
+                  const stationName = event.currentTarget.value;
+                  const stationIndex = platformSignStationNames.indexOf(stationName);
+                  setInput((current) => ({
+                    ...current,
+                    nextStationName: stationName,
+                    ...(hasPinyinField
+                      ? { nextStationPinyin: toUppercasePinyin(stationName) }
+                      : {}),
+                    travelDirection: stationIndex > platformSignCurrentIndex ? 'last' : 'first',
+                  }));
+                  clearPreview();
+                }}
+              >
+                <option value="">请选择相邻站</option>
+                {platformSignAdjacentStations.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        );
+      }
+      if (field.key === SERVICE_TIME_FIELD_KEY && offerProjectServiceTimeInput) {
+        return (
+          <MaterialServiceTimeFields
+            key={field.key}
+            label={field.label}
+            value={input[field.key] ?? ''}
+            disabled={isBusy}
+            onChange={updateMaterialFieldValue.bind(null, field.key)}
+          />
+        );
+      }
+      return (
+        <>
+          <MaterialFieldEditor
+            key={field.key}
+            field={field}
+            labelOverride={materialFieldLabelOverride(field)}
+            value={input[field.key] ?? field.defaultValue ?? ''}
+            disabled={isBusy}
+            suggestions={field.key === 'roadName' ? serverLocationSuggestions : undefined}
+            optionsOverride={
+              field.key === 'trackPosition'
+                ? trackPositionOptions
+                : field.key === 'travelDirection'
+                  ? travelDirectionOptions
+                  : field.key === 'travelDirectionSecondary'
+                    ? verticalSecondaryDirectionOptions
+                    : undefined
+            }
+            onChange={updateMaterialFieldValue.bind(null, field.key)}
+          />
+          {field.key === 'terminalRole' && derivedTerminalRole.mixed ? (
+            <small className="material-field-hint">
+              所选线路方向不一致（部分始发、部分终到），请手动选择站点属性。
+            </small>
+          ) : null}
+        </>
+      );
+    };
+    return (
+      <VisualEditorShell
+        actions={<></>}
+        backHref="/services"
+        editorKind="transit-material"
+        isBusy={isBusy || isWorkspaceLoading}
+        isDirty={isWorkspaceDirty}
+        onSave={saveWorkspace}
+        sessionId={`transit-materials:${studioId}`}
+        title={panelTitle}
+        workspace
+      >
+        <TransitMaterialFormWorkspace
+          studioId={studioId}
+          title={panelTitle}
+          templateTitle={selected?.template.title ?? panelTitle}
+          templateMeta={selected?.template.description}
+          fields={workspaceFields}
+          groups={workspaceGroups}
+          stations={workspaceStations}
+          regions={workspaceRegionResult.regions}
+          regionViewBox={workspaceRegionResult.viewBox}
+          regionValue={workspaceRegionValue}
+          onRegionEdit={editWorkspaceRegion}
+          renderField={renderWorkspaceField}
+          renderStation={renderWorkspaceStation}
+          sourceControls={workspaceSourceSelection}
+          onOpenApplyWizard={() => openApplyWizard()}
+          canApplySource={
+            activeServerSource === 'transit_station'
+              ? Boolean(activeTransitStation)
+              : canUseServerSource
+          }
+          canvasSettings={
+            activeCanvas ? (
+              <CanvasEditor
+                canvas={activeCanvas}
+                disabled={isBusy || !selected}
+                isMetroWayfinding={false}
+                isVerticalLineMap={isMetroVerticalLineMap}
+                lockAlignToTile={isRealisticBusStop}
+                metroWayfindingLayoutMode={metroWayfindingLayoutMode}
+                onChange={updateCanvas}
+                sizeMode={canvasSizeMode}
+                locks={canvasLocks}
+              />
+            ) : undefined
+          }
+          canvasSize={
+            activeCanvas ? { widthM: activeCanvas.widthM, heightM: activeCanvas.heightM } : undefined
+          }
+          canvasLocks={canvasLocks}
+          onCanvasSizeChange={(patch) => {
+            if (patch.widthM !== undefined) {
+              updateCanvas('widthM', patch.widthM);
+            }
+            if (patch.heightM !== undefined) {
+              updateCanvas('heightM', patch.heightM);
+            }
+          }}
+          templateControls={workspaceTemplateControls}
+          preview={
             <MaterialPreviewStage
-              previewUrl={previewUrl}
-              isRendering={isPreviewRendering}
+              svg={localPreview.svg}
+              isRendering={false}
               alt={t('materialStudio.previewAlt', {
                 title: selected?.template.title ?? title,
               })}
             />
-          </section>
-        </div>
-      ) : null}
-
-      {isHistoryDialogOpen ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.currentTarget === event.target) setIsHistoryDialogOpen(false);
+          }
+          hasPreview={Boolean(localPreview.svg)}
+          previewError={previewError}
+          invalidFieldKeys={localPreview.invalidFieldKeys}
+          onExportProject={undefined}
+          onSubmitReview={() => void submitManualDraft()}
+          onDownload={() => {
+            if (mode === 'server') {
+              void exportFromServer();
+            } else {
+              void exportManualDraft();
+            }
           }}
-        >
-          <section
-            className="modal-panel material-history-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="material-history-heading"
-          >
-            <div className="material-history-heading">
-              <div>
-                <h2 id="material-history-heading">{t('materialStudio.historyTitle')}</h2>
-                <p className="muted">{t('materialStudio.historyHint')}</p>
-              </div>
-              <div className="material-history-heading-actions">
-                <span>{t('services.itemCount', { count: historyDrafts.length })}</span>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={t('materialStudio.closeHistory')}
-                  title={t('materialStudio.closeHistory')}
-                  autoFocus
-                  onClick={() => setIsHistoryDialogOpen(false)}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    close
-                  </span>
-                </button>
-              </div>
-            </div>
-            {historyDrafts.length ? (
-              <div className="material-history-list">
-                {historyDrafts.map((draft) => {
-                  const template = templateVersionByKey.get(
-                    `${draft.templateId}:${draft.templateVersion}`,
-                  );
-                  return (
-                    <article className="material-history-item" key={draft.id}>
-                      <div>
-                        <strong>
-                          {template?.title ?? draft.templateId} · v{draft.templateVersion} ·{' '}
-                          {materialDraftStatusLabel(draft.status, t)}
-                        </strong>
-                        <p>{formatStudioDraftInput(draft, template, t)}</p>
-                        <small>
-                          {t('materialStudio.submittedAt', {
-                            time: formatTime(draft.submittedAt ?? draft.createdAt, locale),
-                          })}
-                          {draft.reviewedAt
-                            ? ` · ${t('materialStudio.reviewedAt', {
-                                time: formatTime(draft.reviewedAt, locale),
-                              })}`
-                            : ''}
-                          {draft.reviewReason ? ` · ${draft.reviewReason}` : ''}
-                        </small>
-                      </div>
-                      {draft.status === 'approved' ? (
-                        <button
-                          type="button"
-                          className="is-primary"
-                          onClick={() => void exportDraft(draft)}
-                          disabled={isBusy}
-                          title={t('materialStudio.download')}
-                        >
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            download
-                          </span>
-                          {t('materialStudio.download')}
-                        </button>
-                      ) : null}
-                    </article>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="material-history-empty">{t('materialStudio.noSubmittedYet')}</p>
-            )}
-          </section>
-        </div>
-      ) : null}
-    </section>
+          saveBusy={isBusy || isSyncingLocalDraft}
+          disabled={isBusy}
+        />
+        {applyWizardDialog}
+        {studioDialogs}
+      </VisualEditorShell>
+    );
+  }
+
+  return (
+    <VisualEditorShell
+      actions={<></>}
+      backHref="/services"
+      editorKind="transit-material"
+      isBusy={isBusy || isWorkspaceLoading}
+      isDirty={isWorkspaceDirty}
+      onSave={saveWorkspace}
+      sessionId={`transit-materials:${studioId}`}
+      title={panelTitle}
+      workspace
+    >
+      <TransitWayfindingWorkspace
+        backgroundColorOptions={mergeMetroColorOptions(
+          metroWayfindingBackgroundPalette,
+          metroLineColorOptions,
+        )}
+        canvasSettings={
+          activeCanvas ? (
+            <CanvasEditor
+              canvas={activeCanvas}
+              disabled={isBusy || !selected}
+              isMetroWayfinding
+              isVerticalLineMap={isMetroVerticalLineMap}
+              lockAlignToTile={isRealisticBusStop}
+              metroWayfindingLayoutMode={metroWayfindingLayoutMode}
+              onChange={updateCanvas}
+              sizeMode={canvasSizeMode}
+              locks={canvasLocks}
+            />
+          ) : undefined
+        }
+        dataSourceControls={workspaceDataSourceControls}
+        disabled={isBusy}
+        editor={renderMetroWayfindingEditor(true)}
+        editorId={METRO_WAYFINDING_EDITOR_ID}
+        initialLayout={parseMetroWayfindingLayout(input.layout ?? '')}
+        onDownload={() => {
+          if (mode === 'server') {
+            void exportFromServer();
+          } else {
+            void exportManualDraft();
+          }
+        }}
+        onExportProject={() => exportMetroWayfindingProject()}
+        onSubmitReview={() => void submitManualDraft()}
+        onToggleTransitSource={toggleTransitSource}
+        onPxPerMeterChange={(value) => updateCanvas('pxPerMeter', value)}
+        pxPerMeter={activeCanvas?.pxPerMeter ?? 128}
+        maxPxPerMeter={maxPxPerMeter}
+        saveBusy={isBusy || isSyncingLocalDraft}
+        studioId={studioId}
+        transitSource={transitNetworkSource}
+        transitSourceOrigin={transitProjectOrigin}
+        lineColorOptions={metroLineColorOptions}
+        lineKeysByColor={metroLineKeysByColor}
+        templateControls={workspaceTemplateControls}
+        templateMeta={selected?.template.title ?? ''}
+        templateTitle={panelTitle}
+        textSuggestions={metroTextSuggestions}
+      />
+      {applyWizardDialog}
+      {studioDialogs}
+    </VisualEditorShell>
+  );
+}
+
+function groupMaterialFormFields(
+  templateId: string,
+  template: MaterialTemplate,
+  fields: ReadonlyArray<MaterialField>,
+): TransitMaterialFormGroup[] {
+  const fieldKeys = fields.map((field) => field.key);
+  const has = (key: string) => fieldKeys.includes(key);
+  const pick = (...keys: string[]) => keys.filter((key) => has(key));
+  const assigned = new Set<string>();
+  const add = (
+    key: string,
+    label: string,
+    icon: string,
+    keys: string[],
+  ): TransitMaterialFormGroup | null => {
+    const groupFieldKeys = pick(...keys);
+    if (!groupFieldKeys.length) {
+      return null;
+    }
+    groupFieldKeys.forEach((fieldKey) => assigned.add(fieldKey));
+    return { key, label, icon, fieldKeys: groupFieldKeys };
+  };
+  const groups: Array<TransitMaterialFormGroup | null> = [];
+
+  if (template.family === 'bus_stop') {
+    if (has('stationName')) {
+      groups.push(add('station', '当前站名', 'signpost', ['stationName', 'stationNamePinyin']));
+      // 每条线路拆成一个节点：线路编号、停靠状态与站点属性都并入该线路节点。
+      const routeSlots = [
+        ...new Set(
+          fieldKeys
+            .map((key) => key.match(/^route(\d+)Number$/u)?.[1])
+            .filter((slot): slot is string => Boolean(slot))
+            .map(Number),
+        ),
+      ].sort((left, right) => left - right);
+      for (const slot of routeSlots) {
+        groups.push(
+          add(`route-slot-${slot}`, `第 ${slot} 条线路`, 'route', [
+            `route${slot}Number`,
+            `route${slot}TemporaryStop`,
+          ]),
+        );
+      }
+      // 单线路模板（方块 / 拟真方块）：线路编号 + 停靠状态 + 始发终到合并为一个节点。
+      groups.push(
+        add('route-single', '线路', 'route', ['routeNumber', 'routeTemporaryStop', 'terminalRole']),
+      );
+    } else if (has('routeStations')) {
+      groups.push(
+        add('route-info', '线路信息', 'route', [
+          'routeNumber',
+          'routeSuffix',
+          'accentColor',
+          'routeFirstLast',
+          'routeServiceTime',
+          'operator',
+          'travelDirection',
+          'routeOrigin',
+          'routeTerminal',
+          'nextStation',
+          'routeStationState',
+          'footerText',
+          'footerMode',
+        ]),
+      );
+      groups.push(
+        add('stations', '站点列表', 'list_alt', ['routeStations', 'currentStationIndex']),
+      );
+    }
+  } else if (template.family === 'metro_line') {
+    if (has('nextStationName') && has('stationName')) {
+      groups.push(
+        add('current-station', '当前站', 'signpost', [
+          'stationName',
+          'stationNamePinyin',
+          'accentColor',
+        ]),
+      );
+      groups.push(
+        add('next-station', '下一站', 'place', [
+          'nextStationName',
+          'nextStationPinyin',
+          'travelDirection',
+        ]),
+      );
+    } else if (has('stationName')) {
+      groups.push(
+        add('station', '当前站', 'signpost', ['stationName', 'stationNamePinyin', 'accentColor']),
+      );
+    } else if (has('nextStationName')) {
+      // 方向版式：线路编号与行车方向拆成两个节点，属性各自归位。
+      groups.push(
+        add('line-info', '线路编号', 'route', ['lineLabel', 'lineEnglishLabel', 'accentColor']),
+      );
+      groups.push(
+        add('direction-info', '行车方向', 'explore', [
+          'terminalName',
+          'terminalNamePinyin',
+          'travelDirection',
+          'doorDirection',
+        ]),
+      );
+      groups.push(add('next-station', '下一站', 'place', ['nextStationName', 'nextStationPinyin']));
+    } else {
+      groups.push(
+        add('line-info', '线路编号', 'route', ['lineLabel', 'lineEnglishLabel', 'accentColor']),
+      );
+      groups.push(
+        add('direction-info', '行车方向', 'explore', [
+          'travelDirection',
+          'travelDirectionSecondary',
+          'doorDirection',
+          'trackPosition',
+        ]),
+      );
+      groups.push(
+        add('stations', '站点列表', 'list_alt', ['routeStations', 'currentStationIndex']),
+      );
+    }
+  } else if (template.family === 'road_sign') {
+    // 路牌：路名与方向各一个节点，属性合并进各自面板。
+    groups.push(add('road-name', '路名', 'signpost', ['roadName', 'roadNamePinyin']));
+    groups.push(add('road-direction', '方向', 'explore', ['directionMode', 'arrowMode', 'signColor']));
+  } else if (template.family === 'address_sign') {
+    if (templateId === NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID) {
+      // 怀旧门牌只有一个整体版面，所有字段合并到一个节点。
+      fieldKeys.forEach((fieldKey) => assigned.add(fieldKey));
+      if (fieldKeys.length) {
+        groups.push({ key: 'address', label: '门牌信息', icon: 'home', fieldKeys });
+      }
+    } else {
+      // 默认门牌：左侧路名 / 邮政信息，右侧门牌号码。
+      groups.push(
+        add('address-name', '左侧路名栏', 'signpost', ['roadName', 'roadNamePinyin', 'postalCode']),
+      );
+      groups.push(add('address-number', '右侧号码栏', 'tag', ['buildingNumber', 'buildingSuffix']));
+    }
+  }
+
+  // 换乘线路已拆到每个站点的属性面板；其余未归组字段统一进「其他」。
+  const other = fieldKeys.filter((key) => !assigned.has(key) && key !== 'transferLines');
+  if (other.length) {
+    groups.push({ key: 'other', label: '其他', icon: 'tune', fieldKeys: other });
+  }
+  return groups.filter((group): group is TransitMaterialFormGroup => Boolean(group));
+}
+
+function buildMaterialFormRegions(
+  templateId: string,
+  template: MaterialTemplate,
+  canvas: { widthM: number; heightM: number },
+  stationNames: ReadonlyArray<string>,
+  values: Record<string, string> = {},
+): { regions: TransitMaterialFormRegion[]; viewBox: { width: number; height: number } } {
+  const width = Math.max(1, Math.round(canvas.widthM * 128));
+  const height = Math.max(1, Math.round(canvas.heightM * 128));
+  const regions: TransitMaterialFormRegion[] = [];
+  const pushRegion = (
+    id: string,
+    label: string,
+    x: number,
+    y: number,
+    regionWidth: number,
+    regionHeight: number,
+    extra: Pick<
+      TransitMaterialFormRegion,
+      'groupKey' | 'stationIndex' | 'fieldKey' | 'fontSize' | 'selectField'
+    >,
+  ) => {
+    regions.push({
+      id,
+      label,
+      x,
+      y,
+      width: regionWidth,
+      height: regionHeight,
+      ...extra,
+    });
+  };
+  const stationCount = stationNames.length;
+
+  if (templateId === BUS_STOP_OVERVIEW_TEMPLATE_ID) {
+    pushRegion('station', '当前站名', 12, 18, 104, 30, {
+      groupKey: 'station',
+      fieldKey: 'stationName',
+      fontSize: 12,
+    });
+    [
+      [1, 17, 45],
+      [2, 17, 72],
+      [3, 17, 99],
+      [4, 75, 45],
+      [5, 75, 72],
+      [6, 75, 99],
+    ].forEach(([slot, x, y]) => {
+      pushRegion(`route-${slot}`, `第 ${slot} 条线路`, x!, y!, 36, 22, {
+        groupKey: `route-slot-${slot}`,
+        fieldKey: `route${slot}Number`,
+        fontSize: 20,
+      });
+    });
+  } else if (templateId === BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID) {
+    pushRegion('station', '当前站名', 8, 42, 112, 38, {
+      groupKey: 'station',
+      fieldKey: 'stationName',
+      fontSize: 14,
+    });
+    [
+      [1, 11.86, 82.92],
+      [2, 11.86, 112.88],
+      [3, 11.86, 142.83],
+      [4, 76.2, 82.92],
+      [5, 76.2, 112.88],
+      [6, 76.2, 142.83],
+    ].forEach(([slot, x, y]) => {
+      pushRegion(`route-${slot}`, `第 ${slot} 条线路`, x!, y!, 39.94, 24.4, {
+        groupKey: `route-slot-${slot}`,
+        fieldKey: `route${slot}Number`,
+        fontSize: 20,
+      });
+    });
+  } else if (templateId === BUS_STOP_TERMINAL_TEMPLATE_ID) {
+    pushRegion('station', '当前站名', 12, 18, 104, 30, {
+      groupKey: 'station',
+      fieldKey: 'stationName',
+      fontSize: 12,
+    });
+    pushRegion('route', '线路编号', 36.5, 58, 55, 36, {
+      groupKey: 'route-single',
+      fieldKey: 'routeNumber',
+      fontSize: 46,
+    });
+    pushRegion('terminal-role', '始发终到', 36.5, 99, 55, 9, {
+      groupKey: 'route-single',
+      fieldKey: 'terminalRole',
+      fontSize: 6,
+    });
+  } else if (templateId === BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID) {
+    pushRegion('station', '当前站名', 0, 38, 128, 42, {
+      groupKey: 'station',
+      fieldKey: 'stationName',
+      fontSize: 14,
+    });
+    pushRegion('route', '线路编号', 33.6, 97, 60.8, 40, {
+      groupKey: 'route-single',
+      fieldKey: 'routeNumber',
+      fontSize: 46,
+    });
+    pushRegion('terminal-role', '始发终到', 0, 140, 128, 24, {
+      groupKey: 'route-single',
+      fieldKey: 'terminalRole',
+      fontSize: 6,
+    });
+  } else if (templateId === BUS_STOP_DETAIL_TEMPLATE_ID) {
+    pushRegion('route-info', '线路信息', 15, 6, 98, 32, {
+      groupKey: 'route-info',
+      fieldKey: 'routeNumber',
+      fontSize: 11,
+    });
+    if (stationCount) {
+      const leftCount = Math.ceil(stationCount / 2);
+      const rows = Math.max(leftCount, stationCount - leftCount);
+      const rowHeight = 79 / rows;
+      stationNames.forEach((stationName, index) => {
+        const isLeft = index < leftCount;
+        const row = isLeft ? index : index - leftCount;
+        pushRegion(
+          `station-${index}`,
+          `第 ${index + 1} 站 · ${stationName || '未命名'}`,
+          16 + (isLeft ? 0 : 50),
+          41 + row * rowHeight,
+          46,
+          rowHeight,
+          {
+            groupKey: 'stations',
+            stationIndex: index,
+            fieldKey: 'routeStations',
+            fontSize: Math.max(4, rowHeight * 0.55),
+          },
+        );
+      });
+    }
+  } else if (templateId === BUS_STOP_HORIZONTAL_DETAIL_TEMPLATE_ID) {
+    // 模板 viewBox 固定 256×128，画布加宽后内容按比例拉伸，热区同步换算。
+    const sx = width / 256;
+    const sy = height / 128;
+    pushRegion('route-info', '线路信息', 3 * sx, 3 * sy, 178 * sx, 24 * sy, {
+      groupKey: 'route-info',
+      fieldKey: 'routeNumber',
+      fontSize: 12,
+    });
+    // 底部行车方向由行车方向自动推断，只作为选中线路信息节点的热区。
+    pushRegion('footer', '底部行车方向', 0, 106 * sy, 256 * sx, 22 * sy, {
+      groupKey: 'route-info',
+      fontSize: 12,
+    });
+    // 右侧线路走向地图：只做选区提示，双击不进入文本编辑（地图数据不可手填）。
+    pushRegion('route-map', '线路走向图', 184 * sx, 0, 72 * sx, 106 * sy, {
+      groupKey: 'route-info',
+      fontSize: 5,
+    });
+    if (stationCount) {
+      // 站名会按可用宽度拆成一栏或两栏、长站名还会换列，热区必须跟同一套排版结果，
+      // 不能再用等分宽度，否则点到的区域和看到的站名对不上。
+      const stationGlyph = template.fields.find((field) => field.key === 'routeStations')?.glyph;
+      const glyphRegions = stationGlyph
+        ? resolveTransitHorizontalStationRegions(stationNames.join('\n'), stationGlyph)
+        : [];
+      glyphRegions.forEach((region) => {
+        const stationName = stationNames[region.stationIndex] ?? '';
+        pushRegion(
+          `station-${region.stationIndex}`,
+          `第 ${region.stationIndex + 1} 站 · ${stationName || '未命名'}`,
+          (3 + region.x) * sx,
+          (33 + region.y) * sy,
+          region.width * sx,
+          region.height * sy,
+          {
+            groupKey: 'stations',
+            stationIndex: region.stationIndex,
+            fieldKey: 'routeStations',
+            fontSize: stationGlyph?.fontSize ?? 6,
+          },
+        );
+      });
+    }
+  } else if (templateId === METRO_PLATFORM_SIGN_TEMPLATE_ID) {
+    // 站台标志按较短边等比缩放内容，热区必须跟着画布尺寸一起缩放。
+    const signScale = Math.min(width / 512, height / 512);
+    pushRegion('current-station', '当前站', 0, 72 * signScale, width, 221 * signScale, {
+      groupKey: 'current-station',
+      fieldKey: 'stationName',
+      fontSize: 40,
+    });
+    pushRegion('line-color', '线路色', 0, 293 * signScale, width, 28 * signScale, {
+      groupKey: 'current-station',
+      fieldKey: 'accentColor',
+      fontSize: 12,
+    });
+    pushRegion('next-station', '下一站', 0, 321 * signScale, width, 191 * signScale, {
+      groupKey: 'next-station',
+      fieldKey: 'nextStationName',
+      fontSize: 24,
+    });
+  } else if (
+    template.family === 'metro_line' &&
+    template.fields.some(
+      (field) =>
+        field.glyph?.renderer?.startsWith('metro_station_name') ||
+        field.glyph?.renderer?.startsWith('metro_direction'),
+    )
+  ) {
+    // 站名 / 方向版式：文字位置由渲染器决定，这里复用同一套版面公式生成热区。
+    const signGlyph = template.fields.find(
+      (field) =>
+        field.glyph?.renderer?.startsWith('metro_station_name') ||
+        field.glyph?.renderer?.startsWith('metro_direction'),
+    )?.glyph;
+    if (signGlyph) {
+      resolveMetroSignTextRegions(signGlyph.renderer, values, canvas).forEach((region) => {
+        pushRegion(region.id, region.label, region.x, region.y, region.width, region.height, {
+          groupKey: region.groupKey,
+          fieldKey: region.fieldKey,
+          fontSize: 10,
+        });
+      });
+    }
+  } else if (
+    template.family === 'metro_line' &&
+    template.fields.some((field) => field.glyph?.renderer?.startsWith('metro_line_map'))
+  ) {
+    // 热区必须与渲染器共用同一套站位算法：padding / spacing / 反向显示 / 页头高度。
+    const renderer =
+      template.fields.find((field) => field.key === 'routeStations')?.glyph?.renderer ?? '';
+    const isVertical = renderer.startsWith('metro_line_map_vertical');
+    const isClassic = renderer.endsWith('_classic');
+    const travelDirection = values.travelDirection === 'first' ? 'first' : 'last';
+    const doorDirection = values.doorDirection === 'right' ? 'right' : 'left';
+    // 旧版竖版线路图固定按两侧轨道渲染，热区同步按两侧计算。
+    const isBoth = isClassic || values.trackPosition === 'both';
+    if (isVertical) {
+      const widthScale = width / 128;
+      const headerHeight = (isClassic && isBoth ? 50 : 32) * widthScale;
+      const margin = 12 * widthScale;
+      const firstY = headerHeight + margin;
+      const lastY = Math.max(height - margin, firstY);
+      const spacing = stationCount > 1 ? (lastY - firstY) / (stationCount - 1) : 0;
+      pushRegion('line-info', '线路信息', 0, 0, width, Math.max(headerHeight, 1), {
+        groupKey: 'line-info',
+        fieldKey: 'lineLabel',
+        fontSize: 16,
+      });
+      stationNames.forEach((stationName, displayIndex) => {
+        const originalIndex =
+          travelDirection === 'first' ? displayIndex : stationCount - 1 - displayIndex;
+        const y = firstY + displayIndex * spacing;
+        pushRegion(
+          `station-${originalIndex}`,
+          `第 ${originalIndex + 1} 站 · ${stationName || '未命名'}`,
+          0,
+          Math.max(y - spacing / 2, headerHeight),
+          width,
+          Math.max(spacing, 10),
+          {
+            groupKey: 'stations',
+            stationIndex: originalIndex,
+            fieldKey: 'routeStations',
+            fontSize: Math.max(5, spacing * 0.4),
+          },
+        );
+      });
+    } else if (stationCount) {
+      const paddingX = Math.min(26, width * 0.08);
+      const left = paddingX;
+      const right = width - paddingX;
+      const spacing = stationCount > 1 ? (right - left) / (stationCount - 1) : right - left;
+      const terminusOnLast = travelDirection !== 'first';
+      const reverseDisplay =
+        (terminusOnLast && doorDirection === 'left') ||
+        (!terminusOnLast && doorDirection === 'right');
+      stationNames.forEach((stationName, displayIndex) => {
+        const originalIndex = reverseDisplay ? stationCount - 1 - displayIndex : displayIndex;
+        const x = left + displayIndex * spacing;
+        const regionWidth = Math.max(spacing, 24);
+        pushRegion(
+          `station-${originalIndex}`,
+          `第 ${originalIndex + 1} 站 · ${stationName || '未命名'}`,
+          Math.max(x - regionWidth / 2, 0),
+          0,
+          regionWidth,
+          height,
+          {
+            groupKey: 'stations',
+            stationIndex: originalIndex,
+            fieldKey: 'routeStations',
+            fontSize: 7,
+          },
+        );
+      });
+    }
+  } else if (templateId === ROAD_NAME_DIRECTION_TEMPLATE_ID) {
+    // 路牌 / 门牌模板的 viewBox 固定为 256×128，画布拉伸后热区要按比例换算。
+    const sx = width / 256;
+    const sy = height / 128;
+    // 路牌：先放非文本区域，文本热区最后放，保证文字区域命中优先级最高。
+    pushRegion('road-sign-color', '底色与辅助文字颜色', 4 * sx, 68 * sy, 248 * sx, 40 * sy, {
+      groupKey: 'road-direction',
+      fontSize: 10,
+    });
+    pushRegion('road-direction-left', '左侧方位', 4 * sx, 72 * sy, 44 * sx, 50 * sy, {
+      groupKey: 'road-direction',
+      fontSize: 9,
+    });
+    pushRegion('road-direction-right', '右侧方位', 208 * sx, 72 * sy, 44 * sx, 50 * sy, {
+      groupKey: 'road-direction',
+      fontSize: 9,
+    });
+    pushRegion('road-name', '道路主名称', 52 * sx, 70 * sy, 152 * sx, 30 * sy, {
+      groupKey: 'road-name',
+      fieldKey: 'roadName',
+      fontSize: 18,
+    });
+    pushRegion('road-name-pinyin', '道路副名称', 52 * sx, 104 * sy, 152 * sx, 22 * sy, {
+      groupKey: 'road-name',
+      fieldKey: 'roadNamePinyin',
+      fontSize: 12,
+    });
+  } else if (templateId === BUILDING_ADDRESS_TEMPLATE_ID) {
+    const sx = width / 256;
+    const sy = height / 128;
+    pushRegion('address-road-name', '地名或道路名称', 4 * sx, 16 * sy, 134 * sx, 34 * sy, {
+      groupKey: 'address-name',
+      fieldKey: 'roadName',
+      fontSize: 20,
+    });
+    pushRegion('address-road-pinyin', '地名或道路副名称', 4 * sx, 52 * sy, 134 * sx, 28 * sy, {
+      groupKey: 'address-name',
+      fieldKey: 'roadNamePinyin',
+      fontSize: 12,
+    });
+    pushRegion('address-postal', '邮政编码', 4 * sx, 94 * sy, 134 * sx, 24 * sy, {
+      groupKey: 'address-name',
+      fieldKey: 'postalCode',
+      fontSize: 11,
+    });
+    pushRegion('address-building-number', '门牌号', 143 * sx, 5 * sy, 62 * sx, 118 * sy, {
+      groupKey: 'address-number',
+      fieldKey: 'buildingNumber',
+      fontSize: 40,
+    });
+    pushRegion('address-building-suffix', '门牌附标', 201 * sx, 5 * sy, 51 * sx, 118 * sy, {
+      groupKey: 'address-number',
+      fieldKey: 'buildingSuffix',
+      fontSize: 24,
+    });
+  } else if (templateId === NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID) {
+    const sx = width / 256;
+    const sy = height / 128;
+    pushRegion('nostalgic-road-name', '道路名称', 8 * sx, 8 * sy, 66 * sx, 112 * sy, {
+      groupKey: 'address',
+      fieldKey: 'roadName',
+      fontSize: 18,
+    });
+    pushRegion('nostalgic-building-number', '门牌号', 70 * sx, 8 * sy, 160 * sx, 112 * sy, {
+      groupKey: 'address',
+      fieldKey: 'buildingNumber',
+      fontSize: 40,
+    });
+  }
+
+  return { regions, viewBox: { width, height } };
+}
+
+function splitMaterialStationNames(value: string): string[] {
+  return value
+    .split(/\r?\n|\s*\/\s*/u)
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+function parseMaterialTransferLines(value: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const segment of value.split(/[;；\n]/u)) {
+    const [name, lines] = segment.split(/[=＝]/u);
+    if (!name?.trim()) {
+      continue;
+    }
+    map.set(name.trim(), lines?.trim() ?? '');
+  }
+  return map;
+}
+
+function formatMaterialTransferLines(map: Map<string, string>): string {
+  return [...map.entries()]
+    .filter(([name, lines]) => Boolean(name.trim() && lines.trim()))
+    .map(([name, lines]) => `${name}=${lines}`)
+    .join(';');
+}
+
+function setMaterialTransferLine(value: string, stationName: string, lines: string): string {
+  const map = parseMaterialTransferLines(value);
+  if (lines.trim()) {
+    map.set(stationName, lines.trim());
+  } else {
+    map.delete(stationName);
+  }
+  return formatMaterialTransferLines(map);
+}
+
+function renameMaterialTransferStation(
+  value: string,
+  previousName: string,
+  nextName: string,
+): string {
+  if (!previousName || previousName === nextName) {
+    return value;
+  }
+  const map = parseMaterialTransferLines(value);
+  const lines = map.get(previousName);
+  if (lines === undefined) {
+    return value;
+  }
+  map.delete(previousName);
+  map.set(nextName, lines);
+  return formatMaterialTransferLines(map);
+}
+
+function resolveMetroLineNumber(name: string): string {
+  const trimmed = name.trim();
+  const match = trimmed.match(/^([0-9]+[A-Za-z]?|[A-Za-z]+[0-9]+)/u);
+  return match?.[1] ?? trimmed;
+}
+
+/** 缩略图的取色结果：背景、前景（文字）与强调色都来自模板真实源码。 */
+interface TemplateThumbnailPalette {
+  accent: string;
+  background: string;
+  foreground: string;
+}
+
+function normalizeThumbnailColor(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (/^#[0-9a-f]{3}$/i.test(trimmed)) {
+    const [, r, g, b] = trimmed;
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+  }
+  return /^#[0-9a-f]{6}$/i.test(trimmed) ? trimmed.toUpperCase() : undefined;
+}
+
+/** 粗略亮度：只用于判断前景该用黑还是白，不追求色彩空间精度。 */
+function thumbnailColorLuminance(color: string): number {
+  const [r, g, b] = [1, 3, 5].map(
+    (offset) => parseInt(color.slice(offset, offset + 2), 16) / 255,
+  ) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function readAttribute(tag: string, name: string): string | undefined {
+  const matched = new RegExp(`${name}\\s*=\\s*"([^"]*)"`, 'i').exec(tag);
+  return matched?.[1];
+}
+
+/**
+ * 从模板 SVG 源码里提取代表色：面积最大的矩形作为底色，文字填充色作为前景色，
+ * 颜色字段或第二大面积色块作为强调色。模板没有源码时退回中性深色。
+ */
+function resolveTemplateThumbnailPalette(
+  template: MaterialTemplate,
+  source: string | undefined,
+): TemplateThumbnailPalette {
+  const fallback: TemplateThumbnailPalette = {
+    accent: '#073764',
+    background: '#262626',
+    foreground: '#FFFFFF',
+  };
+  if (!source) {
+    return fallback;
+  }
+
+  // 先把 {{fieldKey}} 这类简单变量替换成字段默认值，否则 signColor / accentColor
+  // 这类模板颜色取不到字面量，会被误判成白底白字。
+  const defaultByField = new Map(
+    template.fields.map((field) => [field.key, field.defaultValue?.trim() ?? '']),
+  );
+  const resolvedSource = source.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (matched, variable: string) => {
+    if (variable.includes('.')) {
+      return matched;
+    }
+    return defaultByField.get(variable) || matched;
+  });
+
+  // 底色：按矩形面积累加，避免被小色块或描边干扰。
+  const rectWeights = new Map<string, number>();
+  for (const match of resolvedSource.matchAll(/<rect\b[^>]*>/gi)) {
+    const tag = match[0];
+    const color = normalizeThumbnailColor(readAttribute(tag, 'fill'));
+    if (!color) {
+      continue;
+    }
+    const width = Number(readAttribute(tag, 'width') ?? 1);
+    const height = Number(readAttribute(tag, 'height') ?? 1);
+    const weight = Number.isFinite(width * height) ? Math.max(width * height, 1) : 1;
+    rectWeights.set(color, (rectWeights.get(color) ?? 0) + weight);
+  }
+  const rankedRects = [...rectWeights.entries()].sort((left, right) => right[1] - left[1]);
+  let background: string | undefined = rankedRects[0]?.[0];
+
+  // 文字前景：出现次数最多的文字填充色。
+  const textCounts = new Map<string, number>();
+  for (const match of resolvedSource.matchAll(/<text\b[^>]*>/gi)) {
+    const color = normalizeThumbnailColor(readAttribute(match[0], 'fill'));
+    if (color) {
+      textCounts.set(color, (textCounts.get(color) ?? 0) + 1);
+    }
+  }
+  for (const match of resolvedSource.matchAll(/<tspan\b[^>]*>/gi)) {
+    const color = normalizeThumbnailColor(readAttribute(match[0], 'fill'));
+    if (color) {
+      textCounts.set(color, (textCounts.get(color) ?? 0) + 1);
+    }
+  }
+  let foreground: string | undefined;
+  let fallbackTextColor: string | undefined;
+  for (const [color] of [...textCounts.entries()].sort((left, right) => right[1] - left[1])) {
+    fallbackTextColor ??= color;
+    if (background && Math.abs(thumbnailColorLuminance(color) - thumbnailColorLuminance(background)) > 0.28) {
+      foreground = color;
+      break;
+    }
+  }
+
+  // 导视牌等模板把配色写在字段默认值 JSON 里，源码没有字面量颜色。
+  if (!background || !foreground) {
+    const defaults = template.fields.map((field) => field.defaultValue ?? '').join('\n');
+    background ??= normalizeThumbnailColor(/"backgroundColor"\s*:\s*"(#[0-9a-fA-F]{6})"/.exec(defaults)?.[1]);
+    foreground ??= normalizeThumbnailColor(/"foregroundColor"\s*:\s*"(#[0-9a-fA-F]{6})"/.exec(defaults)?.[1]);
+  }
+
+  background ??= fallback.background;
+  foreground ??=
+    fallbackTextColor ??
+    (thumbnailColorLuminance(background) > 0.55 ? '#111111' : fallback.foreground);
+
+  // 强调色：优先取模板配色字段的默认值，其次取第二大面积且与底色不同的色块。
+  const colorField = template.fields.find((field) =>
+    ['accentColor', 'signColor', 'lineColor'].includes(field.key),
+  );
+  const accent =
+    normalizeThumbnailColor(colorField?.defaultValue) ??
+    rankedRects.find(([color]) => color !== background)?.[0] ??
+    foreground;
+
+  return { accent, background, foreground };
+}
+
+/**
+ * 版式卡片里的低仿真预览：不请求服务端出图，只用真实站点 / 线路值拼一个比例正确的牌面示意。
+ */
+function MaterialLayoutThumbnail({
+  source,
+  template,
+  values,
+}: Readonly<{ source?: string; template: MaterialTemplate; values: Record<string, string> }>) {
+  const width = Math.max(template.defaultCanvas.widthM || 1, 0.2);
+  const height = Math.max(template.defaultCanvas.heightM || 1, 0.2);
+  const styleLabel = template.title.match(/（([^）]+)）\s*$/u)?.[1] ?? '';
+  const hasOverview = template.fields.some((field) => field.key === 'route1Number');
+  const hasDetail = template.fields.some((field) => field.key === 'routeStations');
+  const station = values.stationName || template.title;
+  const routeNumbers = [1, 2, 3, 4, 5, 6]
+    .map((slot) => values[`route${slot}Number`])
+    .filter((value): value is string => Boolean(value));
+  const primaryRoute = values.routeNumber || routeNumbers[0] || '';
+  const palette = useMemo(
+    () => resolveTemplateThumbnailPalette(template, source),
+    [source, template],
+  );
+  return (
+    <span
+      className={`material-layout-thumb${styleLabel.includes('拟真') ? ' is-realistic' : ''}${
+        hasOverview ? ' is-overview' : hasDetail ? ' is-detail' : ' is-generic'
+      }`}
+      style={
+        {
+          aspectRatio: `${width} / ${height}`,
+          '--material-thumb-accent': palette.accent,
+          '--material-thumb-bg': palette.background,
+          '--material-thumb-fg': palette.foreground,
+        } as CSSProperties
+      }
+      role="img"
+      aria-label={template.title}
+    >
+      <span className="material-layout-thumb-sign">
+        <strong>{station}</strong>
+        {hasOverview ? (
+          <span className="material-layout-thumb-routes">
+            {routeNumbers.map((route, index) => (
+              <i key={`route-${index}`}>{route}</i>
+            ))}
+          </span>
+        ) : null}
+        {hasDetail ? (
+          <span className="material-layout-thumb-detail">
+            {primaryRoute ? <i>{primaryRoute}</i> : null}
+            <span>{values.nextStation || ''}</span>
+            <span>
+              {values.routeOrigin || ''}
+              {values.routeOrigin || values.routeTerminal ? ' → ' : ''}
+              {values.routeTerminal || ''}
+            </span>
+          </span>
+        ) : null}
+        {!hasOverview && !hasDetail ? (
+          <span className="material-layout-thumb-generic">{styleLabel || template.title}</span>
+        ) : null}
+      </span>
+    </span>
   );
 }
 
@@ -3220,9 +6357,10 @@ function MaterialPreviewDescription({
 
 function MaterialPreviewStage({
   previewUrl,
+  svg,
   isRendering,
   alt,
-}: Readonly<{ previewUrl: string | null; isRendering?: boolean; alt: string }>) {
+}: Readonly<{ previewUrl?: string | null; svg?: string; isRendering?: boolean; alt: string }>) {
   const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -3243,6 +6381,23 @@ function MaterialPreviewStage({
       image.onload = null;
     };
   }, [previewUrl]);
+  if (svg) {
+    // 本地合成的 SVG 自带像素宽高；去掉外层尺寸后由容器按比例缩放，保证与导出同版式。
+    const scalableSvg = svg.replace(
+      /^<svg([^>]*?)\swidth="[^"]*"\sheight="[^"]*"/u,
+      '<svg$1 width="100%" height="100%"',
+    );
+    return (
+      <div className="material-preview-stage material-preview-svg-stage">
+        <div
+          className="material-preview-canvas material-preview-svg"
+          role="img"
+          aria-label={alt}
+          dangerouslySetInnerHTML={{ __html: scalableSvg }}
+        />
+      </div>
+    );
+  }
   return (
     <div className={`material-preview-stage${isRendering ? ' is-rendering' : ''}`}>
       {previewUrl ? (
@@ -3319,6 +6474,7 @@ function CanvasEditor({
   isVerticalLineMap = false,
   lockAlignToTile = false,
   metroWayfindingLayoutMode,
+  locks,
   onChange,
 }: Readonly<{
   canvas: MaterialCanvas | null;
@@ -3328,6 +6484,8 @@ function CanvasEditor({
   isVerticalLineMap?: boolean;
   lockAlignToTile?: boolean;
   metroWayfindingLayoutMode?: 'single' | 'double' | 'vertical';
+  /** 画布锁：被锁维度不显示输入，服务端也会拒绝修改。 */
+  locks?: { width: boolean; height: boolean };
   onChange: <TKey extends keyof MaterialCanvas>(key: TKey, value: MaterialCanvas[TKey]) => void;
 }>) {
   const metroLayoutMode = metroWayfindingLayoutMode ?? 'single';
@@ -3392,73 +6550,85 @@ function CanvasEditor({
   const outputHeight = canvas.alignToTile
     ? Math.ceil(heightPx / canvas.tileSizePx) * canvas.tileSizePx
     : heightPx;
-  const metroLength = isVerticalLength ? canvas.heightM : canvas.widthM;
   const updateMetroLength = (value: number) => {
     onChange(isVerticalLength ? 'heightM' : 'widthM', normalizeVerticalLength(value));
   };
+  const maxPxPerMeter = resolveMaterialMaxPxPerMeter(canvas);
+  // 画布尺寸变大后，旧的密度可能让最长边超过 4096：自动压回上限。
+  useEffect(() => {
+    if (canvas.pxPerMeter > maxPxPerMeter) {
+      onChange('pxPerMeter', maxPxPerMeter);
+    }
+  }, [canvas.pxPerMeter, maxPxPerMeter, onChange]);
+  const showWidthInput =
+    !locks?.width && (sizeMode === 'full' || (sizeMode === 'length' && !isVerticalLength));
+  const showHeightInput =
+    !locks?.height && (sizeMode === 'full' || (sizeMode === 'length' && isVerticalLength));
+  const showMetroVerticalWidthInput =
+    isMetroVertical && !locks?.width && sizeMode === 'length';
 
   return (
     <fieldset className="material-canvas-editor" disabled={disabled}>
       <legend>{t('materialStudio.dimensions')}</legend>
-      {sizeMode === 'length' ? (
-        <>
-          <label>
-            <span>
-              {isVerticalLength ? t('materialStudio.signHeight') : t('materialStudio.signLength')}
-            </span>
-            <input
-              type="number"
-              min="1"
-              max="64"
-              step={isVerticalLineMap ? '0.5' : '1'}
-              value={metroLength}
-              onChange={(event) => updateMetroLength(Number(event.currentTarget.value))}
-            />
-          </label>
-          {isMetroVertical ? (
-            <label>
-              <span>{t('materialStudio.signWidth')}</span>
-              <input
-                type="number"
-                min="1"
-                max="64"
-                step="1"
-                value={canvas.widthM}
-                onChange={(event) =>
-                  onChange(
-                    'widthM',
-                    Math.min(64, Math.max(1, Math.round(Number(event.currentTarget.value)))),
-                  )
-                }
-              />
-            </label>
-          ) : null}
-        </>
-      ) : sizeMode === 'full' ? (
-        <>
-          <label>
-            <span>{t('materialStudio.widthMeters')}</span>
-            <input
-              type="number"
-              min="0.01"
-              max="64"
-              step="0.01"
-              value={canvas.widthM}
-              onChange={(event) => onChange('widthM', Number(event.currentTarget.value))}
-            />
-          </label>
-          <label>
-            <span>{t('materialStudio.heightMeters')}</span>
-            <input
-              type="number"
-              min="0.01"
-              max="64"
-              step="0.01"
-              value={canvas.heightM}
-              onChange={(event) => onChange('heightM', Number(event.currentTarget.value))}
-            />
-          </label>
-        </>
+      {showWidthInput ? (
+        <label>
+          <span>
+            {isVerticalLength ? t('materialStudio.signWidth') : t('materialStudio.widthMeters')}
+          </span>
+          <input
+            type="number"
+            min="0.01"
+            max="64"
+            step={sizeMode === 'length' ? '1' : '0.01'}
+            value={canvas.widthM}
+            onChange={(event) => {
+              if (sizeMode === 'length') {
+                updateMetroLength(Number(event.currentTarget.value));
+                return;
+              }
+              onChange('widthM', Number(event.currentTarget.value));
+            }}
+          />
+        </label>
+      ) : null}
+      {showHeightInput ? (
+        <label>
+          <span>
+            {isVerticalLength ? t('materialStudio.signHeight') : t('materialStudio.heightMeters')}
+          </span>
+          <input
+            type="number"
+            min="0.01"
+            max="64"
+            step={isVerticalLineMap ? '0.5' : sizeMode === 'length' ? '1' : '0.01'}
+            value={canvas.heightM}
+            onChange={(event) => {
+              if (sizeMode === 'length') {
+                updateMetroLength(Number(event.currentTarget.value));
+                return;
+              }
+              onChange('heightM', Number(event.currentTarget.value));
+            }}
+          />
+        </label>
+      ) : null}
+      {showMetroVerticalWidthInput ? (
+        <label>
+          <span>{t('materialStudio.signWidth')}</span>
+          <input
+            type="number"
+            min="1"
+            max="64"
+            step="1"
+            value={canvas.widthM}
+            onChange={(event) =>
+              onChange(
+                'widthM',
+                Math.min(64, Math.max(1, Math.round(Number(event.currentTarget.value)))),
+              )
+            }
+          />
+        </label>
       ) : null}
       <label>
         <span>{t('materialStudio.alignmentUnit')}</span>
@@ -3482,6 +6652,7 @@ function CanvasEditor({
       </label>
       <output>
         {outputWidth} × {outputHeight} px
+        {canvas.pxPerMeter > maxPxPerMeter ? ` · 上限 ${maxPxPerMeter} px/米` : ''}
       </output>
     </fieldset>
   );
@@ -3537,6 +6708,9 @@ function MaterialServiceTimeFields({
   );
 }
 
+/** 颜色预设选项的值是 #RRGGBB；选中时用它填充按钮。 */
+const materialColorOptionPattern = /^#[0-9a-f]{6}$/i;
+
 function MaterialFieldEditor({
   field,
   value,
@@ -3561,25 +6735,51 @@ function MaterialFieldEditor({
   // 兼容早期草稿里的 left/right 取值：两套旧值都表示「开往末站」。
   const selectValue =
     field.key === 'travelDirection' && (value === 'left' || value === 'right') ? 'last' : value;
+  const selectOptions = optionsOverride ?? field.options;
+  // 固定 ≤4 个选项改用分段控件，避免下拉里再展开一次；超过 4 项仍用 select。
+  const rendersSegmentedSelect =
+    field.kind === 'select' &&
+    !!selectOptions &&
+    selectOptions.length > 0 &&
+    selectOptions.length <= 4;
+  // 分段控件是一组按钮，不能再套 <label>：label 会把点击/交互转发给第一个按钮，
+  // 表现为“指针在任意位置都命中第一个选项”。
+  const FieldElement = rendersSegmentedSelect ? 'div' : 'label';
   return (
-    <label className="material-field">
+    <FieldElement className={`material-field${rendersSegmentedSelect ? ' is-segmented' : ''}`}>
       <span>
         {labelOverride ?? field.label}
         {field.required ? ' *' : ''}
       </span>
       {field.kind === 'select' ? (
-        <select
-          value={selectValue}
-          onChange={(event) => onChange(event.currentTarget.value)}
-          disabled={disabled}
-        >
-          <option value="">{t('materialStudio.pleaseSelect')}</option>
-          {(optionsOverride ?? field.options)?.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        rendersSegmentedSelect ? (
+          <SegmentedControl
+            ariaLabel={labelOverride ?? field.label}
+            className="material-mode-switch material-variant-switch material-field-segmented"
+            disabled={disabled}
+            value={selectValue}
+            onChange={onChange}
+            options={selectOptions.map((option) => ({
+              ...option,
+              accentColor: materialColorOptionPattern.test(option.value)
+                ? option.value
+                : undefined,
+            }))}
+          />
+        ) : (
+          <select
+            value={selectValue}
+            onChange={(event) => onChange(event.currentTarget.value)}
+            disabled={disabled}
+          >
+            <option value="">{t('materialStudio.pleaseSelect')}</option>
+            {selectOptions?.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        )
       ) : field.kind === 'color' ? (
         <span
           style={{
@@ -3662,7 +6862,7 @@ function MaterialFieldEditor({
           onChange={(event) => onChange(event.currentTarget.value)}
         />
       )}
-    </label>
+    </FieldElement>
   );
 }
 

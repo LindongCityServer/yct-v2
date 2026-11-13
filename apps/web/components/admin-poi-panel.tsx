@@ -22,13 +22,7 @@ import type {
   ReactNode,
   WheelEvent as ReactWheelEvent,
 } from 'react';
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent,
-} from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { AdminPoiDescription } from './admin-poi-description';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
@@ -44,11 +38,32 @@ import { CurrentPlayerLocationButton } from './current-player-location-button';
 import { AdminRefreshButton } from './admin-refresh-button';
 import { LayeredMapTile } from './layered-map-tile';
 import { MaterialSymbol } from './material-symbol';
-import { PoiFacilityEditor } from './poi-facility-editor';
+import { PoiFacilityEditor, PoiFacilityRow } from './poi-facility-editor';
 import { ProgressiveImage } from './progressive-image';
 import { SegmentedControl } from './segmented-control';
 import type { SegmentedControlOption } from './segmented-control';
 import { VisualEditorShell } from './visual-editor-shell';
+import { EditorToolbar } from './editor/editor-toolbar';
+import { EditorToolbarActionButton } from './editor/editor-toolbar-actions';
+import { buildEditorToolbarSections } from './editor/editor-toolbar-sections';
+import type { EditorToolbarOverflowItem } from './editor/editor-toolbar-overflow';
+import { EditorHeaderToolsPortal } from './editor/editor-header-tools-portal';
+import { EditorHeaderToolbar } from './editor/editor-header-toolbar';
+import { EditorInspectorEntry } from './editor/editor-inspector-entry';
+import {
+  EditorLayerRowActions,
+  type EditorLayerRowAction,
+} from './editor/editor-layer-row-actions';
+import { EditorPanelHeading } from './editor/editor-panel-heading';
+import { EditorRailBridge } from './editor/editor-rail-bridge';
+import { EditorZoomControls } from './editor/editor-zoom-controls';
+import { defineShortcut } from '../lib/editor/shortcut-builders';
+import { EDITOR_SHORTCUT_CATALOG, isEditableTarget } from '../lib/editor/shortcuts';
+import { useEditorInspectorFocus } from '../lib/editor/use-editor-inspector-focus';
+import { useEditorLayerScroll } from '../lib/editor/use-editor-layer-scroll';
+import { useEditorPanels } from '../lib/editor/use-editor-panels';
+import type { EditorTool } from '../lib/editor/types';
+import { useEditorShortcuts } from '../lib/editor/use-editor-shortcuts';
 import { useListKeyboardNavigation } from './use-list-keyboard-navigation';
 
 type StatusFilter = PoiSubmissionStatus | 'all' | 'todo' | 'blocked' | 'legacy';
@@ -182,20 +197,20 @@ interface LegacyPoiMarkerEditInput {
   facilities: PoiFacilitySnapshot[];
 }
 
-interface CoordinateDraft {
+export interface CoordinateDraft {
   x: string;
   y?: string;
   z: string;
 }
 
-interface RectangleBoundsDraft {
+export interface RectangleBoundsDraft {
   minX: string;
   minZ: string;
   maxX: string;
   maxZ: string;
 }
 
-type PoiGeometryDraft =
+export type PoiGeometryDraft =
   | { type: 'Point'; coordinate: CoordinateDraft }
   | { type: 'MultiPoint'; coordinates: CoordinateDraft[] }
   | { type: 'LineString'; coordinates: CoordinateDraft[] }
@@ -257,10 +272,11 @@ const poiAdminSectionOptions: Array<{ value: PoiAdminSection; label: string }> =
   { value: 'submissions', label: '投稿审核' },
   { value: 'categories', label: '分类 / 图标' },
 ];
+// 字段标签已写明「公开投稿」，分段控件用短文案，避免在工具条里折行。
 const poiCategoryBoardFilterOptions: Array<{ value: PoiCategoryBoardFilter; label: string }> = [
-  { value: 'all', label: '全部分类' },
-  { value: 'public_enabled', label: '允许公开投稿' },
-  { value: 'public_disabled', label: '不允许公开投稿' },
+  { value: 'all', label: '全部' },
+  { value: 'public_enabled', label: '允许' },
+  { value: 'public_disabled', label: '不允许' },
 ];
 
 const poiRejectReasonPresets = [
@@ -279,8 +295,9 @@ async function confirmLeavePoiDialogForWorkspace(isDirty: boolean): Promise<bool
   }
 
   return (
-    (await requestConfirmation('当前弹窗有未保存的修改，进入工作台会丢弃这些修改，确定继续吗？')) ===
-    true
+    (await requestConfirmation(
+      '当前弹窗有未保存的修改，进入工作台会丢弃这些修改，确定继续吗？',
+    )) === true
   );
 }
 
@@ -1570,7 +1587,6 @@ export function AdminPoiPanel({
         }
         editorKind="poi"
         sessionId={editorSessionId}
-        status={poiDataLoaded ? '未找到要编辑的 POI。' : '正在读取 POI 编辑数据'}
         title="POI 几何工作台"
       >
         <div className="visual-editor-empty-state">
@@ -2091,6 +2107,18 @@ function LegacyPoiMarkerItem({
             地图查看
           </a>
         ) : null}
+        <a
+          className="admin-action-link"
+          href={appPath(`/admin/map-poi/editor?markerId=${encodeURIComponent(marker.id)}`)}
+        >
+          几何工作台
+        </a>
+        <a
+          className="admin-action-link"
+          href={appPath(`/admin/map-poi/intro-editor?markerId=${encodeURIComponent(marker.id)}`)}
+        >
+          简介工作台
+        </a>
         <button type="button" disabled={isBusy} onClick={onEdit}>
           编辑
         </button>
@@ -2633,14 +2661,15 @@ function PoiSpatialMetadataEditor({
     <>
       <PoiEditorSection summary="道路/通道网络与可达性" title="路网与通行">
         <div className="admin-poi-edit-coordinate-fields">
-          <label>
+          <div className="admin-segmented-field">
             <span>网络类型</span>
-            <select
+            <SegmentedControl
+              ariaLabel="路网类型"
+              className="material-mode-switch material-variant-switch"
               value={normalizedValue?.networkKind ?? ''}
-              onChange={(event) => {
+              onChange={(next) => {
                 const networkKind =
-                  (event.currentTarget.value as MapMarkerSpatialMetadata['networkKind']) ||
-                  undefined;
+                  (next as MapMarkerSpatialMetadata['networkKind']) || undefined;
                 update({
                   networkKind,
                   allowedModes:
@@ -2653,29 +2682,31 @@ function PoiSpatialMetadataEditor({
                       : normalizedValue?.allowedModes,
                 });
               }}
-            >
-              <option value="">非路网 POI</option>
-              <option value="road">道路</option>
-              <option value="pedestrian">通道 / 步行路</option>
-            </select>
-          </label>
-          <label>
+              options={[
+                { value: '', label: '非路网 POI' },
+                { value: 'road', label: '道路' },
+                { value: 'pedestrian', label: '通道 / 步行路' },
+              ]}
+            />
+          </div>
+          <div className="admin-segmented-field">
             <span>方向</span>
-            <select
+            <SegmentedControl
+              ariaLabel="路网方向"
+              className="material-mode-switch material-variant-switch"
               value={normalizedValue?.direction ?? 'both'}
-              onChange={(event) =>
+              onChange={(next) =>
                 update({
-                  direction: event.currentTarget.value as NonNullable<
-                    MapMarkerSpatialMetadata['direction']
-                  >,
+                  direction: next as NonNullable<MapMarkerSpatialMetadata['direction']>,
                 })
               }
-            >
-              <option value="both">双向</option>
-              <option value="forward">沿点序单向</option>
-              <option value="reverse">逆点序单向</option>
-            </select>
-          </label>
+              options={[
+                { value: 'both', label: '双向' },
+                { value: 'forward', label: '沿点序单向' },
+                { value: 'reverse', label: '逆点序单向' },
+              ]}
+            />
+          </div>
         </div>
         <fieldset className="poi-editor-subsection">
           <legend>允许通行方式</legend>
@@ -3185,11 +3216,11 @@ function EditLegacyPoiMarkerDialog({
           isDirty={isDirty}
           onSave={() => save()}
           sessionId={editorSessionId}
-          status={error || describePoiIntroSummary(introForm)}
           title={`编辑 ${marker.label} 简介`}
           workspace
         >
           <PoiIntroWorkspace
+            categories={categories}
             disabled={isBusy}
             excludedParentMarkerId={marker.id}
             form={introForm}
@@ -3228,7 +3259,6 @@ function EditLegacyPoiMarkerDialog({
         isDirty={isDirty}
         onSave={() => save()}
         sessionId={editorSessionId}
-        status={error || geometryLabelFromDraft(geometryDraft)}
         title={`调整 ${marker.label} 几何`}
         workspace
       >
@@ -3477,21 +3507,16 @@ function PoiCategoryBoard({
         ))}
       </div>
       <div className="admin-toolbar admin-poi-toolbar" aria-label="POI 分类筛选">
-        <label>
+        <div className="admin-segmented-field">
           <span>公开投稿</span>
-          <select
+          <SegmentedControl
+            ariaLabel="公开投稿筛选"
+            className="material-mode-switch material-variant-switch"
             value={filterValue}
-            onChange={(event) =>
-              onFilterChange(event.currentTarget.value as PoiCategoryBoardFilter)
-            }
-          >
-            {poiCategoryBoardFilterOptions.map((option) => (
-              <option value={option.value} key={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            onChange={(next) => onFilterChange(next as PoiCategoryBoardFilter)}
+            options={poiCategoryBoardFilterOptions}
+          />
+        </div>
         <label className="admin-poi-search">
           <span>搜索</span>
           <input
@@ -3740,6 +3765,20 @@ function PoiSubmissionReviewItem({
         </button>
         <a className="admin-action-link" href={mapHref} target="_blank" rel="noreferrer">
           地图查看
+        </a>
+        <a
+          className="admin-action-link"
+          href={appPath(`/admin/map-poi/editor?markerId=${encodeURIComponent(submission.id)}`)}
+        >
+          几何工作台
+        </a>
+        <a
+          className="admin-action-link"
+          href={appPath(
+            `/admin/map-poi/intro-editor?markerId=${encodeURIComponent(submission.id)}`,
+          )}
+        >
+          简介工作台
         </a>
         <button
           type="button"
@@ -4232,13 +4271,12 @@ function PoiAuditMapPreview({
         <PoiAuditTileLayer bounds={preview.bounds} tilePreviewConfig={tilePreviewConfig} />
         <svg viewBox="0 0 220 152" role="img" aria-label={`${submission.title} 审核地图预览`}>
           <rect className="admin-poi-audit-map-grid" x="0" y="0" width="220" height="152" />
-          {preview.polygons.map((polygon, index) => (
-            <polygon
-              className="admin-poi-audit-map-submission-shape"
-              key={`submission-polygon-${index}`}
-              points={polygon}
-            />
-          ))}
+          <PoiShapeLayer
+            className="admin-poi-audit-map-submission-shape"
+            height={152}
+            preview={preview}
+            width={220}
+          />
           {preview.lines.map((line, index) => (
             <polyline
               className="admin-poi-audit-map-submission-line"
@@ -4324,13 +4362,12 @@ function PoiGeometryPreview({ geometry }: Readonly<{ geometry: MapGeometry }>) {
   return (
     <div className="admin-poi-geometry-preview">
       <svg viewBox="0 0 180 128" role="img" aria-label={`${geometryLabel(geometry)} 预览`}>
-        {preview.polygons.map((polygon, index) => (
-          <polygon
-            className="admin-poi-geometry-preview-shape"
-            key={`polygon-${index}`}
-            points={polygon}
-          />
-        ))}
+        <PoiShapeLayer
+          className="admin-poi-geometry-preview-shape"
+          height={128}
+          preview={preview}
+          width={180}
+        />
         {preview.lines.map((line, index) => (
           <polyline
             className="admin-poi-geometry-preview-line"
@@ -5173,11 +5210,11 @@ function EditPoiSubmissionDialog({
           isDirty={isDirty}
           onSave={() => save()}
           sessionId={editorSessionId}
-          status={error || describePoiIntroSummary(form)}
           title={`编辑 ${submission?.title ?? 'POI'} 简介`}
           workspace
         >
           <PoiIntroWorkspace
+            categories={categories}
             disabled={isBusy}
             excludedParentMarkerId={submission ? `poi-${submission.id}` : undefined}
             form={form}
@@ -5216,7 +5253,6 @@ function EditPoiSubmissionDialog({
         isDirty={isDirty}
         onSave={() => save()}
         sessionId={editorSessionId}
-        status={error || geometryLabelFromDraft(geometryDraft)}
         title={`调整 ${submission?.title ?? 'POI'} 几何`}
         workspace
       >
@@ -5550,7 +5586,113 @@ function EditPoiSubmissionDialog({
   );
 }
 
+type PoiIntroChapterId =
+  'header' | 'images' | 'description' | 'details' | 'facilities' | 'relation' | 'link';
+
+type PoiIntroSelection = { chapter: PoiIntroChapterId; field?: string } | null;
+
+type PoiIntroPreviewWidth = 'narrow' | 'medium' | 'wide';
+
+/** 简介工作台的章节顺序：标题栏 / 图片 / 简介 / 更多信息 / 设施 / 地点关系 / 链接。 */
+const poiIntroChapters: ReadonlyArray<{
+  id: PoiIntroChapterId;
+  label: string;
+  icon: string;
+}> = [
+  { id: 'header', label: '标题栏', icon: 'title' },
+  { id: 'images', label: '图片', icon: 'image' },
+  { id: 'description', label: '简介', icon: 'article' },
+  { id: 'details', label: '更多信息', icon: 'info' },
+  { id: 'facilities', label: '设施', icon: 'accessible' },
+  { id: 'relation', label: '地点关系', icon: 'account_tree' },
+  { id: 'link', label: '链接', icon: 'link' },
+];
+
+const poiIntroHeaderFields = [
+  { id: 'title', label: '名称' },
+  { id: 'category', label: '分类' },
+  { id: 'icon', label: '图标' },
+] as const;
+
+const poiIntroDetailFields = [
+  { id: 'openingHours', label: '营业时间' },
+  { id: 'address', label: '地址' },
+  { id: 'floorLabel', label: '楼层' },
+  { id: 'addressRoadMarkerId', label: '地址道路' },
+] as const;
+
+const poiIntroRelationFields = [
+  { id: 'parent', label: '父地点' },
+  { id: 'children', label: '子地点' },
+] as const;
+
+const poiIntroPreviewWidthOptions: ReadonlyArray<{
+  value: PoiIntroPreviewWidth;
+  label: string;
+  icon: string;
+}> = [
+  { value: 'narrow', label: '窄屏预览（240px）', icon: 'smartphone' },
+  { value: 'medium', label: '桌面预览（340px）', icon: 'desktop_windows' },
+  { value: 'wide', label: '宽屏预览（760px）', icon: 'tablet_mac' },
+];
+
+function describePoiIntroField(chapter: PoiIntroChapterId, field: string): string {
+  if (chapter === 'images') {
+    return `图片 ${Number(field.replace('image:', '')) + 1}`;
+  }
+  if (chapter === 'header') {
+    return field === 'title' ? '名称' : field === 'category' ? '分类' : '图标';
+  }
+  if (chapter === 'details') {
+    return poiIntroDetailFields.find((item) => item.id === field)?.label ?? '属性';
+  }
+  if (chapter === 'facilities') {
+    return `设施 ${Number(field.replace('facility:', '')) + 1}`;
+  }
+  if (chapter === 'relation') {
+    return field === 'parent' ? '父地点' : '子地点';
+  }
+  return chapter === 'description' ? '简介' : '链接';
+}
+
+/** 预览卡里的可点选区域：单击选中字段，具体编辑仍在右侧检查器完成。 */
+function PoiIntroPreviewTarget({
+  children,
+  className,
+  label,
+  onSelect,
+}: Readonly<{
+  children: ReactNode;
+  className?: string;
+  label: string;
+  onSelect: () => void;
+}>) {
+  return (
+    <div
+      className={`poi-intro-preview-target${className ? ` ${className}` : ''}`}
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      title={label}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * POI 简介工作台：中间是公开端详情卡预览，左侧是章节 / 字段树，右侧是属性检查器。
+ * 预览保持只读，单击卡片上的区域即可选中对应字段并进入右侧检查器编辑。
+ */
 function PoiIntroWorkspace({
+  categories,
   disabled,
   excludedParentMarkerId,
   form,
@@ -5560,6 +5702,7 @@ function PoiIntroWorkspace({
   roadMarkerOptions,
   selectedCategory,
 }: Readonly<{
+  categories: PoiCategory[];
   disabled: boolean;
   excludedParentMarkerId?: string;
   form: PoiSubmissionFormInput;
@@ -5569,109 +5712,1100 @@ function PoiIntroWorkspace({
   roadMarkerOptions: MapMarker[];
   selectedCategory?: PoiCategory;
 }>) {
+  const [selection, setSelection] = useState<PoiIntroSelection>(null);
+  const [previewWidth, setPreviewWidth] = useState<PoiIntroPreviewWidth>('medium');
+  const [previewTab, setPreviewTab] = useState<'summary' | 'facilities'>('summary');
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const { panelsVisible, panelStateClass, togglePanels, openInspector, closeInspector } =
+    useEditorPanels();
+  const inspectorRef = useRef<HTMLElement | null>(null);
+  const layerBodyRef = useRef<HTMLDivElement | null>(null);
+  const focusInspector = useEditorInspectorFocus(inspectorRef);
+  useEditorLayerScroll(
+    layerBodyRef,
+    selection ? `${selection.chapter}:${selection.field ?? ''}` : null,
+  );
+
   const imageUrls = form.imageUrls.map((url) => url.trim()).filter(Boolean);
-  const iconUrl = form.iconFileName
-    ? toMarkerIconUrl(form.iconFileName, iconBaseUrl)
-    : selectedCategory?.iconMapping.defaultIconFileName
-      ? toMarkerIconUrl(selectedCategory.iconMapping.defaultIconFileName, iconBaseUrl)
+  const imageCount = imageUrls.length;
+  const filledImageIndexes = form.imageUrls
+    .map((url, index) => (url.trim() ? index : -1))
+    .filter((index) => index >= 0);
+  const safeImageIndex =
+    imageUrls.length > 0 ? Math.min(activeImageIndex, imageUrls.length - 1) : 0;
+  const activeImageRawIndex = filledImageIndexes[safeImageIndex] ?? filledImageIndexes[0] ?? 0;
+  const descriptionLength = form.description.trim().length;
+  const detailCompletedCount = [
+    form.openingHours.trim(),
+    form.address.trim(),
+    form.floorLabel.trim(),
+    form.addressRoadMarkerId,
+  ].filter(Boolean).length;
+  const categoryName = selectedCategory
+    ? formatCategoryName(selectedCategory.id, selectedCategory)
+    : form.categoryId
+      ? formatCategoryName(form.categoryId)
+      : '未选择分类';
+  const previewCategoryName = selectedCategory?.name || form.categoryId || '未选择分类';
+  const roadName =
+    roadMarkerOptions.find((marker) => marker.id === form.addressRoadMarkerId)?.label ??
+    form.addressRoadMarkerId ??
+    '未绑定';
+  const parentMarker = parentMarkerOptions.find((marker) => marker.id === form.parentMarkerId);
+  const childMarkers = excludedParentMarkerId
+    ? parentMarkerOptions.filter((marker) => marker.parentMarkerId === excludedParentMarkerId)
+    : [];
+  const childGroups = childMarkers.reduce<Array<{ categoryId: string; markers: MapMarker[] }>>(
+    (groups, marker) => {
+      const categoryId = marker.categoryId ?? '';
+      const group = groups.find((item) => item.categoryId === categoryId);
+      if (group) {
+        group.markers.push(marker);
+      } else {
+        groups.push({ categoryId, markers: [marker] });
+      }
+      return groups;
+    },
+    [],
+  );
+  const categoryLabelFor = (categoryId: string): string => {
+    if (!categoryId) {
+      return '未分类';
+    }
+    return categories.find((category) => category.id === categoryId)?.name || categoryId;
+  };
+  const iconHidden = Boolean(form.spatial?.hideMarkerIcon);
+  const iconUrl =
+    !iconHidden && form.iconFileName
+      ? toMarkerIconUrl(form.iconFileName, iconBaseUrl)
+      : !iconHidden && selectedCategory?.iconMapping.defaultIconFileName
+        ? toMarkerIconUrl(selectedCategory.iconMapping.defaultIconFileName, iconBaseUrl)
+        : null;
+  const iconLabel = iconHidden ? '不使用图标' : form.iconFileName ? '自定义图标' : '跟随分类默认';
+
+  const handleTreeDoubleClick = (chapter: PoiIntroChapterId, field?: string) => {
+    setSelection({ chapter, field });
+    focusInspector();
+  };
+
+  const updateImageAt = (index: number, value: string) => {
+    onChange({
+      imageUrls: form.imageUrls.map((item, itemIndex) => (itemIndex === index ? value : item)),
+    });
+  };
+  const moveImage = (index: number, offset: -1 | 1) => {
+    const nextIndex = index + offset;
+    onChange({ imageUrls: moveListItem(form.imageUrls, index, nextIndex) });
+    setSelection({ chapter: 'images', field: `image:${nextIndex}` });
+  };
+  const removeImage = (index: number) => {
+    onChange({ imageUrls: form.imageUrls.filter((_, itemIndex) => itemIndex !== index) });
+    setSelection({ chapter: 'images' });
+  };
+  const addImage = () => {
+    const nextIndex = form.imageUrls.length;
+    onChange({ imageUrls: [...form.imageUrls, ''] });
+    setSelection({ chapter: 'images', field: `image:${nextIndex}` });
+  };
+
+  const updateFacility = (index: number, facility: PoiFacilitySnapshot) => {
+    onChange({
+      facilities: form.facilities.map((item, itemIndex) => (itemIndex === index ? facility : item)),
+    });
+  };
+  const removeFacility = (index: number) => {
+    onChange({ facilities: form.facilities.filter((_, itemIndex) => itemIndex !== index) });
+    setSelection({ chapter: 'facilities' });
+  };
+  const addFacility = () => {
+    const nextIndex = form.facilities.length;
+    onChange({ facilities: [...form.facilities, { symbolIcon: 'info', description: '' }] });
+    setSelection({ chapter: 'facilities', field: `facility:${nextIndex}` });
+  };
+
+  const chapterMeta = (chapter: PoiIntroChapterId): string => {
+    if (chapter === 'header') {
+      return form.title.trim() ? '已填写' : '未填写';
+    }
+    if (chapter === 'images') {
+      return `${form.imageUrls.length} 项`;
+    }
+    if (chapter === 'description') {
+      return `${descriptionLength} 字`;
+    }
+    if (chapter === 'details') {
+      return `${detailCompletedCount}/${poiIntroDetailFields.length}`;
+    }
+    if (chapter === 'facilities') {
+      return `${form.facilities.length} 项`;
+    }
+    if (chapter === 'relation') {
+      return `${childMarkers.length} 个子地点`;
+    }
+    return form.href.trim() ? '已填写' : '未填写';
+  };
+
+  const renderFieldRow = (
+    chapter: PoiIntroChapterId,
+    field: string,
+    label: string,
+    meta: string,
+    actions?: EditorLayerRowAction[],
+  ) => {
+    const selected = selection?.chapter === chapter && selection.field === field;
+    return (
+      <li key={field}>
+        <div className={`poi-visual-layer-row${selected ? ' is-active' : ''}`}>
+          <button
+            aria-pressed={selected}
+            className="poi-visual-layer-point"
+            type="button"
+            onClick={() => setSelection({ chapter, field })}
+            onDoubleClick={() => handleTreeDoubleClick(chapter, field)}
+          >
+            <span className="poi-visual-layer-coordinate">{label}</span>
+            <span className="poi-visual-layer-count">{meta}</span>
+          </button>
+          {actions ? <EditorLayerRowActions actions={actions} /> : null}
+        </div>
+      </li>
+    );
+  };
+
+  const renderChapterFields = (chapter: PoiIntroChapterId) => {
+    if (chapter === 'header') {
+      return (
+        <ul className="poi-visual-layer-points">
+          {poiIntroHeaderFields.map((field) =>
+            renderFieldRow(
+              chapter,
+              field.id,
+              field.label,
+              field.id === 'title'
+                ? form.title.trim()
+                  ? '已填写'
+                  : '未填写'
+                : field.id === 'category'
+                  ? categoryName
+                  : iconLabel,
+            ),
+          )}
+        </ul>
+      );
+    }
+    if (chapter === 'images') {
+      if (form.imageUrls.length === 0) {
+        return <p className="poi-visual-panel-empty">还没有图片，使用面板底部的「添加图片」。</p>;
+      }
+      return (
+        <ul className="poi-visual-layer-points">
+          {form.imageUrls.map((url, index) =>
+            renderFieldRow(
+              chapter,
+              `image:${index}`,
+              `图片 ${index + 1}`,
+              url.trim() ? '已填写' : '空链接',
+              [
+                {
+                  id: 'move-up',
+                  icon: 'arrow_upward',
+                  label: '上移图片',
+                  disabled: index === 0,
+                  onClick: () => moveImage(index, -1),
+                },
+                {
+                  id: 'move-down',
+                  icon: 'arrow_downward',
+                  label: '下移图片',
+                  disabled: index === form.imageUrls.length - 1,
+                  onClick: () => moveImage(index, 1),
+                },
+                {
+                  id: 'remove',
+                  icon: 'delete',
+                  label: '移除图片',
+                  danger: true,
+                  onClick: () => removeImage(index),
+                },
+              ],
+            ),
+          )}
+        </ul>
+      );
+    }
+    if (chapter === 'description') {
+      return (
+        <ul className="poi-visual-layer-points">
+          {renderFieldRow('description', 'description', '简介', `${descriptionLength} 字`)}
+        </ul>
+      );
+    }
+    if (chapter === 'details') {
+      return (
+        <ul className="poi-visual-layer-points">
+          {poiIntroDetailFields.map((field) =>
+            renderFieldRow(
+              chapter,
+              field.id,
+              field.label,
+              field.id === 'openingHours'
+                ? form.openingHours.trim() || '未填写'
+                : field.id === 'address'
+                  ? form.address.trim() || '未填写'
+                  : field.id === 'floorLabel'
+                    ? form.floorLabel.trim() || '未填写'
+                    : roadName,
+            ),
+          )}
+          <li>
+            <div className="poi-visual-layer-row">
+              <button
+                className="poi-visual-layer-point is-disabled"
+                disabled
+                title="等待后续建造者信息 PR 接入"
+                type="button"
+              >
+                <span className="poi-visual-layer-coordinate">建造者信息</span>
+                <span className="poi-visual-layer-count">待接入</span>
+              </button>
+            </div>
+          </li>
+        </ul>
+      );
+    }
+    if (chapter === 'facilities') {
+      if (form.facilities.length === 0) {
+        return <p className="poi-visual-panel-empty">还没有设施，使用面板底部的「添加设施」。</p>;
+      }
+      return (
+        <ul className="poi-visual-layer-points">
+          {form.facilities.map((facility, index) =>
+            renderFieldRow(
+              chapter,
+              `facility:${index}`,
+              `设施 ${index + 1}`,
+              facility.description.trim() || '未填写描述',
+            ),
+          )}
+        </ul>
+      );
+    }
+    if (chapter === 'relation') {
+      return (
+        <ul className="poi-visual-layer-points">
+          {poiIntroRelationFields.map((field) =>
+            renderFieldRow(
+              'relation',
+              field.id,
+              field.label,
+              field.id === 'parent'
+                ? (parentMarker?.label ?? '未绑定')
+                : `${childMarkers.length} 个`,
+            ),
+          )}
+        </ul>
+      );
+    }
+    return (
+      <ul className="poi-visual-layer-points">
+        {renderFieldRow('link', 'href', '链接', form.href.trim() ? '已填写' : '未填写')}
+      </ul>
+    );
+  };
+
+  const selectedChapter = selection
+    ? poiIntroChapters.find((chapter) => chapter.id === selection.chapter)
+    : null;
+  const selectedFieldLabel =
+    selection && selection.field !== undefined
+      ? describePoiIntroField(selection.chapter, selection.field)
       : null;
 
-  return (
-    <div className="poi-intro-workspace">
-      <aside className="poi-intro-form-panel" aria-label="简介字段">
-        <div className="poi-intro-panel-heading">
-          <div>
-            <strong>简介内容</strong>
-            <span className="muted">图片、简介、营业时间、地址与链接</span>
-          </div>
-        </div>
-        <label>
-          <span>简介</span>
-          <textarea
-            disabled={disabled}
-            maxLength={1000}
-            value={form.description}
-            onChange={(event) => onChange({ description: event.currentTarget.value })}
-          />
-        </label>
-        <AdminPoiBusinessDetailsFields
-          disabled={disabled}
-          excludedParentMarkerId={excludedParentMarkerId}
-          form={form}
-          parentMarkerOptions={parentMarkerOptions}
-          roadMarkerOptions={roadMarkerOptions}
-          showFacilities={false}
-          onChange={onChange}
-        />
-        <label>
-          <span>链接</span>
+  const nameField = (
+    <label className="material-field">
+      <span>POI 名称</span>
+      <input
+        disabled={disabled}
+        maxLength={200}
+        value={form.title}
+        onChange={(event) => onChange({ title: event.currentTarget.value })}
+      />
+    </label>
+  );
+
+  const categoryField = (
+    <label className="material-field">
+      <span>分类</span>
+      <select
+        disabled={disabled}
+        value={form.categoryId}
+        onChange={(event) => onChange({ categoryId: event.currentTarget.value })}
+      >
+        <option value="">未选择分类</option>
+        {form.categoryId && !categories.some((category) => category.id === form.categoryId) ? (
+          <option value={form.categoryId}>{form.categoryId}</option>
+        ) : null}
+        {categories.map((category) => (
+          <option key={category.id} value={category.id}>
+            {formatCategoryName(category.id, category)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+
+  const iconField = (
+    <AdminPoiIconPicker
+      defaultIconFileName={selectedCategory?.iconMapping.defaultIconFileName}
+      disabled={disabled}
+      hidden={iconHidden}
+      iconBaseUrl={iconBaseUrl}
+      options={selectedCategory?.iconMapping.iconFileNames ?? []}
+      value={form.iconFileName}
+      onChange={(iconFileName) => onChange({ iconFileName })}
+      onHiddenChange={(hidden) =>
+        onChange({
+          spatial: compactPoiSpatialMetadata({
+            ...form.spatial,
+            hideMarkerIcon: hidden || undefined,
+          }),
+        })
+      }
+    />
+  );
+
+  const renderDetailField = (field: string) => {
+    if (field === 'openingHours') {
+      return (
+        <label className="material-field">
+          <span>营业时间</span>
           <input
             disabled={disabled}
-            value={form.href}
-            onChange={(event) => onChange({ href: event.currentTarget.value })}
-            placeholder="https://..."
+            maxLength={500}
+            placeholder="例如：周一至周五 09:00-18:00"
+            value={form.openingHours}
+            onChange={(event) => onChange({ openingHours: event.currentTarget.value })}
           />
         </label>
+      );
+    }
+    if (field === 'address') {
+      return (
+        <label className="material-field">
+          <span>文字地址</span>
+          <input
+            disabled={disabled}
+            maxLength={300}
+            placeholder="例如：青年大街 18 号"
+            value={form.address}
+            onChange={(event) => onChange({ address: event.currentTarget.value })}
+          />
+        </label>
+      );
+    }
+    if (field === 'floorLabel') {
+      return (
+        <label className="material-field">
+          <span>楼层</span>
+          <input
+            disabled={disabled}
+            maxLength={40}
+            placeholder="例如：B1、3F、站厅层"
+            value={form.floorLabel}
+            onChange={(event) => onChange({ floorLabel: event.currentTarget.value })}
+          />
+        </label>
+      );
+    }
+    return (
+      <label className="material-field">
+        <span>地址道路</span>
+        <select
+          disabled={disabled || !form.address.trim()}
+          value={form.addressRoadMarkerId}
+          onChange={(event) => onChange({ addressRoadMarkerId: event.currentTarget.value })}
+        >
+          <option value="">不绑定道路</option>
+          {form.addressRoadMarkerId &&
+          !roadMarkerOptions.some((marker) => marker.id === form.addressRoadMarkerId) ? (
+            <option value={form.addressRoadMarkerId}>{form.addressRoadMarkerId}</option>
+          ) : null}
+          {roadMarkerOptions.map((marker) => (
+            <option key={marker.id} value={marker.id}>
+              {marker.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  };
+
+  const renderImageField = (index: number) => {
+    const value = form.imageUrls[index] ?? '';
+    return (
+      <>
+        <label className="material-field">
+          <span>{`图片 ${index + 1} 链接`}</span>
+          <input
+            disabled={disabled}
+            placeholder="https://... 或 /api/map/poi-submission-images/..."
+            value={value}
+            onChange={(event) => updateImageAt(index, event.currentTarget.value)}
+          />
+        </label>
+        {value.trim() ? (
+          <a
+            className="secondary-action-button"
+            href={resolvePoiSubmissionImageUrl(value)}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              open_in_new
+            </span>
+            <span>预览图片</span>
+          </a>
+        ) : null}
+        <div className="poi-visual-inspector-actions">
+          <button disabled={index === 0} type="button" onClick={() => moveImage(index, -1)}>
+            上移
+          </button>
+          <button
+            disabled={index >= form.imageUrls.length - 1}
+            type="button"
+            onClick={() => moveImage(index, 1)}
+          >
+            下移
+          </button>
+          <button type="button" onClick={() => removeImage(index)}>
+            移除
+          </button>
+        </div>
+      </>
+    );
+  };
+
+  const descriptionField = (
+    <>
+      <label className="material-field">
+        <span>简介</span>
+        <textarea
+          disabled={disabled}
+          maxLength={1000}
+          placeholder="填写地点简介，保存后展示在公开端详情卡。"
+          value={form.description}
+          onChange={(event) => onChange({ description: event.currentTarget.value })}
+        />
+      </label>
+      <p className="muted">{`${descriptionLength} 字，最多 1000 字。`}</p>
+    </>
+  );
+
+  const linkField = (
+    <label className="material-field">
+      <span>链接</span>
+      <input
+        disabled={disabled}
+        placeholder="https://..."
+        value={form.href}
+        onChange={(event) => onChange({ href: event.currentTarget.value })}
+      />
+    </label>
+  );
+
+  const renderFacilityField = (index: number) => {
+    const facility = form.facilities[index];
+    if (!facility) {
+      return <p className="poi-visual-panel-empty">该设施已不存在。</p>;
+    }
+    return (
+      <div className="poi-facility-editor-list">
+        <PoiFacilityRow
+          disabled={disabled}
+          facility={facility}
+          index={index}
+          onChange={(next) => updateFacility(index, next)}
+          onRemove={() => removeFacility(index)}
+        />
+      </div>
+    );
+  };
+
+  const renderChildrenList = () => (
+    <>
+      {childMarkers.length > 0 ? (
+        <ul className="poi-intro-child-list">
+          {childMarkers.map((child) => {
+            const category = categories.find((item) => item.id === child.categoryId);
+            return (
+              <li key={child.id}>
+                <a
+                  href={appPath(
+                    `/admin/map-poi/intro-editor?markerId=${encodeURIComponent(child.id)}`,
+                  )}
+                >
+                  <PoiCategoryIcon
+                    category={category}
+                    iconBaseUrl={iconBaseUrl}
+                    iconFileName={child.iconFileName}
+                  />
+                  <span>
+                    <strong>{child.label}</strong>
+                    <small>
+                      {formatCategoryName(child.categoryId ?? 'uncategorized', category)}
+                    </small>
+                  </span>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="poi-visual-panel-empty">暂无子地点；新增子地点请回 POI 主列表。</p>
+      )}
+      <a className="secondary-action-button" href={appPath('/admin/map-poi')}>
+        <span className="material-symbols-outlined" aria-hidden="true">
+          list
+        </span>
+        <span>回主列表新增子地点</span>
+      </a>
+    </>
+  );
+
+  const renderPreviewChildGroups = () =>
+    childGroups.length > 0 ? (
+      <div className="map-poi-related-list" aria-label="子地点">
+        {childGroups.map((group) => (
+          <section className="map-poi-related-group" key={group.categoryId || 'uncategorized'}>
+            <h4>
+              <span>{categoryLabelFor(group.categoryId)}</span>
+              <small>{`${group.markers.length} 个`}</small>
+            </h4>
+            <div className="map-poi-related-group-items">
+              {group.markers.map((child) => (
+                <PoiIntroPreviewTarget
+                  className="map-poi-related-item"
+                  key={child.id}
+                  label={`选择子地点 ${child.label}`}
+                  onSelect={() => setSelection({ chapter: 'relation', field: 'children' })}
+                >
+                  <PoiCategoryIcon
+                    category={categories.find((item) => item.id === child.categoryId)}
+                    iconBaseUrl={iconBaseUrl}
+                    iconFileName={child.iconFileName}
+                  />
+                  <span>
+                    <strong>{child.label}</strong>
+                    <small>
+                      {`${categoryLabelFor(child.categoryId ?? '')}${
+                        child.floorLabel ? ` · ${child.floorLabel}` : ''
+                      }`}
+                    </small>
+                  </span>
+                </PoiIntroPreviewTarget>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    ) : null;
+
+  const renderSelectionInspector = () => {
+    if (!selection) {
+      return null;
+    }
+    const { chapter, field } = selection;
+    if (chapter === 'header') {
+      if (field === 'title') {
+        return nameField;
+      }
+      if (field === 'category') {
+        return categoryField;
+      }
+      if (field === 'icon') {
+        return iconField;
+      }
+      return (
+        <>
+          {nameField}
+          {categoryField}
+          {iconField}
+        </>
+      );
+    }
+    if (chapter === 'images') {
+      if (field?.startsWith('image:')) {
+        return renderImageField(Number(field.slice('image:'.length)));
+      }
+      return (
         <AdminPoiImageEditor
           disabled={disabled}
           values={form.imageUrls}
           onChange={(imageUrls) => onChange({ imageUrls })}
         />
-      </aside>
-      <section className="poi-intro-preview" aria-label="简介预览">
-        <article className="map-poi-detail-panel poi-intro-preview-panel">
+      );
+    }
+    if (chapter === 'description') {
+      return descriptionField;
+    }
+    if (chapter === 'details') {
+      if (field) {
+        return renderDetailField(field);
+      }
+      return (
+        <>
+          <AdminPoiBusinessDetailsFields
+            disabled={disabled}
+            excludedParentMarkerId={excludedParentMarkerId}
+            form={form}
+            parentMarkerOptions={parentMarkerOptions}
+            roadMarkerOptions={roadMarkerOptions}
+            showFacilities={false}
+            onChange={onChange}
+          />
+          <p className="poi-visual-panel-empty">建造者信息：等待后续 PR 接入后补充。</p>
+        </>
+      );
+    }
+    if (chapter === 'facilities') {
+      if (field?.startsWith('facility:')) {
+        return renderFacilityField(Number(field.slice('facility:'.length)));
+      }
+      return (
+        <PoiFacilityEditor
+          disabled={disabled}
+          facilities={form.facilities}
+          onChange={(facilities) => onChange({ facilities })}
+        />
+      );
+    }
+    if (chapter === 'relation') {
+      const parentField = (
+        <ParentMarkerSelect
+          categories={categories}
+          excludedMarkerId={excludedParentMarkerId}
+          iconBaseUrl={iconBaseUrl}
+          markerOptions={parentMarkerOptions}
+          selectedId={form.parentMarkerId}
+          onChange={(parentMarkerId) => onChange({ parentMarkerId })}
+        />
+      );
+      if (field === 'parent') {
+        return parentField;
+      }
+      if (field === 'children') {
+        return renderChildrenList();
+      }
+      return (
+        <>
+          {parentField}
+          {renderChildrenList()}
+        </>
+      );
+    }
+    return linkField;
+  };
+
+  const previewWidthItems: EditorToolbarOverflowItem[] = poiIntroPreviewWidthOptions.map(
+    (option) => ({
+      id: `preview-${option.value}`,
+      icon: option.icon,
+      label: option.label,
+      active: previewWidth === option.value,
+      onClick: () => setPreviewWidth(option.value),
+    }),
+  );
+
+  const renderIntroToolbar = (inHeader = false) => (
+    <EditorToolbar
+      activeToolId=""
+      ariaLabel="简介编辑视图"
+      className={inHeader ? 'is-in-header' : undefined}
+      panels={{
+        visible: panelsVisible,
+        onToggle: togglePanels,
+        label: panelsVisible ? '隐藏全部面板' : '显示全部面板',
+      }}
+      onToolChange={() => undefined}
+      sections={[
+        {
+          id: 'view',
+          ariaLabel: '预览视图',
+          actions: previewWidthItems.map((item) => (
+            <EditorToolbarActionButton item={item} key={item.id} />
+          )),
+        },
+      ]}
+    />
+  );
+
+  return (
+    <div
+      className={`poi-visual-workspace poi-intro-workspace${panelStateClass}${
+        selection ? ' has-layer-selection' : ''
+      }`}
+    >
+      <section className="poi-intro-canvas" aria-label="简介预览">
+        <article
+          className={`map-poi-detail-panel poi-intro-preview-panel is-width-${previewWidth}`}
+        >
           <div className="map-poi-detail-header">
-            {iconUrl ? <img alt="" src={iconUrl} /> : null}
+            <PoiIntroPreviewTarget
+              className="poi-intro-preview-icon-target"
+              label="编辑图标"
+              onSelect={() => setSelection({ chapter: 'header', field: 'icon' })}
+            >
+              {iconUrl ? (
+                <img alt="" src={iconUrl} />
+              ) : (
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {iconHidden ? 'visibility_off' : 'category'}
+                </span>
+              )}
+            </PoiIntroPreviewTarget>
             <div>
-              <h2>{form.title.trim() || '未命名地点'}</h2>
-              <span>
-                {selectedCategory
-                  ? formatCategoryName(selectedCategory.id, selectedCategory)
-                  : '未选择分类'}
-              </span>
+              <PoiIntroPreviewTarget
+                label="编辑名称"
+                onSelect={() => setSelection({ chapter: 'header', field: 'title' })}
+              >
+                <h2>{form.title.trim() || '未命名地点'}</h2>
+              </PoiIntroPreviewTarget>
+              <PoiIntroPreviewTarget
+                className="poi-intro-preview-subtitle"
+                label="编辑分类"
+                onSelect={() => setSelection({ chapter: 'header', field: 'category' })}
+              >
+                <span>{previewCategoryName}</span>
+              </PoiIntroPreviewTarget>
             </div>
           </div>
+          <div className="map-poi-detail-tabs" aria-label="简介预览页签">
+            <button
+              className={previewTab === 'summary' ? 'is-active' : ''}
+              type="button"
+              aria-pressed={previewTab === 'summary'}
+              onClick={() => setPreviewTab('summary')}
+            >
+              <span className="material-interaction-label">简介</span>
+            </button>
+            <button
+              className={previewTab === 'facilities' ? 'is-active' : ''}
+              type="button"
+              aria-pressed={previewTab === 'facilities'}
+              onClick={() => setPreviewTab('facilities')}
+            >
+              <span className="material-interaction-label">设施/出入口</span>
+            </button>
+          </div>
           <div className="map-poi-detail-body">
-            {imageUrls[0] ? (
+            {previewTab === 'summary' ? (
               <>
-                <ProgressiveImage
-                  alt="地点主图"
-                  className="map-poi-detail-image"
-                  src={resolvePoiSubmissionImageUrl(imageUrls[0])}
-                />
-                {imageUrls.length > 1 ? (
-                  <p className="muted">{`共 ${imageUrls.length} 张图片，地图按此顺序展示。`}</p>
+                {imageUrls.length > 0 ? (
+                  <div
+                    className={`map-poi-detail-gallery${
+                      imageUrls.length > 1 ? ' is-multiple' : ''
+                    }`}
+                  >
+                    <PoiIntroPreviewTarget
+                      className="poi-intro-preview-image-target"
+                      label="编辑图片"
+                      onSelect={() =>
+                        setSelection({ chapter: 'images', field: `image:${activeImageRawIndex}` })
+                      }
+                    >
+                      <ProgressiveImage
+                        alt="地点主图"
+                        className="map-poi-detail-image"
+                        draggable={false}
+                        loading="lazy"
+                        maxDisplayWidth={1024}
+                        src={resolvePoiSubmissionImageUrl(imageUrls[safeImageIndex])}
+                      />
+                    </PoiIntroPreviewTarget>
+                    {imageUrls.length > 1 ? (
+                      <>
+                        <button
+                          className="map-poi-detail-gallery-button is-previous"
+                          type="button"
+                          aria-label="上一张图片"
+                          onClick={() =>
+                            setActiveImageIndex(
+                              (safeImageIndex - 1 + imageUrls.length) % imageUrls.length,
+                            )
+                          }
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            chevron_left
+                          </span>
+                        </button>
+                        <button
+                          className="map-poi-detail-gallery-button is-next"
+                          type="button"
+                          aria-label="下一张图片"
+                          onClick={() =>
+                            setActiveImageIndex((safeImageIndex + 1) % imageUrls.length)
+                          }
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            chevron_right
+                          </span>
+                        </button>
+                        <span className="map-poi-detail-gallery-counter">
+                          {`${safeImageIndex + 1} / ${imageUrls.length}`}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+                {form.description.trim() ? (
+                  <PoiIntroPreviewTarget
+                    label="编辑简介"
+                    onSelect={() => setSelection({ chapter: 'description', field: 'description' })}
+                  >
+                    <p>{form.description.trim()}</p>
+                  </PoiIntroPreviewTarget>
+                ) : null}
+                {form.address.trim() ||
+                form.floorLabel.trim() ||
+                form.openingHours.trim() ||
+                parentMarker ? (
+                  <dl>
+                    {form.address.trim() ? (
+                      <PoiIntroPreviewTarget
+                        label="编辑地址"
+                        onSelect={() => setSelection({ chapter: 'details', field: 'address' })}
+                      >
+                        <dt>地址</dt>
+                        <dd>{form.address.trim()}</dd>
+                      </PoiIntroPreviewTarget>
+                    ) : null}
+                    {form.floorLabel.trim() ? (
+                      <PoiIntroPreviewTarget
+                        label="编辑楼层"
+                        onSelect={() => setSelection({ chapter: 'details', field: 'floorLabel' })}
+                      >
+                        <dt>楼层</dt>
+                        <dd>{form.floorLabel.trim()}</dd>
+                      </PoiIntroPreviewTarget>
+                    ) : null}
+                    {form.openingHours.trim() ? (
+                      <PoiIntroPreviewTarget
+                        label="编辑营业时间"
+                        onSelect={() => setSelection({ chapter: 'details', field: 'openingHours' })}
+                      >
+                        <dt>营业时间</dt>
+                        <dd>{form.openingHours.trim()}</dd>
+                      </PoiIntroPreviewTarget>
+                    ) : null}
+                    {parentMarker ? (
+                      <PoiIntroPreviewTarget
+                        label="编辑所属地点"
+                        onSelect={() => setSelection({ chapter: 'relation', field: 'parent' })}
+                      >
+                        <dt>所属地点</dt>
+                        <dd>{parentMarker.label}</dd>
+                      </PoiIntroPreviewTarget>
+                    ) : null}
+                  </dl>
+                ) : null}
+                {childGroups.length > 0 ? (
+                  <div className="poi-intro-preview-related">
+                    <div className="poi-intro-preview-section-title">子地点</div>
+                    {renderPreviewChildGroups()}
+                  </div>
+                ) : null}
+                {form.href.trim() ? (
+                  <button
+                    className="secondary-action-button"
+                    type="button"
+                    onClick={() => setSelection({ chapter: 'link', field: 'href' })}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      link
+                    </span>
+                    <span>编辑链接</span>
+                  </button>
                 ) : null}
               </>
             ) : (
-              <p className="muted">暂无图片。</p>
+              <>
+                {form.facilities.length > 0 ? (
+                  <div className="map-poi-facility-list">
+                    {form.facilities.map((facility, index) => (
+                      <PoiIntroPreviewTarget
+                        className="map-poi-facility-item"
+                        key={`${facility.symbolIcon}-${index}`}
+                        label={`编辑设施 ${index + 1}`}
+                        onSelect={() =>
+                          setSelection({ chapter: 'facilities', field: `facility:${index}` })
+                        }
+                      >
+                        <MaterialSymbol name={facility.symbolIcon || 'info'} aria-hidden="true" />
+                        <span>{facility.description || '未填写描述'}</span>
+                      </PoiIntroPreviewTarget>
+                    ))}
+                  </div>
+                ) : null}
+                {renderPreviewChildGroups()}
+                {form.facilities.length === 0 && childGroups.length === 0 ? (
+                  <p>当前没有设施或子地点。</p>
+                ) : null}
+              </>
             )}
-            {form.description.trim() ? (
-              <p>{form.description.trim()}</p>
-            ) : (
-              <p className="muted">暂无简介。</p>
-            )}
-            <dl>
-              <div>
-                <dt>营业时间</dt>
-                <dd>{form.openingHours.trim() || '未填写'}</dd>
-              </div>
-              <div>
-                <dt>地址</dt>
-                <dd>{form.address.trim() || '未填写'}</dd>
-              </div>
-              <div>
-                <dt>楼层</dt>
-                <dd>{form.floorLabel.trim() || '未填写'}</dd>
-              </div>
-              <div>
-                <dt>链接</dt>
-                <dd>{form.href.trim() || '未填写'}</dd>
-              </div>
-            </dl>
           </div>
         </article>
       </section>
+
+      <EditorRailBridge
+        activeToolId=""
+        ownerId="poi-intro-editor"
+        panels={{ visible: panelsVisible, onToggle: togglePanels }}
+        sections={[{ id: 'view', priority: 60, items: previewWidthItems }]}
+        tools={[]}
+        onToolChange={() => undefined}
+      />
+
+      {panelsVisible ? (
+        <aside className="poi-visual-layer-panel" aria-label="简介结构">
+          <EditorPanelHeading
+            meta={`${form.imageUrls.length} 张图片 · ${descriptionLength} 字简介`}
+            title="结构"
+          >
+            <EditorInspectorEntry onOpen={openInspector} />
+          </EditorPanelHeading>
+          <div className="poi-visual-layer-body" ref={layerBodyRef}>
+            <ul className="poi-visual-layer-tree">
+              {poiIntroChapters.map((chapter) => (
+                <li key={chapter.id}>
+                  <div
+                    className={`poi-visual-layer-row${
+                      selection?.chapter === chapter.id ? ' is-active' : ''
+                    }`}
+                  >
+                    <button
+                      aria-pressed={selection?.chapter === chapter.id && !selection?.field}
+                      className="poi-visual-layer-group"
+                      type="button"
+                      onClick={() => setSelection({ chapter: chapter.id })}
+                      onDoubleClick={() => handleTreeDoubleClick(chapter.id)}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        {chapter.icon}
+                      </span>
+                      <span className="poi-visual-layer-label">{chapter.label}</span>
+                      <span className="poi-visual-layer-count">{chapterMeta(chapter.id)}</span>
+                    </button>
+                  </div>
+                  {renderChapterFields(chapter.id)}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="poi-visual-layer-footer">
+            <button
+              disabled={disabled || form.imageUrls.length >= 12}
+              type="button"
+              onClick={addImage}
+            >
+              添加图片
+            </button>
+            <button
+              disabled={disabled || form.facilities.length >= 64}
+              type="button"
+              onClick={addFacility}
+            >
+              添加设施
+            </button>
+          </div>
+        </aside>
+      ) : null}
+
+      {panelsVisible ? (
+        <aside className="poi-visual-inspector" aria-label="属性检查器" ref={inspectorRef}>
+          <EditorPanelHeading
+            meta={
+              selection
+                ? selection.field
+                  ? `字段 · ${selectedFieldLabel ?? ''}`
+                  : `章节 · ${selectedChapter?.label ?? ''}`
+                : `${imageCount} 张图片 · ${descriptionLength} 字简介`
+            }
+            title={
+              selection ? (selectedFieldLabel ?? selectedChapter?.label ?? '属性') : '全局属性'
+            }
+          >
+            <button
+              aria-label="返回图层"
+              className="poi-visual-inspector-back"
+              onClick={() => {
+                setSelection(null);
+                closeInspector();
+              }}
+              title="返回图层"
+              type="button"
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                arrow_back
+              </span>
+            </button>
+          </EditorPanelHeading>
+          <div className="poi-visual-coordinate-panel-body">
+            {selection ? (
+              renderSelectionInspector()
+            ) : (
+              <>
+                <dl className="poi-visual-global-summary">
+                  <div>
+                    <dt>POI 名称</dt>
+                    <dd>{form.title.trim() || '未命名地点'}</dd>
+                  </div>
+                  <div>
+                    <dt>分类</dt>
+                    <dd>{categoryName}</dd>
+                  </div>
+                  <div>
+                    <dt>简介</dt>
+                    <dd>{`${descriptionLength} 字`}</dd>
+                  </div>
+                  <div>
+                    <dt>图片</dt>
+                    <dd>{`${imageCount} 张`}</dd>
+                  </div>
+                  <div>
+                    <dt>设施</dt>
+                    <dd>{`${form.facilities.length} 项`}</dd>
+                  </div>
+                  <div>
+                    <dt>子地点</dt>
+                    <dd>{`${childMarkers.length} 个`}</dd>
+                  </div>
+                  <div>
+                    <dt>营业时间</dt>
+                    <dd>{form.openingHours.trim() ? '已填写' : '未填写'}</dd>
+                  </div>
+                  <div>
+                    <dt>地址</dt>
+                    <dd>{form.address.trim() ? '已填写' : '未填写'}</dd>
+                  </div>
+                  <div>
+                    <dt>营业 / 地址完成度</dt>
+                    <dd>{`${[form.openingHours.trim(), form.address.trim()].filter(Boolean).length}/2`}</dd>
+                  </div>
+                </dl>
+                <p className="poi-visual-panel-empty">
+                  单击预览卡中的区域即可选中字段；编辑在右侧检查器完成。
+                </p>
+              </>
+            )}
+          </div>
+        </aside>
+      ) : null}
+
+      <EditorHeaderToolsPortal>
+        <EditorHeaderToolbar compact={renderIntroToolbar(true)} full={renderIntroToolbar(true)} />
+      </EditorHeaderToolsPortal>
+
+      {renderIntroToolbar()}
     </div>
   );
 }
@@ -5751,6 +6885,195 @@ function PoiNonPointGeometryEditor({
       {fields}
     </div>
   );
+}
+
+interface PoiGeometryLayerGroup {
+  /** 与 ringTargetValue 相同的路径标识，例如 "0:1"。 */
+  path: string;
+  label: string;
+  icon: string;
+  /** 图层树里展示的真实顶点（闭合环不含末位副本）。 */
+  points: CoordinateDraft[];
+  /** 地图预览里该组占用的点数（闭合环包含末位副本），用于画布高亮对齐。 */
+  canvasPointCount: number;
+  canDuplicate: boolean;
+  canRemove: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+}
+
+/** 矩形在图层树里按 4 个顶点展示，顶点与 min/max 边界字段一一对应。 */
+function rectangleBoundsToCornerDrafts(bounds: RectangleBoundsDraft): CoordinateDraft[] {
+  return [
+    { x: bounds.minX, z: bounds.minZ },
+    { x: bounds.maxX, z: bounds.minZ },
+    { x: bounds.maxX, z: bounds.maxZ },
+    { x: bounds.minX, z: bounds.maxZ },
+  ];
+}
+
+/** 把几何草稿展开成「形状 → 边界 / 环 → 控制点」的图层树数据。 */
+function buildPoiGeometryLayerGroups(draft: PoiGeometryDraft): PoiGeometryLayerGroup[] {
+  if (draft.type === 'Point') {
+    return [
+      {
+        path: '0:0',
+        label: '控制点 1',
+        icon: 'location_on',
+        points: [draft.coordinate],
+        canvasPointCount: 1,
+        canDuplicate: false,
+        canRemove: false,
+        canMoveUp: false,
+        canMoveDown: false,
+      },
+    ];
+  }
+  if (draft.type === 'MultiPoint' || draft.type === 'LineString') {
+    return [
+      {
+        path: '0:0',
+        label: draft.type === 'LineString' ? '点序' : '点组',
+        icon: 'polyline',
+        points: draft.coordinates,
+        canvasPointCount: draft.coordinates.length,
+        canDuplicate: false,
+        canRemove: false,
+        canMoveUp: false,
+        canMoveDown: false,
+      },
+    ];
+  }
+  if (draft.type === 'Polygon') {
+    return draft.rings.map((ring, index) => ({
+      path: `0:${index}`,
+      label: index === 0 ? '外边界' : `减去图形 ${index}`,
+      icon: index === 0 ? 'pentagon' : 'donut_large',
+      // 闭合环末位是首点副本，图层树只列真实顶点。
+      points: ring.slice(0, getPoiRingUniqueCount(ring)),
+      canvasPointCount: ring.length,
+      canDuplicate: true,
+      canRemove: draft.rings.length > 1,
+      canMoveUp: index > 0,
+      canMoveDown: index < draft.rings.length - 1,
+    }));
+  }
+  if (draft.type === 'MultiPolygon') {
+    return draft.polygons.flatMap((rings, polygonIndex) =>
+      rings.map((ring, ringIndex) => ({
+        path: `${polygonIndex}:${ringIndex}`,
+        label: `多边形 ${polygonIndex + 1} · ${ringIndex === 0 ? '外边界' : `减去图形 ${ringIndex}`}`,
+        icon: 'pentagon',
+        points: ring.slice(0, getPoiRingUniqueCount(ring)),
+        canvasPointCount: ring.length,
+        canDuplicate: true,
+        canRemove: rings.length > 1 || draft.polygons.length > 1,
+        canMoveUp: ringIndex > 0,
+        canMoveDown: ringIndex < rings.length - 1,
+      })),
+    );
+  }
+  if (draft.type === 'Rectangle') {
+    return [
+      {
+        path: '0:0',
+        label: '矩形边界',
+        icon: 'rectangle',
+        points: rectangleBoundsToCornerDrafts(draft.bounds),
+        canvasPointCount: 4,
+        canDuplicate: false,
+        canRemove: false,
+        canMoveUp: false,
+        canMoveDown: false,
+      },
+    ];
+  }
+  return draft.rectangles.map((bounds, index) => ({
+    path: `${index}:0`,
+    label: `矩形 ${index + 1}`,
+    icon: 'rectangle',
+    points: rectangleBoundsToCornerDrafts(bounds),
+    canvasPointCount: 4,
+    canDuplicate: true,
+    canRemove: draft.rectangles.length > 1,
+    canMoveUp: index > 0,
+    canMoveDown: index < draft.rectangles.length - 1,
+  }));
+}
+
+/** 复制结构时给坐标一个可见的偏移，避免副本与原对象完全重合。 */
+function offsetDraftCoordinateValue(value: string, delta: number): string {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? String(Math.round((numeric + delta) * 100) / 100) : value;
+}
+
+function offsetDraftCoordinate(coordinate: CoordinateDraft, delta: number): CoordinateDraft {
+  return {
+    ...coordinate,
+    x: offsetDraftCoordinateValue(coordinate.x, delta),
+    z: offsetDraftCoordinateValue(coordinate.z, delta),
+  };
+}
+
+function PoiLayerRowActions({
+  canDuplicate,
+  canMoveDown,
+  canMoveUp,
+  canRemove,
+  onDuplicate,
+  onInsert,
+  onMoveDown,
+  onMoveUp,
+  onRemove,
+}: Readonly<{
+  canDuplicate: boolean;
+  canMoveDown: boolean;
+  canMoveUp: boolean;
+  canRemove: boolean;
+  onDuplicate: () => void;
+  onInsert?: () => void;
+  onMoveDown: () => void;
+  onMoveUp: () => void;
+  onRemove: () => void;
+}>) {
+  const actions: EditorLayerRowAction[] = [
+    ...(onInsert
+      ? [{ id: 'insert', icon: 'playlist_add', label: '在此后插入', onClick: onInsert }]
+      : []),
+    {
+      id: 'duplicate',
+      icon: 'content_copy',
+      label: '创建副本',
+      title: '创建副本（Ctrl+D）',
+      disabled: !canDuplicate,
+      onClick: onDuplicate,
+    },
+    {
+      id: 'move-up',
+      icon: 'arrow_upward',
+      label: '上移',
+      title: '上移（Alt+↑）',
+      disabled: !canMoveUp,
+      onClick: onMoveUp,
+    },
+    {
+      id: 'move-down',
+      icon: 'arrow_downward',
+      label: '下移',
+      title: '下移（Alt+↓）',
+      disabled: !canMoveDown,
+      onClick: onMoveDown,
+    },
+    {
+      id: 'remove',
+      icon: 'delete',
+      label: '移除',
+      title: '移除（Delete）',
+      disabled: !canRemove,
+      onClick: onRemove,
+    },
+  ];
+  return <EditorLayerRowActions actions={actions} />;
 }
 
 export function RegionGeometryEditor({
@@ -5877,28 +7200,40 @@ function AdminPoiImageEditor({
 
   return (
     <div className="admin-poi-image-edit-block">
-      <span>图片（最多 12 张，顺序即地图展示顺序）</span>
+      <p className="muted">图片（最多 12 张，顺序即地图展示顺序）</p>
       {values.map((value, index) => (
         <div className="admin-poi-image-url-row" key={index}>
-          <input
-            value={value}
-            disabled={disabled || isUploading}
-            onChange={(event) =>
-              onChange(
-                values.map((item, itemIndex) =>
-                  itemIndex === index ? event.currentTarget.value : item,
-                ),
-              )
-            }
-            placeholder="https://... 或 /api/map/poi-submission-images/..."
-            aria-label={`第 ${index + 1} 张图片链接`}
-          />
-          {value ? (
-            <a href={resolvePoiSubmissionImageUrl(value)} target="_blank" rel="noreferrer">
-              预览
+          <label className="material-field">
+            <span>{`图片 ${index + 1}`}</span>
+            <input
+              value={value}
+              disabled={disabled || isUploading}
+              onChange={(event) =>
+                onChange(
+                  values.map((item, itemIndex) =>
+                    itemIndex === index ? event.currentTarget.value : item,
+                  ),
+                )
+              }
+              placeholder="https://... 或 /api/map/poi-submission-images/..."
+              aria-label={`第 ${index + 1} 张图片链接`}
+            />
+          </label>
+          {value.trim() ? (
+            <a
+              className="secondary-action-button"
+              href={resolvePoiSubmissionImageUrl(value)}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                open_in_new
+              </span>
+              <span>预览</span>
             </a>
           ) : null}
           <button
+            className="icon-action-button"
             type="button"
             title="向前移动"
             aria-label="向前移动图片"
@@ -5910,6 +7245,7 @@ function AdminPoiImageEditor({
             </span>
           </button>
           <button
+            className="icon-action-button"
             type="button"
             title="向后移动"
             aria-label="向后移动图片"
@@ -5921,6 +7257,7 @@ function AdminPoiImageEditor({
             </span>
           </button>
           <button
+            className="icon-action-button"
             type="button"
             title="删除图片"
             aria-label="删除图片"
@@ -5934,14 +7271,18 @@ function AdminPoiImageEditor({
         </div>
       ))}
       <button
+        className="secondary-action-button"
         type="button"
         disabled={disabled || isUploading || values.length >= 12}
         onClick={() => onChange([...values, ''])}
       >
-        添加图片链接
+        <span className="material-symbols-outlined" aria-hidden="true">
+          add
+        </span>
+        <span>添加图片链接</span>
       </button>
-      <label className="admin-poi-image-upload">
-        <span>上传一张或多张图片</span>
+      <label className="material-field admin-poi-image-upload">
+        <span>上传图片</span>
         <input
           key={inputKey}
           type="file"
@@ -5950,14 +7291,13 @@ function AdminPoiImageEditor({
           disabled={disabled || isUploading}
           onChange={(event) => void upload(Array.from(event.currentTarget.files ?? []))}
         />
+        <small className="muted">支持多选，最多 12 张</small>
       </label>
-      <div className="admin-content-actions">
-        {status ? (
-          <span className="muted" role="status">
-            {status}
-          </span>
-        ) : null}
-      </div>
+      {status ? (
+        <p className="muted" role="status">
+          {status}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -6340,13 +7680,12 @@ function PoiGeometryVisualEditor({
             width={poiAuditPreviewWidth}
             height={poiAuditPreviewHeight}
           />
-          {preview.polygons.map((polygon, index) => (
-            <polygon
-              className="admin-poi-audit-map-submission-shape"
-              key={`draft-polygon-${index}`}
-              points={polygon}
-            />
-          ))}
+          <PoiShapeLayer
+            className="admin-poi-audit-map-submission-shape"
+            height={poiAuditPreviewHeight}
+            preview={preview}
+            width={poiAuditPreviewWidth}
+          />
           {preview.lines.map((line, index) => (
             <polyline
               className="admin-poi-audit-map-submission-line"
@@ -6454,23 +7793,54 @@ function PoiGeometryVisualEditor({
 function PoiStandaloneGeometryWorkspace({
   contextMarkers,
   draft,
+  draftTypeOptions,
   entityLabel,
+  globalFields,
+  layerRoot,
+  layerStatus,
   onChange,
   onPointYChange,
   pointYText,
+  showCoordinateY = true,
+  showGroupStructureActions = false,
   tilePreviewConfig,
 }: Readonly<{
   contextMarkers: PoiAuditContextMarker[];
   draft: PoiGeometryDraft;
+  /** 限制可切换的几何类型；区划工作台只开放 4 种区域几何。 */
+  draftTypeOptions?: Array<{ label: string; value: PoiGeometryDraft['type'] }>;
   entityLabel: string;
+  /** 未选中对象时追加到「全局属性」的字段，由业务方提供。 */
+  globalFields?: ReactNode;
+  /** 图层树顶部的业务根节点，例如「区划」。 */
+  layerRoot?: { icon: string; label: string; meta?: string };
+  /** 图层面板里的状态文案，复用线路工作台的状态条样式。 */
+  layerStatus?: string;
   onChange: (draft: PoiGeometryDraft) => void;
   onPointYChange: (value: string) => void;
   pointYText: string;
+  /** 区划没有高度，隐藏坐标里的 Y 字段。 */
+  showCoordinateY?: boolean;
+  /** 选中边界时在检查器里直接提供结构操作。 */
+  showGroupStructureActions?: boolean;
   tilePreviewConfig: PoiTilePreviewConfig;
 }>) {
-  const [tool, setTool] = useState<'pan' | 'move' | 'draw'>('pan');
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [tool, setTool] = useState<'pan' | 'select' | 'draw'>('pan');
+  const [spacePressed, setSpacePressed] = useState(false);
+  const { panelsVisible, panelStateClass, togglePanels, openInspector, closeInspector } =
+    useEditorPanels();
+  const [layerSelection, setLayerSelection] = useState<{
+    path: string;
+    index: number | null;
+  } | null>(null);
+  const locationProxyRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const inspectorRef = useRef<HTMLElement | null>(null);
+  const layerBodyRef = useRef<HTMLDivElement | null>(null);
+  useEditorLayerScroll(
+    layerBodyRef,
+    layerSelection ? `${layerSelection.path}:${layerSelection.index ?? ''}` : null,
+  );
   const [viewportSize, setViewportSize] = useState<PoiMapViewport>(poiAuditPreviewViewport);
   const [insertionMode, setInsertionMode] = useState<PoiCoordinateInsertionMode>('append');
   const insertionSupported = supportsPoiCoordinateInsertion(draft);
@@ -6479,14 +7849,14 @@ function PoiStandaloneGeometryWorkspace({
   const ringOptions = useMemo(() => {
     if (draft.type === 'Polygon') {
       return draft.rings.map((_, ringIndex) => ({
-        label: ringIndex === 0 ? '外边界' : `内环 ${ringIndex}`,
+        label: ringIndex === 0 ? '外边界' : `减去图形 ${ringIndex}`,
         value: `0:${ringIndex}`,
       }));
     }
     if (draft.type === 'MultiPolygon') {
       return draft.polygons.flatMap((polygon, polygonIndex) =>
         polygon.map((_, ringIndex) => ({
-          label: `多边形 ${polygonIndex + 1} · ${ringIndex === 0 ? '外边界' : `内环 ${ringIndex}`}`,
+          label: `多边形 ${polygonIndex + 1} · ${ringIndex === 0 ? '外边界' : `减去图形 ${ringIndex}`}`,
           value: `${polygonIndex}:${ringIndex}`,
         })),
       );
@@ -6595,35 +7965,35 @@ function PoiStandaloneGeometryWorkspace({
     setViewBounds((current) => fitPoiAuditBoundsToViewport(current, viewportSize));
   }, [viewportSize]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey) {
-        return;
-      }
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-      const modeByKey: Partial<Record<string, PoiCoordinateInsertionMode>> = {
-        '[': 'prepend',
-        ']': 'append',
-        '\\': 'nearest',
-      };
-      const mode = modeByKey[event.key];
-      if (mode) {
-        event.preventDefault();
-        setInsertionMode(mode);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  const geometryTools = useMemo<EditorTool[]>(() => {
+    const drawLabel =
+      draft.type === 'Point'
+        ? '选择坐标'
+        : insertionSupported
+          ? '增删控制点（左键添加 / 右键或长按删除）'
+          : '添加控制点';
+    return [
+      {
+        id: 'pan',
+        icon: 'pan_tool',
+        label: EDITOR_SHORTCUT_CATALOG.toolPan.label,
+        shortcut: EDITOR_SHORTCUT_CATALOG.toolPan.displayKeys[0],
+      },
+      {
+        id: 'select',
+        // Material Symbols 里最接近「去掉箭柄的光标」的实心箭头。
+        icon: 'near_me',
+        label: EDITOR_SHORTCUT_CATALOG.toolSelect.label,
+        shortcut: EDITOR_SHORTCUT_CATALOG.toolSelect.displayKeys[0],
+      },
+      {
+        id: 'draw',
+        icon: 'add_location_alt',
+        label: drawLabel,
+        shortcut: EDITOR_SHORTCUT_CATALOG.toolDraw.displayKeys[0],
+      },
+    ];
+  }, [draft.type, insertionSupported]);
 
   const coordinateAtClientPoint = (
     clientX: number,
@@ -6649,7 +8019,41 @@ function PoiStandaloneGeometryWorkspace({
     startBounds: PoiAuditMapBounds;
     moved: boolean;
     nodeIndex?: number;
+    /** 中键 / 空格 / 手型工具触发的纯平移，不参与选中与绘制。 */
+    panOnly?: boolean;
   } | null>(null);
+
+  // 空格按住时临时切换到手型，松开恢复原工具。
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || isEditableTarget(event.target)) {
+        return;
+      }
+      // 不抢走按钮 / 链接的 Space 激活行为。
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest('button, a, summary, [role="button"]')
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setSpacePressed(true);
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        setSpacePressed(false);
+      }
+    };
+    const handleBlur = () => setSpacePressed(false);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
 
   const updateCoordinateAtIndex = (index: number, coordinate: [number, number]) => {
     if (draft.type === 'Point') {
@@ -6759,24 +8163,61 @@ function PoiStandaloneGeometryWorkspace({
         ? scalePoiAuditBoundsAtCoordinate(current, factor, anchor)
         : scalePoiAuditBounds(current, factor),
     );
+  /** 双击进入编辑：选中对象并把焦点送进属性检查器的第一个字段。 */
+  const focusInspector = useEditorInspectorFocus(inspectorRef);
+
+  const handleDoubleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (tool !== 'select') {
+      return;
+    }
+    const nodeElement =
+      event.target instanceof Element
+        ? event.target.closest<SVGGElement>('[data-poi-node-index]')
+        : null;
+    if (!nodeElement) {
+      return;
+    }
+    const nodeIndex = Number(nodeElement.dataset.poiNodeIndex);
+    const selection = flatPointSelectionMap.get(nodeIndex);
+    if (!selection) {
+      return;
+    }
+    setRingTargetValue(selection.path);
+    setLayerSelection(selection);
+    focusInspector();
+  };
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
+    const isMiddleButton = event.button === 1;
+    if (event.button !== 0 && !isMiddleButton) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+    // 中键、按住空格、手型工具都走纯平移，不触发选中或绘制。
+    const panOnly = isMiddleButton || spacePressed || tool === 'pan';
     const nodeElement =
       event.target instanceof Element
         ? event.target.closest<SVGGElement>('[data-poi-node-index]')
         : null;
     const nodeIndex = nodeElement ? Number(nodeElement.dataset.poiNodeIndex) : undefined;
+    // 选择工具单击即选定：画布上的控制点与图层树保持同一份选中状态。
+    if (!panOnly && tool === 'select' && nodeIndex !== undefined) {
+      const selection = flatPointSelectionMap.get(nodeIndex);
+      if (selection) {
+        setRingTargetValue(selection.path);
+        setLayerSelection(selection);
+      }
+    }
     const gesture: NonNullable<typeof gestureRef.current> = {
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startBounds: viewBounds,
       moved: false,
-      nodeIndex: tool === 'move' && Number.isInteger(nodeIndex) ? nodeIndex : undefined,
+      nodeIndex:
+        !panOnly && tool === 'select' && Number.isInteger(nodeIndex) ? nodeIndex : undefined,
+      panOnly,
     };
-    if (tool === 'draw' && insertionSupported) {
+    if (!panOnly && tool === 'draw' && insertionSupported) {
       gesture.longPressTimer = window.setTimeout(() => {
         const current = gestureRef.current;
         if (!current || current.pointerId !== event.pointerId || current.moved) {
@@ -6797,7 +8238,7 @@ function PoiStandaloneGeometryWorkspace({
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const gesture = gestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
-    if (tool === 'move' && gesture.nodeIndex !== undefined) {
+    if (!gesture.panOnly && tool === 'select' && gesture.nodeIndex !== undefined) {
       gesture.moved = true;
       clearGestureTimer(gesture);
       updateCoordinateAtIndex(
@@ -6806,7 +8247,7 @@ function PoiStandaloneGeometryWorkspace({
       );
       return;
     }
-    if (tool !== 'pan') return;
+    if (!gesture.panOnly) return;
     const deltaX = event.clientX - gesture.startClientX;
     const deltaY = event.clientY - gesture.startClientY;
     if (Math.hypot(deltaX, deltaY) > 5) {
@@ -6827,7 +8268,7 @@ function PoiStandaloneGeometryWorkspace({
     const gesture = gestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     clearGestureTimer(gesture);
-    if (tool === 'draw' && !gesture.moved && !gesture.longPressTriggered) {
+    if (!gesture.panOnly && tool === 'draw' && !gesture.moved && !gesture.longPressTriggered) {
       addCoordinate(coordinateAtClientPoint(event.clientX, event.clientY, event.currentTarget));
     }
     gestureRef.current = null;
@@ -6850,9 +8291,600 @@ function PoiStandaloneGeometryWorkspace({
     );
   };
   const removable = draft.type === 'Point' ? false : canRemovePoiGeometryDraftCoordinate(draft);
+  // 缩放比例以「适配全部几何」为 100%，避免暴露内部世界单位。
+  const fittedViewBounds = fitPoiAuditBoundsToViewport(autoPreview.bounds, viewportSize);
+  const viewBoundsWidth = Math.max(0, viewBounds.maxX - viewBounds.minX);
+  const fittedBoundsWidth = Math.max(0, fittedViewBounds.maxX - fittedViewBounds.minX);
+  const zoomScale = viewBoundsWidth > 0 ? fittedBoundsWidth / viewBoundsWidth : 1;
+
+  const layerGroups = useMemo(() => buildPoiGeometryLayerGroups(draft), [draft]);
+  const layerPointOffsets = useMemo(() => {
+    const offsets = new Map<string, number>();
+    let cursor = 0;
+    layerGroups.forEach((group) => {
+      offsets.set(group.path, cursor);
+      cursor += group.canvasPointCount;
+    });
+    return offsets;
+  }, [layerGroups]);
+  const flatPointSelectionMap = useMemo(() => {
+    const map = new Map<number, { path: string; index: number }>();
+    layerGroups.forEach((group) => {
+      const base = layerPointOffsets.get(group.path) ?? 0;
+      group.points.forEach((_, index) => map.set(base + index, { path: group.path, index }));
+    });
+    return map;
+  }, [layerGroups, layerPointOffsets]);
+  const geometrySizeLabel = `${Math.round((autoPreview.bounds.maxX - autoPreview.bounds.minX) * 10) / 10} × ${
+    Math.round((autoPreview.bounds.maxZ - autoPreview.bounds.minZ) * 10) / 10
+  }`;
+  const selectedLayerGroup = layerSelection
+    ? (layerGroups.find((group) => group.path === layerSelection.path) ?? null)
+    : null;
+  const selectedPointIndex = layerSelection?.index ?? null;
+  const selectedPoint =
+    selectedLayerGroup && selectedPointIndex !== null
+      ? (selectedLayerGroup.points[selectedPointIndex] ?? null)
+      : null;
+  const selectedRingMinPoints = draft.type === 'Polygon' || draft.type === 'MultiPolygon' ? 4 : 2;
+  const selectedFlatPointIndex =
+    layerSelection && layerSelection.index !== null
+      ? (layerPointOffsets.get(layerSelection.path) ?? -1) + layerSelection.index
+      : -1;
+  const inspectorSubtitle =
+    selectedPoint && selectedPointIndex !== null
+      ? `${selectedLayerGroup?.label ?? '控制点'} · 点 ${selectedPointIndex + 1}`
+      : (selectedLayerGroup?.label ?? '未选择对象');
+
+  // 切换几何类型后旧的路径会失效，直接清空选择避免属性面板指向不存在的点。
+  useEffect(() => {
+    setLayerSelection(null);
+  }, [draft.type]);
+
+  const selectLayerGroup = (path: string) => {
+    const [leadingIndex] = path.split(':').map(Number);
+    if (draft.type === 'MultiRectangle') {
+      setRectangleIndex(clamp(leadingIndex, 0, Math.max(0, draft.rectangles.length - 1)));
+    }
+    setRingTargetValue(path);
+    setLayerSelection({ path, index: null });
+  };
+
+  const selectLayerPoint = (path: string, index: number) => {
+    setRingTargetValue(path);
+    setLayerSelection({ path, index });
+  };
+
+  /** 矩形按 4 个顶点编辑：顶点坐标映射回 min/max 边界，等价于同时更新相邻两条边。 */
+  const updateRectangleCorner = (
+    cornerIndex: number,
+    patch: Partial<CoordinateDraft>,
+    rectangleIndexOverride?: number,
+  ) => {
+    const applyBounds = (bounds: RectangleBoundsDraft): RectangleBoundsDraft => {
+      const next = { ...bounds };
+      if (patch.x !== undefined) {
+        if (cornerIndex === 0 || cornerIndex === 3) {
+          next.minX = patch.x;
+        } else {
+          next.maxX = patch.x;
+        }
+      }
+      if (patch.z !== undefined) {
+        if (cornerIndex === 0 || cornerIndex === 1) {
+          next.minZ = patch.z;
+        } else {
+          next.maxZ = patch.z;
+        }
+      }
+      return next;
+    };
+    if (draft.type === 'Rectangle') {
+      onChange({ type: 'Rectangle', bounds: applyBounds(draft.bounds) });
+      return;
+    }
+    if (draft.type !== 'MultiRectangle') {
+      return;
+    }
+    const target = clamp(
+      rectangleIndexOverride ?? rectangleIndex,
+      0,
+      Math.max(0, draft.rectangles.length - 1),
+    );
+    onChange({
+      type: 'MultiRectangle',
+      rectangles: draft.rectangles.map((bounds, index) =>
+        index === target ? applyBounds(bounds) : bounds,
+      ),
+    });
+  };
+
+  const updateSelectedPoint = (patch: Partial<CoordinateDraft>) => {
+    if (selectedPointIndex === null) {
+      return;
+    }
+    if (draft.type === 'Rectangle' || draft.type === 'MultiRectangle') {
+      const rectangleIndexValue =
+        draft.type === 'MultiRectangle'
+          ? Number(selectedLayerGroup?.path.split(':')[0] ?? rectangleIndex)
+          : undefined;
+      updateRectangleCorner(selectedPointIndex, patch, rectangleIndexValue);
+      return;
+    }
+    if (!editingRing) {
+      return;
+    }
+    onChange(
+      editingRing.apply(
+        editingRing.ring.map((item, index) =>
+          index === selectedPointIndex ? { ...item, ...patch } : item,
+        ),
+      ),
+    );
+  };
+
+  /** 按图层路径读取控制点数组，供悬停行操作复用，不必先切换选中态。 */
+  const getRingByPath = (path: string): CoordinateDraft[] | null => {
+    if (draft.type === 'MultiPoint' || draft.type === 'LineString') {
+      return draft.coordinates;
+    }
+    if (draft.type === 'Polygon') {
+      return draft.rings[Number(path.split(':')[1])] ?? null;
+    }
+    if (draft.type === 'MultiPolygon') {
+      const [polygonIndex, ringIndex] = path.split(':').map(Number);
+      return draft.polygons[polygonIndex]?.[ringIndex] ?? null;
+    }
+    return null;
+  };
+
+  const applyRingByPath = (path: string, ring: CoordinateDraft[]) => {
+    if (draft.type === 'MultiPoint' || draft.type === 'LineString') {
+      onChange({ type: draft.type, coordinates: ring });
+      return;
+    }
+    if (draft.type === 'Polygon') {
+      const ringIndex = Number(path.split(':')[1]);
+      onChange({
+        type: 'Polygon',
+        rings: draft.rings.map((item, index) => (index === ringIndex ? ring : item)),
+      });
+      return;
+    }
+    if (draft.type === 'MultiPolygon') {
+      const [polygonIndex, ringIndex] = path.split(':').map(Number);
+      onChange({
+        type: 'MultiPolygon',
+        polygons: draft.polygons.map((rings, index) =>
+          index === polygonIndex
+            ? rings.map((item, current) => (current === ringIndex ? ring : item))
+            : rings,
+        ),
+      });
+    }
+  };
+
+  const movePointAt = (path: string, index: number, offset: -1 | 1) => {
+    const ring = getRingByPath(path);
+    if (!ring) return;
+    const nextIndex = index + offset;
+    if (nextIndex < 0 || nextIndex >= ring.length) return;
+    const next = [...ring];
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    applyRingByPath(path, next);
+    setRingTargetValue(path);
+    setLayerSelection({ path, index: nextIndex });
+  };
+
+  const insertPointAt = (path: string, index: number) => {
+    const ring = getRingByPath(path);
+    if (!ring) return;
+    const next = [...ring];
+    next.splice(index + 1, 0, createInsertedCoordinateDraft(ring, index));
+    applyRingByPath(path, next);
+    setRingTargetValue(path);
+    setLayerSelection({ path, index: index + 1 });
+  };
+
+  const removePointAt = (path: string, index: number) => {
+    const ring = getRingByPath(path);
+    if (!ring || ring.length <= selectedRingMinPoints) return;
+    const next = ring.filter((_, current) => current !== index);
+    applyRingByPath(path, next);
+    setRingTargetValue(path);
+    setLayerSelection({ path, index: Math.min(index, next.length - 1) });
+  };
+
+  const duplicatePointAt = (path: string, index: number) => {
+    const ring = getRingByPath(path);
+    const source = ring?.[index];
+    if (!ring || !source) return;
+    const next = [...ring];
+    next.splice(index + 1, 0, offsetDraftCoordinate(source, 1));
+    applyRingByPath(path, next);
+    setRingTargetValue(path);
+    setLayerSelection({ path, index: index + 1 });
+  };
+
+  const moveSelectedPoint = (offset: -1 | 1) => {
+    if (!selectedLayerGroup || selectedPointIndex === null) return;
+    movePointAt(selectedLayerGroup.path, selectedPointIndex, offset);
+  };
+
+  const insertSelectedPoint = () => {
+    if (!selectedLayerGroup || selectedPointIndex === null) return;
+    insertPointAt(selectedLayerGroup.path, selectedPointIndex);
+  };
+
+  const removeSelectedPoint = () => {
+    if (!selectedLayerGroup || selectedPointIndex === null) return;
+    removePointAt(selectedLayerGroup.path, selectedPointIndex);
+  };
+
+  const duplicateSelectedPoint = () => {
+    if (!selectedLayerGroup || selectedPointIndex === null) return;
+    duplicatePointAt(selectedLayerGroup.path, selectedPointIndex);
+  };
+
+  const reverseSelectedRing = () => {
+    if (!editingRing) {
+      return;
+    }
+    onChange(editingRing.apply([...editingRing.ring].reverse()));
+  };
+
+  const appendPointToSelectedRing = () => {
+    if (!editingRing) {
+      return;
+    }
+    onChange(
+      editingRing.apply([...editingRing.ring, createInsertedCoordinateDraft(editingRing.ring)]),
+    );
+  };
+
+  const duplicateSelectedGroup = (targetPath = selectedLayerGroup?.path) => {
+    if (!targetPath) {
+      return;
+    }
+    if (draft.type === 'Polygon') {
+      const ringIndex = Number(targetPath.split(':')[1]);
+      const ring = draft.rings[ringIndex];
+      if (!ring) {
+        return;
+      }
+      const rings = [...draft.rings];
+      rings.splice(
+        ringIndex + 1,
+        0,
+        ring.map((item) => offsetDraftCoordinate(item, 1)),
+      );
+      onChange({ type: 'Polygon', rings });
+      const path = `0:${ringIndex + 1}`;
+      setRingTargetValue(path);
+      setLayerSelection({ path, index: null });
+      return;
+    }
+    if (draft.type === 'MultiPolygon') {
+      const [polygonIndex, ringIndex] = targetPath.split(':').map(Number);
+      const source = draft.polygons[polygonIndex]?.[ringIndex];
+      if (!source) {
+        return;
+      }
+      const polygons = draft.polygons.map((rings, index) => {
+        if (index !== polygonIndex) {
+          return rings;
+        }
+        const copy = [...rings];
+        copy.splice(
+          ringIndex + 1,
+          0,
+          source.map((item) => offsetDraftCoordinate(item, 1)),
+        );
+        return copy;
+      });
+      onChange({ type: 'MultiPolygon', polygons });
+      const path = `${polygonIndex}:${ringIndex + 1}`;
+      setRingTargetValue(path);
+      setLayerSelection({ path, index: null });
+      return;
+    }
+    if (draft.type === 'MultiRectangle') {
+      const rectangleIndexValue = Number(targetPath.split(':')[0]);
+      const bounds = draft.rectangles[rectangleIndexValue];
+      if (!bounds) {
+        return;
+      }
+      const rectangles = [...draft.rectangles];
+      rectangles.splice(rectangleIndexValue + 1, 0, {
+        minX: offsetDraftCoordinateValue(bounds.minX, 1),
+        minZ: offsetDraftCoordinateValue(bounds.minZ, 1),
+        maxX: offsetDraftCoordinateValue(bounds.maxX, 1),
+        maxZ: offsetDraftCoordinateValue(bounds.maxZ, 1),
+      });
+      onChange({ type: 'MultiRectangle', rectangles });
+      const path = `${rectangleIndexValue + 1}:0`;
+      setRectangleIndex(rectangleIndexValue + 1);
+      setRingTargetValue(path);
+      setLayerSelection({ path, index: null });
+    }
+  };
+
+  const removeSelectedGroup = (targetPath = selectedLayerGroup?.path) => {
+    if (!targetPath) {
+      return;
+    }
+    if (draft.type === 'Polygon') {
+      const ringIndex = Number(targetPath.split(':')[1]);
+      if (draft.rings.length <= 1) {
+        return;
+      }
+      const rings = draft.rings.filter((_, index) => index !== ringIndex);
+      onChange({ type: 'Polygon', rings });
+      setRingTargetValue(`0:${Math.min(ringIndex, rings.length - 1)}`);
+      setLayerSelection(null);
+      return;
+    }
+    if (draft.type === 'MultiPolygon') {
+      const [polygonIndex, ringIndex] = targetPath.split(':').map(Number);
+      const rings = draft.polygons[polygonIndex] ?? [];
+      let polygons;
+      if (rings.length > 1) {
+        polygons = draft.polygons.map((item, index) =>
+          index === polygonIndex ? item.filter((_, current) => current !== ringIndex) : item,
+        );
+      } else if (draft.polygons.length > 1) {
+        polygons = draft.polygons.filter((_, index) => index !== polygonIndex);
+      } else {
+        return;
+      }
+      onChange({ type: 'MultiPolygon', polygons });
+      setLayerSelection(null);
+      return;
+    }
+    if (draft.type === 'MultiRectangle') {
+      const rectangleIndexValue = Number(targetPath.split(':')[0]);
+      if (draft.rectangles.length <= 1) {
+        return;
+      }
+      const rectangles = draft.rectangles.filter((_, index) => index !== rectangleIndexValue);
+      onChange({ type: 'MultiRectangle', rectangles });
+      setRectangleIndex(0);
+      setLayerSelection(null);
+    }
+  };
+
+  const moveSelectedGroup = (offset: -1 | 1, targetPath = selectedLayerGroup?.path) => {
+    if (!targetPath) {
+      return;
+    }
+    if (draft.type === 'Polygon') {
+      const ringIndex = Number(targetPath.split(':')[1]);
+      const nextIndex = ringIndex + offset;
+      if (nextIndex < 0 || nextIndex >= draft.rings.length) {
+        return;
+      }
+      const rings = [...draft.rings];
+      [rings[ringIndex], rings[nextIndex]] = [rings[nextIndex], rings[ringIndex]];
+      onChange({ type: 'Polygon', rings });
+      const path = `0:${nextIndex}`;
+      setRingTargetValue(path);
+      setLayerSelection({ path, index: null });
+      return;
+    }
+    if (draft.type === 'MultiPolygon') {
+      const [polygonIndex, ringIndex] = targetPath.split(':').map(Number);
+      const rings = draft.polygons[polygonIndex] ?? [];
+      const nextIndex = ringIndex + offset;
+      if (nextIndex < 0 || nextIndex >= rings.length) {
+        return;
+      }
+      const polygons = draft.polygons.map((item, index) => {
+        if (index !== polygonIndex) {
+          return item;
+        }
+        const copy = [...item];
+        [copy[ringIndex], copy[nextIndex]] = [copy[nextIndex], copy[ringIndex]];
+        return copy;
+      });
+      onChange({ type: 'MultiPolygon', polygons });
+      const path = `${polygonIndex}:${nextIndex}`;
+      setRingTargetValue(path);
+      setLayerSelection({ path, index: null });
+      return;
+    }
+    if (draft.type === 'MultiRectangle') {
+      const rectangleIndexValue = Number(targetPath.split(':')[0]);
+      const nextIndex = rectangleIndexValue + offset;
+      if (nextIndex < 0 || nextIndex >= draft.rectangles.length) {
+        return;
+      }
+      const rectangles = [...draft.rectangles];
+      [rectangles[rectangleIndexValue], rectangles[nextIndex]] = [
+        rectangles[nextIndex],
+        rectangles[rectangleIndexValue],
+      ];
+      onChange({ type: 'MultiRectangle', rectangles });
+      const path = `${nextIndex}:0`;
+      setRectangleIndex(nextIndex);
+      setRingTargetValue(path);
+      setLayerSelection({ path, index: null });
+    }
+  };
+
+  const addRingToPolygon = () => {
+    if (draft.type === 'Polygon') {
+      const rings = [...draft.rings, createDefaultPolygonRingDraft(draft.rings.at(-1)?.[0])];
+      onChange({ type: 'Polygon', rings });
+      const path = `0:${rings.length - 1}`;
+      setRingTargetValue(path);
+      setLayerSelection({ path, index: null });
+      return;
+    }
+    if (draft.type === 'MultiPolygon') {
+      const polygonIndex = clamp(
+        Number(layerSelection?.path.split(':')[0] ?? draft.polygons.length - 1),
+        0,
+        Math.max(0, draft.polygons.length - 1),
+      );
+      const polygons = draft.polygons.map((rings, index) =>
+        index === polygonIndex
+          ? [...rings, createDefaultPolygonRingDraft(rings.at(-1)?.[0])]
+          : rings,
+      );
+      onChange({ type: 'MultiPolygon', polygons });
+      const path = `${polygonIndex}:${polygons[polygonIndex].length - 1}`;
+      setRingTargetValue(path);
+      setLayerSelection({ path, index: null });
+    }
+  };
+
+  const addPolygon = () => {
+    if (draft.type !== 'MultiPolygon') {
+      return;
+    }
+    const polygons = [
+      ...draft.polygons,
+      [createDefaultPolygonRingDraft(draft.polygons.at(-1)?.[0]?.[0])],
+    ];
+    onChange({ type: 'MultiPolygon', polygons });
+    const path = `${polygons.length - 1}:0`;
+    setRingTargetValue(path);
+    setLayerSelection({ path, index: null });
+  };
+
+  const addRectangle = () => {
+    if (draft.type !== 'MultiRectangle') {
+      return;
+    }
+    const rectangles = [...draft.rectangles, createNextRectangleDraft(draft.rectangles)];
+    onChange({ type: 'MultiRectangle', rectangles });
+    const path = `${rectangles.length - 1}:0`;
+    setRectangleIndex(rectangles.length - 1);
+    setRingTargetValue(path);
+    setLayerSelection({ path, index: null });
+  };
+
+  const duplicateLayerSelection = () => {
+    if (selectedPointIndex !== null) {
+      duplicateSelectedPoint();
+      return;
+    }
+    duplicateSelectedGroup();
+  };
+
+  const removeLayerSelection = () => {
+    if (selectedPointIndex !== null) {
+      removeSelectedPoint();
+      return;
+    }
+    removeSelectedGroup();
+  };
+
+  const moveLayerSelection = (offset: -1 | 1) => {
+    if (selectedPointIndex !== null) {
+      moveSelectedPoint(offset);
+      return;
+    }
+    moveSelectedGroup(offset);
+  };
+
+  // 结构操作依赖当前草稿与选择，因此每次都刷新绑定表，不做 memo。
+  useEditorShortcuts([
+    defineShortcut('toolPan', () => setTool('pan')),
+    defineShortcut('toolSelect', () => setTool('select')),
+    defineShortcut('toolDraw', () => setTool('draw')),
+    defineShortcut('insertPrepend', () => setInsertionMode('prepend')),
+    defineShortcut('insertAppend', () => setInsertionMode('append')),
+    defineShortcut('insertNearest', () => setInsertionMode('nearest')),
+    defineShortcut('duplicateSelection', duplicateLayerSelection),
+    defineShortcut('moveUp', () => moveLayerSelection(-1)),
+    defineShortcut('moveDown', () => moveLayerSelection(1)),
+    defineShortcut('deleteSelection', removeLayerSelection),
+    defineShortcut('deleteSelection', removeLayerSelection, {
+      id: `${EDITOR_SHORTCUT_CATALOG.deleteSelection.id}-backspace`,
+      keys: 'backspace',
+    }),
+  ]);
+
+  // 工具栏分组单一来源：桌面端标题栏平铺到各自胶囊，窄屏收进各自的图标菜单。
+  const insertionActionItems: EditorToolbarOverflowItem[] = insertionSupported
+    ? [
+        {
+          id: 'prepend',
+          icon: 'first_page',
+          label: '反向追加模式（[）',
+          active: insertionMode === 'prepend',
+          onClick: () => setInsertionMode('prepend'),
+        },
+        {
+          id: 'append',
+          icon: 'last_page',
+          label: '追加模式（]）',
+          active: insertionMode === 'append',
+          onClick: () => setInsertionMode('append'),
+        },
+        {
+          id: 'nearest',
+          icon: 'conversion_path',
+          label: '就近模式（\\）',
+          active: insertionMode === 'nearest',
+          onClick: () => setInsertionMode('nearest'),
+        },
+      ]
+    : [];
+
+  const historyActionItems: EditorToolbarOverflowItem[] = [
+    {
+      id: 'undo',
+      icon: 'undo',
+      label: insertionMode === 'prepend' ? '撤销首个控制点' : '撤销末控制点',
+      disabled: !removable,
+      onClick: undoCoordinate,
+    },
+  ];
+
+  const locationActionItems: EditorToolbarOverflowItem[] = [
+    {
+      id: 'location',
+      icon: 'my_location',
+      label: draft.type === 'Point' ? '使用当前位置' : '追加当前位置',
+      onClick: () => locationProxyRef.current?.querySelector('button')?.click(),
+    },
+  ];
+
+  const renderPoiToolbar = (variant: 'full' | 'compact', inHeader: boolean) => (
+    <EditorToolbar
+      activeToolId={tool}
+      ariaLabel="几何编辑工具"
+      className={inHeader ? 'is-in-header' : undefined}
+      panels={{
+        visible: panelsVisible,
+        onToggle: togglePanels,
+        label: panelsVisible ? '隐藏全部面板' : '显示全部面板',
+      }}
+      onToolChange={(nextTool) => setTool(nextTool as 'pan' | 'select' | 'draw')}
+      sections={buildEditorToolbarSections({
+        variant,
+        tools: geometryTools,
+        toolsAriaLabel: '几何编辑工具',
+        compactAriaLabel: '几何编辑操作',
+        groups: [
+          ...(insertionSupported
+            ? [{ id: 'insertion', ariaLabel: '插入模式', items: insertionActionItems }]
+            : []),
+          { id: 'history', ariaLabel: '历史', items: historyActionItems },
+          { id: 'location', ariaLabel: '定位', items: locationActionItems },
+        ],
+      })}
+    />
+  );
 
   return (
-    <div className={`poi-visual-workspace is-tool-${tool}`}>
+    <div
+      className={`poi-visual-workspace is-tool-${tool}${panelStateClass}${
+        spacePressed ? ' is-space-pan' : ''
+      }${selectedPoint ? ' is-point-selected' : ''}${layerSelection ? ' has-layer-selection' : ''}`}
+    >
       <div
         className="poi-visual-map-stage"
         ref={stageRef}
@@ -6863,6 +8895,7 @@ function PoiStandaloneGeometryWorkspace({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onDoubleClick={handleDoubleClick}
         onWheel={handleWheel}
       >
         <PoiAuditTileLayer
@@ -6882,13 +8915,12 @@ function PoiStandaloneGeometryWorkspace({
             width={viewportSize.width}
             height={viewportSize.height}
           />
-          {preview.polygons.map((polygon, index) => (
-            <polygon
-              className="admin-poi-audit-map-submission-shape"
-              key={`workspace-polygon-${index}`}
-              points={polygon}
-            />
-          ))}
+          <PoiShapeLayer
+            className="admin-poi-audit-map-submission-shape"
+            height={viewportSize.height}
+            preview={preview}
+            width={viewportSize.width}
+          />
           {preview.lines.map((line, index) => (
             <polyline
               className="admin-poi-audit-map-submission-line"
@@ -6908,7 +8940,7 @@ function PoiStandaloneGeometryWorkspace({
           ))}
           {preview.points.map((point, index) => (
             <g
-              className="admin-poi-geometry-map-node"
+              className={`admin-poi-geometry-map-node${index === selectedFlatPointIndex ? ' is-selected' : ''}`}
               data-poi-node-index={index}
               key={`workspace-point-${index}`}
               transform={`translate(${roundPreviewValue(point[0])} ${roundPreviewValue(point[1])})`}
@@ -6922,30 +8954,214 @@ function PoiStandaloneGeometryWorkspace({
         </svg>
       </div>
 
-      <aside
-        className={`poi-visual-coordinate-panel${panelCollapsed ? ' is-collapsed' : ''}`}
-        aria-label="POI 形式和坐标"
-      >
-        <div className="poi-visual-coordinate-panel-heading">
-          <div>
-            <strong>{entityLabel}</strong>
-            <span>{`${geometryLabelFromDraft(draft)} · ${preview.points.length} 个控制点`}</span>
-          </div>
-          <button
-            type="button"
-            aria-expanded={!panelCollapsed}
-            aria-label={panelCollapsed ? '展开坐标面板' : '收起坐标面板'}
-            title={panelCollapsed ? '展开坐标面板' : '收起坐标面板'}
-            onClick={() => setPanelCollapsed((current) => !current)}
+      <div className="poi-visual-rail-proxy" ref={locationProxyRef} aria-hidden="true">
+        <CurrentPlayerLocationButton
+          title={draft.type === 'Point' ? '使用当前绑定玩家的位置' : '追加当前绑定玩家的位置'}
+          onUse={(coordinate) => addCoordinate(coordinate)}
+        />
+      </div>
+
+      <EditorRailBridge
+        activeToolId={tool}
+        ownerId="poi-geometry-editor"
+        panels={{ visible: panelsVisible, onToggle: togglePanels }}
+        sections={[
+          ...(insertionSupported
+            ? [{ id: 'insertion', priority: 50, items: insertionActionItems }]
+            : []),
+          { id: 'history', priority: 70, items: historyActionItems },
+          { id: 'location', priority: 60, items: locationActionItems },
+        ]}
+        tools={geometryTools}
+        onToolChange={(toolId) => setTool(toolId as 'pan' | 'select' | 'draw')}
+      />
+
+      {panelsVisible ? (
+        <aside className="poi-visual-layer-panel" aria-label="图层与控制点">
+          <EditorPanelHeading
+            meta={`${geometryLabelFromDraft(draft)} · ${preview.points.length} 个控制点`}
+            title="图层"
           >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              {panelCollapsed ? 'left_panel_open' : 'left_panel_close'}
-            </span>
-          </button>
-        </div>
-        {!panelCollapsed ? (
+            <EditorInspectorEntry onOpen={openInspector} />
+          </EditorPanelHeading>
+          <div className="poi-visual-layer-body" ref={layerBodyRef}>
+            {layerStatus ? (
+              <p className="transit-visual-panel-status" role="status">
+                {layerStatus}
+              </p>
+            ) : null}
+            {layerRoot ? (
+              <div className={`poi-visual-layer-row${layerSelection ? '' : ' is-active'}`}>
+                <button
+                  aria-pressed={!layerSelection}
+                  className="poi-visual-layer-group"
+                  type="button"
+                  onClick={() => setLayerSelection(null)}
+                  onDoubleClick={() => {
+                    setLayerSelection(null);
+                    focusInspector();
+                  }}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {layerRoot.icon}
+                  </span>
+                  <span className="poi-visual-layer-label">{layerRoot.label}</span>
+                  {layerRoot.meta ? (
+                    <span className="poi-visual-layer-count">{layerRoot.meta}</span>
+                  ) : null}
+                </button>
+              </div>
+            ) : null}
+            {layerGroups.length === 0 ? (
+              <p className="poi-visual-panel-empty">当前几何没有可列出的控制点。</p>
+            ) : (
+              <ul className="poi-visual-layer-tree">
+                {layerGroups.map((group) => {
+                  const groupSelected =
+                    layerSelection?.path === group.path && layerSelection.index === null;
+                  return (
+                    <li key={group.path}>
+                      <div className={`poi-visual-layer-row${groupSelected ? ' is-active' : ''}`}>
+                        <button
+                          aria-pressed={groupSelected}
+                          className="poi-visual-layer-group"
+                          type="button"
+                          onClick={() => selectLayerGroup(group.path)}
+                          onDoubleClick={() => {
+                            selectLayerGroup(group.path);
+                            focusInspector();
+                          }}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            {group.icon}
+                          </span>
+                          <span className="poi-visual-layer-label">{group.label}</span>
+                          <span className="poi-visual-layer-count">{group.points.length}</span>
+                        </button>
+                        <PoiLayerRowActions
+                          canDuplicate={group.canDuplicate}
+                          canMoveDown={group.canMoveDown}
+                          canMoveUp={group.canMoveUp}
+                          canRemove={group.canRemove}
+                          onDuplicate={() => duplicateSelectedGroup(group.path)}
+                          onMoveDown={() => moveSelectedGroup(1, group.path)}
+                          onMoveUp={() => moveSelectedGroup(-1, group.path)}
+                          onRemove={() => removeSelectedGroup(group.path)}
+                        />
+                      </div>
+                      {group.points.length > 0 ? (
+                        <ul className="poi-visual-layer-points">
+                          {group.points.map((point, index) => {
+                            const pointSelected =
+                              layerSelection?.path === group.path && layerSelection.index === index;
+                            return (
+                              <li key={index}>
+                                <div
+                                  className={`poi-visual-layer-row${pointSelected ? ' is-active' : ''}`}
+                                >
+                                  <button
+                                    aria-pressed={pointSelected}
+                                    className="poi-visual-layer-point"
+                                    type="button"
+                                    onClick={() => selectLayerPoint(group.path, index)}
+                                    onDoubleClick={() => {
+                                      selectLayerPoint(group.path, index);
+                                      focusInspector();
+                                    }}
+                                  >
+                                    <span className="poi-visual-layer-index">{index + 1}</span>
+                                    <span className="poi-visual-layer-coordinate">
+                                      {formatDraftCoordinatePair(point)}
+                                    </span>
+                                  </button>
+                                  {draft.type === 'Rectangle' ||
+                                  draft.type === 'MultiRectangle' ? null : (
+                                    <PoiLayerRowActions
+                                      canDuplicate
+                                      canMoveDown={index < group.points.length - 1}
+                                      canMoveUp={index > 0}
+                                      canRemove={group.points.length > selectedRingMinPoints}
+                                      onDuplicate={() => duplicatePointAt(group.path, index)}
+                                      onInsert={() => insertPointAt(group.path, index)}
+                                      onMoveDown={() => movePointAt(group.path, index, 1)}
+                                      onMoveUp={() => movePointAt(group.path, index, -1)}
+                                      onRemove={() => removePointAt(group.path, index)}
+                                    />
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          {draft.type === 'MultiPoint' || draft.type === 'LineString' ? (
+            <div className="poi-visual-layer-footer">
+              <button disabled={!editingRing} type="button" onClick={appendPointToSelectedRing}>
+                添加点
+              </button>
+              <button disabled={!editingRing} type="button" onClick={reverseSelectedRing}>
+                反转点序
+              </button>
+            </div>
+          ) : null}
+          {draft.type === 'Polygon' || draft.type === 'MultiPolygon' ? (
+            <div className="poi-visual-layer-footer">
+              <button type="button" onClick={addRingToPolygon}>
+                添加减去图形
+              </button>
+              {draft.type === 'MultiPolygon' ? (
+                <button type="button" onClick={addPolygon}>
+                  添加多边形
+                </button>
+              ) : null}
+              <button disabled={!editingRing} type="button" onClick={reverseSelectedRing}>
+                反转点序
+              </button>
+            </div>
+          ) : null}
+          {draft.type === 'MultiRectangle' ? (
+            <div className="poi-visual-layer-footer">
+              <button type="button" onClick={addRectangle}>
+                添加矩形
+              </button>
+            </div>
+          ) : null}
+        </aside>
+      ) : null}
+
+      {panelsVisible ? (
+        <aside className="poi-visual-inspector" aria-label="属性检查器" ref={inspectorRef}>
+          <EditorPanelHeading
+            meta={
+              layerSelection
+                ? inspectorSubtitle
+                : `${geometryLabelFromDraft(draft)} · ${preview.points.length} 个控制点`
+            }
+            title={layerSelection ? '属性' : '全局属性'}
+          >
+            <button
+              aria-label="返回图层"
+              className="poi-visual-inspector-back"
+              onClick={() => {
+                setLayerSelection(null);
+                closeInspector();
+              }}
+              title="返回图层"
+              type="button"
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                arrow_back
+              </span>
+            </button>
+          </EditorPanelHeading>
           <div className="poi-visual-coordinate-panel-body">
-            <label>
+            <label className="material-field">
               <span>POI 形式</span>
               <select
                 value={draft.type}
@@ -6958,17 +9174,25 @@ function PoiStandaloneGeometryWorkspace({
                   )
                 }
               >
-                <option value="Point">点状 POI</option>
-                <option value="MultiPoint">多点对象</option>
-                <option value="LineString">道路 / 线性 POI</option>
-                <option value="Rectangle">矩形区域</option>
-                <option value="MultiRectangle">多矩形区域</option>
-                <option value="Polygon">多边形区域</option>
-                <option value="MultiPolygon">多重多边形区域</option>
+                {(
+                  draftTypeOptions ?? [
+                    { value: 'Point', label: '点状 POI' },
+                    { value: 'MultiPoint', label: '多点对象' },
+                    { value: 'LineString', label: '道路 / 线性 POI' },
+                    { value: 'Rectangle', label: '矩形区域' },
+                    { value: 'MultiRectangle', label: '多矩形区域' },
+                    { value: 'Polygon', label: '多边形区域' },
+                    { value: 'MultiPolygon', label: '多重多边形区域' },
+                  ]
+                ).map((option) => (
+                  <option value={option.value} key={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
             {draft.type === 'MultiRectangle' && draft.rectangles.length > 1 ? (
-              <label>
+              <label className="material-field">
                 <span>当前矩形</span>
                 <select
                   value={String(clamp(rectangleIndex, 0, draft.rectangles.length - 1))}
@@ -6980,7 +9204,7 @@ function PoiStandaloneGeometryWorkspace({
                 </select>
               </label>
             ) : ringOptions.length > 1 ? (
-              <label>
+              <label className="material-field">
                 <span>{draft.type === 'MultiPolygon' ? '当前多边形 / 环' : '当前边界'}</span>
                 <select
                   value={effectiveRingTargetValue}
@@ -6996,7 +9220,7 @@ function PoiStandaloneGeometryWorkspace({
             ) : null}
             {draft.type === 'Point' ? (
               <div className="poi-visual-point-fields">
-                <label>
+                <label className="material-field">
                   <span>X</span>
                   <input
                     inputMode="decimal"
@@ -7009,7 +9233,7 @@ function PoiStandaloneGeometryWorkspace({
                     }
                   />
                 </label>
-                <label>
+                <label className="material-field">
                   <span>Y</span>
                   <input
                     inputMode="decimal"
@@ -7018,7 +9242,7 @@ function PoiStandaloneGeometryWorkspace({
                     onChange={(event) => onPointYChange(event.currentTarget.value)}
                   />
                 </label>
-                <label>
+                <label className="material-field">
                   <span>Z</span>
                   <input
                     inputMode="decimal"
@@ -7032,114 +9256,213 @@ function PoiStandaloneGeometryWorkspace({
                   />
                 </label>
               </div>
+            ) : selectedPoint && selectedPointIndex !== null && selectedLayerGroup ? (
+              <>
+                <div className="poi-visual-inspector-heading">
+                  <strong>
+                    {draft.type === 'Rectangle' || draft.type === 'MultiRectangle'
+                      ? `顶点 ${selectedPointIndex + 1}`
+                      : `点 ${selectedPointIndex + 1}`}
+                  </strong>
+                  <span>{`${selectedLayerGroup.label} · ${formatDraftCoordinatePair(selectedPoint)}`}</span>
+                </div>
+                <div
+                  className="poi-visual-point-fields"
+                  style={
+                    showCoordinateY || draft.type === 'Rectangle' || draft.type === 'MultiRectangle'
+                      ? undefined
+                      : { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }
+                  }
+                >
+                  <label className="material-field">
+                    <span>X</span>
+                    <input
+                      inputMode="decimal"
+                      value={selectedPoint.x}
+                      onChange={(event) => updateSelectedPoint({ x: event.currentTarget.value })}
+                    />
+                  </label>
+                  <label className="material-field">
+                    <span>Z</span>
+                    <input
+                      inputMode="decimal"
+                      value={selectedPoint.z}
+                      onChange={(event) => updateSelectedPoint({ z: event.currentTarget.value })}
+                    />
+                  </label>
+                  {showCoordinateY &&
+                  draft.type !== 'Rectangle' &&
+                  draft.type !== 'MultiRectangle' ? (
+                    <label className="material-field">
+                      <span>高度 Y</span>
+                      <input
+                        inputMode="decimal"
+                        placeholder="继承默认"
+                        value={selectedPoint.y ?? ''}
+                        onChange={(event) => updateSelectedPoint({ y: event.currentTarget.value })}
+                      />
+                    </label>
+                  ) : null}
+                </div>
+              </>
+            ) : selectedLayerGroup ? (
+              <>
+                <div className="poi-visual-inspector-heading">
+                  <strong>{selectedLayerGroup.label}</strong>
+                  <span>{`${selectedLayerGroup.points.length} 个控制点`}</span>
+                </div>
+                {showGroupStructureActions ? (
+                  <div className="poi-visual-inspector-actions">
+                    {draft.type === 'Polygon' || draft.type === 'MultiPolygon' ? (
+                      <button type="button" onClick={addRingToPolygon}>
+                        添加减去图形
+                      </button>
+                    ) : null}
+                    {draft.type === 'MultiPolygon' ? (
+                      <button type="button" onClick={addPolygon}>
+                        添加多边形
+                      </button>
+                    ) : null}
+                    {draft.type === 'MultiRectangle' ? (
+                      <button type="button" onClick={addRectangle}>
+                        添加矩形
+                      </button>
+                    ) : null}
+                    <button type="button" onClick={() => duplicateSelectedGroup()}>
+                      创建副本
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!selectedLayerGroup.canMoveUp}
+                      onClick={() => moveSelectedGroup(-1)}
+                    >
+                      上移
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!selectedLayerGroup.canMoveDown}
+                      onClick={() => moveSelectedGroup(1)}
+                    >
+                      下移
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!selectedLayerGroup.canRemove}
+                      onClick={() => removeSelectedGroup()}
+                    >
+                      移除
+                    </button>
+                    {draft.type === 'Polygon' || draft.type === 'MultiPolygon' ? (
+                      <button type="button" onClick={reverseSelectedRing}>
+                        反转点序
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                <p className="poi-visual-panel-empty">
+                  {draft.type === 'Rectangle' || draft.type === 'MultiRectangle'
+                    ? '在左侧选择矩形的 4 个顶点之一编辑坐标；修改顶点会同步更新它所在的两条边。'
+                    : '在左侧图层树选择具体控制点后编辑坐标；结构操作集中在图层树底部的按钮区。'}
+                </p>
+              </>
             ) : (
-              <PoiNonPointGeometryEditor
-                contextMarkers={contextMarkers}
-                draft={draft}
-                entityLabel={entityLabel}
-                showMap={false}
-                tilePreviewConfig={tilePreviewConfig}
-                onChange={onChange}
-              />
+              <>
+                <div className="poi-visual-inspector-heading">
+                  <strong>全局</strong>
+                  <span>{geometryLabelFromDraft(draft)}</span>
+                </div>
+                <dl className="poi-visual-global-summary">
+                  <div>
+                    <dt>控制点</dt>
+                    <dd>{`${preview.points.length} 个`}</dd>
+                  </div>
+                  <div>
+                    <dt>包围盒</dt>
+                    <dd>{geometrySizeLabel}</dd>
+                  </div>
+                </dl>
+                {globalFields}
+                <p className="poi-visual-panel-empty">
+                  在画布或图层树中单击选中，双击直接进入编辑。
+                </p>
+              </>
             )}
           </div>
-        ) : null}
-      </aside>
+        </aside>
+      ) : null}
 
-      <div className="poi-visual-toolbox" aria-label="几何编辑工具">
-        {(
-          [
-            ['pan', 'pan_tool', '拖移地图'],
-            ['move', 'open_with', '拖移控制点'],
-            [
-              'draw',
-              'add_location_alt',
-              draft.type === 'Point'
-                ? '选择坐标'
-                : insertionSupported
-                  ? '增删控制点（左键添加 / 右键或长按删除）'
-                  : '添加控制点',
-            ],
-          ] as const
-        ).map(([value, icon, label]) => (
-          <button
-            className={tool === value ? 'is-active' : ''}
-            type="button"
-            aria-pressed={tool === value}
-            title={label}
-            key={value}
-            onClick={() => setTool(value)}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              {icon}
-            </span>
-          </button>
-        ))}
-        {insertionSupported ? (
-          <>
-            <span className="poi-visual-toolbox-divider" aria-hidden="true" />
-            {(
-              [
-                ['prepend', 'first_page', '反向追加模式（[）'],
-                ['append', 'last_page', '追加模式（]）'],
-                ['nearest', 'conversion_path', '就近模式（\\）'],
-              ] as const
-            ).map(([mode, icon, label]) => (
-              <button
-                className={insertionMode === mode ? 'is-active' : ''}
-                type="button"
-                aria-pressed={insertionMode === mode}
-                title={label}
-                key={mode}
-                onClick={() => setInsertionMode(mode)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {icon}
-                </span>
-              </button>
-            ))}
-          </>
-        ) : null}
-        <button
-          type="button"
-          disabled={!removable}
-          title={insertionMode === 'prepend' ? '撤销首个控制点' : '撤销末控制点'}
-          onClick={undoCoordinate}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            undo
-          </span>
-        </button>
-        <CurrentPlayerLocationButton
-          title={draft.type === 'Point' ? '使用当前绑定玩家的位置' : '追加当前绑定玩家的位置'}
-          onUse={(coordinate) => addCoordinate(coordinate)}
+      <EditorHeaderToolsPortal>
+        <EditorHeaderToolbar
+          compact={renderPoiToolbar('compact', true)}
+          full={renderPoiToolbar('full', true)}
         />
-      </div>
+      </EditorHeaderToolsPortal>
 
-      <div className="poi-visual-viewport-controls" aria-label="地图控制">
-        <button type="button" title="放大" onClick={() => zoom(0.8)}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            add
-          </span>
-        </button>
-        <button type="button" title="缩小" onClick={() => zoom(1.25)}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            remove
-          </span>
-        </button>
-        <button
-          type="button"
-          title="适配全部几何"
-          onClick={() =>
-            setViewBounds(fitPoiAuditBoundsToViewport(autoPreview.bounds, viewportSize))
-          }
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            fit_screen
-          </span>
-        </button>
-      </div>
+      {renderPoiToolbar('compact', false)}
+
+      <EditorZoomControls
+        scale={zoomScale}
+        onZoomIn={() => zoom(0.8)}
+        onZoomOut={() => zoom(1.25)}
+        onFit={() => setViewBounds(fitPoiAuditBoundsToViewport(autoPreview.bounds, viewportSize))}
+      />
     </div>
+  );
+}
+
+/** 区划工作台使用的区域几何草稿：与 POI 几何共用同一套草稿与渲染内核。 */
+export type RegionGeometryDraft = Extract<
+  PoiGeometryDraft,
+  { type: 'Rectangle' | 'MultiRectangle' | 'Polygon' | 'MultiPolygon' }
+>;
+
+const regionGeometryDraftTypeOptions: Array<{
+  label: string;
+  value: PoiGeometryDraft['type'];
+}> = [
+  { value: 'Rectangle', label: '矩形区域' },
+  { value: 'MultiRectangle', label: '多矩形区域' },
+  { value: 'Polygon', label: '多边形区域' },
+  { value: 'MultiPolygon', label: '多重多边形区域' },
+];
+
+/**
+ * 区划几何工作台：直接复用 POI 几何内核（工具胶囊、图层树、检查器、遮罩挖洞），
+ * 只把几何类型限制在区域几何，并通过槽位注入区划字段与业务根节点。
+ */
+export function RegionGeometryWorkspace({
+  draft,
+  entityLabel,
+  globalFields,
+  layerRoot,
+  layerStatus,
+  onChange,
+  tilePreviewConfig,
+}: Readonly<{
+  draft: RegionGeometryDraft;
+  entityLabel: string;
+  globalFields?: ReactNode;
+  layerRoot?: { icon: string; label: string; meta?: string };
+  layerStatus?: string;
+  onChange: (draft: RegionGeometryDraft) => void;
+  tilePreviewConfig: PoiTilePreviewConfig;
+}>) {
+  return (
+    <PoiStandaloneGeometryWorkspace
+      contextMarkers={[]}
+      draft={draft}
+      draftTypeOptions={regionGeometryDraftTypeOptions}
+      entityLabel={entityLabel}
+      globalFields={globalFields}
+      layerRoot={layerRoot}
+      layerStatus={layerStatus}
+      onChange={(next) => onChange(next as RegionGeometryDraft)}
+      onPointYChange={() => undefined}
+      pointYText=""
+      showCoordinateY={false}
+      showGroupStructureActions
+      tilePreviewConfig={tilePreviewConfig}
+    />
   );
 }
 
@@ -7403,7 +9726,7 @@ function PoiPolygonEditor({
       {rings.map((ring, index) => (
         <div className="admin-poi-polygon-ring" key={index}>
           <div className="admin-poi-polygon-heading">
-            <span>{index === 0 ? '外边界' : `内环 ${index}`}</span>
+            <span>{index === 0 ? '外边界' : `减去图形 ${index}`}</span>
             {rings.length > 1 ? (
               <button
                 type="button"
@@ -7430,7 +9753,7 @@ function PoiPolygonEditor({
           type="button"
           onClick={() => onChange([...rings, createDefaultPolygonRingDraft(rings.at(-1)?.[0])])}
         >
-          添加内环
+          添加减去图形
         </button>
       </div>
     </div>
@@ -8243,7 +10566,13 @@ function normalizePoiImageUrlList(values: string[]): string[] {
 }
 
 function moveListItem(values: string[], fromIndex: number, toIndex: number): string[] {
-  if (fromIndex === toIndex || !values[fromIndex] || toIndex < 0 || toIndex >= values.length) {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    fromIndex >= values.length ||
+    toIndex < 0 ||
+    toIndex >= values.length
+  ) {
     return values;
   }
   const next = [...values];
@@ -8286,10 +10615,26 @@ function isLegacyPoiMapMarker(marker: MapMarker): boolean {
   return Boolean(marker.label.trim());
 }
 
+interface PolygonGroupPaths {
+  /** 外边界路径。 */
+  outer: string;
+  /** 减去图形路径；渲染时通过遮罩从外边界中挖掉。 */
+  holes: string[];
+}
+
 interface GeometryPreviewModel {
   points: Array<[number, number]>;
   lines: string[];
   polygons: string[];
+  /** 每个多边形一条外边界 + 若干减去图形。 */
+  polygonGroups: PolygonGroupPaths[];
+}
+
+/** 把投影后的环转换成 SVG 路径片段。 */
+function ringToPathData(points: Array<[number, number]>): string {
+  return `M${points
+    .map(([x, y]) => `${roundPreviewValue(x)},${roundPreviewValue(y)}`)
+    .join(' L')} Z`;
 }
 
 interface PoiAuditMapBounds {
@@ -8369,6 +10714,8 @@ function buildPoiAuditMapPreview(
     }
   }
 
+  const polygonGroups = buildPolygonGroupPaths(getGeometryPolygonRingGroups(geometry), project);
+
   return {
     bounds,
     contextMarkers: contextMarkers.map((item) => ({
@@ -8378,7 +10725,77 @@ function buildPoiAuditMapPreview(
     lines,
     points,
     polygons,
+    polygonGroups,
   };
+}
+
+/** 把「一个多边形一组环」拆成外边界与减去图形路径。 */
+function buildPolygonGroupPaths(
+  groups: Array<Array<Array<[number, number]>>>,
+  project: (coordinate: [number, number]) => [number, number],
+): PolygonGroupPaths[] {
+  return groups
+    .map((rings) => {
+      const paths = rings
+        .filter((ring) => ring.length >= 3)
+        .map((ring) => ringToPathData(ring.map(project)));
+      if (paths.length === 0) {
+        return null;
+      }
+      return { outer: paths[0], holes: paths.slice(1) };
+    })
+    .filter((value): value is PolygonGroupPaths => value !== null);
+}
+
+/**
+ * 多边形填充层：先画外边界，再用遮罩扣掉减去图形。
+ * 这样即使减去图形有一部分伸到外边界之外，也不会被填充成“负面积”。
+ */
+function PoiShapeLayer({
+  className,
+  height,
+  preview,
+  width,
+}: Readonly<{
+  className: string;
+  height: number | string;
+  preview: GeometryPreviewModel;
+  width: number | string;
+}>) {
+  const maskPrefix = useId().replace(/[:]/g, '');
+  if (preview.polygonGroups.length === 0) {
+    return null;
+  }
+  return (
+    <>
+      <defs>
+        {preview.polygonGroups.map((group, index) => (
+          <mask
+            id={`${maskPrefix}-hole-${index}`}
+            key={`shape-mask-${index}`}
+            maskUnits="userSpaceOnUse"
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+          >
+            <path d={group.outer} fill="#fff" />
+            {group.holes.map((hole, holeIndex) => (
+              <path d={hole} fill="#000" key={`shape-hole-${holeIndex}`} />
+            ))}
+          </mask>
+        ))}
+      </defs>
+      {preview.polygonGroups.map((group, index) => (
+        <path
+          className={className}
+          d={group.outer}
+          key={`shape-${index}`}
+          mask={`url(#${maskPrefix}-hole-${index})`}
+        />
+      ))}
+    </>
+  );
 }
 
 function buildPoiGeometryDraftMapPreview(
@@ -8416,6 +10833,8 @@ function buildPoiGeometryDraftMapPreview(
     }
   }
 
+  const polygonGroups = buildPolygonGroupPaths(getDraftPolygonRingGroups(draft), project);
+
   return {
     bounds,
     contextMarkers: contextMarkers.map((item) => ({
@@ -8425,7 +10844,31 @@ function buildPoiGeometryDraftMapPreview(
     lines,
     points,
     polygons,
+    polygonGroups,
   };
+}
+
+/** 按「一个多边形一组环」整理草稿，用于 evenodd 复合路径。 */
+function getDraftPolygonRingGroups(
+  draft: Exclude<PoiGeometryDraft, { type: 'Point' }>,
+): Array<Array<Array<[number, number]>>> {
+  if (draft.type === 'Polygon') {
+    return [draft.rings.map(parseValidCoordinateDrafts)];
+  }
+  if (draft.type === 'MultiPolygon') {
+    return draft.polygons.map((polygon) => polygon.map(parseValidCoordinateDrafts));
+  }
+  if (draft.type === 'Rectangle') {
+    const bounds = parseRectangleBoundsDraft(draft.bounds);
+    return bounds ? [[rectangleBoundsToCoordinates(bounds)]] : [];
+  }
+  if (draft.type === 'MultiRectangle') {
+    return draft.rectangles.flatMap((item) => {
+      const bounds = parseRectangleBoundsDraft(item);
+      return bounds ? [[rectangleBoundsToCoordinates(bounds)]] : [];
+    });
+  }
+  return [];
 }
 
 function getPoiGeometryDraftCoordinateSets(
@@ -8753,7 +11196,31 @@ function buildGeometryPreview(geometry: MapGeometry): GeometryPreviewModel | nul
     }
   }
 
-  return { points, lines, polygons };
+  return {
+    points,
+    lines,
+    polygons,
+    polygonGroups: buildPolygonGroupPaths(getGeometryPolygonRingGroups(geometry), project),
+  };
+}
+
+/** 按「一个多边形一组环」整理已保存几何。 */
+function getGeometryPolygonRingGroups(
+  geometry: MapGeometry,
+): Array<Array<Array<[number, number]>>> {
+  if (geometry.type === 'Polygon') {
+    return [geometry.coordinates];
+  }
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates;
+  }
+  if (geometry.type === 'Rectangle') {
+    return [[rectangleBoundsToCoordinates(geometry.bounds)]];
+  }
+  if (geometry.type === 'MultiRectangle') {
+    return geometry.rectangles.map((bounds) => [rectangleBoundsToCoordinates(bounds)]);
+  }
+  return [];
 }
 
 function getGeometryPreviewCoordinateSets(
@@ -8830,7 +11297,7 @@ function describePoiGeometry(geometry: MapGeometry | null): {
     .filter((set) => set.kind === 'polygon')
     .reduce((total, set) => total + Math.abs(getPolygonArea(set.coordinates)), 0);
   if (polygonArea > 0) {
-    return { center, detail: `面积 ${formatPoiGeometryMetric(polygonArea)} 格² · ${pointLabel}` };
+    return { center, detail: `面积 ${formatPoiGeometryMetric(polygonArea)} 格 · ${pointLabel}` };
   }
 
   const lineLength = sets
@@ -9579,7 +12046,7 @@ function iconPreviewToneLabel(tone: string): string {
   return '浅色背景预览';
 }
 
-function createPoiGeometryDraft(
+export function createPoiGeometryDraft(
   geometry: MapGeometry,
   coordinateY?: Array<number | null>,
 ): PoiGeometryDraft {
@@ -9637,7 +12104,7 @@ function createPoiGeometryDraft(
   };
 }
 
-function isRegionGeometry(geometry: MapGeometry): geometry is RegionMapGeometry {
+export function isRegionGeometry(geometry: MapGeometry): geometry is RegionMapGeometry {
   return (
     geometry.type === 'Rectangle' ||
     geometry.type === 'MultiRectangle' ||
@@ -9646,7 +12113,7 @@ function isRegionGeometry(geometry: MapGeometry): geometry is RegionMapGeometry 
   );
 }
 
-function createEmptyPoiGeometryDraft(
+export function createEmptyPoiGeometryDraft(
   type: PoiGeometryDraft['type'],
   anchor?: [number, number] | null,
 ): PoiGeometryDraft {
@@ -10097,7 +12564,7 @@ function createEmptyRectangleBoundsDraft(): RectangleBoundsDraft {
   return { minX: '', minZ: '', maxX: '', maxZ: '' };
 }
 
-function buildMapGeometryFromDraft(draft: PoiGeometryDraft): {
+export function buildMapGeometryFromDraft(draft: PoiGeometryDraft): {
   geometry?: MapGeometry;
   error?: string;
 } {

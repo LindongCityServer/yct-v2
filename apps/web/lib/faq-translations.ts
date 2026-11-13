@@ -269,6 +269,38 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             ],
             keywords: ['地圖空白', '瓦片載入失敗', '底圖遺失', '地圖資料暫不可用'],
           },
+          'route-plan-method': {
+            question: '路線方案是按真實道路和班次算出來的嗎？',
+            answer:
+              '頁面會按出行方式分別估算：步行優先沿舊地圖道路中心線行走，無法連通時回退為直線；公車和客運按線路真實站序產生候選，站間耗時優先使用後台區間用時，其次使用舊資料 travelTime；計程車只沿道路行駛，耗時按後台預設限速與路口延誤估算。路網缺失、兩點不連通或站間資料不足時，對應候選可能不會產生，其餘數值只作行程參考。',
+            keywords: [
+              '路線規劃',
+              '估算方式',
+              '沿道路',
+              '直線估算',
+              '真實站序',
+              '區間用時',
+              '計程車限速',
+              '路網不連通',
+            ],
+          },
+          'map-measure-rules': {
+            question: '測距和測面積的數值是怎麼計算的？',
+            answer:
+              '測距和測面積都按水平投影計算，不含高度起伏；1 格代表 1 米。面積和體積同樣用格作單位，分別表示 1 平方格和 1 立方格。面積邊界出現自交、共線或重複頂點時，頁面會提示無法計算，需要復原、清空或移動地圖後重畫。',
+            keywords: [
+              '測距',
+              '測面積',
+              '水平投影',
+              '格子',
+              '平方格',
+              '立方格',
+              '單位',
+              '自交',
+              '共線',
+              '重複頂點',
+            ],
+          },
         },
       },
       'travel-and-ride': {
@@ -695,6 +727,45 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               '可以作為目前已讀取資料的排查線索，但不能把它當作完整線網結論。頁面會列出資料來源狀態；只要存在部分可用或不可用的資料來源，統計範圍和建議都可能不覆蓋全部線路、站點或營運方。',
             keywords: ['部分資料', '資料來源', '統計範圍', '線網不完整', '營運方'],
           },
+          'material-workspace-autosave': {
+            question: '物料工作台需要手動儲存草稿嗎？',
+            answer:
+              '不需要。手動編輯的內容會自動儲存在本機和帳號草稿中，重新開啟工作台會恢復最近一次編輯；連結資料模式每次出圖都從伺服器線網即時解析，沒有可儲存的草稿。帶著未儲存的變更離開工作台時，頁面會先要求確認。',
+            keywords: ['自動儲存', '草稿', '手動儲存', '本機草稿', '連結資料', '離開確認'],
+          },
+          'material-apply-wizard': {
+            question: '物料工作台的「套用線網資料」會覆蓋已填內容嗎？',
+            answer:
+              '會覆蓋同名字段。精靈按目前站點與線路、樣式和版式寫入範本欄位；確認後同名字段會被覆蓋，之後仍可手動修改。只切換版式時會先重設欄位，再合併套用值；取消精靈不會改動目前內容。',
+            keywords: ['套用線網資料', '覆蓋', '精靈', '同名字段', '版式', '樣式', '線路編號'],
+          },
+          'material-style-vs-layout': {
+            question: '物料範本的「樣式」和「版式」有什麼差別？',
+            answer:
+              '版式決定牌子的結構，例如公車站牌分始發終點、線路概覽和線路詳情，捷運分線路圖、站名和方向；樣式決定同一版式下的外觀，例如方塊或擬真、新版或舊版。切換版式會重設欄位，樣式只改變外觀，不會改動已填寫的文字內容。',
+            keywords: ['樣式', '版式', '方塊', '擬真', '新版', '舊版', '範本', '切換版式'],
+          },
+          'material-network-source': {
+            question: '物料工作台的伺服器線網和自訂專案有什麼差別？',
+            answer:
+              '伺服器線網讀取已發布的站點、線路、線路色和站名，作為預設資料來源；範例線網和匯入專案屬於自訂線網，來自 RMP 等外部專案，匯入後按專案線路和站點選材。大眾運輸網路只提供站點、線路、線路色與站名建議；切換來源不會刪除已暫存的專案草稿，使用「移除已匯入專案」才會清除。',
+            keywords: [
+              '伺服器線網',
+              '自訂專案',
+              '範例線網',
+              '匯入專案',
+              'RMP',
+              '資料來源',
+              '線路色',
+              '站名建議',
+            ],
+          },
+          'material-station-list': {
+            question: '物料工作台怎樣單獨修改某一站？',
+            answer:
+              '在左側「站點列表」展開線路的站點，選取某一站後，右側可以修改站名、設為目前站，並依範本支援填寫換乘線路；線路圖類範本還可以設定換乘暫緩開通。這些修改會直接寫回範本中的站點列表和換乘線路欄位。',
+            keywords: ['站點列表', '單站', '修改站名', '目前站', '換乘線路', '暫緩開通'],
+          },
         },
       },
     },
@@ -963,6 +1034,38 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               ' the page. In satellite mode, try another tile source if one is available in Layers. If every source is unavailable, the map data source is likely temporarily inaccessible; try again later.',
             ],
             keywords: ['blank map', 'tile load failed', 'missing basemap', 'map data unavailable'],
+          },
+          'route-plan-method': {
+            question: 'Are route options calculated from real roads and trips?',
+            answer:
+              'Each mode is estimated differently. Walking prefers legacy road centerlines and falls back to a straight line when the network is disconnected. Bus and coach options follow the real stop order; segment times use the configured segment duration first, then legacy travelTime data. Taxis stay on roads, with travel time based on the admin default speed and junction delay. When the road network, connection, or segment data is missing, the related option may not be generated, and the remaining values are for reference only.',
+            keywords: [
+              'route planning',
+              'estimation method',
+              'along roads',
+              'straight line',
+              'real stop order',
+              'segment time',
+              'taxi speed',
+              'disconnected network',
+            ],
+          },
+          'map-measure-rules': {
+            question: 'How are distance and area measurements calculated?',
+            answer:
+              'Both distance and area use a planar projection and ignore elevation; 1 block represents 1 metre. Area and volume also use blocks, representing 1 square block and 1 cubic block. If the area boundary self-intersects, is collinear, or repeats a vertex, the page reports that it cannot calculate and asks you to undo, clear, or move the map and redraw.',
+            keywords: [
+              'measure distance',
+              'measure area',
+              'planar projection',
+              'block',
+              'square block',
+              'cubic block',
+              'unit',
+              'self-intersection',
+              'collinear',
+              'duplicate vertex',
+            ],
           },
         },
       },
@@ -1493,6 +1596,76 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer:
               'Use it as a clue for the data currently read, not as a complete network conclusion. The page lists source status. When any source is partial or unavailable, its metrics and suggestions may not cover every line, stop, or operator.',
             keywords: ['partial data', 'data source', 'coverage', 'incomplete network', 'operator'],
+          },
+          'material-workspace-autosave': {
+            question: 'Do I need to save drafts manually in the materials workspace?',
+            answer:
+              'No. Manual edits are saved automatically to this device and the account draft, and reopening the workspace restores the latest edit. Linked-data mode resolves the server network every time it renders, so it has no draft to save. If you leave with unsaved changes, the page asks for confirmation first.',
+            keywords: [
+              'auto save',
+              'draft',
+              'manual save',
+              'local draft',
+              'linked data',
+              'leave confirmation',
+            ],
+          },
+          'material-apply-wizard': {
+            question: 'Does “Apply network data” overwrite what I already filled in?',
+            answer:
+              'It overwrites fields with the same name. The wizard writes station and line, style, and layout values into the template fields; after confirmation, same-named fields are replaced but remain editable. Switching layout resets fields before merging the applied values, and cancelling the wizard leaves the current content unchanged.',
+            keywords: [
+              'apply network data',
+              'overwrite',
+              'wizard',
+              'same-named field',
+              'layout',
+              'style',
+              'line number',
+            ],
+          },
+          'material-style-vs-layout': {
+            question: 'What is the difference between a template’s style and layout?',
+            answer:
+              'Layout defines the structure, such as bus stop terminus, line overview, or line details, and metro line map, station name, or direction. Style defines the appearance within the same layout, such as block or realistic, or new or legacy. Switching layout resets fields; style only changes appearance and does not modify the text you entered.',
+            keywords: [
+              'style',
+              'layout',
+              'block',
+              'realistic',
+              'new',
+              'legacy',
+              'template',
+              'switch layout',
+            ],
+          },
+          'material-network-source': {
+            question: 'What is the difference between the server network and a custom project?',
+            answer:
+              'The server network reads published stops, lines, line colors, and station names as the default source. Sample and imported projects are custom networks from RMP and similar sources, used for picking stations and lines after import. The transit network only supplies stops, lines, line colors, and station-name suggestions. Switching sources does not delete a stored project draft; use “Remove imported project” to clear it.',
+            keywords: [
+              'server network',
+              'custom project',
+              'sample network',
+              'imported project',
+              'RMP',
+              'data source',
+              'line color',
+              'station name suggestion',
+            ],
+          },
+          'material-station-list': {
+            question: 'How do I edit a single station in the materials workspace?',
+            answer:
+              'Expand a line under Station List on the left and select a station. On the right you can rename it, mark it as the current station, and fill in transfer lines when the template supports them; line-map templates also support marking transfers as not yet open. These edits write directly to the template’s station list and transfer-line fields.',
+            keywords: [
+              'station list',
+              'single station',
+              'rename station',
+              'current station',
+              'transfer lines',
+              'not yet open',
+            ],
           },
         },
       },

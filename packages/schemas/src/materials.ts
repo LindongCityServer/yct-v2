@@ -8,13 +8,48 @@ const fieldKeySchema = z
 const materialColorSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 const materialInputRecordSchema = z.record(fieldKeySchema, z.string().max(16_000));
 
-export const materialCanvasSchema = z.object({
-  widthM: z.number().positive().max(64),
-  heightM: z.number().positive().max(64),
-  pxPerMeter: z.number().int().min(16).max(1024).default(128),
-  alignToTile: z.boolean().default(true),
-  tileSizePx: z.number().int().min(16).max(4096).default(128),
-});
+export const materialCanvasMaxLongSidePx = 4096;
+export const materialCanvasMaxPxPerMeter = 4096;
+
+export const materialCanvasSchema = z
+  .object({
+    widthM: z.number().positive('画布宽度必须大于 0').max(64, '画布宽度不能超过 64 米'),
+    heightM: z.number().positive('画布高度必须大于 0').max(64, '画布高度不能超过 64 米'),
+    pxPerMeter: z
+      .number()
+      .int('每米像素数必须是整数')
+      .min(16, '每米像素数不能小于 16')
+      .max(materialCanvasMaxPxPerMeter, `每米像素数不能大于 ${materialCanvasMaxPxPerMeter}`)
+      .default(128),
+    alignToTile: z.boolean().default(true),
+    tileSizePx: z
+      .number()
+      .int('对齐单位必须是整数')
+      .min(16, '对齐单位不能小于 16')
+      .max(4096, '对齐单位不能大于 4096')
+      .default(128),
+  })
+  .superRefine((canvas, ctx) => {
+    const widthPx = resolveSchemaOutputSide(canvas.widthM, canvas);
+    const heightPx = resolveSchemaOutputSide(canvas.heightM, canvas);
+    const longSidePx = Math.max(widthPx, heightPx);
+    if (longSidePx > materialCanvasMaxLongSidePx) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `画布最长边不能超过 ${materialCanvasMaxLongSidePx} 像素（当前 ${longSidePx} 像素），请降低每米像素数或缩小画布。`,
+        path: ['pxPerMeter'],
+      });
+    }
+  });
+
+function resolveSchemaOutputSide(
+  meters: number,
+  canvas: { pxPerMeter: number; alignToTile: boolean; tileSizePx: number },
+): number {
+  const contentPx = Math.max(1, Math.round(meters * canvas.pxPerMeter));
+  const tileSizePx = Math.max(1, canvas.tileSizePx);
+  return canvas.alignToTile ? Math.ceil(contentPx / tileSizePx) * tileSizePx : contentPx;
+}
 
 export const materialTemplateFieldSchema = z
   .object({
@@ -519,14 +554,26 @@ export const materialExportRequestSchema = z
     networkGeometry: materialTransitNetworkSnapshotSchema.optional(),
     input: materialInputRecordSchema.optional(),
     /**
-     * 手动模式下「未修改标签」：套用示例或导入外部模板时的原始内容。
-     * 服务端只比较文本内容（忽略尺寸与箭头/图标等图形），一致时放行免审核无水印导出。
+     * 手动模式下「未修改标签」：套用模板时保存的文本基线。
+     * 服务端只比较模板定义的文本字段（导视牌比较 layout 中的文本），
+     * 忽略尺寸、颜色、图标等图形差异。
      */
     unmodifiedTemplateBaseline: z
       .object({
-        layout: z.string().max(384_000),
+        /** 地铁导视牌：文本都在 layout 序列化内容里。 */
+        layout: z.string().max(384_000).optional(),
+        /** 其它模板：套用时的文本字段取值。 */
+        input: materialInputRecordSchema.optional(),
         widthM: z.number().positive().max(64),
         heightM: z.number().positive().max(64),
+      })
+      .superRefine((baseline, ctx) => {
+        if (baseline.layout === undefined && baseline.input === undefined) {
+          ctx.addIssue({
+            code: 'custom',
+            message: '未修改模板基线必须包含文本内容。',
+          });
+        }
       })
       .optional(),
   })

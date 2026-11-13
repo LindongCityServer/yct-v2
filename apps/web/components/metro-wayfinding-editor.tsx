@@ -6,13 +6,13 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type CSSProperties,
   type DragEvent as ReactDragEvent,
+  type InputHTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
@@ -26,8 +26,10 @@ import {
   publishMetroWayfindingInspectorSnapshot,
   subscribeMetroWayfindingCompositionActions,
   subscribeMetroWayfindingImportLifecycleEvents,
+  subscribeMetroWayfindingWorkspaceCommands,
   type MetroWayfindingCompositionAction,
   type MetroWayfindingElementAction,
+  type MetroWayfindingWorkspaceCommand,
 } from '../lib/client-metro-wayfinding-events';
 import {
   METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES,
@@ -39,7 +41,9 @@ import {
   type MetroWayfindingImportMode,
   type MetroWayfindingImportPreview,
 } from '../lib/metro-wayfinding-import';
+import { EditorDialogPortal } from './editor/editor-dialog-portal';
 import { MetroWayfindingInspector } from './metro-wayfinding-inspector';
+import { SegmentedControl as SharedSegmentedControl } from './segmented-control';
 import {
   createMetroWayfindingElement,
   createMetroWayfindingTextRow,
@@ -123,6 +127,9 @@ export function MetroWayfindingEditor({
   onCanvasWidthChange,
   onChange,
   rendersInspector = true,
+  rendersToolbar = true,
+  rendersRowLists = true,
+  rendersElementPanel = true,
   lineKeysByColor,
   editorId: editorIdProp,
 }: Readonly<{
@@ -148,6 +155,15 @@ export function MetroWayfindingEditor({
    * 宽屏下这两个面板由宿主容器渲染到预览面板下方（见 MetroWayfindingInspector），此时传 false。
    */
   rendersInspector?: boolean;
+  /**
+   * 是否由编辑器本体渲染顶部折叠工具条。
+   * 统一可视化工作台把版式、颜色、模板库、反转、清空搬到工作台工具栏与全局属性，传 false。
+   */
+  rendersToolbar?: boolean;
+  /** 是否渲染行/元素列表；工作台改用左侧树 + 还原牌面时传 false。 */
+  rendersRowLists?: boolean;
+  /** 是否渲染元素属性面板；工作台把属性搬到右侧检查器时传 false。 */
+  rendersElementPanel?: boolean;
   /**
    * 颜色（大写十六进制）→ RMP 线路键（如 `#8CC220` → `sh2`）。
    *
@@ -235,6 +251,12 @@ export function MetroWayfindingEditor({
 
   const applyAction = useCallback(
     (action: MetroWayfindingCompositionAction) => {
+      // 选中同步只改变 selection，不进入撤销栈，也不触碰 layout。
+      if (action.type === 'select') {
+        const rowIndex = action.rowIndex === 1 ? 1 : 0;
+        setSelection({ rowIndex, elementId: action.elementId });
+        return;
+      }
       const currentSerialized = serializeMetroWayfindingLayout(layoutRef.current);
       const next = reduceMetroWayfindingAction(layoutRef.current, action);
       const nextSerialized = serializeMetroWayfindingLayout(next);
@@ -470,9 +492,6 @@ export function MetroWayfindingEditor({
   const activeElements = layout.rows[selection.rowIndex] ?? [];
   const selectedElement =
     activeElements.find((element) => element.id === selection.elementId) ?? activeElements[0];
-  const selectedElementIndex = selectedElement
-    ? activeElements.findIndex((element) => element.id === selectedElement.id)
-    : -1;
   const visibleRows = layout.rows.slice(0, layout.mode === 'double' ? 2 : 1);
   const hasElements = layout.rows.some((elements) => elements.length > 0);
   // 把编辑器状态广播为只读快照，供编辑器外部的宿主容器（宽屏下预览面板下方）渲染辅助面板。
@@ -637,6 +656,37 @@ export function MetroWayfindingEditor({
     setIsProjectDialogOpen(true);
   };
 
+  // 工作台命令：工具栏 / 全局属性通过事件驱动编辑器内部动作，避免宿主直接改写 layout。
+  const workspaceCommandRef = useRef<(command: MetroWayfindingWorkspaceCommand) => void>(
+    () => undefined,
+  );
+  workspaceCommandRef.current = (command) => {
+    if (command.type === 'open-project-dialog') {
+      openProjectDialog(command.view);
+      return;
+    }
+    if (command.type === 'close-project-dialog') {
+      setIsProjectDialogOpen(false);
+      return;
+    }
+    if (command.type === 'clear-layout') {
+      void clearLayoutElements();
+      return;
+    }
+    if (command.type === 'set-layout-mode') {
+      if (command.mode !== layout.mode) {
+        changeLayoutMode(command.mode);
+      }
+    }
+  };
+  useEffect(
+    () =>
+      subscribeMetroWayfindingWorkspaceCommands(editorId, (command) =>
+        workspaceCommandRef.current(command),
+      ),
+    [editorId],
+  );
+
   const handleImportFiles = async (files: File[]) => {
     if (!files.length) return;
     setIsImporting(true);
@@ -748,150 +798,153 @@ export function MetroWayfindingEditor({
       className="metro-wayfinding-editor"
       aria-label={t('metroWayfindingEditor.aria.canvas')}
     >
-      <details
-        className="metro-wayfinding-toolbar"
-        open={isToolbarExpanded}
-        onToggle={(event) => setIsToolbarExpanded(event.currentTarget.open)}
-      >
-        <summary>
-          <span className="metro-wayfinding-toolbar-title">
-            {t('metroWayfindingEditor.toolbar.title')}
-          </span>
-          {/*
+      {rendersToolbar ? (
+        <details
+          className="metro-wayfinding-toolbar"
+          open={isToolbarExpanded}
+          onToggle={(event) => setIsToolbarExpanded(event.currentTarget.open)}
+        >
+          <summary>
+            <span className="metro-wayfinding-toolbar-title">
+              {t('metroWayfindingEditor.toolbar.title')}
+            </span>
+            {/*
             标题栏图标：仅作视觉提示，告诉用户模板库 / 反转 / 清空这几个操作藏在折叠面板里。
             不响应点按，展开后自动隐藏（见 CSS），避免与面板内真实的操作按钮重复。
           */}
-          <span className="metro-wayfinding-toolbar-hints" aria-hidden="true">
-            <span className="material-symbols-outlined">folder_open</span>
-            <span className="material-symbols-outlined">flip</span>
-            <span className="material-symbols-outlined">delete_sweep</span>
-          </span>
-          <span
-            className="material-symbols-outlined metro-wayfinding-toolbar-expander"
-            aria-hidden="true"
-          >
-            expand_more
-          </span>
-        </summary>
-        <div className="metro-wayfinding-toolbar-content">
-          <SegmentedControl
-            label={t('metroWayfindingEditor.field.layout')}
-            value={layout.mode}
-            options={[
-              {
-                value: 'single',
-                label: t('metroWayfindingEditor.option.singleRow'),
-                icon: 'view_stream',
-              },
-              {
-                value: 'double',
-                label: t('metroWayfindingEditor.option.doubleRow'),
-                icon: 'table_rows',
-              },
-              {
-                value: 'vertical',
-                label: t('metroWayfindingEditor.option.vertical'),
-                icon: 'view_column',
-              },
-            ]}
-            disabled={disabled}
-            wide
-            onChange={changeLayoutMode}
-          />
-          <ColorControl
-            label={t('metroWayfindingEditor.field.backgroundColor')}
-            value={layout.backgroundColor}
-            palette={backgroundColorOptions}
-            disabled={disabled}
-            onChange={(backgroundColor) =>
-              dispatchComposition({ type: 'replace', layout: { ...layout, backgroundColor } })
-            }
-          />
-          <ColorControl
-            label={t('metroWayfindingEditor.field.defaultForegroundColor')}
-            value={layout.foregroundColor}
-            palette={metroWayfindingForegroundPalette}
-            disabled={disabled}
-            onChange={(foregroundColor) =>
-              dispatchComposition({ type: 'replace', layout: { ...layout, foregroundColor } })
-            }
-          />
-          {layout.mode === 'double' ? (
-            <label className="material-checkbox-row metro-wayfinding-toggle">
-              <input
-                type="checkbox"
-                checked={layout.dividerBetweenRows}
-                disabled={disabled}
-                onChange={(event) =>
-                  dispatchComposition({
-                    type: 'replace',
-                    layout: { ...layout, dividerBetweenRows: event.currentTarget.checked },
-                  })
-                }
-              />
-              <span>{t('metroWayfindingEditor.field.rowDivider')}</span>
-            </label>
-          ) : null}
-          {hasElements ? (
-            <div className="metro-wayfinding-toolbar-actions">
-              <button
-                type="button"
-                className="secondary-action-button metro-wayfinding-import-button"
-                disabled={disabled || isImporting}
-                title={t('metroWayfindingEditor.action.openProjectLibraryTitle')}
-                onClick={() => openProjectDialog()}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {isImporting ? 'progress_activity' : 'folder_open'}
-                </span>
-                <span>
-                  {isImporting
-                    ? t('metroWayfindingEditor.status.parsing')
-                    : t('metroWayfindingEditor.action.templateLibrary')}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="secondary-action-button"
-                disabled={disabled || layout.mode === 'vertical'}
-                onClick={() => dispatchComposition({ type: 'reverse' })}
-                title={
-                  layout.mode === 'vertical'
-                    ? t('metroWayfindingEditor.action.reverseDisabledVertical')
-                    : t('metroWayfindingEditor.action.reverseTitle')
-                }
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  flip
-                </span>
-                <span>{t('metroWayfindingEditor.action.reverse')}</span>
-              </button>
-              <button
-                type="button"
-                className="secondary-action-button metro-wayfinding-clear-button"
-                disabled={disabled}
-                onClick={clearLayoutElements}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  delete_sweep
-                </span>
-                <span>{t('metroWayfindingEditor.action.clear')}</span>
-              </button>
-            </div>
-          ) : null}
-          <input
-            ref={importInputRef}
-            type="file"
-            className="sr-only"
-            accept=".json,application/json"
-            multiple
-            disabled={disabled || isImporting}
-            onChange={handleImportInputChange}
-          />
-        </div>
-      </details>
+            <span className="metro-wayfinding-toolbar-hints" aria-hidden="true">
+              <span className="material-symbols-outlined">folder_open</span>
+              <span className="material-symbols-outlined">flip</span>
+              <span className="material-symbols-outlined">delete_sweep</span>
+            </span>
+            <span
+              className="material-symbols-outlined metro-wayfinding-toolbar-expander"
+              aria-hidden="true"
+            >
+              expand_more
+            </span>
+          </summary>
+          <div className="metro-wayfinding-toolbar-content">
+            <SegmentedControl
+              label={t('metroWayfindingEditor.field.layout')}
+              value={layout.mode}
+              options={[
+                {
+                  value: 'single',
+                  label: t('metroWayfindingEditor.option.singleRow'),
+                  icon: 'view_stream',
+                },
+                {
+                  value: 'double',
+                  label: t('metroWayfindingEditor.option.doubleRow'),
+                  icon: 'table_rows',
+                },
+                {
+                  value: 'vertical',
+                  label: t('metroWayfindingEditor.option.vertical'),
+                  icon: 'view_column',
+                },
+              ]}
+              disabled={disabled}
+              wide
+              onChange={changeLayoutMode}
+            />
+            <ColorControl
+              label={t('metroWayfindingEditor.field.backgroundColor')}
+              value={layout.backgroundColor}
+              palette={backgroundColorOptions}
+              disabled={disabled}
+              onChange={(backgroundColor) =>
+                dispatchComposition({ type: 'replace', layout: { ...layout, backgroundColor } })
+              }
+            />
+            <ColorControl
+              label={t('metroWayfindingEditor.field.defaultForegroundColor')}
+              value={layout.foregroundColor}
+              palette={metroWayfindingForegroundPalette}
+              disabled={disabled}
+              onChange={(foregroundColor) =>
+                dispatchComposition({ type: 'replace', layout: { ...layout, foregroundColor } })
+              }
+            />
+            {layout.mode === 'double' ? (
+              <label className="material-checkbox-row metro-wayfinding-toggle">
+                <input
+                  type="checkbox"
+                  checked={layout.dividerBetweenRows}
+                  disabled={disabled}
+                  onChange={(event) =>
+                    dispatchComposition({
+                      type: 'replace',
+                      layout: { ...layout, dividerBetweenRows: event.currentTarget.checked },
+                    })
+                  }
+                />
+                <span>{t('metroWayfindingEditor.field.rowDivider')}</span>
+              </label>
+            ) : null}
+            {hasElements ? (
+              <div className="metro-wayfinding-toolbar-actions">
+                <button
+                  type="button"
+                  className="secondary-action-button metro-wayfinding-import-button"
+                  disabled={disabled || isImporting}
+                  title={t('metroWayfindingEditor.action.openProjectLibraryTitle')}
+                  onClick={() => openProjectDialog()}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {isImporting ? 'progress_activity' : 'folder_open'}
+                  </span>
+                  <span>
+                    {isImporting
+                      ? t('metroWayfindingEditor.status.parsing')
+                      : t('metroWayfindingEditor.action.templateLibrary')}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="secondary-action-button"
+                  disabled={disabled || layout.mode === 'vertical'}
+                  onClick={() => dispatchComposition({ type: 'reverse' })}
+                  title={
+                    layout.mode === 'vertical'
+                      ? t('metroWayfindingEditor.action.reverseDisabledVertical')
+                      : t('metroWayfindingEditor.action.reverseTitle')
+                  }
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    flip
+                  </span>
+                  <span>{t('metroWayfindingEditor.action.reverse')}</span>
+                </button>
+                <button
+                  type="button"
+                  className="secondary-action-button metro-wayfinding-clear-button"
+                  disabled={disabled}
+                  onClick={clearLayoutElements}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    delete_sweep
+                  </span>
+                  <span>{t('metroWayfindingEditor.action.clear')}</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
+      {/* 导入入口在模板库弹窗里也要用；工作台隐藏工具条时仍必须保留这个文件输入。 */}
+      <input
+        ref={importInputRef}
+        type="file"
+        className="sr-only"
+        accept=".json,application/json"
+        multiple
+        disabled={disabled || isImporting}
+        onChange={handleImportInputChange}
+      />
 
-      {hasElements ? (
+      {rendersRowLists && hasElements ? (
         <div className="metro-wayfinding-row-lists">
           {visibleRows.map((elements, rowIndex) => (
             <div
@@ -1003,7 +1056,7 @@ export function MetroWayfindingEditor({
         </div>
       ) : null}
 
-      {!hasElements ? (
+      {rendersRowLists && !hasElements ? (
         <section
           className="metro-wayfinding-empty-card"
           aria-label={t('metroWayfindingEditor.aria.emptyState')}
@@ -1061,7 +1114,7 @@ export function MetroWayfindingEditor({
         />
       ) : null}
 
-      {selectedElement ? (
+      {rendersElementPanel && selectedElement ? (
         <div
           id={`${editorId}-element-panel`}
           role="tabpanel"
@@ -1072,8 +1125,6 @@ export function MetroWayfindingEditor({
             element={selectedElement}
             layoutMode={layout.mode}
             disabled={disabled}
-            isFirst={selectedElementIndex === 0}
-            isLast={selectedElementIndex === activeElements.length - 1}
             lineColorOptions={lineColorOptions}
             backgroundColorOptions={backgroundColorOptions}
             inheritedBackgroundColor={layout.backgroundColor}
@@ -1084,444 +1135,455 @@ export function MetroWayfindingEditor({
         </div>
       ) : null}
       {isProjectDialogOpen ? (
-        <div
-          className="modal-backdrop metro-wayfinding-project-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.currentTarget === event.target) setIsProjectDialogOpen(false);
-          }}
-        >
-          <section
-            className="modal-panel metro-wayfinding-project-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={`${editorId}-project-dialog-heading`}
+        <EditorDialogPortal>
+          <div
+            className="modal-backdrop metro-wayfinding-project-backdrop editor-dialog-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.currentTarget === event.target) setIsProjectDialogOpen(false);
+            }}
           >
-            <header>
-              <div>
-                <span>{t('metroWayfindingEditor.projectDialog.eyebrow')}</span>
-                <h2 id={`${editorId}-project-dialog-heading`}>
-                  {t('metroWayfindingEditor.projectDialog.title')}
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={t('metroWayfindingEditor.projectDialog.closeAria')}
-                title={t('metroWayfindingEditor.action.close')}
-                onClick={() => setIsProjectDialogOpen(false)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            </header>
-            <SegmentedControl
-              label={t('metroWayfindingEditor.projectDialog.source')}
-              value={projectDialogView}
-              options={[
-                {
-                  value: 'examples',
-                  label: t('metroWayfindingEditor.projectDialog.templates'),
-                  icon: 'dashboard_customize',
-                },
-                {
-                  value: 'import',
-                  label: t('metroWayfindingEditor.projectDialog.import'),
-                  icon: 'upload_file',
-                },
-              ]}
-              disabled={disabled || isImporting}
-              wide
-              onChange={setProjectDialogView}
-            />
-            <div className="metro-wayfinding-project-dialog-body">
-              {projectDialogView === 'examples' ? (
-                examples.length && onLoadExample ? (
-                  <MetroWayfindingExampleList
-                    examples={examples}
-                    disabled={disabled}
-                    onLoadExample={(example, stationName) => {
-                      setSelection(resolveMetroWayfindingInitialSelection(example.project.layout));
-                      onLoadExample(example, stationName);
-                      setIsProjectDialogOpen(false);
-                    }}
-                    stationOptions={stationOptions}
-                    selectedStationName={selectedStationName}
-                    onStationChange={onStationChange}
-                    lineOptions={lineOptions}
-                    selectedLineId={selectedLineId}
-                    onLineChange={onLineChange}
-                  />
-                ) : (
-                  <div className="metro-wayfinding-project-empty">
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      dashboard_customize
-                    </span>
-                    <span>{t('metroWayfindingEditor.examples.empty')}</span>
-                  </div>
-                )
-              ) : (
-                <div
-                  className={`metro-wayfinding-project-import${isImportDragActive ? ' is-drag-active' : ''}`}
-                  onDragEnter={handleImportDragEnter}
-                  onDragOver={handleImportDragOver}
-                  onDragLeave={handleImportDragLeave}
-                  onDrop={handleImportDrop}
+            <section
+              className="modal-panel metro-wayfinding-project-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`${editorId}-project-dialog-heading`}
+            >
+              <header>
+                <div>
+                  <span>{t('metroWayfindingEditor.projectDialog.eyebrow')}</span>
+                  <h2 id={`${editorId}-project-dialog-heading`}>
+                    {t('metroWayfindingEditor.projectDialog.title')}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={t('metroWayfindingEditor.projectDialog.closeAria')}
+                  title={t('metroWayfindingEditor.action.close')}
+                  onClick={() => setIsProjectDialogOpen(false)}
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
-                    upload_file
+                    close
                   </span>
-                  <div className="metro-wayfinding-project-import-copy">
-                    <strong>{t('metroWayfindingEditor.import.title')}</strong>
-                    <p>{t('metroWayfindingEditor.import.description')}</p>
-                  </div>
-                  <div className="metro-wayfinding-project-import-sources">
-                    <span>{t('metroWayfindingEditor.import.supportedSources')}</span>
-                    <ul>
-                      <li>
-                        <span>{t('metroWayfindingEditor.import.sourceYct')}</span>
-                        <small>{t('metroWayfindingEditor.import.sourceYctHint')}</small>
-                      </li>
-                      <li>
-                        <a
-                          href="https://centralgo.site/vitool/vitool.html"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          NaL 导向标志设计器
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            open_in_new
-                          </span>
-                        </a>
-                        <small>{t('metroWayfindingEditor.import.sourceExternalHint')}</small>
-                      </li>
-                      <li>
-                        <a href="https://signmaker.chitose.city/" target="_blank" rel="noreferrer">
-                          Chitose.City Sign Maker
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            open_in_new
-                          </span>
-                        </a>
-                        <small>{t('metroWayfindingEditor.import.sourceExternalHint')}</small>
-                      </li>
-                      <li>
-                        <a href="https://guidegen.0v0.my/" target="_blank" rel="noreferrer">
-                          MoeRT-GuideGen
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            open_in_new
-                          </span>
-                        </a>
-                        <small>{t('metroWayfindingEditor.import.sourceExternalHint')}</small>
-                      </li>
-                    </ul>
-                  </div>
-                  <div className="metro-wayfinding-project-import-limits">
-                    <span>{t('metroWayfindingEditor.import.fileLimits')}</span>
-                    <small>
-                      {t('metroWayfindingEditor.import.fileLimitsDescription', {
-                        count: METRO_WAYFINDING_IMPORT_MAX_FILES,
-                        size: METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES / 1024 / 1024,
-                      })}
-                    </small>
-                  </div>
-                  <div className="metro-wayfinding-project-import-drop-hint" aria-live="polite">
+                </button>
+              </header>
+              <SegmentedControl
+                label={t('metroWayfindingEditor.projectDialog.source')}
+                value={projectDialogView}
+                options={[
+                  {
+                    value: 'examples',
+                    label: t('metroWayfindingEditor.projectDialog.templates'),
+                    icon: 'dashboard_customize',
+                  },
+                  {
+                    value: 'import',
+                    label: t('metroWayfindingEditor.projectDialog.import'),
+                    icon: 'upload_file',
+                  },
+                ]}
+                disabled={disabled || isImporting}
+                wide
+                onChange={setProjectDialogView}
+              />
+              <div className="metro-wayfinding-project-dialog-body">
+                {projectDialogView === 'examples' ? (
+                  examples.length && onLoadExample ? (
+                    <MetroWayfindingExampleList
+                      examples={examples}
+                      disabled={disabled}
+                      onLoadExample={(example, stationName) => {
+                        setSelection(
+                          resolveMetroWayfindingInitialSelection(example.project.layout),
+                        );
+                        onLoadExample(example, stationName);
+                        setIsProjectDialogOpen(false);
+                      }}
+                      stationOptions={stationOptions}
+                      selectedStationName={selectedStationName}
+                      onStationChange={onStationChange}
+                      lineOptions={lineOptions}
+                      selectedLineId={selectedLineId}
+                      onLineChange={onLineChange}
+                    />
+                  ) : (
+                    <div className="metro-wayfinding-project-empty">
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        dashboard_customize
+                      </span>
+                      <span>{t('metroWayfindingEditor.examples.empty')}</span>
+                    </div>
+                  )
+                ) : (
+                  <div
+                    className={`metro-wayfinding-project-import${isImportDragActive ? ' is-drag-active' : ''}`}
+                    onDragEnter={handleImportDragEnter}
+                    onDragOver={handleImportDragOver}
+                    onDragLeave={handleImportDragLeave}
+                    onDrop={handleImportDrop}
+                  >
                     <span className="material-symbols-outlined" aria-hidden="true">
                       upload_file
                     </span>
-                    <span>
-                      {isImportDragActive
-                        ? t('metroWayfindingEditor.import.dropActive')
-                        : t('metroWayfindingEditor.import.dropHint')}
-                    </span>
+                    <div className="metro-wayfinding-project-import-copy">
+                      <strong>{t('metroWayfindingEditor.import.title')}</strong>
+                      <p>{t('metroWayfindingEditor.import.description')}</p>
+                    </div>
+                    <div className="metro-wayfinding-project-import-sources">
+                      <span>{t('metroWayfindingEditor.import.supportedSources')}</span>
+                      <ul>
+                        <li>
+                          <span>{t('metroWayfindingEditor.import.sourceYct')}</span>
+                          <small>{t('metroWayfindingEditor.import.sourceYctHint')}</small>
+                        </li>
+                        <li>
+                          <a
+                            href="https://centralgo.site/vitool/vitool.html"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            NaL 导向标志设计器
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              open_in_new
+                            </span>
+                          </a>
+                          <small>{t('metroWayfindingEditor.import.sourceExternalHint')}</small>
+                        </li>
+                        <li>
+                          <a
+                            href="https://signmaker.chitose.city/"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Chitose.City Sign Maker
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              open_in_new
+                            </span>
+                          </a>
+                          <small>{t('metroWayfindingEditor.import.sourceExternalHint')}</small>
+                        </li>
+                        <li>
+                          <a href="https://guidegen.0v0.my/" target="_blank" rel="noreferrer">
+                            MoeRT-GuideGen
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              open_in_new
+                            </span>
+                          </a>
+                          <small>{t('metroWayfindingEditor.import.sourceExternalHint')}</small>
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="metro-wayfinding-project-import-limits">
+                      <span>{t('metroWayfindingEditor.import.fileLimits')}</span>
+                      <small>
+                        {t('metroWayfindingEditor.import.fileLimitsDescription', {
+                          count: METRO_WAYFINDING_IMPORT_MAX_FILES,
+                          size: METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES / 1024 / 1024,
+                        })}
+                      </small>
+                    </div>
+                    <div className="metro-wayfinding-project-import-drop-hint" aria-live="polite">
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        upload_file
+                      </span>
+                      <span>
+                        {isImportDragActive
+                          ? t('metroWayfindingEditor.import.dropActive')
+                          : t('metroWayfindingEditor.import.dropHint')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="primary-action-button"
+                      disabled={disabled || isImporting}
+                      onClick={() => importInputRef.current?.click()}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        {isImporting ? 'progress_activity' : 'upload_file'}
+                      </span>
+                      {isImporting
+                        ? t('metroWayfindingEditor.status.parsingFiles')
+                        : t('metroWayfindingEditor.import.selectFiles')}
+                    </button>
+                    {importError ? (
+                      <p className="metro-wayfinding-import-error" role="alert">
+                        {importError}
+                      </p>
+                    ) : null}
                   </div>
-                  <button
-                    type="button"
-                    className="primary-action-button"
-                    disabled={disabled || isImporting}
-                    onClick={() => importInputRef.current?.click()}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      {isImporting ? 'progress_activity' : 'upload_file'}
-                    </span>
-                    {isImporting
-                      ? t('metroWayfindingEditor.status.parsingFiles')
-                      : t('metroWayfindingEditor.import.selectFiles')}
-                  </button>
-                  {importError ? (
-                    <p className="metro-wayfinding-import-error" role="alert">
-                      {importError}
-                    </p>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          </section>
-        </div>
+                )}
+              </div>
+            </section>
+          </div>
+        </EditorDialogPortal>
       ) : null}
       {importPreview ? (
-        <div
-          className="modal-backdrop metro-wayfinding-import-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.currentTarget === event.target) setImportPreview(undefined);
-          }}
-        >
-          <section
-            className="modal-panel metro-wayfinding-import-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={`${editorId}-import-heading`}
+        <EditorDialogPortal>
+          <div
+            className="modal-backdrop metro-wayfinding-import-backdrop editor-dialog-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.currentTarget === event.target) setImportPreview(undefined);
+            }}
           >
-            <header>
-              <div>
-                <span>{t('metroWayfindingEditor.importPreview.eyebrow')}</span>
-                <h2 id={`${editorId}-import-heading`}>{importPreview.projectName}</h2>
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={t('metroWayfindingEditor.importPreview.closeAria')}
-                title={t('metroWayfindingEditor.action.close')}
-                onClick={() => setImportPreview(undefined)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            </header>
+            <section
+              className="modal-panel metro-wayfinding-import-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`${editorId}-import-heading`}
+            >
+              <header>
+                <div>
+                  <span>{t('metroWayfindingEditor.importPreview.eyebrow')}</span>
+                  <h2 id={`${editorId}-import-heading`}>{importPreview.projectName}</h2>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={t('metroWayfindingEditor.importPreview.closeAria')}
+                  title={t('metroWayfindingEditor.action.close')}
+                  onClick={() => setImportPreview(undefined)}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    close
+                  </span>
+                </button>
+              </header>
 
-            {/*
+              {/*
               中间滚动区：包住 SegmentedControl / dl / ol / warnings。
               弹窗改为 grid 三行布局（header / 滚动内容 / footer），
               footer 不再 sticky，内容滚到底也不会被底栏遮挡。
             */}
-            <div className="metro-wayfinding-import-scroll">
-              {importPreview.source !== 'yct' ? (
-                <SegmentedControl
-                  label={t('metroWayfindingEditor.importPreview.mode')}
-                  value={importMode}
-                  options={[
-                    {
-                      value: 'semantic',
-                      label: t('metroWayfindingEditor.importPreview.modeSemantic'),
-                      icon: 'conversion_path',
-                    },
-                    {
-                      value: 'source-style',
-                      label: t('metroWayfindingEditor.importPreview.modeSourceStyle'),
-                      icon: 'palette',
-                    },
-                  ]}
-                  disabled={disabled}
-                  wide
-                  onChange={setImportMode}
-                />
-              ) : null}
+              <div className="metro-wayfinding-import-scroll">
+                {importPreview.source !== 'yct' ? (
+                  <SegmentedControl
+                    label={t('metroWayfindingEditor.importPreview.mode')}
+                    value={importMode}
+                    options={[
+                      {
+                        value: 'semantic',
+                        label: t('metroWayfindingEditor.importPreview.modeSemantic'),
+                        icon: 'conversion_path',
+                      },
+                      {
+                        value: 'source-style',
+                        label: t('metroWayfindingEditor.importPreview.modeSourceStyle'),
+                        icon: 'palette',
+                      },
+                    ]}
+                    disabled={disabled}
+                    wide
+                    onChange={setImportMode}
+                  />
+                ) : null}
 
-              {/*
+                {/*
                 转换后的牌面内容预览：与「版式模板」页签的示例卡片同一套视觉，
                 数据取自 activeImportPreview（已按当前转换方式归一化），
                 因此切换「仅语义 / 保留源样式」时这里会实时变化。
               */}
-              <div className="metro-wayfinding-import-sign-preview">
-                <MetroWayfindingSignPreview
-                  layout={activeImportPreview?.layout ?? importPreview.layout}
-                  canvas={activeImportPreview?.canvas ?? importPreview.canvas}
-                />
-                <small>{t('metroWayfindingEditor.importPreview.previewNote')}</small>
-              </div>
+                <div className="metro-wayfinding-import-sign-preview">
+                  <MetroWayfindingSignPreview
+                    layout={activeImportPreview?.layout ?? importPreview.layout}
+                    canvas={activeImportPreview?.canvas ?? importPreview.canvas}
+                  />
+                  <small>{t('metroWayfindingEditor.importPreview.previewNote')}</small>
+                </div>
 
-              <dl className="metro-wayfinding-import-facts">
-                <div>
-                  <dt>{t('metroWayfindingEditor.importPreview.source')}</dt>
-                  <dd>{importPreview.sourceLabel}</dd>
-                </div>
-                <div>
-                  <dt>{t('metroWayfindingEditor.importPreview.sourceStyle')}</dt>
-                  <dd>{importPreview.styleLabel}</dd>
-                </div>
-                <div>
-                  <dt>{t('metroWayfindingEditor.importPreview.targetStyle')}</dt>
-                  <dd>
-                    {importPreview.source === 'yct'
-                      ? importPreview.styleLabel
-                      : (activeImportPreview?.styleLabel ?? METRO_WAYFINDING_SEMANTIC_TARGET_STYLE)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('metroWayfindingEditor.field.layout')}</dt>
-                  <dd>
-                    {activeImportPreview?.layout.mode === 'double'
-                      ? t('metroWayfindingEditor.option.doubleRow')
-                      : activeImportPreview?.layout.mode === 'vertical'
-                        ? t('metroWayfindingEditor.option.vertical')
-                        : t('metroWayfindingEditor.option.singleRow')}
-                    {' · '}
-                    {activeImportPreview?.canvas.widthM ?? importPreview.canvas.widthM} ×{' '}
-                    {activeImportPreview?.canvas.heightM ?? importPreview.canvas.heightM}
-                  </dd>
-                </div>
-              </dl>
+                <dl className="metro-wayfinding-import-facts">
+                  <div>
+                    <dt>{t('metroWayfindingEditor.importPreview.source')}</dt>
+                    <dd>{importPreview.sourceLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('metroWayfindingEditor.importPreview.sourceStyle')}</dt>
+                    <dd>{importPreview.styleLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('metroWayfindingEditor.importPreview.targetStyle')}</dt>
+                    <dd>
+                      {importPreview.source === 'yct'
+                        ? importPreview.styleLabel
+                        : (activeImportPreview?.styleLabel ??
+                          METRO_WAYFINDING_SEMANTIC_TARGET_STYLE)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{t('metroWayfindingEditor.field.layout')}</dt>
+                    <dd>
+                      {activeImportPreview?.layout.mode === 'double'
+                        ? t('metroWayfindingEditor.option.doubleRow')
+                        : activeImportPreview?.layout.mode === 'vertical'
+                          ? t('metroWayfindingEditor.option.vertical')
+                          : t('metroWayfindingEditor.option.singleRow')}
+                      {' · '}
+                      {activeImportPreview?.canvas.widthM ?? importPreview.canvas.widthM} ×{' '}
+                      {activeImportPreview?.canvas.heightM ?? importPreview.canvas.heightM}
+                    </dd>
+                  </div>
+                </dl>
 
-              <ol
-                className="metro-wayfinding-import-rows"
-                aria-label={t('metroWayfindingEditor.importPreview.rowsAria')}
-              >
-                {importPreview.rowSources.map((row, index) => {
-                  /*
+                <ol
+                  className="metro-wayfinding-import-rows"
+                  aria-label={t('metroWayfindingEditor.importPreview.rowsAria')}
+                >
+                  {importPreview.rowSources.map((row, index) => {
+                    /*
                     行内元素取**转换后**的结果（`activeImportRows`），
                     `row.elements` 只是源工程的原始元素，仅作兜底。
                     否则切换「转换方式」时上面牌面变了、下面清单没变。
                   */
-                  const rowElements = activeImportRows[index] ?? row.elements;
-                  return (
-                    <li key={`${row.fileName}-${index}`}>
-                      <div>
-                        <span>
-                          {index === 0
-                            ? t('metroWayfindingEditor.row.first')
-                            : t('metroWayfindingEditor.row.second')}
-                        </span>
-                        {/*
+                    const rowElements = activeImportRows[index] ?? row.elements;
+                    return (
+                      <li key={`${row.fileName}-${index}`}>
+                        <div>
+                          <span>
+                            {index === 0
+                              ? t('metroWayfindingEditor.row.first')
+                              : t('metroWayfindingEditor.row.second')}
+                          </span>
+                          {/*
                           用图形化预览替代纯文本摘要：复用模板库的预览组件，
                           让审核者一眼看到「出口箭头 + 卫生间图标 + 文字 + …」的实际形态。
                           `sr-only` 摘要给屏幕阅读器与无图标的场景兜底。
                         */}
-                        <div
-                          className="metro-wayfinding-import-row-preview metro-wayfinding-element-strip"
-                          aria-hidden="true"
-                        >
-                          {rowElements.length ? (
-                            rowElements.map((element) => (
-                              <MetroWayfindingExamplePreviewElement
-                                key={element.id}
-                                element={element}
-                                layoutMode={
-                                  activeImportPreview?.layout.mode ?? importPreview.layout.mode
-                                }
-                                /*
+                          <div
+                            className="metro-wayfinding-import-row-preview metro-wayfinding-element-strip"
+                            aria-hidden="true"
+                          >
+                            {rowElements.length ? (
+                              rowElements.map((element) => (
+                                <MetroWayfindingExamplePreviewElement
+                                  key={element.id}
+                                  element={element}
+                                  layoutMode={
+                                    activeImportPreview?.layout.mode ?? importPreview.layout.mode
+                                  }
+                                  /*
                                   刻意不复原整块牌面的底色/文字色：这里只是「图标 + 文字」
                                   的一字排开清单，颜色交给元素自身（线路色、方框填充等
                                   语义色），其余一律用弹窗的中性色。
                                 */
-                                inheritedBackgroundColor="transparent"
-                                inheritedForegroundColor="inherit"
-                                renderSpaceIcons
-                                neutralizeColors
-                              />
-                            ))
-                          ) : (
-                            <span className="metro-wayfinding-example-preview-element is-space is-flex">
-                              <span className="material-symbols-outlined" aria-hidden="true">
-                                arrow_range
+                                  inheritedBackgroundColor="transparent"
+                                  inheritedForegroundColor="inherit"
+                                  renderSpaceIcons
+                                  neutralizeColors
+                                />
+                              ))
+                            ) : (
+                              <span className="metro-wayfinding-example-preview-element is-space is-flex">
+                                <span className="material-symbols-outlined" aria-hidden="true">
+                                  arrow_range
+                                </span>
                               </span>
-                            </span>
-                          )}
+                            )}
+                          </div>
+                          <small>{row.label}</small>
+                          <span className="sr-only">{row.summary}</span>
                         </div>
-                        <small>{row.label}</small>
-                        <span className="sr-only">{row.summary}</span>
-                      </div>
-                      {importPreview.rowSources.length > 1 ? (
-                        <div className="metro-wayfinding-import-row-actions">
-                          <button
-                            type="button"
-                            className="icon-button"
-                            aria-label={t('metroWayfindingEditor.action.moveRowUpAria')}
-                            title={t('metroWayfindingEditor.action.moveUp')}
-                            disabled={index === 0}
-                            onClick={() =>
-                              setImportPreview((current) =>
-                                current
-                                  ? reorderMetroWayfindingImportRows(current, index, index - 1)
-                                  : current,
-                              )
-                            }
-                          >
-                            <span className="material-symbols-outlined" aria-hidden="true">
-                              arrow_upward
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-button"
-                            aria-label={t('metroWayfindingEditor.action.moveRowDownAria')}
-                            title={t('metroWayfindingEditor.action.moveDown')}
-                            disabled={index === importPreview.rowSources.length - 1}
-                            onClick={() =>
-                              setImportPreview((current) =>
-                                current
-                                  ? reorderMetroWayfindingImportRows(current, index, index + 1)
-                                  : current,
-                              )
-                            }
-                          >
-                            <span className="material-symbols-outlined" aria-hidden="true">
-                              arrow_downward
-                            </span>
-                          </button>
-                        </div>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ol>
-
-              {activeImportWarnings.length ? (
-                <section
-                  className="metro-wayfinding-import-warnings"
-                  aria-label={t('metroWayfindingEditor.importPreview.warningsAria')}
-                >
-                  <header>
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      warning
-                    </span>
-                    <strong>{t('metroWayfindingEditor.importPreview.warningsTitle')}</strong>
-                  </header>
-                  <ul>
-                    {activeImportWarnings.map((warning) => (
-                      <li key={`${warning.code}-${warning.message}`}>
-                        {warning.message}
-                        {warning.count > 1
-                          ? t('metroWayfindingEditor.importPreview.warningCount', {
-                              count: warning.count,
-                            })
-                          : ''}
+                        {importPreview.rowSources.length > 1 ? (
+                          <div className="metro-wayfinding-import-row-actions">
+                            <button
+                              type="button"
+                              className="icon-button"
+                              aria-label={t('metroWayfindingEditor.action.moveRowUpAria')}
+                              title={t('metroWayfindingEditor.action.moveUp')}
+                              disabled={index === 0}
+                              onClick={() =>
+                                setImportPreview((current) =>
+                                  current
+                                    ? reorderMetroWayfindingImportRows(current, index, index - 1)
+                                    : current,
+                                )
+                              }
+                            >
+                              <span className="material-symbols-outlined" aria-hidden="true">
+                                arrow_upward
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-button"
+                              aria-label={t('metroWayfindingEditor.action.moveRowDownAria')}
+                              title={t('metroWayfindingEditor.action.moveDown')}
+                              disabled={index === importPreview.rowSources.length - 1}
+                              onClick={() =>
+                                setImportPreview((current) =>
+                                  current
+                                    ? reorderMetroWayfindingImportRows(current, index, index + 1)
+                                    : current,
+                                )
+                              }
+                            >
+                              <span className="material-symbols-outlined" aria-hidden="true">
+                                arrow_downward
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
                       </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-            </div>
+                    );
+                  })}
+                </ol>
 
-            <footer>
-              <span>
-                {t('metroWayfindingEditor.importPreview.footerSummary', {
-                  count: importPreview.files.length,
-                  size: METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES / 1024 / 1024,
-                })}
-              </span>
-              <div>
-                <button
-                  type="button"
-                  className="secondary-action-button"
-                  onClick={() => setImportPreview(undefined)}
-                >
-                  {t('metroWayfindingEditor.action.cancel')}
-                </button>
-                <button
-                  type="button"
-                  className="primary-action-button"
-                  onClick={applyImportPreview}
-                >
-                  {hasElements
-                    ? t('metroWayfindingEditor.action.replaceSign')
-                    : t('metroWayfindingEditor.action.importSign')}
-                </button>
+                {activeImportWarnings.length ? (
+                  <section
+                    className="metro-wayfinding-import-warnings"
+                    aria-label={t('metroWayfindingEditor.importPreview.warningsAria')}
+                  >
+                    <header>
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        warning
+                      </span>
+                      <strong>{t('metroWayfindingEditor.importPreview.warningsTitle')}</strong>
+                    </header>
+                    <ul>
+                      {activeImportWarnings.map((warning) => (
+                        <li key={`${warning.code}-${warning.message}`}>
+                          {warning.message}
+                          {warning.count > 1
+                            ? t('metroWayfindingEditor.importPreview.warningCount', {
+                                count: warning.count,
+                              })
+                            : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
               </div>
-            </footer>
-          </section>
-        </div>
+
+              <footer>
+                <span>
+                  {t('metroWayfindingEditor.importPreview.footerSummary', {
+                    count: importPreview.files.length,
+                    size: METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES / 1024 / 1024,
+                  })}
+                </span>
+                <div>
+                  <button
+                    type="button"
+                    className="secondary-action-button"
+                    onClick={() => setImportPreview(undefined)}
+                  >
+                    {t('metroWayfindingEditor.action.cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-action-button"
+                    onClick={applyImportPreview}
+                  >
+                    {hasElements
+                      ? t('metroWayfindingEditor.action.replaceSign')
+                      : t('metroWayfindingEditor.action.importSign')}
+                  </button>
+                </div>
+              </footer>
+            </section>
+          </div>
+        </EditorDialogPortal>
       ) : null}
     </section>
   );
@@ -1887,7 +1949,7 @@ export function MetroWayfindingExamplePreviewElement({
         : (element.foregroundColor ?? inheritedForegroundColor);
     return (
       <span
-        className="metro-wayfinding-example-preview-element is-icon"
+        className={`metro-wayfinding-example-preview-element is-icon`}
         style={{ ...style, backgroundColor: facilityBackground, color: facilityForeground }}
       >
         {assetName ? (
@@ -1912,7 +1974,7 @@ export function MetroWayfindingExamplePreviewElement({
   }
   if (element.type === 'arrow') {
     return (
-      <span className="metro-wayfinding-example-preview-element is-icon" style={style}>
+      <span className={`metro-wayfinding-example-preview-element is-icon`} style={style}>
         <MetroArrowAssetIcon assetName={element.iconId} />
       </span>
     );
@@ -2027,7 +2089,7 @@ export function MetroWayfindingExamplePreviewElement({
         : (element.foregroundColor ?? inheritedForegroundColor);
     return (
       <span
-        className="metro-wayfinding-example-preview-element is-combination"
+        className={`metro-wayfinding-example-preview-element is-combination`}
         style={{ ...style, backgroundColor: combinationBackground, color: combinationForeground }}
       >
         {element.children.map((child) => (
@@ -2052,13 +2114,71 @@ export function MetroWayfindingExamplePreviewElement({
    */
   return (
     <span
-      className="metro-wayfinding-example-preview-element is-divider"
+      className={`metro-wayfinding-example-preview-element is-divider`}
       style={{
         color: neutralizeColors
           ? inheritedForegroundColor
           : (element.foregroundColor ?? inheritedForegroundColor),
       }}
     />
+  );
+}
+
+/**
+ * 元素内容缩略图：工作台图层树用它显示「当前实际使用的图标」，
+ * 设施 / 箭头直接用素材 SVG，其余类型用 Material Symbols。
+ */
+export function MetroWayfindingElementGlyph({
+  element,
+}: Readonly<{ element: MetroWayfindingElement }>) {
+  if (element.type === 'facility') {
+    const icon =
+      metroWayfindingFacilityOptions.find((option) => option.id === element.iconId) ??
+      metroWayfindingFacilityOptions[0]!;
+    const assetName = resolveMetroFacilityIconAssetName(
+      icon.id,
+      element.direction,
+      element.variant,
+    );
+    if (assetName) {
+      return (
+        <MetroFacilityAssetIcon
+          assetName={assetName}
+          style={metroFacilityAssetPreviewStyle(icon.id, element.direction, element.variant)}
+        />
+      );
+    }
+    return (
+      <span
+        className="material-symbols-outlined"
+        aria-hidden="true"
+        style={metroIconElementPreviewStyle(icon.id, element.direction)}
+      >
+        {icon.symbol}
+      </span>
+    );
+  }
+  if (element.type === 'arrow') {
+    return <MetroArrowAssetIcon assetName={element.iconId} />;
+  }
+  const glyph =
+    element.type === 'text'
+      ? { left: 'format_align_left', center: 'format_align_center', right: 'format_align_right' }[
+          element.align
+        ]
+      : element.type === 'largeText'
+        ? 'title'
+        : element.type === 'space'
+          ? element.mode === 'flex'
+            ? 'arrow_range'
+            : 'space_bar'
+          : element.type === 'divider'
+            ? 'splitscreen'
+            : 'widgets';
+  return (
+    <span className="material-symbols-outlined" aria-hidden="true">
+      {glyph}
+    </span>
   );
 }
 
@@ -2257,12 +2377,10 @@ function formatMetroMetric(value: number): string {
   return `${Math.round(value * 10) / 10} px`;
 }
 
-function MetroWayfindingElementEditor({
+export function MetroWayfindingElementEditor({
   element,
   layoutMode,
   disabled,
-  isFirst,
-  isLast,
   lineColorOptions,
   backgroundColorOptions,
   inheritedBackgroundColor,
@@ -2273,8 +2391,6 @@ function MetroWayfindingElementEditor({
   element: MetroWayfindingElement;
   layoutMode: MetroWayfindingLayoutMode;
   disabled: boolean;
-  isFirst: boolean;
-  isLast: boolean;
   lineColorOptions: Array<{ value: string; label: string; aliases?: string[] }>;
   backgroundColorOptions: Array<{ value: string; label: string }>;
   inheritedBackgroundColor: string;
@@ -2288,112 +2404,8 @@ function MetroWayfindingElementEditor({
 
   return (
     <article className="metro-wayfinding-element">
-      <header>
-        <strong>{metroElementLabel(element, t)}</strong>
-        <div className="metro-wayfinding-element-actions">
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={t('metroWayfindingEditor.action.moveLeft')}
-            title={t('metroWayfindingEditor.action.moveLeft')}
-            disabled={disabled || isFirst}
-            onClick={() => onAction({ type: 'move', elementId: element.id, direction: 'up' })}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              arrow_back
-            </span>
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={t('metroWayfindingEditor.action.moveRight')}
-            title={t('metroWayfindingEditor.action.moveRight')}
-            disabled={disabled || isLast}
-            onClick={() => onAction({ type: 'move', elementId: element.id, direction: 'down' })}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              arrow_forward
-            </span>
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={t('metroWayfindingEditor.action.duplicateElement')}
-            title={t('metroWayfindingEditor.action.duplicateElement')}
-            disabled={disabled}
-            onClick={() =>
-              onAction({
-                type: 'duplicate',
-                elementId: element.id,
-                element: duplicateMetroWayfindingElement(element),
-              })
-            }
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              content_copy
-            </span>
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={t('metroWayfindingEditor.action.removeElement')}
-            title={t('metroWayfindingEditor.action.removeElement')}
-            disabled={disabled}
-            onClick={() => onAction({ type: 'remove', elementId: element.id })}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              delete
-            </span>
-          </button>
-        </div>
-      </header>
+      {/* 标题与行内操作已由右侧检查器标题栏、左侧图层行承担，这里不再重复入口。 */}
       <div className="metro-wayfinding-element-body">
-        <SegmentedControl
-          label={t('metroWayfindingEditor.field.elementType')}
-          value={element.type}
-          options={[
-            {
-              value: 'facility',
-              label: t('metroWayfindingEditor.elementType.facility'),
-              icon: 'accessible',
-            },
-            {
-              value: 'arrow',
-              label: t('metroWayfindingEditor.elementType.arrow'),
-              icon: 'arrow_forward',
-            },
-            {
-              value: 'text',
-              label: t('metroWayfindingEditor.elementType.text'),
-              icon: 'text_fields',
-            },
-            {
-              value: 'largeText',
-              label: t('metroWayfindingEditor.elementType.largeText'),
-              icon: 'title',
-            },
-            {
-              value: 'combination',
-              label: t('metroWayfindingEditor.elementType.combination'),
-              icon: 'widgets',
-            },
-            {
-              value: 'space',
-              label: t('metroWayfindingEditor.elementType.space'),
-              icon: 'space_bar',
-            },
-            {
-              value: 'divider',
-              label: t('metroWayfindingEditor.elementType.divider'),
-              icon: 'split_scene',
-            },
-          ]}
-          disabled={disabled}
-          wide
-          onChange={(elementType) =>
-            onAction({ type: 'changeType', elementId: element.id, elementType })
-          }
-        />
         <ElementColorFields
           element={element}
           disabled={disabled}
@@ -2531,6 +2543,7 @@ function FacilityElementFields({
           };
         })}
         disabled={disabled}
+        columns={6}
         onChange={selectIcon}
       />
       {variantOptions.length > 0 ? (
@@ -2621,16 +2634,46 @@ function ArrowElementFields({
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
   const { t } = useI18n();
+  // 5×3 方向网格：先左后上 / 左上 / 上 / 右上 / 先右后上，
+  // 第二行中心为「禁止通行」，第三行为掉头与下方向。
+  // 顺序写死而不是依赖数组顺序，避免以后新增箭头时布局漂移。
+  const arrowGridIds = [
+    'turn-left-up',
+    'north-west',
+    'north',
+    'north-east',
+    'turn-right-up',
+    'turn-left-down',
+    'west',
+    'no-entry',
+    'east',
+    'turn-right-down',
+    'u-turn-left',
+    'south-west',
+    'south',
+    'south-east',
+    'u-turn-right',
+  ] as const;
+  const arrowOptionById = new Map(metroWayfindingArrowOptions.map((option) => [option.id, option]));
+  const arrowGridOptions = arrowGridIds.flatMap((id) => {
+    const option = arrowOptionById.get(id);
+    return option
+      ? [
+          {
+            ...option,
+            arrowAssetName: resolveMetroArrowIconAssetName(option.id),
+          },
+        ]
+      : [];
+  });
   return (
     <div className="metro-wayfinding-field-grid">
       <IconChoiceGrid
         label={t('metroWayfindingEditor.field.arrow')}
         value={element.iconId}
-        options={metroWayfindingArrowOptions.map((option) => ({
-          ...option,
-          arrowAssetName: resolveMetroArrowIconAssetName(option.id),
-        }))}
+        options={arrowGridOptions}
         disabled={disabled}
+        columns={5}
         onChange={(iconId) => patch({ iconId })}
       />
       <label className="material-checkbox-row metro-wayfinding-toggle">
@@ -3070,6 +3113,84 @@ function MetroWayfindingSegmentFieldShell({
   );
 }
 
+/**
+ * 输入法安全的受控文本框。
+ *
+ * 导视牌文本字段的提交要绕一圈事件总线（onChange → 编辑器状态 → 快照广播），
+ * 受控 value 会比输入法组合串慢一拍；直接在 onChange 里回写会把拼音逐段固化进输入框，
+ * 出现「cchchuchu…出口」这类重复。组合输入期间只维护本地草稿，组合结束才提交一次。
+ */
+function ImeSafeTextField({
+  autoSize = false,
+  inputRef,
+  onBlur,
+  onValueCommit,
+  value,
+  ...inputProps
+}: Readonly<
+  Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'ref'> & {
+    value: string;
+    /** 组合输入结束或普通输入时提交最终值。 */
+    onValueCommit: (value: string, input: HTMLInputElement) => void;
+    inputRef?: (node: HTMLInputElement | null) => void;
+    /** 按内容长度自适应 size（内联文本段使用）。 */
+    autoSize?: boolean;
+  }
+>) {
+  const composingRef = useRef(false);
+  const [draftValue, setDraftValue] = useState<string | null>(null);
+  const lastCommittedRef = useRef(value);
+  // 事件总线回传的值追上草稿后再丢弃草稿，避免组合结束瞬间闪回旧文本。
+  useEffect(() => {
+    lastCommittedRef.current = value;
+    if (draftValue !== null && value === draftValue) {
+      setDraftValue(null);
+    }
+  }, [draftValue, value]);
+  const displayValue = draftValue ?? value;
+  // 组合结束与随后的 input 事件可能各触发一次提交，值相同时只提交一次。
+  const commit = (next: string, input: HTMLInputElement) => {
+    if (lastCommittedRef.current === next) {
+      return;
+    }
+    lastCommittedRef.current = next;
+    onValueCommit(next, input);
+  };
+
+  return (
+    <input
+      {...inputProps}
+      ref={inputRef}
+      value={displayValue}
+      size={autoSize ? Math.max(displayValue.length, 1) : inputProps.size}
+      onChange={(event) => {
+        const next = event.currentTarget.value;
+        if (composingRef.current) {
+          setDraftValue(next);
+          return;
+        }
+        commit(next, event.currentTarget);
+      }}
+      onCompositionStart={() => {
+        composingRef.current = true;
+        setDraftValue(value);
+      }}
+      onCompositionEnd={(event) => {
+        composingRef.current = false;
+        const next = event.currentTarget.value;
+        setDraftValue(next);
+        commit(next, event.currentTarget);
+      }}
+      onBlur={(event) => {
+        if (!composingRef.current) {
+          setDraftValue(null);
+        }
+        onBlur?.(event);
+      }}
+    />
+  );
+}
+
 function MainSegmentEditor({
   label,
   segments,
@@ -3429,15 +3550,15 @@ function MainSegmentEditor({
               caretIndex === index ? ' is-active' : ''
             }`}
           >
-            <input
-              ref={(node) => {
+            <ImeSafeTextField
+              inputRef={(node) => {
                 if (node) textInputs.current.set(index, node);
                 else textInputs.current.delete(index);
               }}
+              autoSize
               className="metro-wayfinding-main-segments-text"
               value={segment.value}
               disabled={disabled}
-              size={Math.max(segment.value.length, 1)}
               aria-label={t('metroWayfindingEditor.aria.textSegment', {
                 label,
                 index: index + 1,
@@ -3450,9 +3571,8 @@ function MainSegmentEditor({
               onSelect={(event) => syncCaretOffset(event.currentTarget)}
               onClick={(event) => syncCaretOffset(event.currentTarget)}
               onKeyUp={(event) => syncCaretOffset(event.currentTarget)}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
-                const offset = event.currentTarget.selectionStart ?? value.length;
+              onValueCommit={(value, input) => {
+                const offset = input.selectionStart ?? value.length;
                 setCaretOffset(offset);
                 setTextSegmentValue(index, value, offset);
               }}
@@ -3574,15 +3694,15 @@ function MainSegmentEditor({
                 {metroMainSegmentKindIcon(segment.kind)}
               </span>
             </button>
-            <input
-              ref={(node) => {
+            <ImeSafeTextField
+              inputRef={(node) => {
                 if (node) chipInputs.current.set(index, node);
                 else chipInputs.current.delete(index);
               }}
+              autoSize
               className="metro-wayfinding-main-segments-chip-input"
               value={segment.value}
               disabled={disabled}
-              size={Math.max(segment.value.length, 1)}
               maxLength={segment.kind === 'line' ? 20 : 160}
               aria-label={t('metroWayfindingEditor.aria.segmentOrdinal', {
                 index: index + 1,
@@ -3590,7 +3710,7 @@ function MainSegmentEditor({
               })}
               placeholder={metroMainSegmentKindLabel(segment.kind, t)}
               onFocus={() => setActiveTextIndex(null)}
-              onChange={(event) => updateChip(index, event.currentTarget.value)}
+              onValueCommit={(value) => updateChip(index, value)}
               onKeyDown={(event) => {
                 if (event.key === 'Backspace' && handleChipBackspace(index, event)) {
                   event.preventDefault();
@@ -3727,8 +3847,10 @@ function MetroWayfindingSecondaryField({
       onBlankPointerDown={focusLastEditableSegment}
     >
       <span className="metro-wayfinding-main-segments-text-flow is-active">
-        <input
-          ref={inputRef}
+        <ImeSafeTextField
+          inputRef={(node) => {
+            inputRef.current = node;
+          }}
           autoFocus={autoFocus}
           className="metro-wayfinding-main-segments-text"
           value={value}
@@ -3741,9 +3863,9 @@ function MetroWayfindingSecondaryField({
           onSelect={(event) => syncCaretOffset(event.currentTarget)}
           onClick={(event) => syncCaretOffset(event.currentTarget)}
           onKeyUp={(event) => syncCaretOffset(event.currentTarget)}
-          onChange={(event) => {
-            setCaretOffset(event.currentTarget.selectionStart ?? event.currentTarget.value.length);
-            onChange(event.currentTarget.value);
+          onValueCommit={(next, input) => {
+            setCaretOffset(input.selectionStart ?? next.length);
+            onChange(next);
           }}
           onBlur={() => setCaretOffset(null)}
           onKeyDown={(event) => {
@@ -3973,20 +4095,20 @@ function LargeTextValueEditor({
             className="metro-wayfinding-main-segments-chip is-suffix"
             title={t('metroWayfindingEditor.suffix.label')}
           >
-            <input
-              ref={(node) => {
+            <ImeSafeTextField
+              inputRef={(node) => {
                 if (node) suffixInputs.current.set(index, node);
                 else suffixInputs.current.delete(index);
               }}
+              autoSize
               className="metro-wayfinding-main-segments-chip-input"
               value={segment.value}
               disabled={disabled}
-              size={Math.max(segment.value.length, 1)}
               maxLength={24}
               aria-label={t('metroWayfindingEditor.aria.suffixOrdinal', { index: index + 1 })}
               placeholder={t('metroWayfindingEditor.suffix.placeholder')}
               onFocus={() => setActiveTextIndex(null)}
-              onChange={(event) => setSuffixValue(index, event.currentTarget.value)}
+              onValueCommit={(value) => setSuffixValue(index, value)}
               onKeyDown={(event) => {
                 if (event.key === 'Backspace' && handleSuffixBackspace(index, event)) {
                   event.preventDefault();
@@ -4022,15 +4144,15 @@ function LargeTextValueEditor({
               caretIndex === index ? ' is-active' : ''
             }`}
           >
-            <input
-              ref={(node) => {
+            <ImeSafeTextField
+              inputRef={(node) => {
                 if (node) textInputs.current.set(index, node);
                 else textInputs.current.delete(index);
               }}
+              autoSize
               className="metro-wayfinding-main-segments-text"
               value={segment.value}
               disabled={disabled}
-              size={Math.max(segment.value.length, 1)}
               maxLength={160}
               aria-label={t('metroWayfindingEditor.aria.textSegment', {
                 label,
@@ -4043,11 +4165,9 @@ function LargeTextValueEditor({
               onSelect={(event) => syncCaretOffset(event.currentTarget)}
               onClick={(event) => syncCaretOffset(event.currentTarget)}
               onKeyUp={(event) => syncCaretOffset(event.currentTarget)}
-              onChange={(event) => {
-                setCaretOffset(
-                  event.currentTarget.selectionStart ?? event.currentTarget.value.length,
-                );
-                setTextSegmentValue(index, event.currentTarget.value);
+              onValueCommit={(value, input) => {
+                setCaretOffset(input.selectionStart ?? value.length);
+                setTextSegmentValue(index, value);
               }}
               onKeyDown={(event) => {
                 if (event.key === 'Backspace' && handleTextBackspace(index, event)) {
@@ -4296,279 +4416,283 @@ function CombinationElementFields({
         </button>
       </div>
       {isOpen ? (
-        <div
-          className="modal-backdrop metro-wayfinding-combination-dialog-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.currentTarget === event.target) setIsOpen(false);
-          }}
-        >
-          <section
-            className="modal-panel metro-wayfinding-combination-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={`${element.id}-combination-heading`}
+        <EditorDialogPortal>
+          <div
+            className="modal-backdrop metro-wayfinding-combination-dialog-backdrop editor-dialog-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.currentTarget === event.target) setIsOpen(false);
+            }}
           >
-            <header>
-              <div>
-                <span>{t('metroWayfindingEditor.combination.eyebrow')}</span>
-                <h2 id={`${element.id}-combination-heading`}>
-                  {t('metroWayfindingEditor.combination.editTitle')}
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={t('metroWayfindingEditor.combination.closeAria')}
-                title={t('metroWayfindingEditor.action.close')}
-                onClick={() => setIsOpen(false)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            </header>
-            <p className="muted">{t('metroWayfindingEditor.combination.description')}</p>
-            {element.children.length ? (
-              <ol
-                className="metro-wayfinding-combination-child-list"
-                role="tablist"
-                aria-label={t('metroWayfindingEditor.combination.listAria')}
-              >
-                {element.children.map((child, index) => (
-                  <li key={child.id}>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={child.id === selectedChild?.id}
-                      className={child.id === selectedChild?.id ? 'is-active' : undefined}
-                      onClick={() => setSelectedChildId(child.id)}
-                    >
-                      <MetroWayfindingElementTabContent element={child} layoutMode="single" />
-                      <span className="metro-wayfinding-combination-child-index">{index + 1}</span>
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="muted metro-wayfinding-combination-empty">
-                {t('metroWayfindingEditor.combination.empty')}
-              </p>
-            )}
-            <div
-              className="metro-wayfinding-combination-add-actions"
-              aria-label={t('metroWayfindingEditor.combination.addAria')}
+            <section
+              className="modal-panel metro-wayfinding-combination-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`${element.id}-combination-heading`}
             >
-              {(
-                [
-                  {
-                    type: 'facility',
-                    labelKey: 'metroWayfindingEditor.combination.addFacility',
-                    icon: 'accessible',
-                  },
-                  {
-                    type: 'arrow',
-                    labelKey: 'metroWayfindingEditor.elementType.arrow',
-                    icon: 'arrow_forward',
-                  },
-                  {
-                    type: 'text',
-                    labelKey: 'metroWayfindingEditor.elementType.text',
-                    icon: 'text_fields',
-                  },
-                  {
-                    type: 'largeText',
-                    labelKey: 'metroWayfindingEditor.elementType.largeText',
-                    icon: 'title',
-                  },
-                  {
-                    type: 'space',
-                    labelKey: 'metroWayfindingEditor.combination.addSpace',
-                    icon: 'space_bar',
-                  },
-                ] as const
-              ).map(({ type, labelKey, icon }) => (
+              <header>
+                <div>
+                  <span>{t('metroWayfindingEditor.combination.eyebrow')}</span>
+                  <h2 id={`${element.id}-combination-heading`}>
+                    {t('metroWayfindingEditor.combination.editTitle')}
+                  </h2>
+                </div>
                 <button
-                  key={type}
                   type="button"
-                  className="secondary-action-button"
-                  disabled={disabled || element.children.length >= 32}
-                  onClick={() =>
-                    addChild(type as 'facility' | 'arrow' | 'text' | 'largeText' | 'space')
-                  }
+                  className="icon-button"
+                  aria-label={t('metroWayfindingEditor.combination.closeAria')}
+                  title={t('metroWayfindingEditor.action.close')}
+                  onClick={() => setIsOpen(false)}
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
-                    {icon}
+                    close
                   </span>
-                  <span>{t(labelKey)}</span>
                 </button>
-              ))}
-            </div>
-            <p className="muted metro-wayfinding-combination-template-hint">
-              {t('metroWayfindingEditor.combination.templateHint')}
-            </p>
-            {selectedChild ? (
-              <div className="metro-wayfinding-combination-child-editor">
-                <header>
-                  <strong>{metroElementLabel(selectedChild, t)}</strong>
-                  <div className="metro-wayfinding-element-actions">
-                    <button
-                      type="button"
-                      className="icon-button"
-                      aria-label={t('metroWayfindingEditor.combination.childMoveUpAria')}
-                      title={t('metroWayfindingEditor.action.moveUp')}
-                      disabled={disabled || element.children.indexOf(selectedChild) === 0}
-                      onClick={() => moveChild(element.children.indexOf(selectedChild), 'up')}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        arrow_upward
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      aria-label={t('metroWayfindingEditor.combination.childMoveDownAria')}
-                      title={t('metroWayfindingEditor.action.moveDown')}
-                      disabled={
-                        disabled ||
-                        element.children.indexOf(selectedChild) === element.children.length - 1
-                      }
-                      onClick={() => moveChild(element.children.indexOf(selectedChild), 'down')}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        arrow_downward
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      aria-label={t('metroWayfindingEditor.combination.childDuplicateAria')}
-                      title={t('metroWayfindingEditor.action.duplicate')}
-                      disabled={disabled || element.children.length >= 32}
-                      onClick={() => {
-                        const copy = duplicateMetroWayfindingElement(
-                          selectedChild,
-                        ) as MetroWayfindingCombinationChild;
-                        const index = element.children.indexOf(selectedChild);
-                        const children = [...element.children];
-                        children.splice(index + 1, 0, copy);
-                        updateChildren(children);
-                        setSelectedChildId(copy.id);
-                      }}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        content_copy
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      aria-label={t('metroWayfindingEditor.combination.childRemoveAria')}
-                      title={t('metroWayfindingEditor.action.delete')}
-                      disabled={disabled}
-                      onClick={() => removeChild(selectedChild.id)}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        delete
-                      </span>
-                    </button>
-                  </div>
-                </header>
-                <SegmentedControl
-                  label={t('metroWayfindingEditor.combination.childType')}
-                  value={selectedChild.type}
-                  options={[
+              </header>
+              <p className="muted">{t('metroWayfindingEditor.combination.description')}</p>
+              {element.children.length ? (
+                <ol
+                  className="metro-wayfinding-combination-child-list"
+                  role="tablist"
+                  aria-label={t('metroWayfindingEditor.combination.listAria')}
+                >
+                  {element.children.map((child, index) => (
+                    <li key={child.id}>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={child.id === selectedChild?.id}
+                        className={child.id === selectedChild?.id ? 'is-active' : undefined}
+                        onClick={() => setSelectedChildId(child.id)}
+                      >
+                        <MetroWayfindingElementTabContent element={child} layoutMode="single" />
+                        <span className="metro-wayfinding-combination-child-index">
+                          {index + 1}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="muted metro-wayfinding-combination-empty">
+                  {t('metroWayfindingEditor.combination.empty')}
+                </p>
+              )}
+              <div
+                className="metro-wayfinding-combination-add-actions"
+                aria-label={t('metroWayfindingEditor.combination.addAria')}
+              >
+                {(
+                  [
                     {
-                      value: 'facility',
-                      label: t('metroWayfindingEditor.elementType.facility'),
+                      type: 'facility',
+                      labelKey: 'metroWayfindingEditor.combination.addFacility',
                       icon: 'accessible',
                     },
                     {
-                      value: 'arrow',
-                      label: t('metroWayfindingEditor.elementType.arrow'),
+                      type: 'arrow',
+                      labelKey: 'metroWayfindingEditor.elementType.arrow',
                       icon: 'arrow_forward',
                     },
                     {
-                      value: 'text',
-                      label: t('metroWayfindingEditor.elementType.text'),
+                      type: 'text',
+                      labelKey: 'metroWayfindingEditor.elementType.text',
                       icon: 'text_fields',
                     },
                     {
-                      value: 'largeText',
-                      label: t('metroWayfindingEditor.elementType.largeText'),
+                      type: 'largeText',
+                      labelKey: 'metroWayfindingEditor.elementType.largeText',
                       icon: 'title',
                     },
                     {
-                      value: 'space',
-                      label: t('metroWayfindingEditor.elementType.spaceShort'),
+                      type: 'space',
+                      labelKey: 'metroWayfindingEditor.combination.addSpace',
                       icon: 'space_bar',
                     },
-                  ]}
-                  disabled={disabled}
-                  wide
-                  onChange={(type) => changeChildType(selectedChild, type)}
-                />
-                <ElementColorFields
-                  element={selectedChild}
-                  disabled={disabled}
-                  backgroundColorOptions={backgroundColorOptions}
-                  inheritedBackgroundColor={childBackground}
-                  inheritedForegroundColor={childForeground}
-                  patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
-                />
-                {selectedChild.type === 'facility' ? (
-                  <FacilityElementFields
-                    element={selectedChild}
-                    disabled={disabled}
-                    lineColorOptions={lineColorOptions}
-                    patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
-                  />
-                ) : null}
-                {selectedChild.type === 'arrow' ? (
-                  <ArrowElementFields
-                    element={selectedChild}
-                    disabled={disabled}
-                    lineColorOptions={lineColorOptions}
-                    patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
-                  />
-                ) : null}
-                {selectedChild.type === 'text' ? (
-                  <TextElementFields
-                    element={selectedChild}
-                    layoutMode="single"
-                    disabled={disabled}
-                    lineColorOptions={lineColorOptions}
-                    textSuggestions={textSuggestions}
-                    patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
-                  />
-                ) : null}
-                {selectedChild.type === 'largeText' ? (
-                  <LargeTextElementFields
-                    element={selectedChild}
-                    disabled={disabled}
-                    lineColorOptions={lineColorOptions}
-                    patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
-                  />
-                ) : null}
-                {selectedChild.type === 'space' ? (
-                  <SpaceElementFields
-                    element={selectedChild}
-                    disabled={disabled}
-                    patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
-                  />
-                ) : null}
+                  ] as const
+                ).map(({ type, labelKey, icon }) => (
+                  <button
+                    key={type}
+                    type="button"
+                    className="secondary-action-button"
+                    disabled={disabled || element.children.length >= 32}
+                    onClick={() =>
+                      addChild(type as 'facility' | 'arrow' | 'text' | 'largeText' | 'space')
+                    }
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      {icon}
+                    </span>
+                    <span>{t(labelKey)}</span>
+                  </button>
+                ))}
               </div>
-            ) : null}
-            <footer>
-              <button type="button" className="is-primary" onClick={() => setIsOpen(false)}>
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  check
-                </span>
-                {t('metroWayfindingEditor.action.done')}
-              </button>
-            </footer>
-          </section>
-        </div>
+              <p className="muted metro-wayfinding-combination-template-hint">
+                {t('metroWayfindingEditor.combination.templateHint')}
+              </p>
+              {selectedChild ? (
+                <div className="metro-wayfinding-combination-child-editor">
+                  <header>
+                    <strong>{metroElementLabel(selectedChild, t)}</strong>
+                    <div className="metro-wayfinding-element-actions">
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={t('metroWayfindingEditor.combination.childMoveUpAria')}
+                        title={t('metroWayfindingEditor.action.moveUp')}
+                        disabled={disabled || element.children.indexOf(selectedChild) === 0}
+                        onClick={() => moveChild(element.children.indexOf(selectedChild), 'up')}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          arrow_upward
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={t('metroWayfindingEditor.combination.childMoveDownAria')}
+                        title={t('metroWayfindingEditor.action.moveDown')}
+                        disabled={
+                          disabled ||
+                          element.children.indexOf(selectedChild) === element.children.length - 1
+                        }
+                        onClick={() => moveChild(element.children.indexOf(selectedChild), 'down')}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          arrow_downward
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={t('metroWayfindingEditor.combination.childDuplicateAria')}
+                        title={t('metroWayfindingEditor.action.duplicate')}
+                        disabled={disabled || element.children.length >= 32}
+                        onClick={() => {
+                          const copy = duplicateMetroWayfindingElement(
+                            selectedChild,
+                          ) as MetroWayfindingCombinationChild;
+                          const index = element.children.indexOf(selectedChild);
+                          const children = [...element.children];
+                          children.splice(index + 1, 0, copy);
+                          updateChildren(children);
+                          setSelectedChildId(copy.id);
+                        }}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          content_copy
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={t('metroWayfindingEditor.combination.childRemoveAria')}
+                        title={t('metroWayfindingEditor.action.delete')}
+                        disabled={disabled}
+                        onClick={() => removeChild(selectedChild.id)}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          delete
+                        </span>
+                      </button>
+                    </div>
+                  </header>
+                  <SegmentedControl
+                    label={t('metroWayfindingEditor.combination.childType')}
+                    value={selectedChild.type}
+                    options={[
+                      {
+                        value: 'facility',
+                        label: t('metroWayfindingEditor.elementType.facility'),
+                        icon: 'accessible',
+                      },
+                      {
+                        value: 'arrow',
+                        label: t('metroWayfindingEditor.elementType.arrow'),
+                        icon: 'arrow_forward',
+                      },
+                      {
+                        value: 'text',
+                        label: t('metroWayfindingEditor.elementType.text'),
+                        icon: 'text_fields',
+                      },
+                      {
+                        value: 'largeText',
+                        label: t('metroWayfindingEditor.elementType.largeText'),
+                        icon: 'title',
+                      },
+                      {
+                        value: 'space',
+                        label: t('metroWayfindingEditor.elementType.spaceShort'),
+                        icon: 'space_bar',
+                      },
+                    ]}
+                    disabled={disabled}
+                    wide
+                    onChange={(type) => changeChildType(selectedChild, type)}
+                  />
+                  <ElementColorFields
+                    element={selectedChild}
+                    disabled={disabled}
+                    backgroundColorOptions={backgroundColorOptions}
+                    inheritedBackgroundColor={childBackground}
+                    inheritedForegroundColor={childForeground}
+                    patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
+                  />
+                  {selectedChild.type === 'facility' ? (
+                    <FacilityElementFields
+                      element={selectedChild}
+                      disabled={disabled}
+                      lineColorOptions={lineColorOptions}
+                      patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
+                    />
+                  ) : null}
+                  {selectedChild.type === 'arrow' ? (
+                    <ArrowElementFields
+                      element={selectedChild}
+                      disabled={disabled}
+                      lineColorOptions={lineColorOptions}
+                      patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
+                    />
+                  ) : null}
+                  {selectedChild.type === 'text' ? (
+                    <TextElementFields
+                      element={selectedChild}
+                      layoutMode="single"
+                      disabled={disabled}
+                      lineColorOptions={lineColorOptions}
+                      textSuggestions={textSuggestions}
+                      patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
+                    />
+                  ) : null}
+                  {selectedChild.type === 'largeText' ? (
+                    <LargeTextElementFields
+                      element={selectedChild}
+                      disabled={disabled}
+                      lineColorOptions={lineColorOptions}
+                      patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
+                    />
+                  ) : null}
+                  {selectedChild.type === 'space' ? (
+                    <SpaceElementFields
+                      element={selectedChild}
+                      disabled={disabled}
+                      patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+              <footer>
+                <button type="button" className="is-primary" onClick={() => setIsOpen(false)}>
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    check
+                  </span>
+                  {t('metroWayfindingEditor.action.done')}
+                </button>
+              </footer>
+            </section>
+          </div>
+        </EditorDialogPortal>
       ) : null}
     </>
   );
@@ -4841,98 +4965,40 @@ function SegmentedControl<T extends string>({
   wide?: boolean;
   onChange: (value: T) => void;
 }>) {
-  const controlRef = useRef<HTMLFieldSetElement>(null);
-  const [compactLabels, setCompactLabels] = useState(false);
-
-  useLayoutEffect(() => {
-    if (!showLabels) {
-      setCompactLabels(false);
-      return;
-    }
-
-    const control = controlRef.current;
-    const optionsContainer = control?.querySelector<HTMLDivElement>(':scope > div');
-    if (!control || !optionsContainer) return;
-
-    const updateLabelMode = () => {
-      const containerStyle = window.getComputedStyle(optionsContainer);
-      const availableWidth =
-        optionsContainer.clientWidth -
-        Number.parseFloat(containerStyle.paddingLeft) -
-        Number.parseFloat(containerStyle.paddingRight);
-      const measurement = control.cloneNode(true) as HTMLFieldSetElement;
-      measurement.classList.remove('is-compact');
-      measurement.classList.add('is-measuring');
-      Object.assign(measurement.style, {
-        position: 'fixed',
-        top: '-10000px',
-        left: '-10000px',
-        width: 'max-content',
-        maxWidth: 'none',
-        visibility: 'hidden',
-        pointerEvents: 'none',
-      });
-
-      let requiredWidth = 0;
-      document.body.appendChild(measurement);
-      try {
-        const measuredOptionsContainer = measurement.querySelector<HTMLDivElement>(':scope > div');
-        if (measuredOptionsContainer) {
-          const measuredStyle = window.getComputedStyle(measuredOptionsContainer);
-          requiredWidth =
-            measuredOptionsContainer.getBoundingClientRect().width -
-            Number.parseFloat(measuredStyle.paddingLeft) -
-            Number.parseFloat(measuredStyle.paddingRight);
-        }
-      } finally {
-        measurement.remove();
-      }
-      const shouldCompact = requiredWidth > availableWidth + 1;
-      setCompactLabels((previous) => (previous === shouldCompact ? previous : shouldCompact));
-    };
-
-    updateLabelMode();
-    const resizeObserver = new ResizeObserver(updateLabelMode);
-    resizeObserver.observe(optionsContainer);
-    return () => resizeObserver.disconnect();
-  }, [options, showLabels]);
-
   return (
-    <fieldset
-      ref={controlRef}
-      className={`metro-wayfinding-segmented-control${wide ? ' is-wide' : ''}${compactLabels ? ' is-compact' : ''}`}
-      disabled={disabled}
-    >
-      <legend>{label}</legend>
-      <div>
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className={option.value === value ? 'is-active' : undefined}
-            aria-pressed={option.value === value}
-            aria-label={option.label}
-            title={option.label}
-            onClick={() => onChange(option.value)}
-          >
-            {option.assetName ? (
-              <MetroFacilityAssetIcon assetName={option.assetName} style={option.iconStyle} />
-            ) : option.icon ? (
-              <span
-                className="material-symbols-outlined"
-                aria-hidden="true"
-                style={option.iconStyle}
-              >
-                {option.icon}
-              </span>
-            ) : null}
-            {showLabels ? (
-              <span className="metro-wayfinding-segmented-control-label">{option.label}</span>
-            ) : null}
-          </button>
-        ))}
-      </div>
-    </fieldset>
+    <div className={`material-field metro-wayfinding-segmented-field${wide ? ' is-wide' : ''}`}>
+      <span>{label}</span>
+      <SharedSegmentedControl
+        ariaLabel={label}
+        className="metro-wayfinding-segmented-control"
+        disabled={disabled}
+        value={value}
+        onChange={onChange}
+        options={options.map((option) => ({
+          value: option.value,
+          title: option.label,
+          ariaLabel: option.label,
+          label: (
+            <>
+              {option.assetName ? (
+                <MetroFacilityAssetIcon assetName={option.assetName} style={option.iconStyle} />
+              ) : option.icon ? (
+                <span
+                  className="material-symbols-outlined"
+                  aria-hidden="true"
+                  style={option.iconStyle}
+                >
+                  {option.icon}
+                </span>
+              ) : null}
+              {showLabels ? (
+                <span className="metro-wayfinding-segmented-control-label">{option.label}</span>
+              ) : null}
+            </>
+          ),
+        }))}
+      />
+    </div>
   );
 }
 
@@ -4941,6 +5007,7 @@ function IconChoiceGrid({
   value,
   options,
   disabled,
+  columns = 6,
   onChange,
 }: Readonly<{
   label: string;
@@ -4952,19 +5019,28 @@ function IconChoiceGrid({
     }
   >;
   disabled: boolean;
+  /** 每行图标数量；箭头方向固定 5 列，设施按可用宽度自动排列。 */
+  columns?: number;
   onChange: (value: string) => void;
 }>) {
   return (
-    <fieldset className="metro-wayfinding-icon-picker" disabled={disabled}>
-      <legend>{label}</legend>
-      <div>
+    <div className="material-field metro-wayfinding-icon-picker-field">
+      <span>{label}</span>
+      <div
+        className="metro-wayfinding-icon-picker"
+        role="group"
+        aria-label={label}
+        style={{ '--icon-picker-columns': columns } as CSSProperties}
+      >
         {options.map((option) => (
           <button
             key={option.id}
             type="button"
             className={option.id === value ? 'is-active' : undefined}
             aria-pressed={option.id === value}
+            aria-label={option.label}
             title={option.label}
+            disabled={disabled}
             onClick={() => onChange(option.id)}
           >
             {option.arrowAssetName ? (
@@ -4980,11 +5056,10 @@ function IconChoiceGrid({
                 {option.symbol}
               </span>
             )}
-            <span>{option.label}</span>
           </button>
         ))}
       </div>
-    </fieldset>
+    </div>
   );
 }
 
@@ -5068,7 +5143,7 @@ function ElementColorFields({
   );
 }
 
-function ColorControl({
+export function ColorControl({
   label,
   value,
   palette,
@@ -5089,7 +5164,7 @@ function ColorControl({
   return (
     <label className="material-field metro-wayfinding-color-control">
       <span>{label}</span>
-      <div>
+      <div className="metro-wayfinding-color-control-row">
         <select
           value={selectedValue}
           disabled={disabled}
@@ -5114,6 +5189,9 @@ function ColorControl({
           disabled={disabled}
           onChange={(event) => onChange(event.currentTarget.value.toUpperCase())}
         />
+        <span className="metro-wayfinding-color-value" aria-hidden="true">
+          {selectedValue === 'inherit' ? inherit?.label : value.toUpperCase()}
+        </span>
       </div>
     </label>
   );
@@ -5125,6 +5203,8 @@ function reduceMetroWayfindingAction(
 ) {
   if (action.type === 'reverse') return reverseMetroWayfindingLayout(layout);
   if (action.type === 'replace') return action.layout;
+  // 选中同步由 applyAction 提前处理，不会走到这里；保留兜底避免类型收窄缺失。
+  if (action.type === 'select') return layout;
   const elements = layout.rows[action.rowIndex];
   if (!elements) return layout;
   if (action.type === 'add') {
@@ -5254,7 +5334,7 @@ function replaceMetroWayfindingRowElements(
   };
 }
 
-function metroElementLabel(element: MetroWayfindingElement, t: Translate): string {
+export function metroElementLabel(element: MetroWayfindingElement, t: Translate): string {
   if (element.type === 'facility') return t('metroWayfindingEditor.elementLabel.facility');
   if (element.type === 'arrow') return t('metroWayfindingEditor.elementLabel.arrow');
   if (element.type === 'text') {
@@ -5387,7 +5467,7 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
   );
 }
 
-function mergeMetroColorOptions(
+export function mergeMetroColorOptions(
   ...groups: ReadonlyArray<ReadonlyArray<{ value: string; label: string }>>
 ): Array<{ value: string; label: string }> {
   const seen = new Set<string>();

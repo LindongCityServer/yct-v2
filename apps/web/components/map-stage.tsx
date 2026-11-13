@@ -376,6 +376,8 @@ interface ProjectedShapePoi {
   label: string;
   path: string;
   basePath?: string;
+  /** 减去图形路径；渲染时通过遮罩从区域填充中挖掉。 */
+  holePaths: string[];
   fillColor?: string;
   fillOpacity?: number;
   priority: number;
@@ -481,7 +483,9 @@ interface ProjectedAdministrativeArea {
   centerLeft: number;
   centerTop: number;
   fillColor?: string;
+  /** 白色外轮廓路径，减去图形通过遮罩挖空。 */
   path: string;
+  holePaths: string[];
   showLabel: boolean;
   strokeColor?: string;
 }
@@ -5990,23 +5994,35 @@ export function MapStage() {
                 >
                   {projectedAdministrativeAreas
                     .filter((area) => area.area.id === selectedAdministrativeAreaId)
-                    .map((area) => (
-                      <path
-                        className="is-selected"
-                        d={area.path}
-                        key={area.area.id}
-                        style={
-                          {
-                            '--administrative-area-fill': area.fillColor,
-                            '--administrative-area-fill-opacity':
-                              area.area.style?.fillOpacity ?? 0.14,
-                            '--administrative-area-stroke': area.strokeColor,
-                            '--administrative-area-stroke-opacity':
-                              area.area.style?.strokeOpacity ?? 0.72,
-                          } as CSSProperties
-                        }
-                      />
-                    ))}
+                    .map((area) => {
+                      const maskId = getAdministrativeAreaHoleMaskId(area.area.id);
+                      return (
+                        <g key={area.area.id}>
+                          <ShapeHoleMask
+                            height={viewportSize.height}
+                            holePaths={area.holePaths}
+                            id={maskId}
+                            path={area.path}
+                            width={viewportSize.width}
+                          />
+                          <path
+                            className="is-selected"
+                            d={area.path}
+                            mask={area.holePaths.length > 0 ? `url(#${maskId})` : undefined}
+                            style={
+                              {
+                                '--administrative-area-fill': area.fillColor,
+                                '--administrative-area-fill-opacity':
+                                  area.area.style?.fillOpacity ?? 0.14,
+                                '--administrative-area-stroke': area.strokeColor,
+                                '--administrative-area-stroke-opacity':
+                                  area.area.style?.strokeOpacity ?? 0.72,
+                              } as CSSProperties
+                            }
+                          />
+                        </g>
+                      );
+                    })}
                 </svg>
                 {projectedAdministrativeAreas
                   .filter((area) => area.showLabel)
@@ -6043,19 +6059,31 @@ export function MapStage() {
                   viewBox={`0 0 ${Math.max(1, viewportSize.width)} ${Math.max(1, viewportSize.height)}`}
                   aria-hidden="true"
                 >
-                  {rawAreaFillShapePois.map((shape) => (
-                    <path
-                      key={`${shape.id}-area-fill`}
-                      className="map-shape-poi-path is-area"
-                      d={shape.path}
-                      style={
-                        {
-                          '--shape-poi-fill-color': shape.fillColor ?? shape.accentColor,
-                          '--shape-poi-fill-opacity': shape.fillOpacity ?? 0.18,
-                        } as CSSProperties
-                      }
-                    />
-                  ))}
+                  {rawAreaFillShapePois.map((shape, index) => {
+                    const maskId = getShapeHoleMaskId('fill', shape, index);
+                    return (
+                      <g key={`${shape.id}-area-fill`}>
+                        <ShapeHoleMask
+                          height={viewportSize.height}
+                          holePaths={shape.holePaths}
+                          id={maskId}
+                          path={shape.path}
+                          width={viewportSize.width}
+                        />
+                        <path
+                          className="map-shape-poi-path is-area"
+                          d={shape.path}
+                          mask={shape.holePaths.length > 0 ? `url(#${maskId})` : undefined}
+                          style={
+                            {
+                              '--shape-poi-fill-color': shape.fillColor ?? shape.accentColor,
+                              '--shape-poi-fill-opacity': shape.fillOpacity ?? 0.18,
+                            } as CSSProperties
+                          }
+                        />
+                      </g>
+                    );
+                  })}
                 </svg>
               </div>
             ) : null}
@@ -6181,10 +6209,18 @@ export function MapStage() {
                   viewBox={`0 0 ${Math.max(1, viewportSize.width)} ${Math.max(1, viewportSize.height)}`}
                   aria-hidden="true"
                 >
-                  {rawProjectedShapePois.map((shape) => {
+                  {rawProjectedShapePois.map((shape, index) => {
                     const source = shapeOverlaySource.find((marker) => marker.id === shape.id);
+                    const maskId = getShapeHoleMaskId('shape', shape, index);
                     return (
                       <g key={`${shape.id}-shape`}>
+                        <ShapeHoleMask
+                          height={viewportSize.height}
+                          holePaths={shape.holePaths}
+                          id={maskId}
+                          path={shape.path}
+                          width={viewportSize.width}
+                        />
                         {shape.basePath ? (
                           <path
                             className={`map-shape-poi-path is-area is-extrusion-base${
@@ -6210,6 +6246,11 @@ export function MapStage() {
                             .filter(Boolean)
                             .join(' ')}
                           d={shape.path}
+                          mask={
+                            shape.isArea && shape.holePaths.length > 0
+                              ? `url(#${maskId})`
+                              : undefined
+                          }
                           data-map-marker-id={source?.id}
                           onPointerDown={shape.isArea ? undefined : handleMapMarkerPointerDown}
                           onClick={
@@ -9169,8 +9210,6 @@ function RoutePlanDraftCard({
               </div>
               {status === 'loading' ? (
                 <p className="map-route-plan-note">{t('map.route.loadingNote')}</p>
-              ) : selectedOption ? (
-                <p className="map-route-plan-note">{selectedOption.note}</p>
               ) : null}
             </>
           ) : null}
@@ -13342,6 +13381,15 @@ function projectShapePoiMarkers(
       : 0;
     const path = buildPath(perspectiveOffset * -0.45, perspectiveOffset * -0.75);
     const basePath = usePerspective ? buildPath() : undefined;
+    const holePaths = getShapeGeometryHoleRings(marker.geometry)
+      .map((ring) =>
+        ring.map(([x, z]) => ({
+          left: size.width / 2 + (x - view.centerX) * scale + perspectiveOffset * -0.45,
+          top: size.height / 2 + (z - view.centerZ) * scale + perspectiveOffset * -0.75,
+        })),
+      )
+      .filter((points) => points.length >= 3)
+      .map(buildClosedPathFromPoints);
     const labelAnchor = isArea
       ? findAreaLabelAnchor(projectedSets, geometryCenter, label)
       : undefined;
@@ -13352,6 +13400,7 @@ function projectShapePoiMarkers(
         label,
         path,
         basePath,
+        holePaths,
         isArea,
         isRegionMarker: isRegionMarker(marker),
         accentColor: marker.accentColor,
@@ -13405,28 +13454,35 @@ function projectAdministrativeAreas(
       return [];
     }
     const sets = getAdministrativeAreaCoordinateSets(area.boundary);
-    const projectedSets = sets.map((set) => ({
-      closed: true,
-      points: set.map(([x, z]) => ({
+    const projectRing = (ring: Array<[number, number]>) =>
+      ring.map(([x, z]) => ({
         left: size.width / 2 + (x - view.centerX) * scale,
         top: size.height / 2 + (z - view.centerZ) * scale,
-      })),
-    }));
+      }));
+    const buildRingPath = (points: Array<{ left: number; top: number }>): string => {
+      const first = points[0];
+      if (!first) return '';
+      return [
+        `M ${first.left} ${first.top}`,
+        ...points.slice(1).map((point) => `L ${point.left} ${point.top}`),
+        'Z',
+      ].join(' ');
+    };
+    const polygonGroups = getAdministrativeAreaPolygonGroups(area.boundary).map((group) =>
+      group.map(projectRing),
+    );
+    const path = polygonGroups
+      .map((group) => buildRingPath(group[0] ?? []))
+      .filter(Boolean)
+      .join(' ');
+    const holePaths = polygonGroups
+      .flatMap((group) => group.slice(1).map(buildRingPath))
+      .filter(Boolean);
+    const projectedSets = sets.map((set) => ({ closed: true, points: projectRing(set) }));
     const points = projectedSets.flatMap((set) => set.points);
     if (points.length === 0 || !traceBoundsIntersectsViewport(getTraceBounds(points), size)) {
       return [];
     }
-    const path = projectedSets
-      .map((set) => {
-        const first = set.points[0];
-        if (!first) return '';
-        return [
-          `M ${first.left} ${first.top}`,
-          ...set.points.slice(1).map((point) => `L ${point.left} ${point.top}`),
-          'Z',
-        ].join(' ');
-      })
-      .join(' ');
     const geometryCenterCoordinate = getAdministrativeAreaGeometryCenter(sets);
     const geometryCenter = {
       left: size.width / 2 + (geometryCenterCoordinate[0] - view.centerX) * scale,
@@ -13456,6 +13512,7 @@ function projectAdministrativeAreas(
         centerTop: labelAnchor.top,
         fillColor: area.style?.fillColor ?? boundLineColor,
         path,
+        holePaths,
         showLabel: view.zoom <= (area.maxZoom ?? ADMINISTRATIVE_AREA_DEFAULT_MAX_ZOOM),
         strokeColor: area.style?.strokeColor ?? boundLineColor,
       },
@@ -13466,12 +13523,25 @@ function projectAdministrativeAreas(
 function getAdministrativeAreaCoordinateSets(
   geometry: MapGeometry,
 ): Array<Array<[number, number]>> {
-  if (geometry.type === 'Rectangle') return [rectangleBoundsToMapCoordinates(geometry.bounds)];
-  if (geometry.type === 'MultiRectangle') {
-    return geometry.rectangles.map((bounds) => rectangleBoundsToMapCoordinates(bounds));
+  return getAdministrativeAreaPolygonGroups(geometry).flat();
+}
+
+/** 每个多边形按「外边界 + 减去图形」分组，遮罩挖洞需要保留环之间的归属。 */
+function getAdministrativeAreaPolygonGroups(
+  geometry: MapGeometry,
+): Array<Array<Array<[number, number]>>> {
+  if (geometry.type === 'Rectangle') {
+    return [[rectangleBoundsToMapCoordinates(geometry.bounds)]];
   }
-  if (geometry.type === 'Polygon') return geometry.coordinates;
-  if (geometry.type === 'MultiPolygon') return geometry.coordinates.flat();
+  if (geometry.type === 'MultiRectangle') {
+    return geometry.rectangles.map((bounds) => [rectangleBoundsToMapCoordinates(bounds)]);
+  }
+  if (geometry.type === 'Polygon') {
+    return [geometry.coordinates];
+  }
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates;
+  }
   return [];
 }
 
@@ -13587,6 +13657,68 @@ function squaredScreenDistance(
   const deltaLeft = left.left - right.left;
   const deltaTop = left.top - right.top;
   return deltaLeft * deltaLeft + deltaTop * deltaTop;
+}
+
+/** 减去图形只来自多边形的内环；矩形与线状几何没有。 */
+function getShapeGeometryHoleRings(
+  geometry: ShapeMarker['geometry'],
+): Array<Array<[number, number]>> {
+  if (geometry.type === 'Polygon') {
+    return geometry.coordinates.slice(1);
+  }
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates.flatMap((polygon) => polygon.slice(1));
+  }
+  return [];
+}
+
+function buildClosedPathFromPoints(points: Array<{ left: number; top: number }>): string {
+  const [first, ...rest] = points;
+  if (!first) {
+    return '';
+  }
+  return [
+    `M ${first.left} ${first.top}`,
+    ...rest.map((point) => `L ${point.left} ${point.top}`),
+    'Z',
+  ].join(' ');
+}
+
+function getShapeHoleMaskId(layer: string, shape: ProjectedShapePoi, index: number): string {
+  return `map-shape-hole-${layer}-${index}-${shape.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+}
+
+function getAdministrativeAreaHoleMaskId(areaId: string): string {
+  return `map-administrative-area-hole-${areaId.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+}
+
+/** 用白色外轮廓 + 黑色减去图形生成遮罩，等价于「外边界减去减去图形」。 */
+function ShapeHoleMask({
+  height,
+  holePaths,
+  id,
+  path,
+  width,
+}: Readonly<{
+  height: number;
+  holePaths: string[];
+  id: string;
+  path: string;
+  width: number;
+}>) {
+  if (holePaths.length === 0) {
+    return null;
+  }
+  return (
+    <defs>
+      <mask id={id} maskUnits="userSpaceOnUse" x={0} y={0} width={width} height={height}>
+        <path d={path} fill="#fff" />
+        {holePaths.map((hole, index) => (
+          <path d={hole} fill="#000" key={`hole-${index}`} />
+        ))}
+      </mask>
+    </defs>
+  );
 }
 
 function getShapeGeometryCoordinateSets(

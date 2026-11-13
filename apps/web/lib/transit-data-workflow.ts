@@ -867,9 +867,11 @@ export async function saveTransitLine(input: {
       name: string;
       x: number;
       z: number;
+      operationStatus?: 'operating' | 'planned' | 'closed';
       boundPoiMarkerId?: string;
       boundPoiLabel?: string;
       boundPoiCategoryId?: string;
+      boundPoiRefs?: TransitDataRevision['stations'][number]['boundPoiRefs'];
     }>;
   };
 }): Promise<TransitDataActionResult> {
@@ -899,27 +901,22 @@ export async function saveTransitLine(input: {
   const createdStations: TransitDataRevision['stations'] = stationDrafts.map((draft) => {
     const sourceId = `visual-station-${randomUUID()}`;
     stationSourceIdByDraftRef.set(`draft:${draft.clientId.trim()}`, sourceId);
-    const boundPoiMarkerId = draft.boundPoiMarkerId?.trim() || undefined;
-    const boundPoiLabel = draft.boundPoiLabel?.trim() || undefined;
+    const boundPoiRefs = normalizeTransitStationPoiRefs(
+      draft.boundPoiRefs,
+      draft.boundPoiMarkerId?.trim() || undefined,
+      draft.boundPoiLabel?.trim() || undefined,
+    );
+    const primaryBoundPoiRef = boundPoiRefs[0];
     return {
       sourceId,
       name: draft.name.trim(),
       aliases: [],
-      operationStatus: input.patch.operationStatus,
+      operationStatus: draft.operationStatus ?? input.patch.operationStatus,
       x: draft.x,
       z: draft.z,
-      boundPoiMarkerId,
-      boundPoiLabel,
-      boundPoiRefs:
-        boundPoiMarkerId && boundPoiLabel
-          ? [
-              {
-                markerId: boundPoiMarkerId,
-                label: boundPoiLabel,
-                categoryId: draft.boundPoiCategoryId?.trim() || undefined,
-              },
-            ]
-          : undefined,
+      boundPoiMarkerId: primaryBoundPoiRef?.markerId,
+      boundPoiLabel: primaryBoundPoiRef?.label,
+      boundPoiRefs: boundPoiRefs.length > 0 ? boundPoiRefs : undefined,
     };
   });
   const resolveStationSourceId = (sourceId: string) =>

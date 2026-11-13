@@ -8,6 +8,10 @@ import type {
 } from '@yct/contracts';
 import { toUppercasePinyin, toUppercaseRoadPinyin } from './chinese-pinyin';
 import {
+  getMaterialTransitLineSuffix,
+  parseMaterialTransitLineDisplay,
+} from './material-line-display';
+import {
   findMaterialRoadAtCoordinate,
   listMaterialMapMarkers,
   listMaterialLocations,
@@ -1310,28 +1314,13 @@ async function resolveMaterialTransitLineDisplay(
   if (override) {
     const normalizedOverride = override.trim();
     return /^[0-9０-９]+$/u.test(normalizedOverride)
-      ? { number: normalizedOverride, suffix: getTransitLineSuffix(lineName) }
+      ? { number: normalizedOverride, suffix: getMaterialTransitLineSuffix(lineName) }
       : parseMaterialTransitLineDisplay(normalizedOverride);
   }
   return parseMaterialTransitLineDisplay(lineName);
 }
 
-function parseMaterialTransitLineDisplay(lineName: string): { number: string; suffix: string } {
-  const normalizedName = lineName.trim();
-  const numericPrefixMatch = normalizedName.match(/^([0-9０-９]+)(.+)$/u);
-  if (numericPrefixMatch) {
-    return { number: numericPrefixMatch[1], suffix: numericPrefixMatch[2] };
-  }
-  const roadSuffixMatch = normalizedName.match(/^(.*?)(路.*)$/u);
-  if (roadSuffixMatch?.[1]?.trim() && roadSuffixMatch[2]) {
-    return { number: roadSuffixMatch[1].trim(), suffix: roadSuffixMatch[2] };
-  }
-  return { number: normalizedName, suffix: '路' };
-}
 
-function getTransitLineSuffix(lineName: string): string {
-  return parseMaterialTransitLineDisplay(lineName).suffix;
-}
 
 function getMarkerId(locationId: string): string {
   return locationId.startsWith('marker:') ? locationId.slice('marker:'.length) : locationId;

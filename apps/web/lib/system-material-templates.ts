@@ -24,12 +24,12 @@ const busStopOverviewSource = createBusStopTemplateSource(
   <rect x="12" y="18" width="104" height="22" fill="#FFFFFF"/>
   <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="32" transform="scale({{fit.stationName.scaleX}} 1)" fill="{{temporaryStopAll.stationNameFill}}" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
   <text x="0" y="38" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="{{temporaryStopAll.stationNamePinyinFill}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="4.5" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
-  <rect x="17" y="45" width="36" height="22" fill="{{select.route1TemporaryStop.background}}"/><text x="0" y="61" transform="translate(35 0) scale({{fit.route1Number.scaleX}} 1)" fill="{{select.route1TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route1Number}}</text>
-  <rect x="17" y="72" width="36" height="22" fill="{{select.route2TemporaryStop.background}}"/><text x="0" y="88" transform="translate(35 0) scale({{fit.route2Number.scaleX}} 1)" fill="{{select.route2TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route2Number}}</text>
-  <rect x="17" y="99" width="36" height="22" fill="{{select.route3TemporaryStop.background}}"/><text x="0" y="115" transform="translate(35 0) scale({{fit.route3Number.scaleX}} 1)" fill="{{select.route3TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route3Number}}</text>
-  <rect x="75" y="45" width="36" height="22" fill="{{select.route4TemporaryStop.background}}"/><text x="0" y="61" transform="translate(93 0) scale({{fit.route4Number.scaleX}} 1)" fill="{{select.route4TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route4Number}}</text>
-  <rect x="75" y="72" width="36" height="22" fill="{{select.route5TemporaryStop.background}}"/><text x="0" y="88" transform="translate(93 0) scale({{fit.route5Number.scaleX}} 1)" fill="{{select.route5TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route5Number}}</text>
-  <rect x="75" y="99" width="36" height="22" fill="{{select.route6TemporaryStop.background}}"/><text x="0" y="115" transform="translate(93 0) scale({{fit.route6Number.scaleX}} 1)" fill="{{select.route6TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route6Number}}</text>
+  <rect x="17" y="45" width="36" height="22" fill="{{routeSlot.1.fill}}" stroke="{{routeSlot.1.stroke}}" stroke-width="{{routeSlot.1.strokeWidth}}"/><text x="0" y="61" transform="translate(35 0) scale({{fit.route1Number.scaleX}} 1)" fill="{{select.route1TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route1Number}}</text>
+  <rect x="17" y="72" width="36" height="22" fill="{{routeSlot.2.fill}}" stroke="{{routeSlot.2.stroke}}" stroke-width="{{routeSlot.2.strokeWidth}}"/><text x="0" y="88" transform="translate(35 0) scale({{fit.route2Number.scaleX}} 1)" fill="{{select.route2TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route2Number}}</text>
+  <rect x="17" y="99" width="36" height="22" fill="{{routeSlot.3.fill}}" stroke="{{routeSlot.3.stroke}}" stroke-width="{{routeSlot.3.strokeWidth}}"/><text x="0" y="115" transform="translate(35 0) scale({{fit.route3Number.scaleX}} 1)" fill="{{select.route3TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route3Number}}</text>
+  <rect x="75" y="45" width="36" height="22" fill="{{routeSlot.4.fill}}" stroke="{{routeSlot.4.stroke}}" stroke-width="{{routeSlot.4.strokeWidth}}"/><text x="0" y="61" transform="translate(93 0) scale({{fit.route4Number.scaleX}} 1)" fill="{{select.route4TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route4Number}}</text>
+  <rect x="75" y="72" width="36" height="22" fill="{{routeSlot.5.fill}}" stroke="{{routeSlot.5.stroke}}" stroke-width="{{routeSlot.5.strokeWidth}}"/><text x="0" y="88" transform="translate(93 0) scale({{fit.route5Number.scaleX}} 1)" fill="{{select.route5TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route5Number}}</text>
+  <rect x="75" y="99" width="36" height="22" fill="{{routeSlot.6.fill}}" stroke="{{routeSlot.6.stroke}}" stroke-width="{{routeSlot.6.strokeWidth}}"/><text x="0" y="115" transform="translate(93 0) scale({{fit.route6Number.scaleX}} 1)" fill="{{select.route6TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route6Number}}</text>
 </g>`,
 );
 
@@ -81,12 +81,12 @@ const busStopOverviewRealisticSource = createBusStopTemplateSource(
   `<g id="material-dynamic-fields">
   <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="63" transform="scale({{fit.stationName.scaleX}} 1)" fill="{{temporaryStopAll.stationNameFill}}" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
   <text x="0" y="73" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="{{temporaryStopAll.stationNamePinyinFill}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="6" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
-  <rect x="11.859375" y="82.921875" width="39.9375" height="24.406254" fill="#FFFFFF" opacity="{{select.route1TemporaryStop.blockOpacity}}"/>
-  <rect x="11.859375" y="112.875" width="39.9375" height="24.406254" fill="#FFFFFF" opacity="{{select.route2TemporaryStop.blockOpacity}}"/>
-  <rect x="11.859375" y="142.828125" width="39.9375" height="24.406254" fill="#FFFFFF" opacity="{{select.route3TemporaryStop.blockOpacity}}"/>
-  <rect x="76.203125" y="82.921875" width="39.9375" height="24.406254" fill="#FFFFFF" opacity="{{select.route4TemporaryStop.blockOpacity}}"/>
-  <rect x="76.203125" y="112.875" width="39.9375" height="24.406254" fill="#FFFFFF" opacity="{{select.route5TemporaryStop.blockOpacity}}"/>
-  <rect x="76.203125" y="142.828125" width="39.9375" height="24.406254" fill="#FFFFFF" opacity="{{select.route6TemporaryStop.blockOpacity}}"/>
+  <rect x="11.859375" y="82.921875" width="39.9375" height="24.406254" fill="{{routeSlot.1.blockFill}}" stroke="{{routeSlot.1.stroke}}" stroke-width="{{routeSlot.1.strokeWidth}}" opacity="{{routeSlot.1.blockOpacity}}"/>
+  <rect x="11.859375" y="112.875" width="39.9375" height="24.406254" fill="{{routeSlot.2.blockFill}}" stroke="{{routeSlot.2.stroke}}" stroke-width="{{routeSlot.2.strokeWidth}}" opacity="{{routeSlot.2.blockOpacity}}"/>
+  <rect x="11.859375" y="142.828125" width="39.9375" height="24.406254" fill="{{routeSlot.3.blockFill}}" stroke="{{routeSlot.3.stroke}}" stroke-width="{{routeSlot.3.strokeWidth}}" opacity="{{routeSlot.3.blockOpacity}}"/>
+  <rect x="76.203125" y="82.921875" width="39.9375" height="24.406254" fill="{{routeSlot.4.blockFill}}" stroke="{{routeSlot.4.stroke}}" stroke-width="{{routeSlot.4.strokeWidth}}" opacity="{{routeSlot.4.blockOpacity}}"/>
+  <rect x="76.203125" y="112.875" width="39.9375" height="24.406254" fill="{{routeSlot.5.blockFill}}" stroke="{{routeSlot.5.stroke}}" stroke-width="{{routeSlot.5.strokeWidth}}" opacity="{{routeSlot.5.blockOpacity}}"/>
+  <rect x="76.203125" y="142.828125" width="39.9375" height="24.406254" fill="{{routeSlot.6.blockFill}}" stroke="{{routeSlot.6.stroke}}" stroke-width="{{routeSlot.6.strokeWidth}}" opacity="{{routeSlot.6.blockOpacity}}"/>
   <text x="0" y="102" transform="translate(31.8 0) scale({{fit.route1Number.scaleX}} 1)" fill="{{select.route1TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route1Number}}</text>
   <text x="0" y="132" transform="translate(31.8 0) scale({{fit.route2Number.scaleX}} 1)" fill="{{select.route2TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route2Number}}</text>
   <text x="0" y="162" transform="translate(31.8 0) scale({{fit.route3Number.scaleX}} 1)" fill="{{select.route3TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route3Number}}</text>
@@ -111,7 +111,9 @@ const busStopHorizontalDetailSource = createBusStopTemplateSource(
   <g transform="translate(3 33)">{{glyph.routeStations}}</g>
   <g transform="translate(184 0)">{{glyph.routeMapData}}</g>
   <rect x="0" y="106" width="256" height="22" fill="{{accentColor}}"/>
-  <text x="0" y="122" transform="translate(128 0) scale({{fit.footerText.scaleX}} 1)" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.footerText.letterSpacing}}">{{footerText}}　{{operator}}</text>
+  <g opacity="{{select.footerMode.destinationOpacity}}"><text x="0" y="122" transform="translate(128 0) scale({{fit.footerText.scaleX}} 1)" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.footerText.letterSpacing}}">{{footerText}}</text></g>
+  <g opacity="{{select.footerMode.operatorOpacity}}"><text x="128" y="122" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="12" font-weight="700" text-anchor="middle">{{operator}}</text></g>
+  <g opacity="{{select.footerMode.bothOpacity}}"><text x="0" y="122" transform="translate(128 0) scale({{fit.footerText.scaleX}} 1)" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.footerText.letterSpacing}}">{{footerText}}　{{operator}}</text></g>
 </g>`,
 ).replaceAll('#26CABA', '{{accentColor}}');
 
@@ -419,12 +421,15 @@ function createMetroDirectionFields(
       label: '开往终点（中文）',
       kind: 'text',
       maxLength: 60,
+      // 由行车方向 + 线路站序自动推断，不提供手动输入。
+      userEditable: false,
     },
     {
       key: 'terminalNamePinyin',
       label: '开往终点拼音 / 英文名',
       kind: 'text',
       maxLength: 120,
+      userEditable: false,
     },
     {
       key: 'lineLabel',
@@ -572,8 +577,8 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
       {
         version: 1,
         status: 'published',
-        title: '道路路名方向牌（旧版样式）',
-        description: '按旧版路牌模板复现的中英文道路名称与双向方位牌。',
+        title: '道路路名方向牌（默认）',
+        description: '默认道路路名方向牌：中英文道路名称与双向方位牌。',
         family: 'road_sign',
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 128">
   <rect x="0" y="64" width="256" height="64" fill="#ffffff"/>
@@ -594,10 +599,11 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             label: '底色与辅助文字颜色',
             kind: 'select',
             required: true,
+            defaultValue: '#004796',
             options: [
-              { value: '#004796', label: '旧版蓝 #004796' },
-              { value: '#1E892C', label: '街道绿 #1E892C' },
-              { value: '#5D390B', label: '景区棕 #5D390B' },
+              { value: '#004796', label: '旧版蓝' },
+              { value: '#1E892C', label: '街道绿' },
+              { value: '#5D390B', label: '景区棕' },
             ],
           },
           {
@@ -626,11 +632,12 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             label: '方位模式',
             kind: 'select',
             required: true,
+            defaultValue: 'west_east',
             options: [
-              { value: 'west_east', label: '左西右东' },
-              { value: 'east_west', label: '左东右西' },
-              { value: 'south_north', label: '左南右北' },
-              { value: 'north_south', label: '左北右南' },
+              { value: 'west_east', label: '西-东' },
+              { value: 'east_west', label: '东-西' },
+              { value: 'south_north', label: '南-北' },
+              { value: 'north_south', label: '北-南' },
             ],
             selectVariableValues: {
               west_east: { leftText: '西', leftCode: 'W', rightText: '东', rightCode: 'E' },
@@ -644,10 +651,11 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             label: '箭头样式',
             kind: 'select',
             required: true,
+            defaultValue: 'dual_arrow',
             options: [
-              { value: 'dual_arrow', label: '原有双箭头' },
-              { value: 'left_circle_right_arrow', label: '左圆右箭头' },
-              { value: 'left_arrow_right_circle', label: '左箭头右圆' },
+              { value: 'dual_arrow', label: '双箭头' },
+              { value: 'left_circle_right_arrow', label: '圆-箭头' },
+              { value: 'left_arrow_right_circle', label: '箭头-圆' },
             ],
             selectVariableValues: {
               dual_arrow: {
@@ -685,8 +693,8 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
       {
         version: 1,
         status: 'published',
-        title: '楼栋地名标志（旧版样式）',
-        description: '按旧版楼牌模板复现的道路名称、邮政信息与门牌号标志。',
+        title: '楼栋地名标志（默认）',
+        description: '默认楼栋地名标志：道路名称、邮政信息与门牌号。',
         family: 'address_sign',
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 128">
   <rect width="256" height="128" fill="#0054C2"/>
@@ -768,8 +776,8 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
       {
         version: 1,
         status: 'published',
-        title: '怀旧楼栋地名标志',
-        description: '按怀旧楼牌样式制作的竖排道路名称与特定数字字形门牌号。',
+        title: '楼栋地名标志（怀旧）',
+        description: '怀旧楼栋地名标志：竖排道路名称与特定数字字形门牌号。',
         family: 'address_sign',
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 128">
   <rect x="2" y="2" width="252" height="124" rx="14" fill="#FFFFFF"/>
@@ -966,6 +974,17 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             },
           },
           {
+            key: 'travelDirection',
+            label: '行车方向',
+            kind: 'select',
+            required: true,
+            defaultValue: 'last',
+            options: [
+              { value: 'last', label: '开往末站' },
+              { value: 'first', label: '开往首站' },
+            ],
+          },
+          {
             key: 'routeOrigin',
             label: '起点站',
             kind: 'text',
@@ -1072,6 +1091,17 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             textFit: { maxWidth: 47, fontSize: 12, maxLetterSpacing: 0 },
           },
           {
+            key: 'travelDirection',
+            label: '行车方向',
+            kind: 'select',
+            required: true,
+            defaultValue: 'last',
+            options: [
+              { value: 'last', label: '开往末站' },
+              { value: 'first', label: '开往首站' },
+            ],
+          },
+          {
             key: 'routeOrigin',
             label: '起点站',
             kind: 'text',
@@ -1123,6 +1153,8 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             label: '底部行车方向文字',
             kind: 'text',
             maxLength: 80,
+            // 由行车方向 + 站点列表自动推断，不提供手动输入。
+            userEditable: false,
             textFit: {
               maxWidth: 228,
               fontSize: 12,
@@ -1136,6 +1168,23 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             serverOverride: true,
             maxLength: 48,
+          },
+          {
+            key: 'footerMode',
+            label: '底部栏内容',
+            kind: 'select',
+            required: true,
+            defaultValue: 'destination',
+            options: [
+              { value: 'destination', label: '开往终点站' },
+              { value: 'operator', label: '运营方' },
+              { value: 'both', label: '两者都显示' },
+            ],
+            selectVariableValues: {
+              destination: { destinationOpacity: '1', operatorOpacity: '0', bothOpacity: '0' },
+              operator: { destinationOpacity: '0', operatorOpacity: '1', bothOpacity: '0' },
+              both: { destinationOpacity: '0', operatorOpacity: '0', bothOpacity: '1' },
+            },
           },
           {
             key: 'routeMapData',

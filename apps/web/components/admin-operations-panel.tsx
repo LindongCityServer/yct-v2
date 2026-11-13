@@ -15,10 +15,26 @@ import type {
 } from '@yct/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import {
+  markdownImageSnippet,
+  mergeAssetIdText,
+  parseAssetIds,
+  type AdminContentAssetRecord,
+} from '../lib/content-assets-client';
+import { CONTENT_CATEGORIES } from '../lib/content-categories';
+import {
+  formatDateTimeLocalPreview,
+  parseBannerSortOrderInput,
+  parseCustomTagsInput,
+  parseDateTimeLocalInput,
+  toDateTimeLocalInput,
+} from '../lib/content-metadata';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { requestConfirmation } from '../lib/client-dialog-events';
 import { AdminRefreshButton } from './admin-refresh-button';
+import { ContentCoverColorPicker } from './content-cover-color-picker';
 import { ContentPoiBindingEditor } from './content-poi-binding-editor';
+import { SegmentedControl } from './segmented-control';
 import { useListKeyboardNavigation } from './use-list-keyboard-navigation';
 
 interface AdminContentMetadata {
@@ -70,23 +86,6 @@ interface AdminContentActionOptions {
   scheduledAt?: string;
 }
 
-interface AdminContentAssetRecord {
-  asset: ContentAsset;
-  sourceKind: 'legacy' | 'upload' | 'external';
-  migratedPath?: string;
-  sha256?: string;
-  references: Array<{
-    entryId: string;
-    referenceKind: string;
-    contentId: string;
-    contentTitle: string;
-    sourcePageUrl?: string;
-  }>;
-  duplicateGroupId?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 interface LegacyAssetDownloadReportForAdmin {
   generatedAt: string;
   dataSource: string;
@@ -130,18 +129,8 @@ type AdminAssetWorkspace = 'assets' | 'legacy';
 type AdminAssetStatusFilter = ContentAsset['status'] | 'all';
 type AdminAssetSourceFilter = AdminContentAssetRecord['sourceKind'] | 'all';
 
-const categories = ['通知公告', '运营信息', '地铁运营', '公交运营', '有轨运营', '网站公告'];
+const categories = CONTENT_CATEGORIES;
 
-const coverColorOptions = [
-  { value: 'var(--yct-color-primary)', label: '品牌主色' },
-  { value: 'var(--yct-color-secondary)', label: '地铁' },
-  { value: 'var(--yct-color-tertiary)', label: '公交' },
-  { value: 'var(--yct-color-tram)', label: '有轨' },
-  { value: 'var(--yct-color-ferry)', label: '水运' },
-  { value: 'var(--yct-color-railway)', label: '铁路' },
-  { value: 'var(--yct-color-warning)', label: '提醒' },
-  { value: 'var(--yct-color-error)', label: '紧急' },
-] as const;
 const contentStatusFilterOptions: Array<{
   value: AdminContentStatusFilter;
   label: string;
@@ -1673,61 +1662,13 @@ export function AdminOperationsPanel({
               <span>摘要</span>
               <input value={excerpt} onChange={(event) => setExcerpt(event.currentTarget.value)} />
             </label>
-            <fieldset className="admin-cover-color-picker">
-              <legend>封面色</legend>
-              <div>
-                <button
-                  className={!coverColor.trim() ? 'is-selected' : ''}
-                  type="button"
-                  aria-pressed={!coverColor.trim()}
-                  onClick={() => {
-                    setCoverColor('');
-                    markContentEditorDirty();
-                  }}
-                >
-                  <span className="admin-cover-color-swatch is-none" aria-hidden="true" />
-                  <span>不设置</span>
-                </button>
-                {coverColor.trim() &&
-                !coverColorOptions.some((option) => option.value === coverColor.trim()) ? (
-                  <button
-                    className="is-selected"
-                    type="button"
-                    aria-pressed="true"
-                    onClick={() => {
-                      setCoverColor('');
-                      markContentEditorDirty();
-                    }}
-                  >
-                    <span
-                      className="admin-cover-color-swatch"
-                      aria-hidden="true"
-                      style={{ backgroundColor: coverColor.trim() }}
-                    />
-                    <span>现有颜色</span>
-                  </button>
-                ) : null}
-                {coverColorOptions.map((option) => (
-                  <button
-                    className={coverColor.trim() === option.value ? 'is-selected' : ''}
-                    type="button"
-                    aria-pressed={coverColor.trim() === option.value}
-                    key={option.value}
-                    onClick={() => {
-                      setCoverColor(option.value);
-                      markContentEditorDirty();
-                    }}
-                  >
-                    <span
-                      className="admin-cover-color-swatch"
-                      aria-hidden="true"
-                      style={{ backgroundColor: option.value }}
-                    />
-                    <span>{option.label}</span>
-                  </button>
-                ))}
-              </div>
-            </fieldset>
+            <ContentCoverColorPicker
+              value={coverColor}
+              onChange={(value) => {
+                setCoverColor(value);
+                markContentEditorDirty();
+              }}
+            />
             <label>
               <span>封面图链接</span>
               <input
@@ -1924,41 +1865,26 @@ export function AdminOperationsPanel({
                   </span>
                   <span>{editingReminderId ? '继续编辑规则' : '新增规则'}</span>
                 </button>
-                <label>
+                <div className="admin-segmented-field">
                   <span>状态</span>
-                  <select
+                  <SegmentedControl
+                    ariaLabel="提醒规则状态筛选"
+                    className="material-mode-switch material-variant-switch"
                     value={reminderEnabledFilter}
-                    onChange={(event) =>
-                      setReminderEnabledFilter(
-                        event.currentTarget.value as AdminReminderEnabledFilter,
-                      )
-                    }
-                  >
-                    {reminderEnabledFilterOptions.map((option) => (
-                      <option value={option.value} key={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
+                    onChange={setReminderEnabledFilter}
+                    options={reminderEnabledFilterOptions}
+                  />
+                </div>
+                <div className="admin-segmented-field">
                   <span>来源</span>
-                  <select
+                  <SegmentedControl
+                    ariaLabel="提醒规则来源筛选"
+                    className="material-mode-switch material-variant-switch"
                     value={reminderSourceFilter}
-                    onChange={(event) =>
-                      setReminderSourceFilter(
-                        event.currentTarget.value as
-                          OperationsStrongReminderRule['sourceKind'] | 'all',
-                      )
-                    }
-                  >
-                    {reminderSourceFilterOptions.map((option) => (
-                      <option value={option.value} key={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    onChange={setReminderSourceFilter}
+                    options={reminderSourceFilterOptions}
+                  />
+                </div>
                 <label className="admin-poi-search">
                   <span>搜索</span>
                   <input
@@ -2298,20 +2224,19 @@ export function AdminOperationsPanel({
             {editingReminderId ? (
               <p className="muted">{`当前正在编辑 ${editingReminderId.slice(-8).toUpperCase()} 规则`}</p>
             ) : null}
-            <label>
+            <div className="admin-segmented-field">
               <span>来源</span>
-              <select
+              <SegmentedControl
+                ariaLabel="强提醒来源"
+                className="material-mode-switch material-variant-switch"
                 value={reminderSourceKind}
-                onChange={(event) =>
-                  setReminderSourceKind(
-                    event.currentTarget.value as OperationsStrongReminderRule['sourceKind'],
-                  )
-                }
-              >
-                <option value="manual">手动录入</option>
-                <option value="content">关联内容</option>
-              </select>
-            </label>
+                onChange={setReminderSourceKind}
+                options={[
+                  { value: 'manual', label: '手动录入' },
+                  { value: 'content', label: '关联内容' },
+                ]}
+              />
+            </div>
             <label className="checkbox-row">
               <input
                 type="checkbox"
@@ -2821,6 +2746,16 @@ export function AdminOperationsPanel({
                     >
                       {record.sourceKind === 'legacy_content_data' ? '接管编辑' : '编辑'}
                     </button>
+                    {record.sourceKind === 'legacy_content_data' ? null : (
+                      <a
+                        className="admin-action-link"
+                        href={appPath(
+                          `/admin/operations/editor?contentId=${encodeURIComponent(record.contentId)}`,
+                        )}
+                      >
+                        Markdown 工作台
+                      </a>
+                    )}
                     <button
                       type="button"
                       disabled={isBusy || record.revision.status !== 'draft'}
@@ -3754,29 +3689,6 @@ function formatBytes(value: number): string {
   return `${value} B`;
 }
 
-function parseAssetIds(value: string): string[] {
-  return Array.from(
-    new Set(
-      value
-        .split(/[\s,，]+/)
-        .map((item) => item.trim())
-        .filter(Boolean),
-    ),
-  );
-}
-
-function mergeAssetIdText(current: string, assetId: string): string {
-  return Array.from(new Set([...parseAssetIds(current), assetId])).join('\n');
-}
-
-function markdownImageSnippet(asset: ContentAsset): string {
-  if (asset.kind !== 'image') {
-    return asset.url;
-  }
-
-  return `![${asset.fileName}](${appPath(asset.url)})`;
-}
-
 function statusLabel(record: AdminContentRecord): string {
   if (
     record.revision.status === 'published' &&
@@ -4492,65 +4404,4 @@ function describePushDeliveryStatus(status: PushDelivery['status']): string {
     cancelled: '已取消',
   };
   return labels[status];
-}
-
-function parseDateTimeLocalInput(value: string): string | undefined {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return undefined;
-  }
-
-  return parsed.toISOString();
-}
-
-function parseBannerSortOrderInput(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  if (!/^-?\d+$/.test(trimmed)) {
-    return undefined;
-  }
-
-  const parsed = Number(trimmed);
-  return Number.isSafeInteger(parsed) ? parsed : undefined;
-}
-
-function parseCustomTagsInput(value: string): string[] {
-  return Array.from(
-    new Set(
-      value
-        .split(/[\n,，]+/)
-        .map((item) => item.trim())
-        .filter(Boolean),
-    ),
-  ).slice(0, 16);
-}
-
-function toDateTimeLocalInput(value: string | undefined): string {
-  if (!value) {
-    return '';
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
-  }
-
-  const year = parsed.getFullYear();
-  const month = `${parsed.getMonth() + 1}`.padStart(2, '0');
-  const day = `${parsed.getDate()}`.padStart(2, '0');
-  const hours = `${parsed.getHours()}`.padStart(2, '0');
-  const minutes = `${parsed.getMinutes()}`.padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-function formatDateTimeLocalPreview(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-
-  return `${parsed.getFullYear()}-${`${parsed.getMonth() + 1}`.padStart(2, '0')}-${`${parsed.getDate()}`.padStart(2, '0')} ${`${parsed.getHours()}`.padStart(2, '0')}:${`${parsed.getMinutes()}`.padStart(2, '0')}`;
 }

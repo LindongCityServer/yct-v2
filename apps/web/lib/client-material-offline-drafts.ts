@@ -6,6 +6,16 @@ const FALLBACK_STORAGE_KEY = 'yct.materialOfflineDrafts.v1';
 
 export type MaterialOfflineDraftSyncStatus = 'local' | 'syncing' | 'synced' | 'failed' | 'conflict';
 
+export interface MaterialOfflineDraftTransitSelection {
+  stationMarkerId?: string;
+  importedStationNodeId?: string;
+  direction?: 'east' | 'west' | 'north' | 'south';
+  lineIds?: string[];
+  projectLineKey?: string;
+  projectNodeId?: string;
+  terminalRole?: 'origin' | 'terminal' | '';
+}
+
 export interface MaterialOfflineDraftRecord {
   localDraftId: string;
   studioId: string;
@@ -16,6 +26,8 @@ export interface MaterialOfflineDraftRecord {
   mode: 'manual' | 'server';
   transitNetworkSource: 'server' | 'rmp';
   importedTransitNetwork?: MaterialTransitNetworkSnapshot;
+  /** 上次套用的车站 / 方向 / 线路，用于「模板库」预填。 */
+  transitSelection?: MaterialOfflineDraftTransitSelection;
   createdAt: string;
   updatedAt: string;
   syncStatus: MaterialOfflineDraftSyncStatus;
@@ -46,6 +58,26 @@ export async function readLatestMaterialOfflineDraft(
     return readFallbackRecords()
       .filter((record) => record.studioId === studioId)
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+  }
+}
+
+/** 指定模板最近一次的本机草稿：切换模板时用来恢复该模板上次的编辑内容。 */
+export async function readMaterialOfflineDraftForTemplate(
+  studioId: string,
+  templateId: string,
+): Promise<MaterialOfflineDraftRecord | undefined> {
+  if (!isBrowser()) {
+    return undefined;
+  }
+  const pick = (records: MaterialOfflineDraftRecord[]) =>
+    records
+      .filter((record) => record.studioId === studioId && record.templateId === templateId)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+
+  try {
+    return pick(await readIndexedRecords());
+  } catch {
+    return pick(readFallbackRecords());
   }
 }
 

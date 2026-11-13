@@ -11,6 +11,17 @@ import {
   subscribeMapShortcutContextChanged,
 } from '../lib/client-map-ui-events';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import {
+  AREA_EDITOR_SHORTCUT_IDS,
+  EDITOR_SHORTCUT_CATALOG,
+  EDITOR_SHORTCUT_GROUPS,
+  LINE_EDITOR_SHORTCUT_IDS,
+  MARKDOWN_EDITOR_SHORTCUT_IDS,
+  METRO_WAYFINDING_SHORTCUT_IDS,
+  POI_GEOMETRY_SHORTCUT_IDS,
+  POI_INTRO_SHORTCUT_IDS,
+  TRIP_WORKBENCH_SHORTCUT_IDS,
+} from '../lib/editor/shortcuts';
 
 const controlHoldDurationMs = 600;
 /** 双击斜杠触发「手气不错」的时间窗与单击聚焦搜索的延迟。 */
@@ -46,13 +57,20 @@ export function KeyboardShortcutBridge() {
     pathname.startsWith(appPath('/admin/transit/lines/')) && pathname.endsWith('/edit');
   const isTripWorkbenchPage =
     pathname.startsWith(appPath('/admin/transit/lines/')) && pathname.endsWith('/schedule');
-  const isWayfindingPage = [
-    appPath('/services/transit-materials'),
-    appPath('/services/road-materials'),
-  ].some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  const isWayfindingPage =
+    pathname === appPath('/services/road-materials') ||
+    pathname.startsWith(`${appPath('/services/road-materials')}/`);
+  const isTransitWayfindingPage = pathname === appPath('/services/transit-materials');
+  const isPoiIntroEditorPage = pathname === appPath('/admin/map-poi/intro-editor');
+  const isMarkdownEditorPage = pathname === appPath('/admin/operations/editor');
   const isVisualEditorPage =
-    pathname.startsWith(appPath('/admin/map-poi')) ||
-    pathname.startsWith(`${appPath('/admin/operations')}/`);
+    (pathname.startsWith(appPath('/admin/map-poi')) ||
+      pathname.startsWith(`${appPath('/admin/operations')}/`) ||
+      pathname === appPath('/admin/map-areas/editor')) &&
+    !isPoiIntroEditorPage &&
+    !isMarkdownEditorPage;
+  const isGeometryEditorPage = pathname === appPath('/admin/map-poi/editor');
+  const isAreaEditorPage = pathname === appPath('/admin/map-areas/editor');
   const showGlobalSearchShortcut =
     !pathname.startsWith(appPath('/admin')) && !pathname.startsWith(appPath('/auth'));
   const isAdminReviewPage =
@@ -465,91 +483,69 @@ export function KeyboardShortcutBridge() {
             </section>
           ) : null}
 
-          {isLineEditorPage ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-line-editor-title">
-              <h3 id="shortcut-line-editor-title">{t('shortcut.lineEditor')}</h3>
-              <dl className="shortcut-list">
-                <div>
-                  <dt>{t('shortcut.saveAndBack')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl', 'S']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.undo')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl', 'Z']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.redo')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl + Shift + Z / Ctrl + Y']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.deleteSelected')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Delete']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.lineEditor.toolSwap')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Alt']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.lineEditor.snapToggle')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Shift']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.lineEditor.toolPan')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['V']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.lineEditor.toolMove')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['M']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.lineEditor.toolStation')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['S']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.lineEditor.toolWaypoint')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['R']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.insertPrepend')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['[']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.insertAppend')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={[']']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.insertNearest')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['\\']} />
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          ) : null}
+          {isLineEditorPage
+            ? EDITOR_SHORTCUT_GROUPS.map((group) => {
+                const shortcuts = LINE_EDITOR_SHORTCUT_IDS.map(
+                  (key) => EDITOR_SHORTCUT_CATALOG[key],
+                ).filter((shortcut) => shortcut.group === group.id);
+                if (shortcuts.length === 0) {
+                  return null;
+                }
+                return (
+                  <section
+                    className="shortcut-section"
+                    key={group.id}
+                    aria-labelledby={`shortcut-line-editor-${group.id}`}
+                  >
+                    <h3 id={`shortcut-line-editor-${group.id}`}>
+                      {`${t('shortcut.lineEditor')} · ${group.label}`}
+                    </h3>
+                    <dl className="shortcut-list">
+                      {shortcuts.map((shortcut) => (
+                        <div key={shortcut.id}>
+                          <dt>{shortcut.label}</dt>
+                          <dd>
+                            <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                );
+              })
+            : null}
+
+          {isTransitWayfindingPage
+            ? EDITOR_SHORTCUT_GROUPS.map((group) => {
+                const shortcuts = METRO_WAYFINDING_SHORTCUT_IDS.map(
+                  (key) => EDITOR_SHORTCUT_CATALOG[key],
+                ).filter((shortcut) => shortcut.group === group.id);
+                if (shortcuts.length === 0) {
+                  return null;
+                }
+                return (
+                  <section
+                    className="shortcut-section"
+                    key={group.id}
+                    aria-labelledby={`shortcut-transit-wayfinding-${group.id}`}
+                  >
+                    <h3 id={`shortcut-transit-wayfinding-${group.id}`}>
+                      {`公共交通导视工作台 · ${group.label}`}
+                    </h3>
+                    <dl className="shortcut-list">
+                      {shortcuts.map((shortcut) => (
+                        <div key={shortcut.id}>
+                          <dt>{shortcut.label}</dt>
+                          <dd>
+                            <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                );
+              })
+            : null}
 
           {isWayfindingPage ? (
             <section className="shortcut-section" aria-labelledby="shortcut-wayfinding-title">
@@ -703,6 +699,95 @@ export function KeyboardShortcutBridge() {
             </section>
           ) : null}
 
+          {isGeometryEditorPage ? (
+            <section className="shortcut-section" aria-labelledby="shortcut-geometry-editor-title">
+              <h3 id="shortcut-geometry-editor-title">几何编辑</h3>
+              <dl className="shortcut-list">
+                {POI_GEOMETRY_SHORTCUT_IDS.map((key) => {
+                  const shortcut = EDITOR_SHORTCUT_CATALOG[key];
+                  return (
+                    <div key={shortcut.id}>
+                      <dt>{shortcut.label}</dt>
+                      <dd>
+                        <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </section>
+          ) : null}
+
+          {isPoiIntroEditorPage ? (
+            <section className="shortcut-section" aria-labelledby="shortcut-poi-intro-editor-title">
+              <h3 id="shortcut-poi-intro-editor-title">POI 简介工作台</h3>
+              <dl className="shortcut-list">
+                {POI_INTRO_SHORTCUT_IDS.map((key) => {
+                  const shortcut = EDITOR_SHORTCUT_CATALOG[key];
+                  return (
+                    <div key={shortcut.id}>
+                      <dt>{shortcut.label}</dt>
+                      <dd>
+                        <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </section>
+          ) : null}
+
+          {isMarkdownEditorPage
+            ? EDITOR_SHORTCUT_GROUPS.map((group) => {
+                const shortcuts = MARKDOWN_EDITOR_SHORTCUT_IDS.map(
+                  (key) => EDITOR_SHORTCUT_CATALOG[key],
+                ).filter((shortcut) => shortcut.group === group.id);
+                if (shortcuts.length === 0) {
+                  return null;
+                }
+                return (
+                  <section
+                    className="shortcut-section"
+                    key={group.id}
+                    aria-labelledby={`shortcut-markdown-editor-${group.id}`}
+                  >
+                    <h3 id={`shortcut-markdown-editor-${group.id}`}>
+                      {`运营消息工作台 · ${group.label}`}
+                    </h3>
+                    <dl className="shortcut-list">
+                      {shortcuts.map((shortcut) => (
+                        <div key={shortcut.id}>
+                          <dt>{shortcut.label}</dt>
+                          <dd>
+                            <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                );
+              })
+            : null}
+
+          {isAreaEditorPage ? (
+            <section className="shortcut-section" aria-labelledby="shortcut-area-editor-title">
+              <h3 id="shortcut-area-editor-title">区划工作台</h3>
+              <dl className="shortcut-list">
+                {AREA_EDITOR_SHORTCUT_IDS.map((key) => {
+                  const shortcut = EDITOR_SHORTCUT_CATALOG[key];
+                  return (
+                    <div key={shortcut.id}>
+                      <dt>{shortcut.label}</dt>
+                      <dd>
+                        <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </section>
+          ) : null}
+
           {isAdminReviewPage ? (
             <section className="shortcut-section" aria-labelledby="shortcut-admin-review-title">
               <h3 id="shortcut-admin-review-title">{t('shortcut.adminReview')}</h3>
@@ -753,49 +838,37 @@ export function KeyboardShortcutBridge() {
             </section>
           ) : null}
 
-          {isTripWorkbenchPage ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-trip-workbench-title">
-              <h3 id="shortcut-trip-workbench-title">{t('shortcut.tripWorkbench')}</h3>
-              <dl className="shortcut-list">
-                <div>
-                  <dt>{t('shortcut.save')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl + S / Ctrl + Enter']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.undo')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl', 'Z']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.redo')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl + Shift + Z / Ctrl + Y']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.tripWorkbench.toolPan')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['V / 1']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.tripWorkbench.toolMove')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['M / 2']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.tripWorkbench.toolDraw')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['D / 3']} />
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          ) : null}
+          {isTripWorkbenchPage
+            ? EDITOR_SHORTCUT_GROUPS.map((group) => {
+                const shortcuts = TRIP_WORKBENCH_SHORTCUT_IDS.map(
+                  (key) => EDITOR_SHORTCUT_CATALOG[key],
+                ).filter((shortcut) => shortcut.group === group.id);
+                if (shortcuts.length === 0) {
+                  return null;
+                }
+                return (
+                  <section
+                    className="shortcut-section"
+                    key={group.id}
+                    aria-labelledby={`shortcut-trip-workbench-${group.id}`}
+                  >
+                    <h3 id={`shortcut-trip-workbench-${group.id}`}>
+                      {`${t('shortcut.tripWorkbench')} · ${group.label}`}
+                    </h3>
+                    <dl className="shortcut-list">
+                      {shortcuts.map((shortcut) => (
+                        <div key={shortcut.id}>
+                          <dt>{shortcut.label}</dt>
+                          <dd>
+                            <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                );
+              })
+            : null}
 
           <section className="shortcut-section" aria-labelledby="shortcut-general-title">
             <h3 id="shortcut-general-title">{t('shortcut.general')}</h3>

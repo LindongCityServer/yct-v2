@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 export interface SegmentedControlOption<TValue extends string> {
   value: TValue;
@@ -10,6 +10,8 @@ export interface SegmentedControlOption<TValue extends string> {
   title?: string;
   ariaLabel?: string;
   panelId?: string;
+  /** 选中时用该颜色填充按钮（用于模板里的颜色预设）。 */
+  accentColor?: string;
 }
 
 export function SegmentedControl<TValue extends string>({
@@ -44,7 +46,16 @@ export function SegmentedControl<TValue extends string>({
             ref={(element) => {
               buttons.current[index] = element;
             }}
-            className={active ? 'is-active' : undefined}
+            className={
+              [active ? 'is-active' : '', option.accentColor ? 'has-accent' : '']
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
+            style={
+              option.accentColor
+                ? ({ '--yct-segmented-accent': option.accentColor } as CSSProperties)
+                : undefined
+            }
             type="button"
             role={role === 'tablist' ? 'tab' : undefined}
             aria-selected={role === 'tablist' ? active : undefined}

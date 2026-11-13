@@ -10,7 +10,8 @@ import { sessionCookieOptions, yctSessionCookieName } from '../../../../lib/yct-
 
 export async function POST(request: NextRequest) {
   const config = readRuntimeConfig();
-  if (!config.localAdminAuthEnabled || !isLoopbackHostname(request.nextUrl.hostname)) {
+  const allowedHosts = parseAllowedHosts(process.env.YCT_LOCAL_ADMIN_ALLOWED_HOSTS);
+  if (!config.localAdminAuthEnabled || !isAllowedHostname(request.nextUrl.hostname, allowedHosts)) {
     return markResponseNoStore(
       NextResponse.json(
         {
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
   }
 
   const origin = request.headers.get('origin');
-  if (origin && !isLoopbackOrigin(origin, request.nextUrl)) {
+  if (origin && !isAllowedOrigin(origin, request.nextUrl, allowedHosts)) {
     return markResponseNoStore(
       NextResponse.json(
         { error: 'invalid_origin', message: '本地管理员登录请求来源无效。' },
@@ -81,14 +82,60 @@ function isLoopbackHostname(hostname: string): boolean {
   );
 }
 
+interface AllowedHost {
+  hostname: string;
+  port: string;
+}
+
+/**
+ * 局域网联调时的临时放行白名单，取值来自 `YCT_LOCAL_ADMIN_ALLOWED_HOSTS`，
+ * 逗号分隔的 `host` 或 `host:port`（也接受完整 URL），例如 `192.168.1.53`。
+ * 未配置时行为与之前一致：仅回环地址可登录。
+ */
+function parseAllowedHosts(value: string | undefined): AllowedHost[] {
+  const entries = (value ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+  const parsed: AllowedHost[] = [];
+  for (const entry of entries) {
+    try {
+      const url = new URL(entry.includes('://') ? entry : `http://${entry}`);
+      parsed.push({ hostname: url.hostname.toLowerCase(), port: url.port });
+    } catch {
+      // 忽略无法解析的条目。
+    }
+  }
+  return parsed;
+}
+
+function isAllowedHostname(hostname: string, allowedHosts: AllowedHost[]): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  if (isLoopbackHostname(normalized)) {
+    return true;
+  }
+  return allowedHosts.some((entry) => entry.hostname === normalized);
+}
+
 /**
  * 本地开发里浏览器可能用 localhost 打开页面、而服务端把自己解析成 127.0.0.1（或反向），
  * 直接比较完整 origin 会误判。这里只要求两端都是回环地址且端口一致。
+ * 白名单里的主机同样需要端口一致，避免把别的端口的页面也算作合法来源。
  */
-function isLoopbackOrigin(origin: string, requestUrl: URL): boolean {
+function isAllowedOrigin(origin: string, requestUrl: URL, allowedHosts: AllowedHost[]): boolean {
   try {
     const parsed = new URL(origin);
-    return isLoopbackHostname(parsed.hostname) && parsed.port === requestUrl.port;
+    if (isLoopbackHostname(parsed.hostname) && parsed.port === requestUrl.port) {
+      return true;
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+    return allowedHosts.some(
+      (entry) =>
+        entry.hostname === hostname &&
+        (entry.port === '' ? parsed.port === requestUrl.port : entry.port === parsed.port),
+    );
   } catch {
     return false;
   }

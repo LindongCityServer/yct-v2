@@ -1,6 +1,7 @@
 'use client';
 
 import { ScheduleStopTimeTable } from './schedule-stop-time-table';
+import { SegmentedControl } from './segmented-control';
 
 import { requestConfirmation } from '../lib/client-dialog-events';
 
@@ -38,6 +39,7 @@ import {
   isTransitPoiMarkerCompatibleWithStation,
 } from '../lib/transit-station-mode';
 import { findTransitStationDetail } from '../lib/transit-station-detail-match';
+import { TRANSIT_STATION_FACILITY_OPTIONS as stationFacilityOptions } from '../lib/transit-station-facility-options';
 import { CurrentPlayerLocationButton } from './current-player-location-button';
 import { AdminRefreshButton } from './admin-refresh-button';
 import { AdminTripOperatingCalendarEditor } from './admin-trip-operating-calendar-editor';
@@ -2629,6 +2631,26 @@ function TransitLineEntityList({
                 >
                   编辑线路
                 </button>
+                {canEdit ? (
+                  <>
+                    <Link
+                      className="admin-action-link"
+                      href={appPath(
+                        `/admin/transit/lines/${encodeURIComponent(revision.revisionId)}/${encodeURIComponent(line.sourceId)}/edit`,
+                      )}
+                    >
+                      地图工作台
+                    </Link>
+                    <Link
+                      className="admin-action-link"
+                      href={appPath(
+                        `/admin/transit/lines/${encodeURIComponent(revision.revisionId)}/${encodeURIComponent(line.sourceId)}/schedule`,
+                      )}
+                    >
+                      班次工作台
+                    </Link>
+                  </>
+                ) : null}
                 <button
                   type="button"
                   disabled={isBusy || !canEdit}
@@ -3637,20 +3659,23 @@ function ScheduleTripEditDialog({
               onChange={(event) => setRouteNote(event.currentTarget.value)}
             />
           </label>
-          <label>
+          <div className="admin-segmented-field">
             <span>可用性</span>
-            <select
+            <SegmentedControl
+              ariaLabel="班次可用性"
+              className="material-mode-switch material-variant-switch"
               value={availability}
-              onChange={(event) =>
-                setAvailability(event.currentTarget.value as TravelTripInstance['availability'])
+              onChange={(next) =>
+                setAvailability(next as TravelTripInstance['availability'])
               }
-            >
-              <option value="query_only">仅查询</option>
-              <option value="booking_reference">跳转订票</option>
-              <option value="ticketing_unavailable">暂不可售</option>
-              <option value="not_connected">未接入</option>
-            </select>
-          </label>
+              options={[
+                { value: 'query_only', label: '仅查询' },
+                { value: 'booking_reference', label: '跳转订票' },
+                { value: 'ticketing_unavailable', label: '暂不可售' },
+                { value: 'not_connected', label: '未接入' },
+              ]}
+            />
+          </div>
           <label>
             <span>来源路径</span>
             <input
@@ -3722,7 +3747,7 @@ function ScheduleTripEditDialog({
   );
 }
 
-function TransitStationCoordinateDialog({
+export function TransitStationCoordinateDialog({
   isBusy,
   mapMarkers,
   onClose,
@@ -4030,23 +4055,24 @@ function TransitStationCoordinateDialog({
           )}
         </div>
         <div className="transit-station-coordinate-form">
-          <label>
+          <div className="admin-segmented-field">
             <span>开通状态</span>
-            <select
+            <SegmentedControl
+              ariaLabel="站点开通状态"
+              className="material-mode-switch material-variant-switch"
               value={operationStatus}
-              onChange={(event) =>
+              onChange={(next) =>
                 setOperationStatus(
-                  event.currentTarget.value as NonNullable<
-                    TransitRevisionStation['operationStatus']
-                  >,
+                  next as NonNullable<TransitRevisionStation['operationStatus']>,
                 )
               }
-            >
-              <option value="operating">已开通</option>
-              <option value="planned">未开通</option>
-              <option value="closed">已关闭</option>
-            </select>
-          </label>
+              options={[
+                { value: 'operating', label: '已开通' },
+                { value: 'planned', label: '未开通' },
+                { value: 'closed', label: '已关闭' },
+              ]}
+            />
+          </div>
         </div>
         <WorldCoordinatePicker
           ariaLabel="在地图预览中点选站点坐标"
@@ -4106,30 +4132,6 @@ type TransitStationFacilityEdit = TransitStationDetailSnapshot['facilities'][num
 type TransitStationTransferEdit = TransitStationDetailSnapshot['transfers'][number];
 type TransitStationExitEdit = TransitStationDetailSnapshot['exits'][number];
 type TransitStationDetailDirection = 'downwards' | 'upwards';
-
-const stationFacilityOptions = [
-  ['elevator', '电梯'],
-  ['escalator', '扶梯'],
-  ['escalator_and_stairs', '扶梯/楼梯'],
-  ['stairs', '楼梯'],
-  ['stairs_two_way', '双向楼梯'],
-  ['wheelchair_lift', '轮椅升降机'],
-  ['toilet', '卫生间'],
-  ['mens_restroom', '男卫生间'],
-  ['womens_restroom', '女卫生间'],
-  ['family_restroom', '家庭卫生间'],
-  ['accessible_restroom', '无障碍卫生间'],
-  ['third_restroom', '第三卫生间'],
-  ['passenger_service_center', '乘客服务中心'],
-  ['ticket_machine', '自动售票机'],
-  ['nursing_room', '母婴室'],
-  ['police', '警务室'],
-  ['waiting_room', '候车室'],
-  ['meeting_point', '会合点'],
-  ['wheelchair', '无障碍设施'],
-  ['platform_door', '屏蔽门'],
-  ['subway', '地铁'],
-] as const;
 
 const stationLayerTypeOptions = [
   ['concourse', '站厅层'],
@@ -4308,7 +4310,7 @@ function parseStationDetailExits(
   );
 }
 
-function TransitStationDetailDialog({
+export function TransitStationDetailDialog({
   detail,
   isBusy,
   mapMarkers,
@@ -4730,24 +4732,26 @@ function TransitStationDetailDialog({
           </span>
         </div>
         <div className="transit-station-profile-settings">
-          <label>
+          <div className="admin-segmented-field">
             <span>站台开门侧</span>
-            <select
+            <SegmentedControl
+              ariaLabel="站台开门侧"
+              className="material-mode-switch material-variant-switch"
               value={draft.platformSide ?? 'none'}
-              onChange={(event) =>
+              onChange={(next) =>
                 commitDraft({
                   ...draft,
-                  platformSide: event.currentTarget
-                    .value as TransitStationDetailSnapshot['platformSide'],
+                  platformSide: next as TransitStationDetailSnapshot['platformSide'],
                 })
               }
-            >
-              <option value="left">左侧</option>
-              <option value="right">右侧</option>
-              <option value="both">两侧</option>
-              <option value="none">未设置</option>
-            </select>
-          </label>
+              options={[
+                { value: 'left', label: '左侧' },
+                { value: 'right', label: '右侧' },
+                { value: 'both', label: '两侧' },
+                { value: 'none', label: '未设置' },
+              ]}
+            />
+          </div>
           <label className="transit-station-detail-checkbox">
             <input
               type="checkbox"
@@ -5277,25 +5281,25 @@ function TransitStationDetailDialog({
                           ))}
                         </select>
                       </label>
-                      <label>
+                      <div className="admin-segmented-field">
                         <span>站厅侧</span>
-                        <select
+                        <SegmentedControl
+                          ariaLabel="出入口站厅侧"
+                          className="material-mode-switch material-variant-switch"
                           value={exit.direction ?? ''}
-                          onChange={(event) =>
+                          onChange={(next) =>
                             updateExit(exitIndex, {
                               direction:
-                                event.currentTarget.value === 'upwards' ||
-                                event.currentTarget.value === 'downwards'
-                                  ? event.currentTarget.value
-                                  : undefined,
+                                next === 'upwards' || next === 'downwards' ? next : undefined,
                             })
                           }
-                        >
-                          <option value="">未判断</option>
-                          <option value="upwards">上行侧</option>
-                          <option value="downwards">下行侧</option>
-                        </select>
-                      </label>
+                          options={[
+                            { value: '', label: '未判断' },
+                            { value: 'upwards', label: '上行侧' },
+                            { value: 'downwards', label: '下行侧' },
+                          ]}
+                        />
+                      </div>
                       <label>
                         <span>出口朝向</span>
                         <input
@@ -5895,23 +5899,24 @@ function TransitLineEditorDialog({
                   ))}
                 </select>
               </label>
-              <label>
+              <div className="admin-segmented-field">
                 <span>开通状态</span>
-                <select
+                <SegmentedControl
+                  ariaLabel="线路开通状态"
+                  className="material-mode-switch material-variant-switch"
                   value={operationStatus}
-                  onChange={(event) =>
+                  onChange={(next) =>
                     setOperationStatus(
-                      event.currentTarget.value as NonNullable<
-                        TransitRevisionLine['operationStatus']
-                      >,
+                      next as NonNullable<TransitRevisionLine['operationStatus']>,
                     )
                   }
-                >
-                  <option value="operating">已开通</option>
-                  <option value="planned">未开通</option>
-                  <option value="closed">已关闭</option>
-                </select>
-              </label>
+                  options={[
+                    { value: 'operating', label: '已开通' },
+                    { value: 'planned', label: '未开通' },
+                    { value: 'closed', label: '已关闭' },
+                  ]}
+                />
+              </div>
               <label>
                 <span>标识色</span>
                 <span className="transit-line-color-field">

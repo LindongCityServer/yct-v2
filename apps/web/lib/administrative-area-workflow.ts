@@ -166,7 +166,11 @@ async function validateAreaReferences(
       message: '行政区划代码已存在。',
     };
   }
-  if (area.parentAreaId === currentId) return invalidState('行政区划不能把自身设为上级。');
+  // 新建时 currentId 为 undefined，「无上级」经 schema 后同样是 undefined，
+  // 必须显式判断 currentId 存在，避免把「无」误判成「自身」。
+  if (currentId && area.parentAreaId === currentId) {
+    return invalidState('行政区划不能把自身设为上级。');
+  }
   if (area.parentAreaId && !areas.some((item) => item.id === area.parentAreaId)) {
     return {
       ok: false,

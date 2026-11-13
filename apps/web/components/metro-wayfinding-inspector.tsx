@@ -50,10 +50,13 @@ export function MetroWayfindingInspector({
   editorId,
   onAction,
   lineKeysByColor,
+  showSuggestions = true,
 }: Readonly<{
   editorId: string;
   onAction: (rowIndex: number, action: MetroWayfindingElementAction) => void;
   lineKeysByColor?: ReadonlyMap<string, string>;
+  /** 工作台把插入建议移到底栏后传 false，这里只保留尺寸警告。 */
+  showSuggestions?: boolean;
 }>) {
   const [snapshot, setSnapshot] = useState<MetroWayfindingInspectorSnapshot | undefined>();
 
@@ -127,7 +130,7 @@ export function MetroWayfindingInspector({
         </p>
       ) : null}
 
-      {selectedElement ? (
+      {selectedElement && showSuggestions ? (
         <MetroWayfindingInsertionSuggestions
           element={selectedElement}
           elements={activeElements}
@@ -304,7 +307,7 @@ const arrowLeadingTextSuggestion: MetroInsertionSuggestionTemplate = {
   ],
 };
 
-function MetroWayfindingInsertionSuggestions({
+export function MetroWayfindingInsertionSuggestions({
   element,
   elements,
   layoutMode,
@@ -312,6 +315,7 @@ function MetroWayfindingInsertionSuggestions({
   lineColorOptions,
   lineKeysByColor,
   onAction,
+  compact = false,
 }: Readonly<{
   element: MetroWayfindingElement;
   elements: MetroWayfindingElement[];
@@ -320,6 +324,8 @@ function MetroWayfindingInsertionSuggestions({
   lineColorOptions: Array<{ value: string; label: string; aliases?: string[] }>;
   lineKeysByColor?: ReadonlyMap<string, string>;
   onAction: (action: MetroWayfindingElementAction) => void;
+  /** 底栏常驻模式：只保留图标与精简主文案。 */
+  compact?: boolean;
 }>) {
   const lineColors = lineColorOptions.map((option) => option.value);
   const suggestions = resolveMetroInsertionSuggestionTemplates(element, elements, lineColors);
@@ -476,8 +482,11 @@ function MetroWayfindingInsertionSuggestions({
   };
 
   return (
-    <fieldset className="metro-wayfinding-text-suggestions" disabled={disabled}>
-      <legend>插入建议</legend>
+    <fieldset
+      className={`metro-wayfinding-text-suggestions${compact ? ' is-compact' : ''}`}
+      disabled={disabled}
+    >
+      {compact ? null : <legend>插入建议</legend>}
       <div>
         {suggestions.map((suggestion) =>
           suggestion.kind === 'line-combination' ? (
@@ -489,7 +498,7 @@ function MetroWayfindingInsertionSuggestions({
               />
               <span className="metro-wayfinding-line-template-suggestion-body">
                 <strong>{suggestion.previewMain}</strong>
-                <small>{suggestion.previewSecondary}</small>
+                {compact ? null : <small>{suggestion.previewSecondary}</small>}
                 <span className="metro-wayfinding-line-template-suggestion-actions">
                   <select
                     aria-label="选择线路"
@@ -506,36 +515,44 @@ function MetroWayfindingInsertionSuggestions({
                   </select>
                   <button
                     type="button"
+                    aria-label={element.type === 'combination' ? '替换为颜色填充' : '添加颜色填充'}
+                    title={element.type === 'combination' ? '替换为颜色填充' : '添加颜色填充'}
                     disabled={disabled || !selectedTemplateLine}
                     onClick={() => applyLineNumberTemplate('color')}
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">
                       palette
                     </span>
-                    <span>
-                      {element.type === 'combination' ? '替换为颜色填充' : '添加颜色填充'}
-                    </span>
+                    {compact ? null : (
+                      <span>
+                        {element.type === 'combination' ? '替换为颜色填充' : '添加颜色填充'}
+                      </span>
+                    )}
                   </button>
                   <button
                     type="button"
+                    aria-label={element.type === 'combination' ? '替换为色带样式' : '添加色带样式'}
+                    title={element.type === 'combination' ? '替换为色带样式' : '添加色带样式'}
                     disabled={disabled || !selectedTemplateLine}
                     onClick={() => applyLineNumberTemplate('stripe')}
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">
                       view_sidebar
                     </span>
-                    <span>
-                      {element.type === 'combination' ? '替换为色带样式' : '添加色带样式'}
-                    </span>
+                    {compact ? null : (
+                      <span>
+                        {element.type === 'combination' ? '替换为色带样式' : '添加色带样式'}
+                      </span>
+                    )}
                   </button>
                 </span>
-                {lineTemplateOptions.some((line) => line.isDerivedName) ? (
+                {!compact && lineTemplateOptions.some((line) => line.isDerivedName) ? (
                   <small>
                     带「推断」标记的编号由项目线路键推断得出（如 sh2 → 2），
                     可在「配置项目线路名称」中修正为正式名称。
                   </small>
                 ) : null}
-                {!lineTemplateOptions.length ? (
+                {!compact && !lineTemplateOptions.length ? (
                   <small>当前没有带标识色的地铁线路数据。</small>
                 ) : null}
               </span>
@@ -554,12 +571,14 @@ function MetroWayfindingInsertionSuggestions({
               />
               <span>
                 <strong>{suggestion.previewMain}</strong>
-                <small>
-                  {suggestionKindLabel(suggestion)} · {suggestion.previewSecondary}
-                  {suggestion.kind === 'text' || !suggestion.kind
-                    ? ` · ${layoutMode === 'vertical' ? '默认横排，可改为竖排' : '双语文字元素'}`
-                    : ''}
-                </small>
+                {compact ? null : (
+                  <small>
+                    {suggestionKindLabel(suggestion)} · {suggestion.previewSecondary}
+                    {suggestion.kind === 'text' || !suggestion.kind
+                      ? ` · ${layoutMode === 'vertical' ? '默认横排，可改为竖排' : '双语文字元素'}`
+                      : ''}
+                  </small>
+                )}
               </span>
             </button>
           ),

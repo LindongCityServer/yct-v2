@@ -32,3 +32,9 @@ export const METRO_DIRECTION_OLD_TEMPLATE_ID = 'system_material_metro_direction_
 
 /** 站台站名标志：512×512 的方形站台站名牌。 */
 export const METRO_PLATFORM_SIGN_TEMPLATE_ID = 'system_material_metro_platform_sign';
+
+/** 路牌与门牌模板：路牌一个入口，门牌含旧版 / 怀旧两种样式。 */
+export const ROAD_NAME_DIRECTION_TEMPLATE_ID = 'system_material_road_name_direction';
+export const BUILDING_ADDRESS_TEMPLATE_ID = 'system_material_building_address';
+export const NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID =
+  'system_material_nostalgic_building_address';

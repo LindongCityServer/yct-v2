@@ -1,7 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import * as opentypeModule from 'opentype.js';
-import type { Font } from 'opentype.js';
 import type { MaterialGlyphConfig } from '@yct/contracts';
 import { toUppercasePinyin } from './chinese-pinyin';
 import { resolveMetroLineEnglishName } from './metro-wayfinding-import';
@@ -23,7 +19,6 @@ import {
   METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH,
   METRO_WAYFINDING_FOREGROUND,
   hasMetroWayfindingTextRowContent,
-  metroWayfindingIconOptions,
   normalizeColor,
   parseMetroWayfindingLayout,
   resolveMetroArrowIconAssetName,
@@ -36,8 +31,6 @@ import {
   resolveMetroWayfindingTextMetrics,
   resolveMetroWayfindingVerticalLayoutSizing,
   splitMetroLargeTextRuns,
-  type MetroArrowIconAssetName,
-  type MetroFacilityIconAssetName,
   type MetroWayfindingElement,
   type MetroWayfindingCombinationElement,
   type MetroWayfindingFrameFillMode,
@@ -45,6 +38,13 @@ import {
   type MetroWayfindingLargeTextElement,
   type MetroWayfindingMainSegment,
 } from './metro-wayfinding';
+import {
+  escapeXml,
+  formatNumber,
+  isBasicLatinCharacter,
+  renderMetroWayfindingSvg,
+} from './metro-wayfinding-svg';
+import type { MaterialGlyphAssets } from './material-glyph-assets';
 
 interface NostalgicDigitGlyph {
   advance: number;
@@ -139,19 +139,15 @@ const nostalgicSuffixGlyphs: Record<string, NostalgicSuffixGlyph> = {
   },
 };
 
-let chillJinshuSongFont: Font | undefined;
-let harmonyOsSansBoldFont: Font | undefined;
-const materialSymbolMarkupCache = new Map<string, { viewBox: string; content: string }>();
-const metroFacilityAssetMarkupCache = new Map<string, { viewBox: string; content: string }>();
-const metroArrowAssetMarkupCache = new Map<string, { viewBox: string; content: string }>();
-
 export function renderMaterialGlyph(
   value: string,
   config: MaterialGlyphConfig,
-  values: Record<string, string> = {},
+  values: Record<string, string>,
+  assets: MaterialGlyphAssets,
 ): string {
+  // 线路走向地图即使没有数据也要保留版位：空值时画占位框而不是留白。
   if (!value) {
-    return '';
+    return config.renderer === 'transit_route_map' ? renderTransitRouteMapPlaceholder(config) : '';
   }
   if (config.renderer === 'nostalgic_digits') {
     return renderNostalgicDigits(value, config);
@@ -160,18 +156,33 @@ export function renderMaterialGlyph(
     const suffix = config.suffixFieldKey ? (values[config.suffixFieldKey] ?? '') : '';
     return renderNostalgicAddressNumber(value, suffix, config);
   }
-  if (config.renderer === 'transit_station_list') {
-    const currentIndex = config.currentIndexFieldKey
+  if (
+    config.renderer === 'transit_station_list' ||
+    config.renderer === 'transit_horizontal_station_list'
+  ) {
+    // 站点列表跟随行车方向：开往首站时整体倒序，当前站序号同步换算。
+    // 这里只影响渲染，不改写输入值，所以切换方向不会破坏「未修改」状态。
+    let stationValue = value;
+    let currentIndex = config.currentIndexFieldKey
       ? Number.parseInt(values[config.currentIndexFieldKey] ?? '', 10)
       : -1;
-    return renderTransitStationList(value, currentIndex, config);
-  }
-  if (config.renderer === 'transit_horizontal_station_list') {
-    const currentIndex = config.currentIndexFieldKey
-      ? Number.parseInt(values[config.currentIndexFieldKey] ?? '', 10)
-      : -1;
+    if (values.travelDirection === 'first') {
+      const stations = value
+        .split(/\r?\n|\s*\/\s*/u)
+        .map((station) => station.trim())
+        .filter(Boolean);
+      if (stations.length > 1) {
+        stationValue = [...stations].reverse().join('\n');
+        if (Number.isFinite(currentIndex) && currentIndex >= 0) {
+          currentIndex = stations.length - 1 - Math.min(currentIndex, stations.length - 1);
+        }
+      }
+    }
+    if (config.renderer === 'transit_station_list') {
+      return renderTransitStationList(stationValue, currentIndex, config, assets);
+    }
     const color = config.colorFieldKey ? values[config.colorFieldKey] : undefined;
-    return renderTransitHorizontalStationList(value, currentIndex, color, config);
+    return renderTransitHorizontalStationList(stationValue, currentIndex, color, config);
   }
   if (config.renderer === 'transit_route_map') {
     const color = config.colorFieldKey ? values[config.colorFieldKey] : undefined;
@@ -180,7 +191,7 @@ export function renderMaterialGlyph(
   if (config.renderer === 'metro_wayfinding') {
     const width = Number(values['canvas.logicalWidthPx']) || config.layoutWidth;
     const height = Number(values['canvas.logicalHeightPx']) || METRO_WAYFINDING_HEIGHT;
-    return renderMetroWayfinding(value, width, height);
+    return renderMetroWayfindingSvg(value, width, height, assets.getMetroWayfindingAssets());
   }
   if (config.renderer === 'metro_line_map_modern' || config.renderer === 'metro_line_map_classic') {
     return renderMetroLineMap(
@@ -215,990 +226,14 @@ export function renderMaterialGlyph(
   if (config.renderer === 'metro_platform_sign') {
     return renderMetroPlatformSign(value, config, values);
   }
-  return renderVerticalChillJinshuSong(value, config);
-}
-
-function renderMetroWayfinding(value: string, canvasWidth: number, canvasHeight: number): string {
-  const layout = parseMetroWayfindingLayout(value);
-  if (layout.mode === 'vertical') {
-    return renderMetroWayfindingVertical(layout, canvasWidth, canvasHeight);
-  }
-  const rowCount = layout.mode === 'double' ? 2 : 1;
-  const scale = canvasHeight / (METRO_WAYFINDING_HEIGHT * rowCount);
-  const width = canvasWidth / scale;
-  const rows = Array.from({ length: rowCount }, (_unused, index) =>
-    renderMetroWayfindingRow(layout, layout.rows[index] ?? [], width, index),
-  ).join('');
-  const rowDivider =
-    rowCount === 2 && layout.dividerBetweenRows
-      ? `<rect x="${formatNumber(METRO_WAYFINDING_PADDING)}" y="${formatNumber(METRO_WAYFINDING_HEIGHT - METRO_WAYFINDING_DIVIDER_WIDTH / 2)}" width="${formatNumber(Math.max(width - METRO_WAYFINDING_PADDING * 2, 0))}" height="${METRO_WAYFINDING_DIVIDER_WIDTH}" fill="${normalizeColor(layout.foregroundColor, METRO_WAYFINDING_FOREGROUND)}"/>`
-      : '';
-  return `<g transform="scale(${formatNumber(scale)})" data-metro-wayfinding="true" data-metro-wayfinding-mode="${layout.mode}"><rect width="${formatNumber(width)}" height="${METRO_WAYFINDING_HEIGHT * rowCount}" fill="${normalizeColor(layout.backgroundColor, '#262626')}"/>${rows}${rowDivider}</g>`;
-}
-
-function renderMetroWayfindingVertical(
-  layout: ReturnType<typeof parseMetroWayfindingLayout>,
-  canvasWidth: number,
-  canvasHeight: number,
-): string {
-  const width = Math.max(canvasWidth, 1);
-  const height = Math.max(canvasHeight, METRO_WAYFINDING_HEIGHT);
-  const elements = layout.rows[0] ?? [];
-  const sizing = resolveMetroWayfindingVerticalLayoutSizing(elements, height);
-  let cursorY = METRO_WAYFINDING_PADDING;
-  const children = elements.map((element, index) => {
-    const intrinsicElementHeight =
-      element.type === 'space' && element.mode === 'flex'
-        ? sizing.flexHeight
-        : sizing.elementHeights[index]!;
-    const elementScaleY =
-      element.type === 'text' && element.writingMode === 'vertical' ? sizing.textScaleY : 1;
-    const elementHeight = intrinsicElementHeight * elementScaleY;
-    const nextElement = elements[index + 1];
-    const output = renderMetroWayfindingVerticalElement(
-      element,
-      cursorY,
-      elementHeight,
-      width,
-      layout,
-      intrinsicElementHeight,
-    );
-    const gap =
-      nextElement &&
-      resolveMetroElementBackground(element, layout) ===
-        resolveMetroElementBackground(nextElement, layout)
-        ? `<rect x="0" y="${formatNumber(cursorY + elementHeight)}" width="${formatNumber(width)}" height="${METRO_WAYFINDING_GAP}" fill="${resolveMetroElementBackground(element, layout)}"/>`
-        : '';
-    cursorY += elementHeight + (nextElement ? METRO_WAYFINDING_GAP : 0);
-    return `${output}${gap}`;
-  });
-  return `<g data-metro-wayfinding="true" data-metro-wayfinding-mode="vertical"><rect width="${formatNumber(width)}" height="${formatNumber(height)}" fill="${normalizeColor(layout.backgroundColor, '#262626')}"/>${children.join('')}</g>`;
-}
-
-function renderMetroWayfindingVerticalElement(
-  element: MetroWayfindingElement,
-  y: number,
-  height: number,
-  width: number,
-  layout: ReturnType<typeof parseMetroWayfindingLayout>,
-  contentHeight = height,
-): string {
-  const background = resolveMetroElementBackground(element, layout);
-  const foreground = normalizeColor(
-    element.foregroundColor,
-    layout.foregroundColor || METRO_WAYFINDING_FOREGROUND,
-  );
-  if (element.type === 'space') {
-    return `<rect x="0" y="${formatNumber(y)}" width="${formatNumber(width)}" height="${formatNumber(height)}" fill="${background}"/>`;
-  }
-  if (element.type === 'divider') {
-    return `<g transform="translate(0 ${formatNumber(y)})"><rect width="${formatNumber(width)}" height="${formatNumber(height)}" fill="${background}"/><rect x="28" width="${formatNumber(Math.max(width - 56, 0))}" height="${METRO_WAYFINDING_DIVIDER_WIDTH}" fill="${foreground}"/></g>`;
-  }
-  if (element.type === 'text' && element.writingMode === 'vertical') {
-    const content = renderMetroVerticalTextRows(element, width, foreground, background, height);
-    return `<g transform="translate(0 ${formatNumber(y)})"><rect width="${formatNumber(width)}" height="${formatNumber(height)}" fill="${background}"/>${content}</g>`;
-  }
-
-  const naturalWidth =
-    element.type === 'facility' || element.type === 'arrow'
-      ? 85
-      : Math.max(resolveMetroWayfindingElementWidth(element), 1);
-  const availableWidth = Math.max(width - METRO_WAYFINDING_PADDING * 2, 1);
-  const usesRowWidthCompression = element.type === 'text';
-  const contentWidth = usesRowWidthCompression
-    ? Math.min(naturalWidth, availableWidth)
-    : naturalWidth;
-  const scaleX = usesRowWidthCompression ? 1 : Math.min(1, availableWidth / naturalWidth);
-  const displayWidth = contentWidth * scaleX;
-  const x = (width - displayWidth) / 2;
-  const centeredElement =
-    element.type === 'text' ? { ...element, align: 'center' as const } : element;
-  const content = renderMetroWayfindingElement(
-    centeredElement,
-    x,
-    contentWidth,
-    layout,
-    scaleX,
-    1,
-    element.type === 'text',
-    contentHeight,
-    element.type === 'facility' || element.type === 'arrow' ? -21.5 : 0,
-  );
-  return `<g transform="translate(0 ${formatNumber(y)})"><rect width="${formatNumber(width)}" height="${formatNumber(height)}" fill="${background}"/>${content}</g>`;
-}
-
-function renderMetroWayfindingRow(
-  layout: ReturnType<typeof parseMetroWayfindingLayout>,
-  elements: MetroWayfindingElement[],
-  width: number,
-  rowIndex: number,
-): string {
-  const sizing = resolveMetroWayfindingLayoutSizing(elements, width);
-  let cursor = (width - sizing.totalDisplayWidth) / 2;
-  const contentStart = cursor;
-  const contentEnd = contentStart + sizing.totalDisplayWidth;
-  const backgroundColor = normalizeColor(layout.backgroundColor, '#262626');
-  const firstElementBackground = elements[0]
-    ? resolveMetroElementBackground(elements[0], layout)
-    : backgroundColor;
-  const lastElement = elements.at(-1);
-  const lastElementBackground = lastElement
-    ? resolveMetroElementBackground(lastElement, layout)
-    : backgroundColor;
-  const edgeBackgrounds = [
-    firstElementBackground !== backgroundColor
-      ? `<rect width="${formatNumber(Math.max(contentStart, 0))}" height="128" fill="${firstElementBackground}"/>`
-      : '',
-    lastElementBackground !== backgroundColor
-      ? `<rect x="${formatNumber(contentEnd)}" width="${formatNumber(Math.max(width - contentEnd, 0))}" height="128" fill="${lastElementBackground}"/>`
-      : '',
-  ].join('');
-  const children = elements.map((element, index) => {
-    const intrinsicElementWidth =
-      element.type === 'space' && element.mode === 'flex'
-        ? sizing.flexWidth
-        : sizing.elementWidths[index]!;
-    const elementWidth =
-      element.type === 'text' ? intrinsicElementWidth * sizing.textScaleX : intrinsicElementWidth;
-    const elementScaleX =
-      sizing.layoutScale *
-      (element.type === 'largeText' || element.type === 'combination' ? sizing.textScaleX : 1);
-    const displayWidth = elementWidth * elementScaleX;
-    const output = renderMetroWayfindingElement(
-      element,
-      cursor,
-      elementWidth,
-      layout,
-      elementScaleX,
-      sizing.layoutScale,
-    );
-    const nextElement = elements[index + 1];
-    const gap = nextElement
-      ? renderMetroWayfindingGap(
-          element,
-          nextElement,
-          cursor + displayWidth,
-          layout,
-          sizing.layoutScale,
-        )
-      : '';
-    cursor +=
-      displayWidth + (index < elements.length - 1 ? METRO_WAYFINDING_GAP * sizing.layoutScale : 0);
-    return `${output}${gap}`;
-  });
-  return `<g transform="translate(0 ${rowIndex * METRO_WAYFINDING_HEIGHT})" data-metro-wayfinding-row="${rowIndex + 1}"><rect width="${formatNumber(width)}" height="128" fill="${backgroundColor}"/>${edgeBackgrounds}${children.join('')}</g>`;
-}
-
-function renderMetroWayfindingGap(
-  leftElement: MetroWayfindingElement,
-  rightElement: MetroWayfindingElement,
-  x: number,
-  layout: ReturnType<typeof parseMetroWayfindingLayout>,
-  scale: number,
-): string {
-  const leftBackground = resolveMetroElementBackground(leftElement, layout);
-  const rightBackground = resolveMetroElementBackground(rightElement, layout);
-  if (leftBackground !== rightBackground) {
-    return '';
-  }
-  return `<rect x="${formatNumber(x)}" width="${formatNumber(METRO_WAYFINDING_GAP * scale)}" height="${formatNumber(METRO_WAYFINDING_HEIGHT * scale)}" fill="${leftBackground}"/>`;
-}
-
-function resolveMetroElementBackground(
-  element: MetroWayfindingElement,
-  layout: ReturnType<typeof parseMetroWayfindingLayout>,
-): string {
-  return normalizeColor(element.backgroundColor, layout.backgroundColor);
-}
-
-function renderMetroWayfindingElement(
-  element: MetroWayfindingElement,
-  x: number,
-  width: number,
-  layout: ReturnType<typeof parseMetroWayfindingLayout>,
-  scaleX: number,
-  scaleY: number,
-  textTopAligned = false,
-  elementHeight = METRO_WAYFINDING_HEIGHT,
-  iconOffsetY = 0,
-  suppressInheritedBackground = false,
-): string {
-  const foreground = normalizeColor(
-    element.foregroundColor,
-    layout.foregroundColor || METRO_WAYFINDING_FOREGROUND,
-  );
-  const background = normalizeColor(element.backgroundColor, layout.backgroundColor);
-  const backgroundRect =
-    suppressInheritedBackground && element.backgroundColor === undefined
-      ? ''
-      : `<rect width="${formatNumber(width)}" height="${formatNumber(elementHeight)}" fill="${background}"/>`;
-  const transform = `translate(${formatNumber(x)} 0) scale(${formatNumber(scaleX)} ${formatNumber(scaleY)})`;
-  if (element.type === 'space') {
-    return suppressInheritedBackground && element.backgroundColor === undefined
-      ? ''
-      : `<rect x="${formatNumber(x)}" width="${formatNumber(width * scaleX)}" height="${formatNumber(elementHeight)}" fill="${background}"/>`;
-  }
-  if (element.type === 'divider') {
-    return `<g><rect x="${formatNumber(x)}" width="${formatNumber(METRO_WAYFINDING_DIVIDER_WIDTH * scaleX)}" height="128" fill="${background}"/><rect x="${formatNumber(x)}" y="28" width="${formatNumber(METRO_WAYFINDING_DIVIDER_WIDTH * scaleX)}" height="72" fill="${foreground}"/></g>`;
-  }
-  if (element.type === 'facility' || element.type === 'arrow') {
-    const hasFrame = element.type === 'arrow' ? element.framed : element.frameShape !== 'none';
-    const frameFillColor =
-      element.frameFillMode === 'color'
-        ? normalizeColor(element.frameFillColor, foreground)
-        : foreground;
-    const graphicForeground =
-      hasFrame && element.frameFillMode === 'inverse' ? background : foreground;
-    const icon =
-      metroWayfindingIconOptions.find((option) => option.id === element.iconId) ??
-      metroWayfindingIconOptions[0]!;
-    const graphic =
-      element.type === 'arrow'
-        ? renderMetroArrowAsset(
-            resolveMetroArrowIconAssetName(element.iconId) ?? 'south-west',
-            graphicForeground,
-            element.id,
-            element.framed,
-            element.frameFillMode,
-            frameFillColor,
-            element.frameStroke,
-          )
-        : renderMetroIcon(
-            icon.symbol,
-            icon.id,
-            graphicForeground,
-            element.id,
-            element.direction,
-            element.frameShape,
-            element.frameFillMode,
-            frameFillColor,
-            element.frameStroke,
-            element.variant,
-          );
-    const dataAttribute =
-      element.type === 'arrow'
-        ? `data-metro-arrow="${escapeXml(element.iconId)}"`
-        : `data-material-symbol="${escapeXml(icon.symbol)}"`;
-    const positionedGraphic =
-      iconOffsetY === 0
-        ? graphic
-        : `<g transform="translate(0 ${formatNumber(iconOffsetY)})">${graphic}</g>`;
-    return `<g transform="${transform}" ${dataAttribute}>${backgroundRect}${positionedGraphic}</g>`;
-  }
-  if (element.type === 'largeText') {
-    const frameFillColor =
-      element.frameFillMode === 'color'
-        ? normalizeColor(element.frameFillColor, foreground)
-        : foreground;
-    const contentColor =
-      element.frameShape !== 'none' && element.frameFillMode === 'inverse'
-        ? background
-        : foreground;
-    const text = renderMetroLargeText(element, width, contentColor, elementHeight);
-    const frame = renderMetroLargeTextFrame(
-      element.frameShape,
-      width,
-      foreground,
-      element.frameFillMode,
-      frameFillColor,
-      elementHeight,
-      element.frameStroke,
-    );
-    return `<g transform="${transform}">${backgroundRect}${frame}${text}</g>`;
-  }
-  if (element.type === 'combination') {
-    return renderMetroWayfindingCombination(
-      element,
-      x,
-      width,
-      layout,
-      scaleX,
-      scaleY,
-      elementHeight,
-    );
-  }
-  const textAlign =
-    element.align === 'left' ? 'start' : element.align === 'right' ? 'end' : 'middle';
-  const textX = element.align === 'left' ? 0 : element.align === 'right' ? width : width / 2;
-  const rows = renderMetroTextRows(
-    element,
-    width,
-    foreground,
-    background,
-    textX,
-    textAlign,
-    textTopAligned,
-  );
-  return `<g transform="${transform}">${backgroundRect}${rows}</g>`;
-}
-
-function renderMetroWayfindingCombination(
-  element: MetroWayfindingCombinationElement,
-  x: number,
-  width: number,
-  layout: ReturnType<typeof parseMetroWayfindingLayout>,
-  scaleX: number,
-  scaleY: number,
-  elementHeight: number,
-): string {
-  const foreground = normalizeColor(
-    element.foregroundColor,
-    layout.foregroundColor || METRO_WAYFINDING_FOREGROUND,
-  );
-  const background = normalizeColor(element.backgroundColor, layout.backgroundColor);
-  const fillColor = normalizeColor(element.frameFillColor, foreground);
-  const frameBackground =
-    element.frameFillMode === 'inverse'
-      ? foreground
-      : element.frameFillMode === 'color'
-        ? fillColor
-        : background;
-  const contentColor = element.frameFillMode === 'inverse' ? background : foreground;
-  const childLayout = {
-    ...layout,
-    backgroundColor: frameBackground,
-    foregroundColor: contentColor,
-  };
-  const combinationScale = Math.max(0.25, Math.min(1, element.scale));
-  const sizing = resolveMetroWayfindingCombinationSizing(element, width / combinationScale);
-  const baseWidth = sizing.width;
-  const baseHeight = METRO_WAYFINDING_HEIGHT;
-  const childHeight = baseHeight;
-  const childY = 0;
-  const combinationY = Math.max(0, (elementHeight - baseHeight * combinationScale) / 2);
-  const hasFlexibleSpace = element.children.some(
-    (child) => child.type === 'space' && child.mode === 'flex',
-  );
-  let cursor =
-    sizing.contentX +
-    (hasFlexibleSpace ? 0 : Math.max(0, sizing.contentWidth - sizing.totalDisplayWidth) / 2);
-  const children = element.children.map((child, index) => {
-    const intrinsicWidth =
-      child.type === 'space' && child.mode === 'flex'
-        ? sizing.flexWidth
-        : sizing.elementWidths[index]!;
-    const childWidth = child.type === 'text' ? intrinsicWidth * sizing.textScaleX : intrinsicWidth;
-    const childScaleX =
-      sizing.layoutScale *
-      (child.type === 'text' || child.type === 'largeText' ? sizing.textScaleX : 1);
-    const displayWidth = childWidth * childScaleX;
-    const output = renderMetroWayfindingElement(
-      child,
-      cursor,
-      childWidth,
-      childLayout,
-      childScaleX,
-      1,
-      false,
-      childHeight,
-      0,
-      true,
-    );
-    cursor +=
-      displayWidth +
-      (index < element.children.length - 1
-        ? METRO_WAYFINDING_COMBINATION_GAP * sizing.layoutScale
-        : 0);
-    return output;
-  });
-  const totalScaleX = Math.max(Math.abs(scaleX * combinationScale), Number.EPSILON);
-  const totalScaleY = Math.max(Math.abs(scaleY * combinationScale), Number.EPSILON);
-  const fillRadiusX = 10 / totalScaleX;
-  const fillRadiusY = 10 / totalScaleY;
-  const outlineRadiusX = 8.5 / totalScaleX;
-  const outlineRadiusY = 8.5 / totalScaleY;
-  const frame =
-    element.frameFillMode === 'inverse' || element.frameFillMode === 'color'
-      ? `<rect width="${formatNumber(baseWidth)}" height="${formatNumber(baseHeight)}" rx="${formatNumber(fillRadiusX)}" ry="${formatNumber(fillRadiusY)}" fill="${frameBackground}"/>`
-      : '';
-  const shouldStroke = element.frameStroke;
-  const outline = shouldStroke
-    ? `<rect x="1.5" y="1.5" width="${formatNumber(Math.max(baseWidth - 3, 0))}" height="${formatNumber(baseHeight - 3)}" rx="${formatNumber(outlineRadiusX)}" ry="${formatNumber(outlineRadiusY)}" fill="none" stroke="${foreground}" stroke-width="3"/>`
-    : '';
-  const stripe =
-    element.frameFillMode === 'stripe'
-      ? element.stripePosition === 'bottom'
-        ? `<rect y="${formatNumber(baseHeight - METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH)}" width="${formatNumber(baseWidth)}" height="${METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH}" fill="${fillColor}"/>`
-        : `<rect x="${formatNumber(element.stripePosition === 'right' ? baseWidth - METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH : 0)}" y="${METRO_WAYFINDING_COMBINATION_STRIPE_TOP}" width="${METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH}" height="${formatNumber(baseHeight - METRO_WAYFINDING_COMBINATION_STRIPE_TOP)}" fill="${fillColor}"/>`
-      : '';
-  const clipId = `metro-combination-clip-${element.id}`;
-  const roundedBackdrop = `<defs><clipPath id="${escapeXml(clipId)}"><rect width="${formatNumber(baseWidth)}" height="${formatNumber(baseHeight)}" rx="${formatNumber(fillRadiusX)}" ry="${formatNumber(fillRadiusY)}"/></clipPath></defs><g clip-path="url(#${escapeXml(clipId)})"><rect width="${formatNumber(baseWidth)}" height="${formatNumber(baseHeight)}" fill="${background}"/>${frame}${stripe}</g>`;
-  const squareBackdrop = `<rect width="${formatNumber(baseWidth)}" height="${formatNumber(baseHeight)}" fill="${background}"/>${frame}${stripe}`;
-  const backdrop =
-    element.frameFillMode === 'none' || element.frameFillMode === 'stripe'
-      ? squareBackdrop
-      : roundedBackdrop;
-  const transform = `translate(${formatNumber(x)} ${formatNumber(combinationY)}) scale(${formatNumber(scaleX * combinationScale)} ${formatNumber(scaleY * combinationScale)})`;
-  return `<g transform="${transform}">${backdrop}<g transform="translate(0 ${formatNumber(childY)})">${children.join('')}</g>${outline}</g>`;
-}
-
-function renderMetroVerticalTextRows(
-  element: Extract<MetroWayfindingElement, { type: 'text' }>,
-  width: number,
-  color: string,
-  background: string,
-  maxHeight = Number.POSITIVE_INFINITY,
-): string {
-  const rows = element.rows.filter(hasMetroWayfindingTextRowContent);
-  if (rows.length === 0) {
-    return '';
-  }
-  const metrics = resolveMetroWayfindingTextMetrics(rows);
-  const columns = rows.map((row) => ({
-    row,
-    fontSize: row.kind === 'main' ? metrics.mainFontSize : metrics.secondaryFontSize,
-    height:
-      row.kind === 'main'
-        ? measureMetroWayfindingMainSegments(row.segments, metrics.mainFontSize)
-        : measureMetroWayfindingSecondaryText(row.value, metrics.secondaryFontSize, row.bold),
-  }));
-  const contentWidth =
-    columns.reduce((total, column) => total + column.fontSize, 0) +
-    Math.max(columns.length - 1, 0) * metrics.spacing;
-  const availableWidth = Math.max(width - METRO_WAYFINDING_PADDING * 2, 1);
-  const scaleX = contentWidth > 0 ? Math.min(1, availableWidth / contentWidth) : 1;
-  const contentX = (width - contentWidth * scaleX) / 2;
-  let cursorRight = contentWidth;
-  const markup = columns
-    .map(({ row, fontSize, height }) => {
-      const x = cursorRight - fontSize / 2;
-      cursorRight -= fontSize + metrics.spacing;
-      const columnMarkup =
-        row.kind === 'main'
-          ? renderMetroVerticalMainSegments(row.segments, fontSize, color, background, x)
-          : renderMetroVerticalTextRun(row.value, fontSize, color, x, 0, 400);
-      const columnScaleY = height > maxHeight && height > 0 ? maxHeight / height : 1;
-      return `<g transform="scale(1 ${formatNumber(columnScaleY)})">${columnMarkup}</g>`;
-    })
-    .join('');
-  return `<g transform="translate(${formatNumber(contentX)} 0) scale(${formatNumber(scaleX)} 1)">${markup}</g>`;
-}
-
-function renderMetroVerticalMainSegments(
-  segments: MetroWayfindingMainSegment[],
-  fontSize: number,
-  color: string,
-  background: string,
-  x: number,
-): string {
-  const segmentGap = fontSize * 0.12;
-  let cursorY = 0;
-  return segments
-    .map((segment, index) => {
-      const trailingGap = index < segments.length - 1 ? segmentGap : 0;
-      if (segment.kind === 'line') {
-        const diameter = fontSize * 1.12;
-        const centerY = cursorY + diameter / 2;
-        const lineColor = normalizeColor(segment.color, '#2F80ED');
-        const shouldInvert = lineColor.toUpperCase() === background.toUpperCase();
-        const badgeBackground = shouldInvert ? color : lineColor;
-        const badgeForeground = shouldInvert ? lineColor : '#FFFFFF';
-        const output = `<g transform="translate(${formatNumber(x)} ${formatNumber(centerY)})"><circle r="${formatNumber(diameter / 2)}" fill="${badgeBackground}"/><text x="0" y="${formatNumber(fontSize * 0.9 * 0.34)}" transform="rotate(90)" fill="${badgeForeground}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}">${escapeXml(segment.value)}</text></g>`;
-        cursorY += diameter + trailingGap;
-        return output;
-      }
-      const textHeight = estimateMetroWayfindingTextWidth(segment.value, fontSize);
-      const verticalPadding = segment.kind === 'boxed' ? fontSize * 0.16 : 0;
-      const segmentHeight =
-        segment.kind === 'boxed'
-          ? Math.max(fontSize * 1.05, textHeight + verticalPadding * 2)
-          : textHeight;
-      const textY = cursorY + (segmentHeight - textHeight) / 2;
-      const frame =
-        segment.kind === 'boxed'
-          ? `<rect x="${formatNumber(x - fontSize * 0.525)}" y="${formatNumber(cursorY + fontSize * 0.02)}" width="${formatNumber(fontSize * 1.05)}" height="${formatNumber(segmentHeight - fontSize * 0.04)}" rx="${formatNumber(fontSize * 0.11)}" fill="none" stroke="${color}" stroke-width="${formatNumber(Math.max(1, fontSize * 0.04))}"/>`
-          : '';
-      const output = `${frame}${renderMetroVerticalTextRun(segment.value, fontSize, color, x, textY)}`;
-      cursorY += segmentHeight + trailingGap;
-      return output;
-    })
-    .join('');
-}
-
-function renderMetroVerticalTextRun(
-  value: string,
-  fontSize: number,
-  color: string,
-  x: number,
-  startY: number,
-  fontWeight: 400 | 700 = 400,
-): string {
-  let cursorY = startY;
-  return Array.from(value)
-    .map((character) => {
-      const shouldRotate = /[A-Za-z0-9]/u.test(character);
-      const advance = estimateMetroWayfindingTextWidth(character, fontSize);
-      const output = /\s/u.test(character)
-        ? ''
-        : shouldRotate
-          ? `<text transform="translate(${formatNumber(x - fontSize * 0.3)} ${formatNumber(cursorY)}) rotate(90)" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="${fontWeight}">${escapeXml(character)}</text>`
-          : `<text x="${formatNumber(x)}" y="${formatNumber(cursorY + fontSize * 0.82)}" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="${fontWeight}" text-anchor="middle">${escapeXml(character)}</text>`;
-      cursorY += advance;
-      return output;
-    })
-    .join('');
-}
-
-function renderMetroTextRows(
-  element: Extract<MetroWayfindingElement, { type: 'text' }>,
-  width: number,
-  color: string,
-  background: string,
-  textX: number,
-  textAnchor: string,
-  topAligned = false,
-): string {
-  const rows = topAligned ? element.rows.filter(hasMetroWayfindingTextRowContent) : element.rows;
-  if (rows.length === 0) {
-    return '';
-  }
-  const visibleElement = rows.length === element.rows.length ? element : { ...element, rows };
-  const metrics = resolveMetroWayfindingTextMetrics(rows);
-  const rowScales = resolveMetroTextRowScales(visibleElement, width, metrics);
-  let rowTop = topAligned
-    ? 0
-    : (METRO_WAYFINDING_HEIGHT - METRO_WAYFINDING_TEXT_HEIGHT) / 2 + metrics.spacing;
-  return rows
-    .map((row, index) => {
-      const fontSize = row.kind === 'main' ? metrics.mainFontSize : metrics.secondaryFontSize;
-      const baseline = rowTop + fontSize * 0.82;
-      const output =
-        row.kind === 'main'
-          ? renderMetroMainSegments(
-              row.segments,
-              fontSize,
-              color,
-              background,
-              textX,
-              textAnchor,
-              baseline,
-              rowScales[index] ?? 1,
-            )
-          : renderMetroText(
-              row.value,
-              fontSize,
-              width,
-              color,
-              textAnchor,
-              textX,
-              baseline,
-              rowScales[index] ?? 1,
-              400,
-            );
-      rowTop += fontSize + (index < rows.length - 1 ? metrics.spacing : 0);
-      return output;
-    })
-    .join('');
-}
-
-function renderMetroMainSegments(
-  segments: MetroWayfindingMainSegment[],
-  fontSize: number,
-  color: string,
-  background: string,
-  textX: number,
-  textAnchor: string,
-  baseline: number,
-  contentScale: number,
-): string {
-  const totalWidth = measureMetroWayfindingMainSegments(segments, fontSize);
-  const renderedWidth = totalWidth * contentScale;
-  const segmentGap = fontSize * 0.12;
-  const startX =
-    textAnchor === 'start'
-      ? textX
-      : textAnchor === 'end'
-        ? textX - renderedWidth
-        : textX - renderedWidth / 2;
-  let cursor = 0;
-  const content = segments
-    .map((segment, index) => {
-      const trailingGap = index < segments.length - 1 ? segmentGap : 0;
-      if (segment.kind === 'line') {
-        const diameter = fontSize * 1.12;
-        const centerX = cursor + diameter / 2;
-        const lineColor = normalizeColor(segment.color, '#2F80ED');
-        const shouldInvert = lineColor.toUpperCase() === background.toUpperCase();
-        const badgeBackground = shouldInvert ? color : lineColor;
-        const badgeForeground = shouldInvert ? lineColor : '#FFFFFF';
-        cursor += diameter + trailingGap;
-        return `<g transform="translate(${formatNumber(centerX)} ${formatNumber(baseline - fontSize * 0.32)})"><circle r="${formatNumber(diameter / 2)}" fill="${badgeBackground}"/><text y="${formatNumber(fontSize * 0.9 * 0.34)}" fill="${badgeForeground}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}">${escapeXml(segment.value)}</text></g>`;
-      }
-      const textWidth = estimateMetroWayfindingTextWidth(segment.value, fontSize);
-      const horizontalPadding = segment.kind === 'boxed' ? fontSize * 0.16 : 0;
-      const segmentWidth =
-        segment.kind === 'boxed'
-          ? Math.max(fontSize * 1.05, textWidth + horizontalPadding * 2)
-          : textWidth;
-      const textX = cursor + (segmentWidth - textWidth) / 2;
-      const frame =
-        segment.kind === 'boxed'
-          ? `<rect x="${formatNumber(cursor + fontSize * 0.02)}" y="${formatNumber(baseline - fontSize * 0.84)}" width="${formatNumber(segmentWidth - fontSize * 0.04)}" height="${formatNumber(fontSize * 1.05)}" rx="${formatNumber(fontSize * 0.11)}" fill="none" stroke="${color}" stroke-width="${formatNumber(Math.max(1, fontSize * 0.04))}"/>`
-          : '';
-      const output = `${frame}<text x="${formatNumber(textX)}" y="${formatNumber(baseline)}" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400">${escapeXml(segment.value)}</text>`;
-      cursor += segmentWidth + trailingGap;
-      return output;
-    })
-    .join('');
-  return `<g transform="translate(${formatNumber(startX)} 0) scale(${formatNumber(contentScale)} 1)">${content}</g>`;
-}
-
-function renderMetroText(
-  value: string,
-  fontSize: number,
-  width: number,
-  color: string,
-  textAnchor: string,
-  x = width / 2,
-  y = 0,
-  scale = 1,
-  fontWeight: 400 | 700 = 400,
-): string {
-  return `<g transform="translate(${formatNumber(x)} 0) scale(${formatNumber(scale)} 1) translate(-${formatNumber(x)} 0)"><text x="${formatNumber(x)}" y="${formatNumber(y || fontSize)}" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="${fontWeight}" text-anchor="${textAnchor}">${escapeXml(value)}</text></g>`;
-}
-
-function resolveMetroTextRowScales(
-  element: Extract<MetroWayfindingElement, { type: 'text' }>,
-  width: number,
-  metrics: ReturnType<typeof resolveMetroWayfindingTextMetrics>,
-): number[] {
-  const rowWidths = element.rows.map((row) =>
-    row.kind === 'main'
-      ? measureMetroWayfindingMainSegments(row.segments, metrics.mainFontSize)
-      : measureMetroWayfindingSecondaryText(row.value, metrics.secondaryFontSize, row.bold),
-  );
-  const scales = element.rows.map(() => 1);
-  let groupStart = 0;
-
-  while (groupStart < element.rows.length) {
-    const kind = element.rows[groupStart]!.kind;
-    let groupEnd = groupStart + 1;
-    while (groupEnd < element.rows.length && element.rows[groupEnd]!.kind === kind) {
-      groupEnd += 1;
-    }
-    const groupWidth = Math.max(...rowWidths.slice(groupStart, groupEnd), 0);
-    const groupScale = groupWidth > width && groupWidth > 0 ? width / groupWidth : 1;
-    scales.fill(groupScale, groupStart, groupEnd);
-    groupStart = groupEnd;
-  }
-
-  return scales;
-}
-
-/**
- * 大文本渲染：正文与**任意位置**的下角标交替排版。
- *
- * `dy` 是相对位移且会累积，所以进入下角标时 +13 下沉、离开时 -13 回到基线；
- * 相邻两个角标之间不再重复下沉。`dx` 只在「正文 ↔ 角标」交界处补 3px 间距。
- */
-function renderMetroLargeText(
-  element: MetroWayfindingLargeTextElement,
-  width: number,
-  color: string,
-  height: number,
-): string {
-  const frameShape = element.frameShape;
-  const mainFontSize =
-    frameShape !== 'none'
-      ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
-      : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
-  const suffixFontSize = METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE;
-  const runs = splitMetroLargeTextRuns(element);
-  let markup = '';
-  let gapTotal = 0;
-  let lowered = false;
-  runs.forEach((run, index) => {
-    const previous = runs[index - 1];
-    const next = runs[index + 1];
-    if (run.kind === 'suffix') {
-      if (previous?.kind === 'text') gapTotal += 3;
-      if (next?.kind === 'text') gapTotal += 3;
-      const dx = previous?.kind === 'text' ? 3 : 0;
-      const dy = lowered ? 0 : 13;
-      markup += renderMetroLargeTextRuns(run.value, suffixFontSize, 700, dx, dy);
-      lowered = true;
-      return;
-    }
-    const dx = previous?.kind === 'suffix' ? 3 : 0;
-    const dy = lowered ? -13 : 0;
-    markup += renderMetroLargeTextRuns(run.value, mainFontSize, 400, dx, dy);
-    lowered = false;
-  });
-  const text = `<text x="${formatNumber(width / 2 - gapTotal / 2)}" y="${formatNumber(height / 2)}" fill="${color}" text-anchor="middle" dominant-baseline="central" letter-spacing="0">${markup}</text>`;
-  if (frameShape !== 'circle') {
-    return text;
-  }
-  const contentWidth =
-    runs.reduce(
-      (total, run) =>
-        total +
-        estimateMetroWayfindingLargeTextWidth(
-          run.value,
-          run.kind === 'suffix' ? suffixFontSize : mainFontSize,
-        ),
-      0,
-    ) + gapTotal;
-  const scaleX = contentWidth > 72 ? 72 / contentWidth : 1;
-  return scaleX < 1
-    ? `<g transform="translate(${formatNumber(width / 2)} 0) scale(${formatNumber(scaleX)} 1) translate(${formatNumber(-width / 2)} 0)">${text}</g>`
-    : text;
-}
-
-function renderMetroLargeTextFrame(
-  frameShape: MetroWayfindingFrameShape,
-  width: number,
-  color: string,
-  frameFillMode: MetroWayfindingFrameFillMode,
-  frameFillColor: string,
-  height: number,
-  frameStroke: boolean,
-): string {
-  const usesFill = frameFillMode !== 'none';
-  const frameY = (height - METRO_WAYFINDING_TEXT_HEIGHT) / 2;
-  if (frameShape === 'rectangle') {
-    return usesFill
-      ? frameStroke
-        ? `<rect x="1.5" y="${formatNumber(frameY + 1.5)}" width="${formatNumber(width - 3)}" height="${formatNumber(METRO_WAYFINDING_TEXT_HEIGHT - 3)}" rx="8.5" fill="${frameFillColor}" stroke="${color}" stroke-width="3"/>`
-        : `<rect x="0" y="${formatNumber(frameY)}" width="${formatNumber(width)}" height="${METRO_WAYFINDING_TEXT_HEIGHT}" rx="10" fill="${frameFillColor}"/>`
-      : `<rect x="1.5" y="${formatNumber(frameY + 1.5)}" width="${formatNumber(width - 3)}" height="${formatNumber(METRO_WAYFINDING_TEXT_HEIGHT - 3)}" rx="8.5" fill="none" stroke="${color}" stroke-width="3"/>`;
-  }
-  return frameShape === 'circle'
-    ? usesFill
-      ? frameStroke
-        ? `<circle cx="${formatNumber(width / 2)}" cy="${formatNumber(height / 2)}" r="41" fill="${frameFillColor}" stroke="${color}" stroke-width="3"/>`
-        : `<circle cx="${formatNumber(width / 2)}" cy="${formatNumber(height / 2)}" r="42.5" fill="${frameFillColor}"/>`
-      : `<circle cx="${formatNumber(width / 2)}" cy="${formatNumber(height / 2)}" r="41" fill="none" stroke="${color}" stroke-width="3"/>`
-    : '';
-}
-
-function renderMetroLargeTextRuns(
-  value: string,
-  fontSize: number,
-  fontWeight: 400 | 700,
-  firstDx = 0,
-  firstDy = 0,
-): string {
-  const runs = Array.from(value).reduce<Array<{ value: string; usesArial: boolean }>>(
-    (result, character) => {
-      const usesArial = isBasicLatinCharacter(character);
-      const previous = result.at(-1);
-      if (previous?.usesArial === usesArial) {
-        previous.value += character;
-      } else {
-        result.push({ value: character, usesArial });
-      }
-      return result;
-    },
-    [],
-  );
-  return runs
-    .map((run, index) => {
-      const offset =
-        index === 0 ? ` dx="${formatNumber(firstDx)}" dy="${formatNumber(firstDy)}"` : '';
-      const fontFamily = run.usesArial
-        ? "Arial, 'HarmonyOS Sans SC', sans-serif"
-        : "'HarmonyOS Sans SC', sans-serif";
-      return `<tspan${offset} font-family="${fontFamily}" font-size="${formatNumber(fontSize)}" font-weight="${fontWeight}">${escapeXml(run.value)}</tspan>`;
-    })
-    .join('');
-}
-
-function renderMetroIcon(
-  symbol: string,
-  iconId: string,
-  color: string,
-  instanceId: string,
-  direction?: 'left' | 'right' | 'up' | 'down',
-  frameShape: MetroWayfindingFrameShape = 'none',
-  frameFillMode: MetroWayfindingFrameFillMode = 'none',
-  frameFillColor = color,
-  frameStroke = false,
-  variant?: 'two-way' | 'up' | 'down',
-): string {
-  const assetName = resolveMetroFacilityIconAssetName(iconId, direction, variant);
-  if (assetName) {
-    const directionTransform = resolveMetroFacilityAssetDirectionTransform(
-      iconId,
-      direction,
-      variant,
-    );
-    if (frameShape === 'rectangle' && frameFillMode === 'none') {
-      return renderMetroFacilityAsset(assetName, 'framed', color, instanceId, directionTransform);
-    }
-    const frame = renderMetroFacilityFrame(
-      frameShape,
-      color,
-      instanceId,
-      frameFillMode,
-      frameFillColor,
-      frameStroke,
-    );
-    const icon = renderMetroFacilityAsset(
-      assetName,
-      'plain',
-      color,
-      instanceId,
-      directionTransform,
-      frameShape === 'circle' ? 0.86 : frameShape === 'rectangle' ? 0.9 : 1.1,
-    );
-    return `${frame}${icon}`;
-  }
-
-  const frame = renderMetroFacilityFrame(
-    frameShape,
-    color,
-    instanceId,
-    frameFillMode,
-    frameFillColor,
-    frameStroke,
-  );
-  const { viewBox, content } = getMaterialSymbolMarkup(symbol);
-  const transform = resolveMetroIconDirectionTransform(iconId, direction);
-  const scaleTransform = resolveMetroIconScaleTransform(
-    frameShape === 'rectangle' ? 0.9 : frameShape === 'circle' ? 0.84 : 1,
-  );
-  return `${frame}<g transform="${transform}"><g transform="${scaleTransform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" fill="${color}" aria-hidden="true">${content}</svg></g></g>`;
-}
-
-function renderMetroFacilityFrame(
-  frameShape: MetroWayfindingFrameShape,
-  color: string,
-  instanceId: string,
-  frameFillMode: MetroWayfindingFrameFillMode,
-  frameFillColor: string,
-  frameStroke: boolean,
-): string {
-  if (frameShape === 'rectangle') {
-    return frameFillMode === 'none'
-      ? renderMetroFacilityAsset('frame', 'framed', color, `${instanceId}-frame`)
-      : frameStroke
-        ? `<rect x="1.5" y="23" width="82" height="82" rx="7" fill="${frameFillColor}" stroke="${color}" stroke-width="3"/>`
-        : `<rect x="0" y="21.5" width="85" height="85" rx="8.5" fill="${frameFillColor}"/>`;
-  }
-  return frameShape === 'circle'
-    ? frameFillMode === 'none'
-      ? `<circle cx="42.5" cy="64" r="41" fill="none" stroke="${color}" stroke-width="3"/>`
-      : frameStroke
-        ? `<circle cx="42.5" cy="64" r="41" fill="${frameFillColor}" stroke="${color}" stroke-width="3"/>`
-        : `<circle cx="42.5" cy="64" r="42.5" fill="${frameFillColor}"/>`
-    : '';
-}
-
-function renderMetroFacilityAsset(
-  assetName: MetroFacilityIconAssetName | 'frame',
-  variant: 'framed' | 'plain',
-  color: string,
-  instanceId: string,
-  transform = '',
-  scale = 1,
-): string {
-  const { viewBox, content } = getMetroFacilityAssetMarkup(assetName, variant);
-  const namespacedContent = namespaceMetroFacilityAssetMarkup(
-    content,
-    `${instanceId}-${variant}-${assetName}`,
-  );
-  const scaleTransform = resolveMetroIconScaleTransform(scale);
-  return `<g transform="${transform}"><g transform="${scaleTransform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" color="${color}" fill="${color}" aria-hidden="true">${namespacedContent}</svg></g></g>`;
-}
-
-function renderMetroArrowAsset(
-  assetName: MetroArrowIconAssetName,
-  color: string,
-  instanceId: string,
-  framed: boolean,
-  frameFillMode: MetroWayfindingFrameFillMode,
-  frameFillColor: string,
-  frameStroke: boolean,
-): string {
-  const frame = framed
-    ? renderMetroFacilityFrame(
-        'rectangle',
-        color,
-        instanceId,
-        frameFillMode,
-        frameFillColor,
-        frameStroke,
-      )
-    : '';
-  const { viewBox, content } = getMetroArrowAssetMarkup(assetName);
-  const namespacedContent = namespaceMetroFacilityAssetMarkup(
-    content,
-    `${instanceId}-arrow-${assetName}`,
-  );
-  const scaleTransform = resolveMetroIconScaleTransform(framed ? 0.9 : 1);
-  return `${frame}<g transform="${scaleTransform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" color="${color}" fill="${color}" aria-hidden="true">${namespacedContent}</svg></g>`;
-}
-
-function resolveMetroIconScaleTransform(scale: number): string {
-  return scale === 1 ? '' : `translate(42.5 64) scale(${scale}) translate(-42.5 -64)`;
-}
-
-function resolveMetroFacilityAssetDirectionTransform(
-  iconId: string,
-  direction: 'left' | 'right' | 'up' | 'down' | undefined,
-  variant?: 'two-way' | 'up' | 'down',
-): string {
-  // 楼梯：每个「变种 × 方向」都有独立素材（-right 后缀为朝右版），
-  // 翻转已经烘焙在素材自身（双向 / 向上为水平镜像，向下为垂直镜像），因此这里不再叠加变换。
-  // 其余声明了 assetNameByDirection 的图标（扶梯 / 轮椅升降机 / 轮椅）素材只有朝右一份，
-  // 朝左时靠镜像复用，因此这里继续往下走镜像分支。
-  if (iconId === 'stairs' || iconId === 'stairs-down') {
-    return '';
-  }
-  if (iconId === 'escalator' || iconId === 'wheelchair-lift' || iconId === 'wheelchair') {
-    const effectiveDirection =
-      direction ?? resolveMetroWayfindingFacilityDefaultDirection(iconId) ?? 'left';
-    // 素材原始朝向为“朝右”，朝左时按图标声明的镜像轴翻转。
-    return effectiveDirection === 'left'
-      ? resolveMetroFacilityMirrorTransform(iconId, effectiveDirection, variant)
-      : '';
-  }
-  if (iconId !== 'exit') {
-    return '';
-  }
-  const effectiveDirection =
-    direction ?? resolveMetroWayfindingFacilityDefaultDirection(iconId) ?? 'up';
-  if (effectiveDirection === 'left') return 'rotate(-90 42.5 64)';
-  if (effectiveDirection === 'up') return '';
-  if (effectiveDirection === 'down') return 'rotate(180 42.5 64)';
-  return 'rotate(90 42.5 64)';
-}
-
-function resolveMetroIconDirectionTransform(
-  iconId: string,
-  direction: 'left' | 'right' | 'up' | 'down' | undefined,
-): string {
-  if (iconId === 'no-entry') {
-    return 'rotate(-45 42.5 64)';
-  }
-  // 声明了 assetNameByDirection 的图标（如楼梯三向）由图形本身决定朝向，不再做镜像。
-  if (metroWayfindingIconOptions.find((option) => option.id === iconId)?.assetNameByDirection) {
-    return '';
-  }
-  if (iconId === 'turn-left-up' || iconId === 'turn-left-down') {
-    return 'rotate(-90 42.5 64)';
-  }
-  if (iconId === 'turn-right-up' || iconId === 'turn-right-down') {
-    return 'rotate(90 42.5 64)';
-  }
-  const fallbackDirection = resolveMetroWayfindingFacilityDefaultDirection(iconId);
-  if (!fallbackDirection) {
-    return '';
-  }
-  const effectiveDirection = direction ?? fallbackDirection;
-  if (iconId !== 'exit') {
-    return effectiveDirection === 'left' ? 'translate(85 0) scale(-1 1)' : '';
-  }
-  if (effectiveDirection === 'left') return 'translate(85 0) scale(-1 1)';
-  if (effectiveDirection === 'up') return 'rotate(-90 42.5 64)';
-  if (effectiveDirection === 'down') return 'rotate(90 42.5 64)';
-  return '';
+  return renderVerticalChillJinshuSong(value, config, assets);
 }
 
 function renderTransitStationList(
   value: string,
   currentIndex: number,
   config: MaterialGlyphConfig,
+  assets: MaterialGlyphAssets,
 ): string {
   const stations = value
     .split(/\r?\n|\s*\/\s*/u)
@@ -1220,7 +255,7 @@ function renderTransitStationList(
     const x = columnWidth * (isLeft ? 0.5 : 1.5);
     const y = rowHeight * (row + 0.7);
     const color = index === currentIndex ? '#C11111' : '#1D2F78';
-    return renderTransitStationName(station, x, y, maxTextWidth, fontSize, color);
+    return renderTransitStationName(station, x, y, maxTextWidth, fontSize, color, assets);
   });
   return `<g>${paths.join('')}</g>`;
 }
@@ -1232,6 +267,7 @@ function renderTransitStationName(
   layoutWidth: number,
   fontSize: number,
   color: string,
+  assets: MaterialGlyphAssets,
 ): string {
   const characters = Array.from(station);
   const attributes = `y="${formatNumber(y)}" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="700" text-anchor="middle"`;
@@ -1239,10 +275,9 @@ function renderTransitStationName(
     return `<text x="${formatNumber(centerX)}" ${attributes}>${escapeXml(station)}</text>`;
   }
 
-  const font = getHarmonyOsSansBoldFont();
   const characterWidths = characters.map((character) => {
-    const glyph = font.charToGlyph(character);
-    return ((glyph.advanceWidth ?? font.unitsPerEm) / font.unitsPerEm) * fontSize;
+    const metric = assets.getCharacterMetric('harmony-bold', character);
+    return metric.advance * fontSize;
   });
   const naturalWidth = characterWidths.reduce((sum, width) => sum + width, 0);
   const scaleX = Math.min(1, layoutWidth / naturalWidth);
@@ -1332,6 +367,64 @@ function renderTransitHorizontalStationList(
       ? `<path d="M5 35L8.5 35L8.5 37L12 33L8.5 29L8.5 31L5 31L5 35Z" fill="${accentColor}"/>`
       : '';
   return `<g>${backgrounds}${columns}${secondRowArrow}</g>`;
+}
+
+/** 站序热区：与 `renderTransitHorizontalStationList` 使用同一套分栏/换行排版结果。 */
+export interface TransitHorizontalStationRegion {
+  stationIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export function resolveTransitHorizontalStationRegions(
+  value: string,
+  config: MaterialGlyphConfig,
+): TransitHorizontalStationRegion[] {
+  const stations = value
+    .split(/\r?\n|\s*\/\s*/u)
+    .map((station) => station.replace(/[\s\u3000]+/gu, ''))
+    .filter(Boolean);
+  if (!stations.length) {
+    return [];
+  }
+  const preferredFontSize = config.fontSize ?? 4.5;
+  const singleRowLayout = resolveTransitHorizontalStationLayout(
+    stations,
+    config,
+    preferredFontSize,
+    1,
+  );
+  const twoRowLayout = resolveTransitHorizontalStationLayout(
+    stations,
+    config,
+    preferredFontSize,
+    2,
+  );
+  const layout = twoRowLayout.fontSize > singleRowLayout.fontSize ? twoRowLayout : singleRowLayout;
+  const regions: TransitHorizontalStationRegion[] = [];
+  layout.rows.forEach((row, rowIndex) => {
+    let cursorX = 0;
+    const rowY = rowIndex * (layout.rowHeight + layout.rowGap);
+    row.forEach((entry) => {
+      const startX = cursorX;
+      entry.chunks.forEach((_, chunkIndex) => {
+        cursorX +=
+          layout.columnWidth +
+          (chunkIndex < entry.chunks.length - 1 ? layout.wrappedColumnGap : layout.columnGap);
+      });
+      // 最后一段后面的 columnGap 属于站与站之间的空隙，不算进本热区。
+      regions.push({
+        stationIndex: entry.stationIndex,
+        x: startX,
+        y: rowY,
+        width: Math.max(cursorX - layout.columnGap - startX, 1),
+        height: layout.rowHeight,
+      });
+    });
+  });
+  return regions;
 }
 
 function resolveTransitHorizontalStationLayout(
@@ -1477,6 +570,11 @@ function renderTransitRouteMap(
   rawColor: string | undefined,
   config: MaterialGlyphConfig,
 ): string {
+  // 手动模式或来源数据缺少线路坐标时，保留地图版位并渲染占位框，
+  // 避免横版线路图右侧整块空白让人误以为模板缺了地图区域。
+  if (!value.trim()) {
+    return renderTransitRouteMapPlaceholder(config);
+  }
   const payload = parseTransitRouteMapPayload(value);
   if (!payload) {
     return '';
@@ -1534,6 +632,15 @@ function renderTransitRouteMap(
     })
     .join('');
   return `<svg x="0" y="0" width="${formatNumber(config.layoutWidth)}" height="${formatNumber(config.layoutHeight)}" viewBox="0 0 ${formatNumber(config.layoutWidth)} ${formatNumber(config.layoutHeight)}" overflow="hidden"><rect width="${formatNumber(config.layoutWidth)}" height="${formatNumber(config.layoutHeight)}" fill="#FFFFFF"/>${roads}<path d="${routePath}" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><path d="${routePath}" fill="none" stroke="${color}" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>${stations}</svg>`;
+}
+
+/** 没有线路坐标时的地图占位：保留版位并说明这块区域用来放线路走向。 */
+function renderTransitRouteMapPlaceholder(config: MaterialGlyphConfig): string {
+  const width = Math.max(config.layoutWidth, 1);
+  const height = Math.max(config.layoutHeight, 1);
+  const titleSize = Math.max(Math.min(height * 0.05, 6), 3.2);
+  const captionSize = titleSize * 0.62;
+  return `<svg x="0" y="0" width="${formatNumber(width)}" height="${formatNumber(height)}" viewBox="0 0 ${formatNumber(width)} ${formatNumber(height)}" overflow="hidden"><rect x="0.4" y="0.4" width="${formatNumber(width - 0.8)}" height="${formatNumber(height - 0.8)}" fill="#F7F7F7" stroke="#CFCFCF" stroke-width="0.5" stroke-dasharray="2 1.4"/><text x="${formatNumber(width / 2)}" y="${formatNumber(height / 2 - 0.8)}" fill="#8C8C8C" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="${formatNumber(titleSize)}" font-weight="500" text-anchor="middle">线路走向图</text><text x="${formatNumber(width / 2)}" y="${formatNumber(height / 2 + titleSize + 1.6)}" fill="#A8A8A8" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="${formatNumber(captionSize)}" text-anchor="middle">暂无地图数据</text></svg>`;
 }
 
 function parseTransitRouteMapPayload(value: string): TransitRouteMapPayload | undefined {
@@ -1924,7 +1031,8 @@ const metroVerticalTransferTopPath =
   'M35.3733 186.105C36.8316 185.522 38.0461 185.23 39.0183 185.23C39.9905 185.23 41.3055 185.909 42.9583 187.27L43.8333 186.54L43.8333 189.31L41.4983 189.31L41.4983 189.75L44.9983 189.75L44.9983 184.5L43.3933 185.81C41.935 184.935 40.4766 184.5 39.0183 184.5C37.56 184.5 36.3455 185.036 35.3733 186.105Z';
 const metroVerticalTransferBottomPath =
   'M44.7083 189.895C43.2499 190.478 42.0355 190.77 41.0633 190.77C40.091 190.77 38.776 190.091 37.1233 188.73L36.2483 189.46L36.2483 186.685L38.5833 186.685L38.5833 186.25L35.0833 186.25L35.0833 191.5L36.6883 190.185C38.1466 191.06 39.6049 191.5 41.0633 191.5C42.5216 191.5 43.736 190.964 44.7083 189.895Z';
-const metroVerticalTransferGlyphPaths = [  'M39.736 188.152L39.736 188.316L39.1155 188.316C39.181 188.477 39.3384 188.595 39.3384 188.595C39.4957 188.713 39.7339 188.783 39.7339 188.783L39.6596 188.956C39.2116 188.807 39.0324 188.48 39.0324 188.48C38.9581 188.637 38.7954 188.751 38.7954 188.751C38.6326 188.864 38.355 188.963 38.355 188.963L38.2655 188.792C38.5583 188.702 38.7123 188.589 38.7123 188.589C38.8664 188.475 38.9123 188.316 38.9123 188.316L38.2917 188.316L38.2917 188.152L38.4862 188.152L38.4862 187.684C38.4512 187.724 38.4075 187.763 38.4075 187.763L38.3026 187.634C38.473 187.468 38.5856 187.303 38.5856 187.303C38.6981 187.138 38.779 186.95 38.779 186.95L38.9407 186.998C38.9013 187.099 38.8707 187.155 38.8707 187.155L39.4389 187.155L39.4389 187.302L39.2335 187.59L39.5678 187.59L39.5678 188.152L39.736 188.152ZM38.3594 188.023L38.1584 188.099L38.1584 188.705C38.1584 188.831 38.1103 188.882 38.1103 188.882C38.0622 188.932 37.9399 188.932 37.9399 188.932C37.8568 188.932 37.7978 188.921 37.7978 188.921L37.7651 188.748C37.8284 188.766 37.9005 188.766 37.9005 188.766C37.9552 188.766 37.9727 188.74 37.9727 188.74C37.9901 188.713 37.9901 188.643 37.9901 188.643L37.9901 188.163L37.8918 188.202C37.859 188.215 37.823 188.229 37.823 188.229C37.7869 188.244 37.752 188.259 37.752 188.259L37.7083 188.075C37.8699 188.021 37.9901 187.975 37.9901 187.975L37.9901 187.544L37.7541 187.544L37.7541 187.374L37.9901 187.374L37.9901 186.976L38.1584 186.976L38.1584 187.374L38.3507 187.374L38.3507 187.544L38.1584 187.544L38.1584 187.909L38.2065 187.89C38.2436 187.877 38.3223 187.842 38.3223 187.842L38.3594 188.023ZM38.7833 187.313C38.7003 187.448 38.5736 187.59 38.5736 187.59L39.0237 187.59L39.2269 187.313L38.7833 187.313ZM38.6457 187.752L38.6457 188.152L38.9341 188.152L38.9341 188.145L38.9341 187.752L38.6457 187.752ZM39.0958 188.152L39.4105 188.152L39.4105 187.752L39.0958 187.752L39.0958 188.152Z',
+const metroVerticalTransferGlyphPaths = [
+  'M39.736 188.152L39.736 188.316L39.1155 188.316C39.181 188.477 39.3384 188.595 39.3384 188.595C39.4957 188.713 39.7339 188.783 39.7339 188.783L39.6596 188.956C39.2116 188.807 39.0324 188.48 39.0324 188.48C38.9581 188.637 38.7954 188.751 38.7954 188.751C38.6326 188.864 38.355 188.963 38.355 188.963L38.2655 188.792C38.5583 188.702 38.7123 188.589 38.7123 188.589C38.8664 188.475 38.9123 188.316 38.9123 188.316L38.2917 188.316L38.2917 188.152L38.4862 188.152L38.4862 187.684C38.4512 187.724 38.4075 187.763 38.4075 187.763L38.3026 187.634C38.473 187.468 38.5856 187.303 38.5856 187.303C38.6981 187.138 38.779 186.95 38.779 186.95L38.9407 186.998C38.9013 187.099 38.8707 187.155 38.8707 187.155L39.4389 187.155L39.4389 187.302L39.2335 187.59L39.5678 187.59L39.5678 188.152L39.736 188.152ZM38.3594 188.023L38.1584 188.099L38.1584 188.705C38.1584 188.831 38.1103 188.882 38.1103 188.882C38.0622 188.932 37.9399 188.932 37.9399 188.932C37.8568 188.932 37.7978 188.921 37.7978 188.921L37.7651 188.748C37.8284 188.766 37.9005 188.766 37.9005 188.766C37.9552 188.766 37.9727 188.74 37.9727 188.74C37.9901 188.713 37.9901 188.643 37.9901 188.643L37.9901 188.163L37.8918 188.202C37.859 188.215 37.823 188.229 37.823 188.229C37.7869 188.244 37.752 188.259 37.752 188.259L37.7083 188.075C37.8699 188.021 37.9901 187.975 37.9901 187.975L37.9901 187.544L37.7541 187.544L37.7541 187.374L37.9901 187.374L37.9901 186.976L38.1584 186.976L38.1584 187.374L38.3507 187.374L38.3507 187.544L38.1584 187.544L38.1584 187.909L38.2065 187.89C38.2436 187.877 38.3223 187.842 38.3223 187.842L38.3594 188.023ZM38.7833 187.313C38.7003 187.448 38.5736 187.59 38.5736 187.59L39.0237 187.59L39.2269 187.313L38.7833 187.313ZM38.6457 187.752L38.6457 188.152L38.9341 188.152L38.9341 188.145L38.9341 187.752L38.6457 187.752ZM39.0958 188.152L39.4105 188.152L39.4105 187.752L39.0958 187.752L39.0958 188.152Z',
   'M41.5422 188.06C41.6951 188.281 41.9126 188.43 41.9126 188.43C42.13 188.58 42.4577 188.7 42.4577 188.7L42.3878 188.871C42.1038 188.751 41.8973 188.607 41.8973 188.607C41.6908 188.464 41.5422 188.281 41.5422 188.281L41.5422 188.945L41.3761 188.945L41.3761 188.281C41.2275 188.46 41.0352 188.598 41.0352 188.598C40.8429 188.735 40.5545 188.871 40.5545 188.871L40.4693 188.707C40.832 188.547 41.0287 188.411 41.0287 188.411C41.2253 188.274 41.3761 188.064 41.3761 188.064L41.3761 187.551L40.5064 187.551L40.5064 187.398L41.3761 187.398L41.3761 187.214C40.8648 187.232 40.69 187.234 40.69 187.234L40.6812 187.09C41.0046 187.085 41.4548 187.064 41.4548 187.064C41.9049 187.042 42.2152 187.016 42.2152 187.016L42.2349 187.166C41.9814 187.186 41.5422 187.206 41.5422 187.206L41.5422 187.398L42.425 187.398L42.425 187.551L41.5422 187.551L41.5422 188.06ZM40.5021 188.15C40.548 188.141 40.974 188.023 40.974 188.023L40.974 187.894L40.5545 187.894L40.5545 187.759L40.974 187.759L40.974 187.616L41.127 187.616L41.127 188.272L40.974 188.272L40.974 188.165C40.8517 188.198 40.7239 188.235 40.7239 188.235C40.596 188.272 40.5327 188.292 40.5327 188.292L40.5021 188.15ZM41.7913 187.616L41.9421 187.616L41.9421 187.824C42.1628 187.741 42.3092 187.654 42.3092 187.654L42.3703 187.783C42.2218 187.859 41.9421 187.966 41.9421 187.966L41.9421 188.064C41.9421 188.113 41.9639 188.131 41.9639 188.131C41.9858 188.15 42.0382 188.154 42.0382 188.154C42.0885 188.156 42.1365 188.154 42.1365 188.154C42.2086 188.15 42.2327 188.13 42.2327 188.13C42.2567 188.11 42.2633 188.049 42.2633 188.049C42.2676 188.003 42.2676 187.909 42.2676 187.909L42.4031 187.938L42.3944 188.095C42.39 188.204 42.3365 188.244 42.3365 188.244C42.2829 188.283 42.1496 188.287 42.1496 188.287L42.0732 188.289L41.9967 188.287C41.8874 188.283 41.8394 188.237 41.8394 188.237C41.7913 188.191 41.7913 188.084 41.7913 188.084L41.7913 187.616Z',
 ];
 
@@ -2026,14 +1134,18 @@ function renderMetroLineMapVertical(
     Math.max(Number.isFinite(rawCurrentIndex) ? rawCurrentIndex : 0, 0),
     stations.length - 1,
   );
+  // 旧版竖版线路图只有「两侧轨道」这一种合法版式；
+  // 即使草稿里残留单侧取值，也统一按两侧渲染。
   const trackPosition: MetroVerticalTrackPosition =
-    values.trackPosition === 'both' ||
-    values.trackPosition === 'right' ||
-    values.trackPosition === 'left'
-      ? values.trackPosition
-      : values.doorDirection === 'right'
-        ? 'right'
-        : 'left';
+    style === 'classic'
+      ? 'both'
+      : values.trackPosition === 'both' ||
+          values.trackPosition === 'right' ||
+          values.trackPosition === 'left'
+        ? values.trackPosition
+        : values.doorDirection === 'right'
+          ? 'right'
+          : 'left';
   const primaryDirection: MetroVerticalDirection =
     values.travelDirection === 'first' ? 'first' : 'last';
   let secondaryDirection: MetroVerticalDirection =
@@ -2060,8 +1172,7 @@ function renderMetroLineMapVertical(
   const margin = 12 * widthScale;
   const firstY = headerHeight + margin;
   const lastY = Math.max(canvasHeight - margin, firstY);
-  const spacing =
-    displayStations.length > 1 ? (lastY - firstY) / (displayStations.length - 1) : 0;
+  const spacing = displayStations.length > 1 ? (lastY - firstY) / (displayStations.length - 1) : 0;
   const rowScale = Math.min(1, Math.max(spacing / (12 * widthScale), 0.5));
   const layoutScale = widthScale * rowScale;
   const classicStationScale = isClassicBoth ? 0.77 : 1;
@@ -2074,6 +1185,43 @@ function renderMetroLineMapVertical(
   const rightTrackX = metroVerticalBothTrackXs[1] * widthScale;
   const yForIndex = (index: number) =>
     displayStations.length > 1 ? firstY + spacing * index : (firstY + lastY) / 2;
+
+  // 整幅站名共用同一个缩放比例：任一站名或拼音超宽时，所有站名一起等比缩小，
+  // 避免同一张线路图里出现大小不一的站名字号。
+  const singleLabelX = (trackPosition === 'left' ? 66 : 62) * widthScale;
+  const singleMaxLabelWidth = Math.max(
+    (trackPosition === 'left' ? canvasWidth - singleLabelX : singleLabelX) - 2 * widthScale,
+    8,
+  );
+  const labelRowScale = layoutScale * (isBoth ? classicStationScale : 1);
+  const labelRowMaxWidth = isBoth
+    ? (isClassicBoth ? 30 : 28) * widthScale
+    : singleMaxLabelWidth;
+  // 当前站高亮框左右各有内边距，正文可用宽度更窄。
+  const currentPaddingUnits = isClassicBoth ? 0 : isBoth ? 3 : 4;
+  let stationTextFit = 1;
+  displayStations.forEach((station, displayIndex) => {
+    const pinyin = toUppercasePinyin(station);
+    const rowMaxWidth =
+      displayIndex === displayCurrentIndex
+        ? Math.max(labelRowMaxWidth - currentPaddingUnits * layoutScale, 8)
+        : labelRowMaxWidth;
+    stationTextFit = Math.min(
+      stationTextFit,
+      resolveMetroSignTextFit(
+        station,
+        metroVerticalStationNameFontSize * labelRowScale,
+        rowMaxWidth,
+      ),
+      pinyin
+        ? resolveMetroSignTextFit(
+            pinyin,
+            metroVerticalStationPinyinFontSize * labelRowScale,
+            rowMaxWidth,
+          )
+        : 1,
+    );
+  });
 
   const parts: string[] = [
     `<rect width="${formatNumber(canvasWidth)}" height="${formatNumber(canvasHeight)}" fill="#FFFFFF"/>`,
@@ -2165,6 +1313,7 @@ function renderMetroLineMapVertical(
               color: accentColor,
               layoutScale: stationLayoutScale,
               maxWidth: 30 * widthScale,
+              fit: stationTextFit,
             }),
             renderMetroVerticalLabelPair({
               station,
@@ -2175,6 +1324,7 @@ function renderMetroLineMapVertical(
               color: accentColor,
               layoutScale: stationLayoutScale,
               maxWidth: 30 * widthScale,
+              fit: stationTextFit,
             }),
             renderMetroVerticalClassicThisStation({
               centerX: (leftTrackX + rightTrackX) / 2,
@@ -2194,6 +1344,7 @@ function renderMetroLineMapVertical(
               widthScale,
               layoutScale,
               maxWidth: 28 * widthScale,
+              fit: stationTextFit,
               padding: 1.5,
               arrowGap: 3,
               arrowDirection: 'up',
@@ -2208,6 +1359,7 @@ function renderMetroLineMapVertical(
               widthScale,
               layoutScale,
               maxWidth: 28 * widthScale,
+              fit: stationTextFit,
               padding: 1.5,
               arrowGap: 3,
               arrowDirection: 'down',
@@ -2225,6 +1377,7 @@ function renderMetroLineMapVertical(
             color: leftPassed ? metroVerticalPassedColor : '#000000',
             layoutScale: isClassicBoth ? stationLayoutScale : layoutScale,
             maxWidth: (isClassicBoth ? 30 : 28) * widthScale,
+            fit: stationTextFit,
           }),
           renderMetroVerticalLabelPair({
             station,
@@ -2235,6 +1388,7 @@ function renderMetroLineMapVertical(
             color: rightPassed ? metroVerticalPassedColor : '#000000',
             layoutScale: isClassicBoth ? stationLayoutScale : layoutScale,
             maxWidth: (isClassicBoth ? 30 : 28) * widthScale,
+            fit: stationTextFit,
           }),
         );
       }
@@ -2340,6 +1494,7 @@ function renderMetroLineMapVertical(
           widthScale,
           layoutScale,
           maxWidth: maxLabelWidth,
+          fit: stationTextFit,
         }),
       );
     } else {
@@ -2353,6 +1508,7 @@ function renderMetroLineMapVertical(
           color: passed ? metroVerticalPassedColor : '#000000',
           layoutScale,
           maxWidth: maxLabelWidth,
+          fit: stationTextFit,
         }),
       );
     }
@@ -2411,8 +1567,10 @@ function renderMetroVerticalLabelPair(input: {
   color: string;
   layoutScale: number;
   maxWidth: number;
+  /** 整幅站名共用的缩放比例：长站名需要缩小时，所有站名一起缩。 */
+  fit?: number;
 }): string {
-  const { station, pinyin, x, y, anchor, color, layoutScale, maxWidth } = input;
+  const { station, pinyin, x, y, anchor, color, layoutScale, maxWidth, fit } = input;
   const name = renderMetroSignText({
     value: station,
     x,
@@ -2422,6 +1580,7 @@ function renderMetroVerticalLabelPair(input: {
     weight: 400,
     anchor,
     maxWidth,
+    fit,
   });
   const pinyinText = pinyin
     ? renderMetroSignText({
@@ -2433,6 +1592,7 @@ function renderMetroVerticalLabelPair(input: {
         weight: 400,
         anchor,
         maxWidth,
+        fit,
       })
     : '';
   return name + pinyinText;
@@ -2451,6 +1611,8 @@ function renderMetroVerticalCurrentLabel(input: {
   padding?: number;
   arrowGap?: number;
   arrowDirection?: 'up' | 'down';
+  /** 整幅站名共用的缩放比例：长站名需要缩小时，所有站名一起缩。 */
+  fit?: number;
 }): string {
   const {
     station,
@@ -2465,9 +1627,10 @@ function renderMetroVerticalCurrentLabel(input: {
     padding = 2,
     arrowGap = 6,
     arrowDirection = 'up',
+    fit = 1,
   } = input;
-  const nameFont = metroVerticalStationNameFontSize * layoutScale;
-  const pinyinFont = metroVerticalStationPinyinFontSize * layoutScale;
+  const nameFont = metroVerticalStationNameFontSize * layoutScale * fit;
+  const pinyinFont = metroVerticalStationPinyinFontSize * layoutScale * fit;
   const nameWidth = estimateMetroLineMapTextWidth(station, nameFont);
   const pinyinWidth = pinyin ? estimateMetroLineMapTextWidth(pinyin, pinyinFont) : 0;
   const paddingPx = padding * layoutScale;
@@ -2539,9 +1702,7 @@ function renderMetroVerticalMarker(input: {
   }
   if (currentArrow) {
     const isDown = currentArrow === 'down';
-    const path = isDown
-      ? metroVerticalClassicCurrentDownPath
-      : metroVerticalClassicCurrentUpPath;
+    const path = isDown ? metroVerticalClassicCurrentDownPath : metroVerticalClassicCurrentUpPath;
     const referenceCenterX = isDown
       ? metroVerticalClassicCurrentDownCenterX
       : metroVerticalClassicCurrentUpCenterX;
@@ -2569,6 +1730,20 @@ function renderMetroVerticalClassicBothHeader(input: {
   const { canvasWidth, widthScale, accentColor, primaryName, secondaryName, lineLabel } = input;
   const parts: string[] = [];
   const title = lineLabel ? `地铁${lineLabel}号线行车示意图` : '地铁行车示意图';
+  const englishTitle = `Direction For Subway Line${lineLabel ? ` ${lineLabel}` : ''}`;
+  const primaryDirectionText = `${primaryName}方向`;
+  const primaryDirectionEnglish = `To ${toUppercasePinyin(primaryName)}`;
+  const secondaryDirectionText = `${secondaryName}方向`;
+  const secondaryDirectionEnglish = `To ${toUppercasePinyin(secondaryName)}`;
+  // 页头同组文字共用一个缩放比例：任一文本超宽时整体同比缩小，字号保持统一。
+  const headerFit = Math.min(
+    resolveMetroSignTextFit(title, 8 * widthScale, 78 * widthScale),
+    resolveMetroSignTextFit(englishTitle, 5 * widthScale, 78 * widthScale),
+    resolveMetroSignTextFit(primaryDirectionText, 6 * widthScale, 48 * widthScale),
+    resolveMetroSignTextFit(primaryDirectionEnglish, 3 * widthScale, 48 * widthScale),
+    resolveMetroSignTextFit(secondaryDirectionText, 6 * widthScale, 48 * widthScale),
+    resolveMetroSignTextFit(secondaryDirectionEnglish, 3 * widthScale, 48 * widthScale),
+  );
   parts.push(
     renderMetroSignText({
       value: title,
@@ -2579,9 +1754,10 @@ function renderMetroVerticalClassicBothHeader(input: {
       weight: 400,
       anchor: 'start',
       maxWidth: 78 * widthScale,
+      fit: headerFit,
     }),
     renderMetroSignText({
-      value: `Direction For Subway Line${lineLabel ? ` ${lineLabel}` : ''}`,
+      value: englishTitle,
       x: 6.5 * widthScale,
       y: 24.5 * widthScale,
       fontSize: 5 * widthScale,
@@ -2589,10 +1765,13 @@ function renderMetroVerticalClassicBothHeader(input: {
       weight: 400,
       anchor: 'start',
       maxWidth: 78 * widthScale,
+      fit: headerFit,
     }),
   );
   if (lineLabel) {
-    const numberFontSize = (Array.from(lineLabel).length > 2 ? 10 : Array.from(lineLabel).length > 1 ? 11.5 : 14) * widthScale;
+    const numberFontSize =
+      (Array.from(lineLabel).length > 2 ? 10 : Array.from(lineLabel).length > 1 ? 11.5 : 14) *
+      widthScale;
     parts.push(
       `<g transform="translate(${formatNumber(87 * widthScale)} ${formatNumber(3 * widthScale)}) scale(${formatNumber(widthScale)})"><path d="${metroVerticalClassicHeaderTabPath}" fill="${accentColor}"/></g>`,
       `<g transform="translate(${formatNumber(97 * widthScale)} ${formatNumber(7.5 * widthScale)}) scale(${formatNumber(widthScale)})"><path d="${metroVerticalClassicHeaderTabCirclePath}" fill="none" stroke="#FFFFFF" stroke-width="1.2"/></g>`,
@@ -2603,7 +1782,7 @@ function renderMetroVerticalClassicBothHeader(input: {
     renderMetroVerticalClassicDirectionArrow(widthScale, false),
     renderMetroVerticalClassicDirectionArrow(widthScale, true),
     renderMetroSignText({
-      value: `${primaryName}方向`,
+      value: primaryDirectionText,
       x: 14 * widthScale,
       y: 44 * widthScale,
       fontSize: 6 * widthScale,
@@ -2611,9 +1790,10 @@ function renderMetroVerticalClassicBothHeader(input: {
       weight: 700,
       anchor: 'start',
       maxWidth: 48 * widthScale,
+      fit: headerFit,
     }),
     renderMetroSignText({
-      value: `To ${toUppercasePinyin(primaryName)}`,
+      value: primaryDirectionEnglish,
       x: 14 * widthScale,
       y: 48.5 * widthScale,
       fontSize: 3 * widthScale,
@@ -2621,9 +1801,10 @@ function renderMetroVerticalClassicBothHeader(input: {
       weight: 400,
       anchor: 'start',
       maxWidth: 48 * widthScale,
+      fit: headerFit,
     }),
     renderMetroSignText({
-      value: `${secondaryName}方向`,
+      value: secondaryDirectionText,
       x: canvasWidth - 15 * widthScale,
       y: 44 * widthScale,
       fontSize: 6 * widthScale,
@@ -2631,9 +1812,10 @@ function renderMetroVerticalClassicBothHeader(input: {
       weight: 700,
       anchor: 'end',
       maxWidth: 48 * widthScale,
+      fit: headerFit,
     }),
     renderMetroSignText({
-      value: `To ${toUppercasePinyin(secondaryName)}`,
+      value: secondaryDirectionEnglish,
       x: canvasWidth - 15 * widthScale,
       y: 48.5 * widthScale,
       fontSize: 3 * widthScale,
@@ -2641,16 +1823,14 @@ function renderMetroVerticalClassicBothHeader(input: {
       weight: 400,
       anchor: 'end',
       maxWidth: 48 * widthScale,
+      fit: headerFit,
     }),
   );
   return parts.join('');
 }
 
 /** 旧版方向栏的黑色块状箭头，直接复用参考 SVG 的路径。 */
-function renderMetroVerticalClassicDirectionArrow(
-  widthScale: number,
-  mirrored: boolean,
-): string {
+function renderMetroVerticalClassicDirectionArrow(widthScale: number, mirrored: boolean): string {
   const path = mirrored
     ? metroVerticalClassicDirectionRightPath
     : metroVerticalClassicDirectionLeftPath;
@@ -2694,9 +1874,20 @@ function renderMetroVerticalLineMapHeader(input: {
     const textMaxWidth = 42 * widthScale;
     const leftX = 20 * widthScale;
     const rightX = canvasWidth - 20 * widthScale;
+    const leftTitle = `${primaryName}方向`;
+    const leftEnglish = `To ${toUppercasePinyin(primaryName)}`;
+    const rightTitle = `${secondaryName}方向`;
+    const rightEnglish = `To ${toUppercasePinyin(secondaryName)}`;
+    // 左右两侧方向信息共用一个缩放比例：任一侧超宽时整体同比缩小。
+    const headerFit = Math.min(
+      resolveMetroSignTextFit(leftTitle, 8 * widthScale, textMaxWidth),
+      resolveMetroSignTextFit(leftEnglish, 4 * widthScale, textMaxWidth),
+      resolveMetroSignTextFit(rightTitle, 8 * widthScale, textMaxWidth),
+      resolveMetroSignTextFit(rightEnglish, 4 * widthScale, textMaxWidth),
+    );
     parts.push(
       renderMetroSignText({
-        value: `${primaryName}方向`,
+        value: leftTitle,
         x: leftX,
         y: 17.6 * widthScale,
         fontSize: 8 * widthScale,
@@ -2704,9 +1895,10 @@ function renderMetroVerticalLineMapHeader(input: {
         weight: 400,
         anchor: 'start',
         maxWidth: textMaxWidth,
+        fit: headerFit,
       }),
       renderMetroSignText({
-        value: `To ${toUppercasePinyin(primaryName)}`,
+        value: leftEnglish,
         x: leftX,
         y: 23.8 * widthScale,
         fontSize: 4 * widthScale,
@@ -2714,9 +1906,10 @@ function renderMetroVerticalLineMapHeader(input: {
         weight: 400,
         anchor: 'start',
         maxWidth: textMaxWidth,
+        fit: headerFit,
       }),
       renderMetroSignText({
-        value: `${secondaryName}方向`,
+        value: rightTitle,
         x: rightX,
         y: 17.6 * widthScale,
         fontSize: 8 * widthScale,
@@ -2724,9 +1917,10 @@ function renderMetroVerticalLineMapHeader(input: {
         weight: 400,
         anchor: 'end',
         maxWidth: textMaxWidth,
+        fit: headerFit,
       }),
       renderMetroSignText({
-        value: `To ${toUppercasePinyin(secondaryName)}`,
+        value: rightEnglish,
         x: rightX,
         y: 23.8 * widthScale,
         fontSize: 4 * widthScale,
@@ -2734,6 +1928,7 @@ function renderMetroVerticalLineMapHeader(input: {
         weight: 400,
         anchor: 'end',
         maxWidth: textMaxWidth,
+        fit: headerFit,
       }),
     );
     return parts.join('');
@@ -2741,26 +1936,28 @@ function renderMetroVerticalLineMapHeader(input: {
 
   const title = `${primaryName}方向`;
   const pinyin = toUppercasePinyin(primaryName);
+  const englishText = pinyin ? `To ${pinyin}` : '';
   const titleFontSize = 10 * widthScale;
   const englishFontSize = 5 * widthScale;
   const textMaxWidth = 78 * widthScale;
+  // 方向标题与英文共用一个缩放比例：任一超宽时整体同比缩小，字号保持统一。
+  const headerFit = Math.min(
+    resolveMetroSignTextFit(title, titleFontSize, textMaxWidth),
+    englishText ? resolveMetroSignTextFit(englishText, englishFontSize, textMaxWidth) : 1,
+  );
   const titleWidth = Math.min(
-    estimateMetroLineMapTextWidth(title, titleFontSize),
+    estimateMetroLineMapTextWidth(title, titleFontSize) * headerFit,
     textMaxWidth,
   );
-  const englishWidth = pinyin
-    ? Math.min(
-        estimateMetroLineMapTextWidth(`To ${pinyin}`, englishFontSize),
-        textMaxWidth,
-      )
+  const englishWidth = englishText
+    ? Math.min(estimateMetroLineMapTextWidth(englishText, englishFontSize) * headerFit, textMaxWidth)
     : 0;
   const textWidth = Math.max(titleWidth, englishWidth, 1);
   const hasBadge = Boolean(lineLabel);
   const gap = 4 * widthScale;
   const arrowWidth = 16 * widthScale;
   const badgeSize = 16 * widthScale;
-  const groupWidth =
-    arrowWidth + gap + (hasBadge ? badgeSize + gap : 0) + textWidth;
+  const groupWidth = arrowWidth + gap + (hasBadge ? badgeSize + gap : 0) + textWidth;
   const start = Math.max((canvasWidth - groupWidth) / 2, 2 * widthScale);
   const isLeft = trackPosition === 'left';
   const arrowLeft = isLeft ? start : canvasWidth - start - arrowWidth;
@@ -2788,12 +1985,13 @@ function renderMetroVerticalLineMapHeader(input: {
       weight: 400,
       anchor: isLeft ? 'start' : 'end',
       maxWidth: textWidth,
+      fit: headerFit,
     }),
   );
-  if (pinyin) {
+  if (englishText) {
     parts.push(
       renderMetroSignText({
-        value: `To ${pinyin}`,
+        value: englishText,
         x: textX,
         y: 25.5 * widthScale,
         fontSize: englishFontSize,
@@ -2801,6 +1999,7 @@ function renderMetroVerticalLineMapHeader(input: {
         weight: 400,
         anchor: isLeft ? 'start' : 'end',
         maxWidth: textWidth,
+        fit: headerFit,
       }),
     );
   }
@@ -2890,9 +2089,7 @@ function renderMetroVerticalSingleTransfer(input: {
   const stackHeight =
     badgeSizes.length * (11 * badgeScale) + Math.max(badgeSizes.length - 1, 0) * badgeStackGap;
   const iconLeft =
-    trackSide === 'left'
-      ? trackX - 12.3 * widthScale - iconWidth
-      : trackX + 12.3 * widthScale;
+    trackSide === 'left' ? trackX - 12.3 * widthScale - iconWidth : trackX + 12.3 * widthScale;
   const transferColor = passed ? metroVerticalPassedColor : (transferList[0]?.color ?? '#666666');
   const mainColorResolved = passed ? metroVerticalPassedColor : mainColor;
   const glyphColor = passed ? metroVerticalPassedColor : '#000000';
@@ -2916,9 +2113,7 @@ function renderMetroVerticalSingleTransfer(input: {
   let cursorTop = y - stackHeight / 2;
   for (const item of badgeSizes) {
     const left =
-      trackSide === 'left'
-        ? iconLeft - badgeGap - item.width
-        : iconLeft + iconWidth + badgeGap;
+      trackSide === 'left' ? iconLeft - badgeGap - item.width : iconLeft + iconWidth + badgeGap;
     parts.push(
       renderMetroVerticalTransferBadge({
         label: item.transfer.label,
@@ -3146,9 +2341,7 @@ function renderMetroVerticalClassicTransferStem(input: {
 }): string {
   const { side, y, color, widthScale } = input;
   const path =
-    side === 'left'
-      ? metroVerticalClassicStemLeftPath
-      : metroVerticalClassicStemRightPath;
+    side === 'left' ? metroVerticalClassicStemLeftPath : metroVerticalClassicStemRightPath;
   return `<g transform="translate(0 ${formatNumber(
     y - metroVerticalClassicStemCenterY * widthScale,
   )}) scale(${formatNumber(widthScale)})"><path d="${path}" fill="${color}"/></g>`;
@@ -3164,15 +2357,7 @@ function renderMetroVerticalClassicTransferPill(input: {
   glyphMainColor: string;
   widthScale: number;
 }): string {
-  const {
-    centerX,
-    y,
-    side,
-    outlineColor,
-    glyphTransferColor,
-    glyphMainColor,
-    widthScale,
-  } = input;
+  const { centerX, y, side, outlineColor, glyphTransferColor, glyphMainColor, widthScale } = input;
   const isLeft = side === 'left';
   const referenceCenterX = isLeft
     ? metroVerticalClassicPillLeftCenterX
@@ -3265,7 +2450,6 @@ function renderMetroVerticalClassicTransfer(input: {
   ].join('');
 }
 
-
 // 新版方向箭头：设计稿中位于 50×33 的局部坐标，左开门时指向左侧。
 const metroDirectionModernArrowPath =
   'M112.114 70.4069L100.668 58.503L134.807 58.503L134.807 48.7762L101.16 48.7762L112.114 37.3845L100.683 37.3845L84.8067 53.8956L95.9001 53.8956L84.8067 53.8956L100.683 70.4069L112.114 70.4069Z';
@@ -3314,7 +2498,7 @@ function renderMetroPlatformSign(
       y: 194 * scale,
       fontSize: 88 * scale,
       color: '#000000',
-      weight: 700,
+      weight: 400,
       anchor: 'middle',
       maxWidth: canvasWidth - 40 * scale,
     }),
@@ -3411,7 +2595,7 @@ function renderMetroStationNameSign(
       y: (style === 'classic' ? 62 : 63) * yScale,
       fontSize: 44 * yScale,
       color,
-      weight: 700,
+      weight: 400,
       anchor: 'middle',
       letterSpacing: nameLetterSpacing,
       maxWidth: maxTextWidth,
@@ -3433,6 +2617,163 @@ function renderMetroStationNameSign(
     `<rect x="0.5" y="0.5" width="${formatNumber(Math.max(canvasWidth - 1, 1))}" height="${formatNumber(Math.max(canvasHeight - 1, 1))}" fill="none" stroke="#CCCCCC" stroke-width="1"/>`,
   ];
   return `<g data-metro-station-name="${style}">${parts.join('')}</g>`;
+}
+
+/** 地铁站名 / 方向版式的可点击文字区域，坐标与渲染器保持一致。 */
+export interface MetroSignTextRegion {
+  id: string;
+  label: string;
+  /** 派生字段不提供双击编辑，只用于选中对应节点。 */
+  fieldKey?: string;
+  groupKey: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export function resolveMetroSignTextRegions(
+  renderer: string,
+  values: Record<string, string>,
+  canvas: { widthM: number; heightM: number },
+): MetroSignTextRegion[] {
+  const width = Math.max(1, Math.round(canvas.widthM * 128));
+  const height = Math.max(1, Math.round(canvas.heightM * 128));
+  const yScale = height / 128;
+  if (renderer.startsWith('metro_station_name')) {
+    return [
+      {
+        id: 'station-name',
+        label: '站名',
+        fieldKey: 'stationName',
+        groupKey: 'station',
+        x: 0,
+        y: 16 * yScale,
+        width,
+        height: 58 * yScale,
+      },
+      {
+        id: 'station-name-pinyin',
+        label: '站名拼音',
+        fieldKey: 'stationNamePinyin',
+        groupKey: 'station',
+        x: 0,
+        y: 74 * yScale,
+        width,
+        height: 30 * yScale,
+      },
+      {
+        id: 'station-name-color',
+        label: '线路颜色',
+        fieldKey: 'accentColor',
+        groupKey: 'station',
+        x: 0,
+        y: 110 * yScale,
+        width,
+        height: 18 * yScale,
+      },
+    ];
+  }
+  if (!renderer.startsWith('metro_direction')) {
+    return [];
+  }
+  const style = renderer.endsWith('_classic') ? 'classic' : 'modern';
+  const doorRight = values.doorDirection === 'right';
+  const rightShift = width - metroSignReferenceWidth;
+  const centerShift = rightShift / 2;
+  const infoShift = style === 'classic' ? (doorRight ? 0 : rightShift) : centerShift;
+  const destinationShift = style === 'classic' ? (doorRight ? rightShift : 0) : centerShift;
+  const terminalName = (values.terminalName ?? '').trim();
+  const terminalPinyin = (values.terminalNamePinyin ?? '').trim();
+  const nextStationName = (values.nextStationName ?? '').trim();
+  const nextStationPinyin = (values.nextStationPinyin ?? '').trim();
+  // 开往方向热区按实际文字宽度自适应，不再写死 200。
+  const destinationText = `开往${terminalName}`;
+  const destinationEnglishText = `To ${terminalPinyin || terminalName}`;
+  const destinationRegionWidth = Math.min(
+    Math.max(
+      estimateMetroLineMapTextWidth(destinationText, (style === 'classic' ? 32 : 35) * yScale),
+      estimateMetroLineMapTextWidth(destinationEnglishText, 16 * yScale),
+      24,
+    ) + 8,
+    width * 0.62,
+  );
+  const badgeRadius = style === 'classic' ? 21 : 18;
+  const badgeCy = style === 'classic' ? 56 : 43.5;
+  const classicDestinationWidth = estimateMetroLineMapTextWidth(
+    `开往${terminalName}`,
+    32 * yScale,
+  );
+  const badgeCx =
+    style === 'classic'
+      ? doorRight
+        ? 463.6 + destinationShift - classicDestinationWidth - 20.9 - badgeRadius
+        : 106 + destinationShift + classicDestinationWidth + 24 + badgeRadius
+      : (doorRight ? 133 : 392) + infoShift;
+  const destinationX =
+    (style === 'classic' ? (doorRight ? 463.6 : 106) : doorRight ? 421 : 160.87) +
+    destinationShift;
+  const destinationBaseline = (style === 'classic' ? 60.84 : 58.34) * yScale;
+  const destinationEnglishBaseline = (style === 'classic' ? 81.5 : 80.48) * yScale;
+  const stationColumnWidth = doorRight ? 150 : 138;
+  const stationColumnX =
+    (style === 'classic' ? (doorRight ? 83.1 : 506) : doorRight ? 163 : 422) + infoShift;
+  const estimatedStationWidth = Math.min(
+    Math.max(
+      estimateMetroLineMapTextWidth(nextStationName, 12 * yScale) +
+        Math.max(Array.from(nextStationName).length - 1, 0) * 1 * yScale,
+      estimateMetroLineMapTextWidth(nextStationPinyin, 7 * yScale),
+      20,
+    ),
+    80,
+  );
+  const stationLabelTextX =
+    style === 'modern' && doorRight ? 206 + infoShift - estimatedStationWidth : stationColumnX;
+  const regions: MetroSignTextRegion[] = [
+    {
+      id: 'direction-destination',
+      label: '开往方向',
+      groupKey: 'direction-info',
+      x: doorRight ? destinationX - destinationRegionWidth : destinationX,
+      y: destinationBaseline - 36 * yScale,
+      width: destinationRegionWidth,
+      height: destinationEnglishBaseline - destinationBaseline + 22 * yScale,
+    },
+    {
+      id: 'direction-line-badge',
+      label: '线路标',
+      fieldKey: 'lineLabel',
+      groupKey: 'line-info',
+      x: badgeCx - badgeRadius,
+      y: badgeCy * yScale - badgeRadius * yScale,
+      width: badgeRadius * 2,
+      height: badgeRadius * 2 * yScale,
+    },
+    {
+      id: 'direction-next-station',
+      label: '下一站',
+      fieldKey: 'nextStationName',
+      groupKey: 'next-station',
+      // 旧版左开门时信息列贴着画布右缘，热区需要收回到画布内。
+      x: Math.max(0, Math.min(stationLabelTextX, width - stationColumnWidth)),
+      y: (style === 'classic' ? 90.06 : 94.36) * yScale - 14 * yScale,
+      width: Math.min(stationColumnWidth, width),
+      height: 30 * yScale,
+    },
+  ];
+  if (style === 'modern') {
+    regions.push({
+      id: 'direction-line-english',
+      label: '线路英文名',
+      fieldKey: 'lineEnglishLabel',
+      groupKey: 'line-info',
+      x: (doorRight ? 46 : 414.94) + infoShift,
+      y: 30 * yScale,
+      width: doorRight ? 164 : 146,
+      height: 34 * yScale,
+    });
+  }
+  return regions;
 }
 
 /**
@@ -3475,9 +2816,9 @@ function renderMetroDirectionSign(
   const destinationEnglishText = `To ${terminalPinyin || terminalName}`;
   // 保持设计稿中的组内间距；新版整体居中，旧版箭头与开往跟随同侧边缘。
   const nextLabelX =
-    (style === 'classic' ? (doorRight ? 23.2 : 446) : (doorRight ? 115 : 374)) + infoShift;
+    (style === 'classic' ? (doorRight ? 23.2 : 446) : doorRight ? 115 : 374) + infoShift;
   const stationColumnX =
-    (style === 'classic' ? (doorRight ? 83.1 : 506) : (doorRight ? 163 : 422)) + infoShift;
+    (style === 'classic' ? (doorRight ? 83.1 : 506) : doorRight ? 163 : 422) + infoShift;
   const nextColumnWidth = 44;
   const stationColumnWidth = doorRight ? 150 : 138;
   const badgeCy = style === 'classic' ? 56 : 43.5;
@@ -3497,17 +2838,19 @@ function renderMetroDirectionSign(
       ? `<g transform="translate(${formatNumber(45 + destinationShift)} ${formatNumber(35.4 * yScale)}) scale(${formatNumber(yScale)})"><path d="${metroDirectionClassicArrowPath}" fill="#000000" stroke="#000000" stroke-width="0.6"/></g>`
       : `<g transform="translate(${formatNumber(destinationShift)} 0) scale(1 ${formatNumber(yScale)})"><path d="${metroDirectionModernArrowPath}" fill="#000000"/></g>`;
 
-  const badge = `<circle cx="${formatNumber(badgeCx)}" cy="${formatNumber(badgeCy * yScale)}" r="${formatNumber(badgeRadius * yScale)}" fill="${accentColor}"/>${renderMetroSignText({
-    value: lineLabel,
-    x: badgeCx,
-    y: (style === 'classic' ? 68.7 : 52.85) * yScale,
-    fontSize: 28 * yScale,
-    color: '#FFFFFF',
-    weight: 400,
-    anchor: 'middle',
-    letterSpacing: -3 * yScale,
-    maxWidth: (badgeRadius * 2 - 8) * yScale,
-  })}`;
+  const badge = `<circle cx="${formatNumber(badgeCx)}" cy="${formatNumber(badgeCy * yScale)}" r="${formatNumber(badgeRadius * yScale)}" fill="${accentColor}"/>${renderMetroSignText(
+    {
+      value: lineLabel,
+      x: badgeCx,
+      y: (style === 'classic' ? 68.7 : 52.85) * yScale,
+      fontSize: 28 * yScale,
+      color: '#FFFFFF',
+      weight: 400,
+      anchor: 'middle',
+      letterSpacing: -3 * yScale,
+      maxWidth: (badgeRadius * 2 - 8) * yScale,
+    },
+  )}`;
 
   // 新版右开门时，线路标与下一站信息作为一组整体右对齐（统一右端），组内仍左对齐避免重叠。
   const modernRightAligned = style === 'modern' && doorRight;
@@ -3523,9 +2866,7 @@ function renderMetroDirectionSign(
   const stationLabelTextX = modernRightAligned
     ? 206 + infoShift - stationTextWidth
     : stationColumnX;
-  const nextLabelTextX = modernRightAligned
-    ? stationLabelTextX - 4 - 44
-    : nextLabelX;
+  const nextLabelTextX = modernRightAligned ? stationLabelTextX - 4 - 44 : nextLabelX;
 
   const nextLabel = renderMetroSignText({
     value: '下一站',
@@ -3567,8 +2908,7 @@ function renderMetroDirectionSign(
   });
   const destinationAnchor = doorRight ? 'end' : 'start';
   const destinationX =
-    (style === 'classic' ? (doorRight ? 463.6 : 106) : (doorRight ? 421 : 160.87)) +
-    destinationShift;
+    (style === 'classic' ? (doorRight ? 463.6 : 106) : doorRight ? 421 : 160.87) + destinationShift;
   const destinationChinese = renderMetroSignText({
     value: destinationText,
     x: destinationX,
@@ -3582,7 +2922,7 @@ function renderMetroDirectionSign(
   const destinationEnglish = renderMetroSignText({
     value: destinationEnglishText,
     x:
-      (style === 'classic' ? (doorRight ? 463.6 : 105.19) : (doorRight ? 421 : 159)) +
+      (style === 'classic' ? (doorRight ? 463.6 : 105.19) : doorRight ? 421 : 159) +
       destinationShift,
     y: (style === 'classic' ? 81.5 : 80.48) * yScale,
     fontSize: 16 * yScale,
@@ -3664,6 +3004,8 @@ function renderMetroSignText(input: {
   letterSpacing?: number;
   maxWidth?: number;
   fontFamily?: string;
+  /** 外部指定的缩放比例；同一组文字共用最小值即可整体同比缩小。 */
+  fit?: number;
 }): string {
   const value = input.value.trim();
   if (!value) {
@@ -3674,7 +3016,8 @@ function renderMetroSignText(input: {
     estimateMetroLineMapTextWidth(value, input.fontSize) +
     Math.max(value.length - 1, 0) * letterSpacing;
   const fit =
-    input.maxWidth && naturalWidth > input.maxWidth ? input.maxWidth / naturalWidth : 1;
+    input.fit ??
+    (input.maxWidth && naturalWidth > input.maxWidth ? input.maxWidth / naturalWidth : 1);
   const fontSize = input.fontSize * fit;
   const spacing = letterSpacing * fit;
   const anchor = input.anchor ?? 'start';
@@ -3682,6 +3025,25 @@ function renderMetroSignText(input: {
   const spacingAttribute =
     Math.abs(spacing) > 0.01 ? ` letter-spacing="${formatNumber(spacing)}"` : '';
   return `<text x="${formatNumber(x)}" y="${formatNumber(input.y)}" fill="${input.color}" font-family="${input.fontFamily ?? metroLineMapFontFamily}" font-size="${formatNumber(fontSize)}" font-weight="${input.weight ?? 400}" text-anchor="${anchor}"${spacingAttribute}>${escapeXml(value)}</text>`;
+}
+
+/**
+ * 计算一段文字落在给定宽度内所需的缩放比例。
+ * 同一组文字（页头方向信息、整幅站名）取所有比例的最小值，即可让字号统一并一起缩小。
+ */
+function resolveMetroSignTextFit(
+  value: string,
+  fontSize: number,
+  maxWidth: number,
+  letterSpacing = 0,
+): number {
+  const text = value.trim();
+  if (!text || !(maxWidth > 0) || !(fontSize > 0)) {
+    return 1;
+  }
+  const naturalWidth =
+    estimateMetroLineMapTextWidth(text, fontSize) + Math.max(text.length - 1, 0) * letterSpacing;
+  return naturalWidth > maxWidth ? maxWidth / naturalWidth : 1;
 }
 
 function renderMetroLineMapText(
@@ -4001,12 +3363,15 @@ function renderNostalgicAddressNumber(
   return `<g transform="translate(${formatNumber(offsetXInLayout)} 0) scale(${formatNumber(scaleX)} ${formatNumber(scaleY)})">${paths.join('')}</g>`;
 }
 
-function renderVerticalChillJinshuSong(value: string, config: MaterialGlyphConfig): string {
+function renderVerticalChillJinshuSong(
+  value: string,
+  config: MaterialGlyphConfig,
+  assets: MaterialGlyphAssets,
+): string {
   const fontSize = config.fontSize;
   if (!fontSize) {
     throw new Error('竖排道路名称缺少字形字号配置。');
   }
-  const font = getChillJinshuSongFont();
   const characters = Array.from(value.replace(/[\s\u3000]+/g, ''));
   const naturalHeight = characters.length * fontSize;
   const gapCount = Math.max(characters.length - 1, 0);
@@ -4018,180 +3383,23 @@ function renderVerticalChillJinshuSong(value: string, config: MaterialGlyphConfi
         )
       : 0;
   const scaleY = naturalHeight > config.layoutHeight ? config.layoutHeight / naturalHeight : 1;
+  const baselineRatio = assets.getBaselineRatio('chill-jinshu-song');
   const paths = characters.map((character, index) => {
-    const glyph = font.charToGlyph(character);
-    if (glyph.index === 0) {
-      throw new Error(`怀旧楼牌字体不支持字符“${character}”。`);
-    }
-    const advance = ((glyph.advanceWidth ?? font.unitsPerEm) / font.unitsPerEm) * fontSize;
+    const metric = assets.getCharacterMetric('chill-jinshu-song', character);
+    // 字体缺字时退回系统字体，保证预览仍能渲染并让用户看到具体字符。
+    const advance = (metric.supported ? metric.advance : 1) * fontSize;
     const x = (config.layoutWidth - advance) / 2;
-    const baseline = (font.ascender / font.unitsPerEm) * fontSize;
+    const baseline = baselineRatio * fontSize;
     const y = index * (fontSize + letterSpacing) + baseline;
-    return `<path d="${glyph.getPath(x, y, fontSize).toPathData(3)}"/>`;
+    const path = metric.supported
+      ? assets.getCharacterPath('chill-jinshu-song', character, x, y, fontSize)
+      : null;
+    if (!path) {
+      return `<text x="${formatNumber(x + advance / 2)}" y="${formatNumber(y)}" font-family="'YctChillJinshuSong', 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" text-anchor="middle">${escapeXml(character)}</text>`;
+    }
+    return `<path d="${path}"/>`;
   });
   return `<g transform="scale(1 ${formatNumber(scaleY)})">${paths.join('')}</g>`;
-}
-
-function getChillJinshuSongFont(): Font {
-  if (chillJinshuSongFont) {
-    return chillJinshuSongFont;
-  }
-  const sourcePath = resolveMaterialFontPath('chill-jinshu-song-wide-bold.otf');
-  const source = readFileSync(sourcePath);
-  const buffer = source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength);
-  chillJinshuSongFont = parseOpenTypeFont(buffer);
-  return chillJinshuSongFont;
-}
-
-function getHarmonyOsSansBoldFont(): Font {
-  if (harmonyOsSansBoldFont) {
-    return harmonyOsSansBoldFont;
-  }
-  const sourcePath = resolveMaterialFontPath('harmonyos-sans', 'HarmonyOS_Sans_SC_Bold.ttf');
-  const source = readFileSync(sourcePath);
-  const buffer = source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength);
-  harmonyOsSansBoldFont = parseOpenTypeFont(buffer);
-  return harmonyOsSansBoldFont;
-}
-
-function parseOpenTypeFont(buffer: ArrayBuffer): Font {
-  const runtime = opentypeModule as unknown as {
-    default?: { parse?: (source: ArrayBuffer) => Font };
-    parse?: (source: ArrayBuffer) => Font;
-  };
-  const parse = runtime.parse ?? runtime.default?.parse;
-  if (!parse) {
-    throw new Error('当前 OpenType 运行时不支持字体解析。');
-  }
-  return parse(buffer);
-}
-
-function resolveMaterialFontPath(...relativePath: string[]): string {
-  const candidates = [
-    resolve(process.cwd(), 'public', 'fonts', ...relativePath),
-    resolve(process.cwd(), 'apps', 'web', 'public', 'fonts', ...relativePath),
-    resolve(process.cwd(), 'app', 'fonts', ...relativePath),
-    resolve(process.cwd(), 'apps', 'web', 'app', 'fonts', ...relativePath),
-  ];
-  const sourcePath = candidates.find((candidate) => existsSync(candidate));
-  if (!sourcePath) {
-    throw new Error(`物料字体文件 ${relativePath.join('/')} 不存在。`);
-  }
-  return sourcePath;
-}
-
-function getMaterialSymbolMarkup(symbol: string): { viewBox: string; content: string } {
-  const cached = materialSymbolMarkupCache.get(symbol);
-  if (cached) {
-    return cached;
-  }
-  if (!metroWayfindingIconOptions.some((option) => option.symbol === symbol)) {
-    throw new Error(`不支持的 Material Symbols 图标“${symbol}”。`);
-  }
-  const sourcePath = resolveMaterialSymbolPath(`${symbol}.svg`);
-  const source = readFileSync(sourcePath, 'utf8');
-  const viewBox = source.match(/\bviewBox="([^"]+)"/u)?.[1];
-  const content = source
-    .replace(/^\s*<svg\b[^>]*>/u, '')
-    .replace(/<\/svg>\s*$/u, '')
-    .trim();
-  if (!viewBox || !content) {
-    throw new Error(`Material Symbols 图标“${symbol}”格式无效。`);
-  }
-  const markup = { viewBox, content };
-  materialSymbolMarkupCache.set(symbol, markup);
-  return markup;
-}
-
-function getMetroFacilityAssetMarkup(
-  assetName: MetroFacilityIconAssetName | 'frame',
-  variant: 'framed' | 'plain',
-): { viewBox: string; content: string } {
-  const cacheKey = `${variant}/${assetName}`;
-  const cached = metroFacilityAssetMarkupCache.get(cacheKey);
-  if (cached) {
-    return cached;
-  }
-  const sourcePath = resolveMetroFacilityAssetPath(variant, `${assetName}.svg`);
-  const source = readFileSync(sourcePath, 'utf8');
-  const viewBox = source.match(/\bviewBox="([^"]+)"/u)?.[1];
-  const content = source
-    .replace(/^\s*<svg\b[^>]*>/u, '')
-    .replace(/<\/svg>\s*$/u, '')
-    .trim();
-  if (!viewBox || !content) {
-    throw new Error(`地铁设施图标“${assetName}”格式无效。`);
-  }
-  const markup = { viewBox, content };
-  metroFacilityAssetMarkupCache.set(cacheKey, markup);
-  return markup;
-}
-
-function getMetroArrowAssetMarkup(assetName: MetroArrowIconAssetName): {
-  viewBox: string;
-  content: string;
-} {
-  const cached = metroArrowAssetMarkupCache.get(assetName);
-  if (cached) return cached;
-  const sourcePath = resolveMetroArrowAssetPath(`${assetName}.svg`);
-  const source = readFileSync(sourcePath, 'utf8');
-  const viewBox = source.match(/\bviewBox="([^"]+)"/u)?.[1];
-  const content = source
-    .replace(/^\s*<svg\b[^>]*>/u, '')
-    .replace(/<\/svg>\s*$/u, '')
-    .trim();
-  if (!viewBox || !content) throw new Error(`地铁箭头图标“${assetName}”格式无效。`);
-  const markup = { viewBox, content };
-  metroArrowAssetMarkupCache.set(assetName, markup);
-  return markup;
-}
-
-function namespaceMetroFacilityAssetMarkup(content: string, instanceId: string): string {
-  const prefix = instanceId.replace(/[^a-zA-Z0-9_-]/gu, '-');
-  const ids = Array.from(content.matchAll(/\bid="([^"]+)"/gu), (match) => match[1]!);
-  return ids.reduce(
-    (markup, id) =>
-      markup
-        .replaceAll(`id="${id}"`, `id="${prefix}-${id}"`)
-        .replaceAll(`url(#${id})`, `url(#${prefix}-${id})`)
-        .replaceAll(`href="#${id}"`, `href="#${prefix}-${id}"`)
-        .replaceAll(`xlink:href="#${id}"`, `xlink:href="#${prefix}-${id}"`),
-    content,
-  );
-}
-
-function resolveMaterialSymbolPath(fileName: string): string {
-  const candidates = [
-    resolve(process.cwd(), 'public', 'material-symbols', 'outlined', fileName),
-    resolve(process.cwd(), 'apps', 'web', 'public', 'material-symbols', 'outlined', fileName),
-  ];
-  const sourcePath = candidates.find((candidate) => existsSync(candidate));
-  if (!sourcePath) {
-    throw new Error(`Material Symbols 图标文件 ${fileName} 不存在。`);
-  }
-  return sourcePath;
-}
-
-function resolveMetroFacilityAssetPath(variant: 'framed' | 'plain', fileName: string): string {
-  const candidates = [
-    resolve(process.cwd(), 'public', 'metro-facilities', variant, fileName),
-    resolve(process.cwd(), 'apps', 'web', 'public', 'metro-facilities', variant, fileName),
-  ];
-  const sourcePath = candidates.find((candidate) => existsSync(candidate));
-  if (!sourcePath) {
-    throw new Error(`地铁设施图标文件 ${variant}/${fileName} 不存在。`);
-  }
-  return sourcePath;
-}
-
-function resolveMetroArrowAssetPath(fileName: string): string {
-  const candidates = [
-    resolve(process.cwd(), 'public', 'metro-arrows', fileName),
-    resolve(process.cwd(), 'apps', 'web', 'public', 'metro-arrows', fileName),
-  ];
-  const sourcePath = candidates.find((candidate) => existsSync(candidate));
-  if (!sourcePath) throw new Error(`地铁箭头图标文件 ${fileName} 不存在。`);
-  return sourcePath;
 }
 
 function estimateTextWidth(value: string, fontSize: number): number {
@@ -4201,11 +3409,6 @@ function estimateTextWidth(value: string, fontSize: number): number {
       0,
     ) * fontSize
   );
-}
-
-function isBasicLatinCharacter(character: string): boolean {
-  const codePoint = character.codePointAt(0) ?? 0;
-  return codePoint >= 0x20 && codePoint <= 0x7e;
 }
 
 function metroCharacterWidthFactor(character: string): number {
@@ -4228,21 +3431,4 @@ function metroCharacterWidthFactor(character: string): number {
     return 0.62;
   }
   return 0.56;
-}
-
-function formatNumber(value: number): string {
-  return String(Math.round(value * 1_000) / 1_000);
-}
-
-function escapeXml(value: string): string {
-  return value.replace(/[<>&"']/g, (character) => {
-    const entityByCharacter: Record<string, string> = {
-      '<': '&lt;',
-      '>': '&gt;',
-      '&': '&amp;',
-      '"': '&quot;',
-      "'": '&apos;',
-    };
-    return entityByCharacter[character];
-  });
 }

@@ -22,8 +22,6 @@ import { SegmentedControl } from './segmented-control';
 type Translate = (key: CommonMessageKey, values?: Record<string, string | number>) => string;
 
 const distanceKilometerThreshold = 1000;
-const areaHectareThreshold = 10_000;
-const squareBlocksPerHectare = 10_000;
 /** 拖动时面板与视口边缘的最小留白。 */
 const dragViewportInset = 8;
 /** 小于该位移视为点击，不写入拖动位置，避免轻微抖动改变布局。 */
@@ -86,11 +84,7 @@ export function MapMeasurePanel({
       : t('map.hud.scale.blocks', { value: formatMeasureValue(value) });
 
   const formatArea = (value: number): string =>
-    value >= areaHectareThreshold
-      ? t('map.measure.unit.hectares', {
-          value: formatMeasureValue(value / squareBlocksPerHectare),
-        })
-      : t('map.measure.unit.squareBlocks', { value: formatMeasureValue(value) });
+    t('map.measure.unit.squareBlocks', { value: formatMeasureValue(value) });
 
   const formatAreaReason = (reason: MapMeasureAreaReason): string => {
     if (reason === 'duplicatePoint') {

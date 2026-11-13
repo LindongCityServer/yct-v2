@@ -22,6 +22,66 @@ const facilityIconOptions: ReadonlyArray<readonly [string, CommonMessageKey]> = 
   ['smoking_rooms', 'poiFacility.icon.smoking'],
 ];
 
+export function PoiFacilityRow({
+  disabled = false,
+  facility,
+  index,
+  onChange,
+  onRemove,
+}: Readonly<{
+  disabled?: boolean;
+  facility: PoiFacilitySnapshot;
+  index: number;
+  onChange: (facility: PoiFacilitySnapshot) => void;
+  onRemove: () => void;
+}>) {
+  const { t } = useI18n();
+  return (
+    <div className="poi-facility-editor-row">
+      <MaterialSymbol name={facility.symbolIcon || 'info'} aria-hidden="true" />
+      <label>
+        <span>{t('poiFacility.iconLabel')}</span>
+        <select
+          disabled={disabled}
+          value={facility.symbolIcon}
+          onChange={(event) => onChange({ ...facility, symbolIcon: event.currentTarget.value })}
+        >
+          {!facilityIconOptions.some(([value]) => value === facility.symbolIcon) ? (
+            <option value={facility.symbolIcon}>{facility.symbolIcon}</option>
+          ) : null}
+          {facilityIconOptions.map(([value, labelKey]) => (
+            <option value={value} key={value}>
+              {t(labelKey)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>{t('poiFacility.descriptionLabel')}</span>
+        <input
+          disabled={disabled}
+          maxLength={300}
+          value={facility.description}
+          onChange={(event) => onChange({ ...facility, description: event.currentTarget.value })}
+          placeholder={t('poiFacility.descriptionPlaceholder')}
+        />
+      </label>
+      <button
+        className="poi-facility-editor-remove"
+        type="button"
+        disabled={disabled}
+        aria-label={t('poiFacility.removeAria', { index: index + 1 })}
+        title={t('poiFacility.removeTitle')}
+        onClick={onRemove}
+      >
+        <span className="material-symbols-outlined" aria-hidden="true">
+          delete
+        </span>
+      </button>
+    </div>
+  );
+}
+
 export function PoiFacilityEditor({
   disabled = false,
   facilities,
@@ -59,54 +119,16 @@ export function PoiFacilityEditor({
       {facilities.length > 0 ? (
         <div className="poi-facility-editor-list">
           {facilities.map((facility, index) => (
-            <div className="poi-facility-editor-row" key={`${index}-${facility.symbolIcon}`}>
-              <MaterialSymbol name={facility.symbolIcon || 'info'} aria-hidden="true" />
-              <label>
-                <span>{t('poiFacility.iconLabel')}</span>
-                <select
-                  disabled={disabled}
-                  value={facility.symbolIcon}
-                  onChange={(event) =>
-                    updateFacility(index, { symbolIcon: event.currentTarget.value })
-                  }
-                >
-                  {!facilityIconOptions.some(([value]) => value === facility.symbolIcon) ? (
-                    <option value={facility.symbolIcon}>{facility.symbolIcon}</option>
-                  ) : null}
-                  {facilityIconOptions.map(([value, labelKey]) => (
-                    <option value={value} key={value}>
-                      {t(labelKey)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>{t('poiFacility.descriptionLabel')}</span>
-                <input
-                  disabled={disabled}
-                  maxLength={300}
-                  value={facility.description}
-                  onChange={(event) =>
-                    updateFacility(index, { description: event.currentTarget.value })
-                  }
-                  placeholder={t('poiFacility.descriptionPlaceholder')}
-                />
-              </label>
-              <button
-                className="poi-facility-editor-remove"
-                type="button"
-                disabled={disabled}
-                aria-label={t('poiFacility.removeAria', { index: index + 1 })}
-                title={t('poiFacility.removeTitle')}
-                onClick={() =>
-                  onChange(facilities.filter((_, currentIndex) => currentIndex !== index))
-                }
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  delete
-                </span>
-              </button>
-            </div>
+            <PoiFacilityRow
+              disabled={disabled}
+              facility={facility}
+              index={index}
+              key={`${index}-${facility.symbolIcon}`}
+              onChange={(next) => updateFacility(index, next)}
+              onRemove={() =>
+                onChange(facilities.filter((_, currentIndex) => currentIndex !== index))
+              }
+            />
           ))}
         </div>
       ) : null}

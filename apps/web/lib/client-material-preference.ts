@@ -3,12 +3,15 @@ export type MaterialMode = 'performance' | 'balanced' | 'advanced';
 export interface MaterialPreference {
   mode: MaterialMode;
   thickness: number;
+  /** 反转并削弱透光材质的背景调色，用于提升面板内容在复杂底图上的可读性。 */
+  invertTint: boolean;
 }
 
 interface StoredMaterialPreference {
   mode?: unknown;
   thickness?: unknown;
   translucency?: unknown;
+  invertTint?: unknown;
 }
 
 export interface MaterialPreferenceChangedPayload {
@@ -22,6 +25,7 @@ export const materialPreferenceStorageKey = 'yct.materialPreference.v1';
 export const defaultMaterialPreference: MaterialPreference = {
   mode: 'balanced',
   thickness: 50,
+  invertTint: false,
 };
 
 export function readMaterialPreference(): MaterialPreference {
@@ -85,8 +89,9 @@ function normalizeMaterialPreference(preference: StoredMaterialPreference): Mate
     typeof storedThickness === 'number' && Number.isFinite(storedThickness)
       ? Math.min(100, Math.max(0, Math.round(storedThickness)))
       : defaultMaterialPreference.thickness;
+  const invertTint = preference.invertTint === true;
 
-  return { mode, thickness };
+  return { mode, thickness, invertTint };
 }
 
 function isMaterialMode(value: unknown): value is MaterialMode {

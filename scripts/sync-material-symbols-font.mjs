@@ -9,8 +9,11 @@ const fontPath = join(fontDirectory, 'MaterialSymbolsOutlined.woff2');
 const manifestPath = join(fontDirectory, 'manifest.json');
 const materialSymbolsCssUrl =
   'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200';
-const materialSymbolsCodepointsUrl =
-  'https://raw.githubusercontent.com/google/material-design-icons/master/variablefont/MaterialSymbolsOutlined%5BFILL%2CGRAD%2Copsz%2Cwght%5D.codepoints';
+const materialSymbolsCodepointUrls = [
+  'https://raw.githubusercontent.com/google/material-design-icons/master/variablefont/MaterialSymbolsOutlined%5BFILL%2CGRAD%2Copsz%2Cwght%5D.codepoints',
+  // raw.githubusercontent.com 偶发不可达时用 jsDelivr 镜像兜底。
+  'https://cdn.jsdelivr.net/gh/google/material-design-icons@master/variablefont/MaterialSymbolsOutlined%5BFILL%2CGRAD%2Copsz%2Cwght%5D.codepoints',
+];
 const browserUserAgent =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36';
 const maximumFontBytes = 512 * 1024;
@@ -31,13 +34,19 @@ async function main() {
 
   const sortedIconNames = [...iconNames].sort();
   await warnUnknownIconNames(sortedIconNames);
+  // Google Fonts 的 icon_names 只要混入不存在的图标名，就可能直接返回完整可变字体，
+  // 因此请求子集与写清单都只使用官方 codepoints 中确实存在的图标名。
+  const subsetIconNames = await filterKnownIconNames(sortedIconNames);
+  if (subsetIconNames.length === 0) {
+    throw new Error('没有可用的 Material Symbols 图标名，已停止覆盖现有字体。');
+  }
   if (process.argv.includes('--check')) {
-    await validateMaterialSymbolManifest(sortedIconNames);
-    console.log(`Material Symbols 清单校验通过，共 ${sortedIconNames.length} 个图标。`);
+    await validateMaterialSymbolManifest(subsetIconNames);
+    console.log(`Material Symbols 清单校验通过，共 ${subsetIconNames.length} 个图标。`);
     return;
   }
 
-  const requestUrl = `${materialSymbolsCssUrl}&icon_names=${sortedIconNames.join(',')}`;
+  const requestUrl = `${materialSymbolsCssUrl}&icon_names=${subsetIconNames.join(',')}`;
   const css = await fetchText(requestUrl);
   const fontUrl = css.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/)?.[1];
   if (!fontUrl || !css.includes("format('woff2')")) {
@@ -57,22 +66,25 @@ async function main() {
 
   await mkdir(fontDirectory, { recursive: true });
   await writeFile(fontPath, fontBytes);
-  const manifest = JSON.stringify(
-    {
-      family: 'Material Symbols Outlined',
-      axes: 'opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200',
-      source: materialSymbolsCssUrl,
-      iconCount: sortedIconNames.length,
-      icons: sortedIconNames,
-      fontBytes: fontBytes.length,
-    },
-    null,
-    2,
+  await writeFile(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        family: 'Material Symbols Outlined',
+        axes: 'opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200',
+        source: materialSymbolsCssUrl,
+        iconCount: subsetIconNames.length,
+        icons: subsetIconNames,
+        fontBytes: fontBytes.length,
+      },
+      null,
+      2,
+    ).replace(/\n/g, '\r\n')}\r\n`,
+    'utf8',
   );
-  await writeFile(manifestPath, `${manifest.replace(/\n/g, '\r\n')}\r\n`, 'utf8');
 
   console.log(
-    `已同步 ${sortedIconNames.length} 个 Material Symbols 图标，字体大小 ${fontBytes.length} 字节。`,
+    `已同步 ${subsetIconNames.length} 个 Material Symbols 图标，字体大小 ${fontBytes.length} 字节。`,
   );
 }
 
@@ -106,30 +118,60 @@ async function validateMaterialSymbolManifest(sortedIconNames) {
   }
 }
 
+async function readMaterialSymbolCodepoints() {
+  for (const url of materialSymbolsCodepointUrls) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        continue;
+      }
+      return new Set(
+        (await response.text())
+          .split('\n')
+          .map((line) => line.split(/\s+/)[0]?.trim())
+          .filter(Boolean),
+      );
+    } catch {
+      // 换下一个镜像源继续尝试。
+    }
+  }
+  return undefined;
+}
+
 async function warnUnknownIconNames(sortedIconNames) {
   // Google Fonts 的 icon_names 子集会静默忽略不存在的图标名（字体里没有对应
   // ligature，页面渲染退化为普通文本）。这里对照官方 codepoints 提前发现
   // 无效名，仅告警不阻塞（codepoints 与线上 CSS 版本可能存在时间差）。
-  try {
-    const response = await fetch(materialSymbolsCodepointsUrl);
-    if (!response.ok) {
-      return;
-    }
-    const codepoints = new Set(
-      (await response.text())
-        .split('\n')
-        .map((line) => line.split(/\s+/)[0]?.trim())
-        .filter(Boolean),
+  const codepoints = await readMaterialSymbolCodepoints();
+  if (!codepoints) {
+    return;
+  }
+  const unknown = sortedIconNames.filter((iconName) => !codepoints.has(iconName));
+  if (unknown.length > 0) {
+    console.warn(
+      `警告：以下图标名不在 Material Symbols 官方 codepoints 中，` +
+        `将被忽略（页面会渲染为纯文本）：${unknown.join(', ')}`,
     );
-    const unknown = sortedIconNames.filter((iconName) => !codepoints.has(iconName));
-    if (unknown.length > 0) {
-      console.warn(
-        `警告：以下图标名不在 Material Symbols 官方 codepoints 中，` +
-          `将被 Google Fonts 子集忽略（页面会渲染为纯文本）：${unknown.join(', ')}`,
-      );
-    }
+  }
+}
+
+/** 只保留官方字体里真实存在的图标名，避免 Google Fonts 返回完整字体。 */
+async function filterKnownIconNames(sortedIconNames) {
+  const codepoints = await readMaterialSymbolCodepoints();
+  if (codepoints) {
+    return sortedIconNames.filter((iconName) => codepoints.has(iconName));
+  }
+  // 官方清单不可达时退回现有 manifest：把全部候选名（含无效名）发给 Google
+  // 会让它直接返回完整可变字体，所以这里宁可少同步新图标。
+  try {
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    const known = new Set(Array.isArray(manifest.icons) ? manifest.icons : []);
+    console.warn('警告：无法读取 Material Symbols 官方 codepoints，本次只同步清单里已有的图标。');
+    return sortedIconNames.filter((iconName) => known.has(iconName));
   } catch {
-    // 官方 codepoints 拉取失败时跳过该校验，不影响主流程。
+    throw new Error(
+      '无法读取 Material Symbols 官方 codepoints，也没有可用的旧清单，已停止覆盖现有字体。',
+    );
   }
 }
 

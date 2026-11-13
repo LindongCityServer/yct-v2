@@ -7,6 +7,7 @@ import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { AdminRefreshButton } from './admin-refresh-button';
 import { MaterialSymbol } from './material-symbol';
+import { SegmentedControl } from './segmented-control';
 
 interface AdminServiceEntry {
   id: string;
@@ -581,24 +582,18 @@ export function AdminServicesPanel() {
                 onChange={(event) => updateEditorField('title', event.currentTarget.value)}
               />
             </label>
-            <label>
+            <div className="admin-segmented-field">
               <span>分类</span>
-              <select
+              <SegmentedControl
+                ariaLabel="服务分类"
+                className="material-mode-switch material-variant-switch"
                 value={editorState.categoryId}
-                onChange={(event) =>
-                  updateEditorField(
-                    'categoryId',
-                    event.currentTarget.value as AdminServiceEntry['categoryId'],
-                  )
+                onChange={(next) =>
+                  updateEditorField('categoryId', next as AdminServiceEntry['categoryId'])
                 }
-              >
-                {categoryOptions.map((category) => (
-                  <option value={category.value} key={category.value}>
-                    {category.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                options={categoryOptions}
+              />
+            </div>
             <label>
               <span>图标</span>
               <span className="admin-material-symbol-input">
@@ -620,21 +615,21 @@ export function AdminServicesPanel() {
                 onChange={(event) => updateEditorField('sortOrderValue', event.currentTarget.value)}
               />
             </label>
-            <label>
+            <div className="admin-segmented-field">
               <span>打开方式</span>
-              <select
+              <SegmentedControl
+                ariaLabel="打开方式"
+                className="material-mode-switch material-variant-switch"
                 value={editorState.openMode}
-                onChange={(event) =>
-                  updateEditorField(
-                    'openMode',
-                    event.currentTarget.value as AdminServiceEntry['openMode'],
-                  )
+                onChange={(next) =>
+                  updateEditorField('openMode', next as AdminServiceEntry['openMode'])
                 }
-              >
-                <option value="new_tab">新标签页</option>
-                <option value="same_tab">当前页</option>
-              </select>
-            </label>
+                options={[
+                  { value: 'new_tab', label: '新标签页' },
+                  { value: 'same_tab', label: '当前页' },
+                ]}
+              />
+            </div>
             <label className="admin-editor-markdown">
               <span>链接</span>
               <input

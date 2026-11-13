@@ -347,6 +347,7 @@ export function AccountSettingsPanel({
   const [materialPreference, setMaterialPreference] = useState<MaterialPreference>({
     mode: 'balanced',
     thickness: 50,
+    invertTint: false,
   });
   const [mobileActionRail, setMobileActionRail] = useState<MobileActionRailPreference>({
     enabled: false,
@@ -686,6 +687,11 @@ export function AccountSettingsPanel({
 
   const updateMaterialThickness = (thickness: number) => {
     const next = updateMaterialPreference({ ...materialPreference, thickness });
+    setMaterialPreference(next);
+  };
+
+  const updateMaterialInvertTint = (invertTint: boolean) => {
+    const next = updateMaterialPreference({ ...materialPreference, invertTint });
     setMaterialPreference(next);
   };
 
@@ -1255,6 +1261,28 @@ export function AccountSettingsPanel({
               onChange={(event) => updateMaterialThickness(Number(event.currentTarget.value))}
             />
           </label>
+          <div
+            className={
+              materialPreference.mode === 'advanced'
+                ? 'material-invert-tint-control'
+                : 'material-invert-tint-control is-disabled'
+            }
+          >
+            <span className="material-invert-tint-copy">
+              <span>{t('settings.material.invertTint')}</span>
+              <span className="settings-row-note">{t('settings.material.invertTintNote')}</span>
+            </span>
+            <label className="switch-control" title={t('settings.material.invertTint')}>
+              <input
+                type="checkbox"
+                aria-label={t('settings.material.invertTint')}
+                checked={materialPreference.invertTint}
+                disabled={materialPreference.mode !== 'advanced'}
+                onChange={(event) => updateMaterialInvertTint(event.currentTarget.checked)}
+              />
+              <span />
+            </label>
+          </div>
         </section>
 
         <section

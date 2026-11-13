@@ -535,34 +535,34 @@ export function AdminMaterialsPanel() {
               onChange={(event) => setAuditQuery(event.currentTarget.value)}
             />
           </label>
-          <label className="admin-material-audit-filter">
+          <div className="admin-material-audit-filter">
             <span>类型</span>
-            <select
+            <SegmentedControl
+              ariaLabel="记录类型"
+              className="material-mode-switch material-variant-switch"
               value={auditKind}
-              onChange={(event) =>
-                setAuditKind(event.currentTarget.value as 'all' | 'preview' | 'export')
-              }
-            >
-              <option value="all">全部</option>
-              <option value="preview">预览</option>
-              <option value="export">下载</option>
-            </select>
-          </label>
-          <label className="admin-material-audit-filter">
+              onChange={setAuditKind}
+              options={[
+                { value: 'all', label: '全部' },
+                { value: 'preview', label: '预览' },
+                { value: 'export', label: '下载' },
+              ]}
+            />
+          </div>
+          <div className="admin-material-audit-filter">
             <span>水印</span>
-            <select
+            <SegmentedControl
+              ariaLabel="水印筛选"
+              className="material-mode-switch material-variant-switch"
               value={auditWatermark}
-              onChange={(event) =>
-                setAuditWatermark(
-                  event.currentTarget.value as 'all' | 'free' | 'watermarked',
-                )
-              }
-            >
-              <option value="all">全部</option>
-              <option value="free">无水印</option>
-              <option value="watermarked">带水印</option>
-            </select>
-          </label>
+              onChange={setAuditWatermark}
+              options={[
+                { value: 'all', label: '全部' },
+                { value: 'free', label: '无水印' },
+                { value: 'watermarked', label: '带水印' },
+              ]}
+            />
+          </div>
         </div>
         {filteredExports.length ? (
           filteredExports.slice(0, 20).map((item) => (

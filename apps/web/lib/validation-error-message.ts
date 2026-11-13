@@ -38,6 +38,11 @@ const zodFormatLabels: Record<string, string> = {
   emoji: '表情符号',
 };
 
+/** zod 的默认 message 是英文；只有自定义中文文案才直接采用。 */
+function hasChineseMessage(message: string | undefined): message is string {
+  return Boolean(message && /[\u4e00-\u9fff]/u.test(message));
+}
+
 function describeIssue(issue: ZodIssue): string {
   switch (issue.code) {
     case 'invalid_type':
@@ -47,9 +52,18 @@ function describeIssue(issue: ZodIssue): string {
         ? `值不在允许范围内（可选：${issue.values.join(' / ')}）`
         : '值不在允许范围内';
     case 'too_small':
-      return issue.exact ? `长度必须为 ${issue.minimum}` : `小于允许的最小值 ${issue.minimum}`;
+      // schema 里自定义的中文文案优先，避免覆盖成「小于允许的最小值 0」这类机器话术。
+      return hasChineseMessage(issue.message)
+        ? issue.message
+        : issue.exact
+          ? `长度必须为 ${issue.minimum}`
+          : `小于允许的最小值 ${issue.minimum}`;
     case 'too_big':
-      return issue.exact ? `长度必须为 ${issue.maximum}` : `超过允许的最大值 ${issue.maximum}`;
+      return hasChineseMessage(issue.message)
+        ? issue.message
+        : issue.exact
+          ? `长度必须为 ${issue.maximum}`
+          : `超过允许的最大值 ${issue.maximum}`;
     case 'invalid_format': {
       const label = zodFormatLabels[issue.format];
       return label ? `格式不正确（需要${label}）` : '格式不正确';

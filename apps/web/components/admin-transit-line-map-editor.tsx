@@ -5,7 +5,7 @@ import type {
   PointerEvent as ReactPointerEvent,
   WheelEvent as ReactWheelEvent,
 } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   MapMarkerSnapshot,
   MapSpatialProfile,
@@ -13,17 +13,29 @@ import type {
   TransitDataRevision,
   TransitLineRouteNodeSnapshot,
   TransitLineSegmentPathSnapshot,
+  TransitStationDetailSnapshot,
+  TransitStationFacilitySnapshot,
 } from '@yct/contracts';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { selectMapTileTemplates } from '../lib/map-tile-templates';
+import { defineShortcut } from '../lib/editor/shortcut-builders';
+import { EDITOR_SHORTCUT_CATALOG } from '../lib/editor/shortcuts';
+import { useEditorInspectorFocus } from '../lib/editor/use-editor-inspector-focus';
+import { useEditorLayerScroll } from '../lib/editor/use-editor-layer-scroll';
+import { useEditorPanels } from '../lib/editor/use-editor-panels';
+import type { EditorTool } from '../lib/editor/types';
+import { useEditorShortcuts } from '../lib/editor/use-editor-shortcuts';
+import { useSnapshotHistory } from '../lib/editor/use-snapshot-history';
 import {
   isTransitLineDirectionIncluded,
   type TransitLineTravelDirection,
 } from '../lib/transit-line-direction';
 import { isTransitPoiMarkerCompatibleWithStation } from '../lib/transit-station-mode';
+import { findTransitStationDetail } from '../lib/transit-station-detail-match';
+import { TRANSIT_STATION_FACILITY_OPTIONS } from '../lib/transit-station-facility-options';
+import { SegmentedControl } from './segmented-control';
 import {
   buildVisualRoadGraph,
   isVisualRoadMarker,
@@ -33,11 +45,31 @@ import {
 } from '../lib/transit-line-visual-routing';
 import { CurrentPlayerLocationButton } from './current-player-location-button';
 import { LayeredMapTile } from './layered-map-tile';
-import { SecondaryPageHeader } from './app-shell';
+import { EditorHeaderToolbar } from './editor/editor-header-toolbar';
+import { EditorInspectorEntry } from './editor/editor-inspector-entry';
+import { EditorLayerRowActions } from './editor/editor-layer-row-actions';
+import { EditorLoadingState } from './editor/editor-loading-state';
+import { EditorPanelHeading } from './editor/editor-panel-heading';
+import { EditorRailBridge } from './editor/editor-rail-bridge';
+import { EditorToolbar } from './editor/editor-toolbar';
+import { buildEditorToolbarSections } from './editor/editor-toolbar-sections';
+import type { EditorToolbarOverflowItem } from './editor/editor-toolbar-overflow';
+import { EditorZoomControls } from './editor/editor-zoom-controls';
+import { VisualEditorShell } from './visual-editor-shell';
+
+// 站点弹窗体量较大且只在点开时使用，按需加载避免拖慢线路工作台首屏。
+const TransitStationCoordinateDialog = dynamic(
+  () => import('./admin-transit-panel').then((module) => module.TransitStationCoordinateDialog),
+  { ssr: false },
+);
+const TransitStationDetailDialog = dynamic(
+  () => import('./admin-transit-panel').then((module) => module.TransitStationDetailDialog),
+  { ssr: false },
+);
 
 type TransitLine = TransitDataRevision['lines'][number];
 type TransitStation = TransitDataRevision['stations'][number];
-type EditorTool = 'pan' | 'move' | 'station' | 'waypoint';
+type LineEditorTool = 'select' | 'pan' | 'station' | 'waypoint';
 type Direction = 'both' | 'up' | 'down';
 type InsertionMode = 'append' | 'nearest' | 'prepend';
 
@@ -63,6 +95,7 @@ interface EditorStationNode {
   id: string;
   kind: 'station';
   name: string;
+  operationStatus?: NonNullable<TransitStation['operationStatus']>;
   stationSourceId: string;
 }
 
@@ -76,6 +109,20 @@ interface EditorWaypointNode {
 }
 
 type EditorNode = EditorStationNode | EditorWaypointNode;
+
+/** 图层树里的区间条目：相邻两个站点之间的路段。 */
+interface EditorSegmentEntry {
+  fromIndex: number;
+  fromNode: EditorStationNode;
+  /** 选中与 React key 使用；环线重复经过同一站时也不会冲突。 */
+  id: string;
+  key: string;
+  toIndex: number;
+  toNode: EditorStationNode;
+  waypointCount: number;
+  /** 区间内的途径点，按里程顺序作为区间子节点展示。 */
+  waypoints: Array<{ index: number; node: EditorWaypointNode }>;
+}
 
 interface MapView {
   centerX: number;
@@ -133,6 +180,8 @@ interface VisibleTile {
 
 interface EditorData {
   defaultY: number;
+  /** POI 原图标的基底地址，来自地图标记接口。 */
+  iconBaseUrl: string;
   junctionSnapTolerance: number;
   line: TransitLine;
   markers: MapMarkerSnapshot['markers'];
@@ -157,15 +206,15 @@ export function AdminTransitLineMapEditor({
     normalizedLineSourceId,
   )}`;
   const backToAdminHref = appPath(backToAdminPath);
-  const router = useRouter();
   const stageRef = useRef<HTMLDivElement | null>(null);
   const gestureRef = useRef<PointerGesture | null>(null);
   const touchPointersRef = useRef<Map<number, EditorTouchPoint>>(new Map());
   const pinchGestureRef = useRef<EditorPinchGesture | null>(null);
   const [data, setData] = useState<EditorData | null>(null);
   const [nodes, setNodes] = useState<EditorNode[]>([]);
+  const [lineName, setLineName] = useState('');
   const [routeMode, setRouteMode] = useState<'road' | 'straight'>('straight');
-  const [activeTool, setActiveTool] = useState<EditorTool>('pan');
+  const [activeTool, setActiveTool] = useState<LineEditorTool>('pan');
   const [insertionMode, setInsertionMode] = useState<InsertionMode>('append');
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [altDown, setAltDown] = useState(false);
@@ -174,9 +223,29 @@ export function AdminTransitLineMapEditor({
   const [viewportSize, setViewportSize] = useState<ViewportSize>({ height: 0, width: 0 });
   const [status, setStatus] = useState('正在读取线路和地图数据');
   const [isSaving, setIsSaving] = useState(false);
-  const [routePanelCollapsed, setRoutePanelCollapsed] = useState(false);
+  const {
+    panelsVisible,
+    panelStateClass,
+    setPanelsVisible,
+    togglePanels,
+    openInspector,
+    closeInspector,
+  } = useEditorPanels();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [stationCoordinateTargetId, setStationCoordinateTargetId] = useState<string | null>(null);
+  const [stationDetailTargetId, setStationDetailTargetId] = useState<string | null>(null);
+  const [stationDialogBusy, setStationDialogBusy] = useState(false);
   const [previewDirection, setPreviewDirection] = useState<TransitLineTravelDirection>('forward');
+  const inspectorRef = useRef<HTMLElement | null>(null);
+  const layerBodyRef = useRef<HTMLDivElement | null>(null);
+  const toolbarLocationProxyRef = useRef<HTMLDivElement | null>(null);
+  useEditorLayerScroll(
+    layerBodyRef,
+    selectedNodeId || selectedSegmentId
+      ? `${selectedNodeId ?? ''}:${selectedSegmentId ?? ''}`
+      : null,
+  );
   const [segmentOperationStatusByKey, setSegmentOperationStatusByKey] = useState<
     Record<string, NonNullable<TransitLineSegmentPathSnapshot['operationStatus']>>
   >({});
@@ -185,8 +254,7 @@ export function AdminTransitLineMapEditor({
   >({});
 
   // 节点历史：只在 nodes 真正变化时入栈；加载初始数据时重置，避免撤销回到空线路。
-  const undoStackRef = useRef<EditorNode[][]>([]);
-  const redoStackRef = useRef<EditorNode[][]>([]);
+  const snapshotHistory = useSnapshotHistory<EditorNode[]>();
   const previousNodesRef = useRef<EditorNode[] | null>(null);
   const applyingHistoryRef = useRef(false);
   const nodeDragStartRef = useRef<EditorNode[] | null>(null);
@@ -205,80 +273,28 @@ export function AdminTransitLineMapEditor({
     if (gestureRef.current?.kind === 'move-node') {
       return;
     }
-    undoStackRef.current.push(previous);
-    if (undoStackRef.current.length > 100) {
-      undoStackRef.current.shift();
-    }
-    redoStackRef.current = [];
-  }, [nodes]);
+    snapshotHistory.push(previous);
+  }, [nodes, snapshotHistory.push]);
 
   const undoNodes = () => {
-    const previous = undoStackRef.current.pop();
+    const previous = snapshotHistory.undo(nodes);
     if (!previous) {
       return;
     }
     applyingHistoryRef.current = true;
-    redoStackRef.current.push(nodes);
     setNodes(previous);
   };
 
   const redoNodes = () => {
-    const next = redoStackRef.current.pop();
+    const next = snapshotHistory.redo(nodes);
     if (!next) {
       return;
     }
     applyingHistoryRef.current = true;
-    undoStackRef.current.push(nodes);
     setNodes(next);
   };
 
-  // 键盘处理随渲染更新，订阅只建立一次，避免编辑时高频重渲染反复解绑监听。
-  const editorKeyboardHandlerRef = useRef<(event: KeyboardEvent) => void>(() => undefined);
-  editorKeyboardHandlerRef.current = (event) => {
-    if (isEditableKeyboardTarget(event.target)) {
-      return;
-    }
-    const modifier = event.ctrlKey || event.metaKey;
-    if (modifier && (event.key.toLowerCase() === 's' || event.key === 'Enter')) {
-      event.preventDefault();
-      if (!isSaving) {
-        void save();
-      }
-      return;
-    }
-    if (modifier && event.key.toLowerCase() === 'z') {
-      event.preventDefault();
-      if (event.shiftKey) {
-        redoNodes();
-      } else {
-        undoNodes();
-      }
-      return;
-    }
-    if (modifier && event.key.toLowerCase() === 'y') {
-      event.preventDefault();
-      redoNodes();
-      return;
-    }
-    if (modifier || event.altKey || event.shiftKey) {
-      return;
-    }
-    if (event.key !== 'Delete' && event.key !== 'Backspace') {
-      return;
-    }
-    if (!selectedNodeId) {
-      return;
-    }
-    event.preventDefault();
-    setNodes((current) => current.filter((node) => node.id !== selectedNodeId));
-    setSelectedNodeId(null);
-  };
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => editorKeyboardHandlerRef.current(event);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  // 快捷键统一走 useEditorShortcuts，具体注册放在所有操作函数定义之后。
 
   useEffect(() => {
     let cancelled = false;
@@ -296,6 +312,7 @@ export function AdminTransitLineMapEditor({
           message?: string;
         };
         const markerData = (await markerResponse.json()) as {
+          iconBaseUrl?: string;
           snapshot?: MapMarkerSnapshot;
           message?: string;
         };
@@ -321,6 +338,7 @@ export function AdminTransitLineMapEditor({
         const initialNodes = buildInitialEditorNodes(line, revision.stations);
         setData({
           defaultY: spatialProfileData.profile?.defaultY ?? 64,
+          iconBaseUrl: markerData.iconBaseUrl ?? '',
           junctionSnapTolerance: spatialProfileData.profile?.roadTiming.junctionSnapTolerance ?? 30,
           line,
           markers,
@@ -332,9 +350,11 @@ export function AdminTransitLineMapEditor({
         });
         setNodes(initialNodes);
         previousNodesRef.current = initialNodes;
-        undoStackRef.current = [];
-        redoStackRef.current = [];
+        snapshotHistory.reset();
         setRouteMode(line.routeMode ?? defaultRouteMode(line));
+        setLineName(line.name);
+        setStationCoordinateTargetId(null);
+        setStationDetailTargetId(null);
         setSegmentOperationStatusByKey(
           Object.fromEntries(
             (line.segmentPaths ?? []).map((path) => [
@@ -386,6 +406,7 @@ export function AdminTransitLineMapEditor({
     return () => observer.disconnect();
   }, [data]);
 
+  // 只跟踪 Alt / Shift 的按下状态；工具与插入模式改走 useEditorShortcuts。
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       setAltDown(event.altKey);
@@ -393,33 +414,6 @@ export function AdminTransitLineMapEditor({
       // 单独按住 Alt 会激活浏览器菜单，尽量拦下，避免临时换工具时闪菜单。
       if (event.key === 'Alt') {
         event.preventDefault();
-      }
-      if (isEditableKeyboardTarget(event.target)) {
-        return;
-      }
-      if (event.ctrlKey || event.metaKey || event.altKey) {
-        return;
-      }
-      const key = event.key.toLowerCase();
-      const toolByKey: Partial<Record<string, EditorTool>> = {
-        v: 'pan',
-        m: 'move',
-        s: 'station',
-        r: 'waypoint',
-      };
-      const modeByKey: Partial<Record<string, InsertionMode>> = {
-        '[': 'prepend',
-        ']': 'append',
-        '\\': 'nearest',
-      };
-      const nextTool = toolByKey[key];
-      const nextMode = modeByKey[event.key];
-      if (nextTool) {
-        event.preventDefault();
-        setActiveTool(nextTool);
-      } else if (nextMode) {
-        event.preventDefault();
-        setInsertionMode(nextMode);
       }
     };
     const handleKeyUp = (event: KeyboardEvent) => {
@@ -444,6 +438,28 @@ export function AdminTransitLineMapEditor({
     () => data?.markers.filter(hasPointGeometry).slice(0, 800) ?? [],
     [data],
   );
+  const modeMatchedMarkerIds = useMemo(() => {
+    if (!data) {
+      return new Set<string>();
+    }
+    return new Set(
+      pointMarkers
+        .filter((marker) => isTransitPoiMarkerCompatibleWithStation(marker, [data.line.mode]))
+        .map((marker) => marker.id),
+    );
+  }, [data, pointMarkers]);
+  const markerIconUrlById = useMemo(() => {
+    const urls = new Map<string, string>();
+    if (!data) {
+      return urls;
+    }
+    for (const marker of pointMarkers) {
+      if (marker.iconFileName) {
+        urls.set(marker.id, toMarkerIconUrl(marker.iconFileName, data.iconBaseUrl));
+      }
+    }
+    return urls;
+  }, [data, pointMarkers]);
   const stationSnapCandidates = useMemo(
     () =>
       data
@@ -502,13 +518,182 @@ export function AdminTransitLineMapEditor({
       ),
     [data?.freshTileTemplate, data?.tileTemplate, mapView, viewportSize],
   );
-  const effectiveTool: EditorTool =
+  const effectiveTool: LineEditorTool =
     altDown && activeTool === 'station'
       ? 'waypoint'
       : altDown && activeTool === 'waypoint'
         ? 'station'
         : activeTool;
   const effectiveSnapEnabled = shiftDown ? !snapEnabled : snapEnabled;
+
+  const stationEntries = useMemo(
+    () =>
+      nodes.flatMap((node, index) => (node.kind === 'station' ? [{ index, node }] : [])) as Array<{
+        index: number;
+        node: EditorStationNode;
+      }>,
+    [nodes],
+  );
+  const waypointEntries = useMemo(
+    () =>
+      nodes.flatMap((node, index) => (node.kind === 'waypoint' ? [{ index, node }] : [])) as Array<{
+        index: number;
+        node: EditorWaypointNode;
+      }>,
+    [nodes],
+  );
+  const segmentEntries = useMemo<EditorSegmentEntry[]>(() => {
+    const entries: EditorSegmentEntry[] = [];
+    let previous: { index: number; node: EditorStationNode } | null = null;
+    nodes.forEach((node, index) => {
+      if (node.kind !== 'station') {
+        return;
+      }
+      if (previous) {
+        const key = segmentOperationStatusKey(previous.node.stationSourceId, node.stationSourceId);
+        const fromIndex = previous.index;
+        const waypoints = nodes
+          .slice(fromIndex + 1, index)
+          .flatMap((item, offset) =>
+            item.kind === 'waypoint' ? [{ index: fromIndex + 1 + offset, node: item }] : [],
+          );
+        entries.push({
+          key,
+          id: `${key}\u0001${entries.length}`,
+          fromIndex,
+          fromNode: previous.node,
+          toIndex: index,
+          toNode: node,
+          waypointCount: waypoints.length,
+          waypoints,
+        });
+      }
+      previous = { index, node };
+    });
+    return entries;
+  }, [nodes]);
+  const selectedNode = useMemo(
+    () => nodes.find((node) => node.id === selectedNodeId) ?? null,
+    [nodes, selectedNodeId],
+  );
+  const selectedSegment = useMemo(
+    () => segmentEntries.find((entry) => entry.id === selectedSegmentId) ?? null,
+    [segmentEntries, selectedSegmentId],
+  );
+  const hasLayerSelection = Boolean(selectedNode || selectedSegment);
+  const segmentByFromIndex = useMemo(
+    () => new Map(segmentEntries.map((segment) => [segment.fromIndex, segment] as const)),
+    [segmentEntries],
+  );
+  const firstStationIndex = stationEntries[0]?.index ?? -1;
+  const lastStationIndex = stationEntries.at(-1)?.index ?? -1;
+  const orphanWaypointEntries = useMemo(
+    () =>
+      waypointEntries.filter(({ index }) => index < firstStationIndex || index > lastStationIndex),
+    [waypointEntries, firstStationIndex, lastStationIndex],
+  );
+  const totalRouteLength = useMemo(
+    () => getCoordinateChainLength(fullRouteResolution.coordinates),
+    [fullRouteResolution],
+  );
+  const selectedStationDetail = useMemo(() => {
+    if (!data || selectedNode?.kind !== 'station') {
+      return undefined;
+    }
+    return findTransitStationDetail(
+      data.revision.stationDetails,
+      data.line.name,
+      selectedNode.name,
+    );
+  }, [data, selectedNode]);
+  const markerCoordinateById = useMemo(() => {
+    const coordinates = new Map<string, string>();
+    if (!data) {
+      return coordinates;
+    }
+    for (const marker of data.markers) {
+      if (marker.geometry.type === 'Point') {
+        coordinates.set(marker.id, formatCoordinate(marker.geometry.coordinates));
+      }
+    }
+    return coordinates;
+  }, [data]);
+  const selectedPlatformFacilities = useMemo(() => {
+    if (!selectedStationDetail) {
+      return [];
+    }
+    const platformFloor = selectedStationDetail.layers.find(
+      (layer) => layer.type === 'platform',
+    )?.floor;
+    if (!platformFloor) {
+      return selectedStationDetail.facilities;
+    }
+    return selectedStationDetail.facilities.filter(
+      (facility) => !facility.floor || facility.floor === platformFloor,
+    );
+  }, [selectedStationDetail]);
+  const stationCoordinateTargetNode = useMemo(() => {
+    if (!stationCoordinateTargetId) {
+      return null;
+    }
+    const node = nodes.find((candidate) => candidate.id === stationCoordinateTargetId);
+    return node?.kind === 'station' ? node : null;
+  }, [nodes, stationCoordinateTargetId]);
+  const stationCoordinateTargetStation = useMemo(() => {
+    if (!data || !stationCoordinateTargetNode || stationCoordinateTargetNode.draftClientId) {
+      return undefined;
+    }
+    return data.revision.stations.find(
+      (station) => station.sourceId === stationCoordinateTargetNode.stationSourceId,
+    );
+  }, [data, stationCoordinateTargetNode]);
+  const stationDetailTargetNode = useMemo(() => {
+    if (!stationDetailTargetId) {
+      return null;
+    }
+    const node = nodes.find((candidate) => candidate.id === stationDetailTargetId);
+    return node?.kind === 'station' ? node : null;
+  }, [nodes, stationDetailTargetId]);
+  const stationDetailTarget = useMemo<TransitStationDetailSnapshot | null>(() => {
+    if (!data || !stationDetailTargetNode) {
+      return null;
+    }
+    return (
+      findTransitStationDetail(
+        data.revision.stationDetails,
+        data.line.name,
+        stationDetailTargetNode.name,
+      ) ?? {
+        sourceId: stationDetailTargetNode.stationSourceId,
+        lineName: data.line.name,
+        stationName: stationDetailTargetNode.name,
+        layers: [],
+        facilities: [],
+        transfers: [],
+        exits: [],
+        surroundingStationNames: [],
+      }
+    );
+  }, [data, stationDetailTargetNode]);
+
+  // 删除节点后同步清理失效的选中项与弹窗目标。
+  useEffect(() => {
+    if (selectedNodeId && !nodes.some((node) => node.id === selectedNodeId)) {
+      setSelectedNodeId(null);
+    }
+    if (stationCoordinateTargetId && !nodes.some((node) => node.id === stationCoordinateTargetId)) {
+      setStationCoordinateTargetId(null);
+    }
+    if (stationDetailTargetId && !nodes.some((node) => node.id === stationDetailTargetId)) {
+      setStationDetailTargetId(null);
+    }
+  }, [nodes, selectedNodeId, stationCoordinateTargetId, stationDetailTargetId]);
+
+  useEffect(() => {
+    if (selectedSegmentId && !segmentEntries.some((entry) => entry.id === selectedSegmentId)) {
+      setSelectedSegmentId(null);
+    }
+  }, [segmentEntries, selectedSegmentId]);
 
   const removeNodeAtClientPoint = useCallback(
     (clientX: number, clientY: number, hitRadius: number) => {
@@ -551,12 +736,52 @@ export function AdminTransitLineMapEditor({
     [insertionMode, mapView, viewportSize],
   );
 
+  /** 根据吸附结果生成新节点；站点优先复用已绑定该 POI 的既有站点。 */
+  const buildNodeFromSnap = (
+    kind: 'station' | 'waypoint',
+    coordinate: [number, number],
+    snapMarker: ReturnType<typeof findNearestSnapMarker>,
+  ): EditorNode => {
+    const rounded = roundCoordinate(coordinate);
+    if (kind === 'waypoint') {
+      return {
+        id: createClientId('waypoint'),
+        kind: 'waypoint',
+        coordinate: rounded,
+        direction: 'both',
+        boundPoiMarkerId: snapMarker?.id,
+        boundPoiLabel: snapMarker?.label,
+      };
+    }
+    const existingStation =
+      snapMarker && data ? findStationBoundToMarker(data.revision.stations, snapMarker) : undefined;
+    if (existingStation) {
+      return createExistingStationNode(existingStation, nodes.length);
+    }
+    const clientId = createClientId('station');
+    return {
+      id: clientId,
+      kind: 'station',
+      stationSourceId: `draft:${clientId}`,
+      draftClientId: clientId,
+      // 直接绑定现有 POI 时沿用该 POI 的名称，避免再手动填一次站名。
+      name: snapMarker?.label ?? '',
+      coordinate: rounded,
+      direction: 'both',
+      operationStatus: 'operating',
+      boundPoiMarkerId: snapMarker?.id,
+      boundPoiLabel: snapMarker?.label,
+      boundPoiCategoryId: snapMarker?.categoryId,
+    };
+  };
+
   const addNodeAtClientPoint = useCallback(
     (clientX: number, clientY: number) => {
       const stage = stageRef.current;
-      if (!stage || !data || effectiveTool === 'pan') {
+      if (!stage || !data || effectiveTool === 'pan' || effectiveTool === 'select') {
         return;
       }
+      setSelectedSegmentId(null);
       const rect = stage.getBoundingClientRect();
       const coordinate = unprojectClientPoint(clientX, clientY, rect, mapView);
       const snapCandidates = effectiveTool === 'station' ? stationSnapCandidates : pointMarkers;
@@ -599,70 +824,17 @@ export function AdminTransitLineMapEditor({
         return;
       }
 
-      if (effectiveTool === 'waypoint') {
-        setNodes((current) =>
-          insertEditorNode(
-            current,
-            {
-              id: createClientId('waypoint'),
-              kind: 'waypoint',
-              coordinate: roundCoordinate(resolvedCoordinate),
-              direction: 'both',
-              boundPoiMarkerId: snapMarker?.id,
-              boundPoiLabel: snapMarker?.label,
-            },
-            insertionMode,
-            routeMode,
-            roadGraph,
-          ),
+      const node = buildNodeFromSnap(effectiveTool, resolvedCoordinate, snapMarker);
+      setNodes((current) => insertEditorNode(current, node, insertionMode, routeMode, roadGraph));
+      if (node.kind === 'station') {
+        setStatus(
+          snapMarker
+            ? `已添加站点“${node.name || snapMarker.label}”（绑定该 POI），可在检查器改名。`
+            : '已添加新站点，请在检查器填写站名。',
         );
+      } else {
         setStatus(snapMarker ? `已添加吸附到“${snapMarker.label}”的途径点。` : '已添加途径点。');
-        return;
       }
-
-      const existingStation = snapMarker
-        ? findStationBoundToMarker(data.revision.stations, snapMarker)
-        : undefined;
-      if (existingStation) {
-        setNodes((current) =>
-          insertEditorNode(
-            current,
-            createExistingStationNode(existingStation, current.length),
-            insertionMode,
-            routeMode,
-            roadGraph,
-          ),
-        );
-        setStatus(`已添加站点“${existingStation.name}”。`);
-        return;
-      }
-      const clientId = createClientId('station');
-      setNodes((current) =>
-        insertEditorNode(
-          current,
-          {
-            id: clientId,
-            kind: 'station',
-            stationSourceId: `draft:${clientId}`,
-            draftClientId: clientId,
-            // 直接绑定现有 POI 时沿用该 POI 的名称，避免再手动填一次站名。
-            name: snapMarker?.label ?? '',
-            coordinate: roundCoordinate(resolvedCoordinate),
-            direction: 'both',
-            boundPoiMarkerId: snapMarker?.id,
-            boundPoiLabel: snapMarker?.label,
-            boundPoiCategoryId: snapMarker?.categoryId,
-          },
-          insertionMode,
-          routeMode,
-          roadGraph,
-        ),
-      );
-      setStatus(
-        snapMarker
-          ? `已添加站点“${snapMarker.label}”（绑定该 POI），可在列表中改名。`
-          : '已添加新站点，请在列表填写站名。',
-      );
     },
     [
       data,
@@ -678,6 +850,51 @@ export function AdminTransitLineMapEditor({
       stationSnapCandidates,
     ],
   );
+
+  /** 图层树底部的结构操作：在画布中心新增节点，自动套用当前吸附与插入模式。 */
+  const addNodeFromPanel = (kind: 'station' | 'waypoint') => {
+    const stage = stageRef.current;
+    if (!stage || !data) {
+      return;
+    }
+    const rect = stage.getBoundingClientRect();
+    const coordinate = unprojectClientPoint(
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2,
+      rect,
+      mapView,
+    );
+    const snapCandidates = kind === 'station' ? stationSnapCandidates : pointMarkers;
+    const snapMarker = effectiveSnapEnabled
+      ? findNearestSnapMarker(coordinate, snapCandidates, mapView.zoom, 48)
+      : undefined;
+    const node = buildNodeFromSnap(
+      kind,
+      snapMarker?.geometry.coordinates ?? coordinate,
+      snapMarker,
+    );
+    setNodes((current) => insertEditorNode(current, node, insertionMode, routeMode, roadGraph));
+    setSelectedNodeId(node.id);
+    setSelectedSegmentId(null);
+    setStatus(kind === 'station' ? '已在画布中心添加站点。' : '已在画布中心添加途径点。');
+  };
+
+  /** 把当前定位追加为途径点，工具栏与移动端侧栏共用。 */
+  const appendLocationWaypoint = (coordinate: [number, number]) => {
+    const waypoint: EditorWaypointNode = {
+      id: createClientId('waypoint'),
+      kind: 'waypoint',
+      coordinate: roundCoordinate(coordinate),
+      direction: 'both',
+    };
+    setNodes((current) => insertEditorNode(current, waypoint, insertionMode, routeMode, roadGraph));
+    setMapView((current) => ({
+      ...current,
+      centerX: coordinate[0],
+      centerZ: coordinate[1],
+    }));
+    setStatus('已追加当前位置为途径点。');
+  };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button === 2) {
@@ -728,10 +945,12 @@ export function AdminTransitLineMapEditor({
         );
     const hitNode = hitNodeIndex >= 0 ? nodes[hitNodeIndex] : undefined;
     const canMoveNode = Boolean(
-      hitNode && (effectiveTool === 'move' || hitNode.kind === effectiveTool),
+      hitNode && (effectiveTool === 'select' || hitNode.kind === effectiveTool),
     );
-    if (effectiveTool === 'move' && !canMoveNode) {
-      // 拖移端点工具下点击空白既不新增节点，也不接管指针。
+    if (effectiveTool === 'select' && !canMoveNode) {
+      // 选择工具下点击空白既不新增节点，也不接管指针，只清空选中。
+      setSelectedNodeId(null);
+      setSelectedSegmentId(null);
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
@@ -883,6 +1102,7 @@ export function AdminTransitLineMapEditor({
           }),
         );
         setSelectedNodeId(gesture.nodeId);
+        setSelectedSegmentId(null);
       }
       return;
     }
@@ -918,24 +1138,25 @@ export function AdminTransitLineMapEditor({
     }
     if (gesture.kind === 'add' && !gesture.moved && !gesture.longPressTriggered) {
       addNodeAtClientPoint(event.clientX, event.clientY);
-    } else if (gesture.kind === 'move-node' && gesture.moved) {
-      const dragStart = nodeDragStartRef.current;
-      if (dragStart) {
-        undoStackRef.current.push(dragStart);
-        if (undoStackRef.current.length > 100) {
-          undoStackRef.current.shift();
+    } else if (gesture.kind === 'move-node') {
+      if (gesture.moved) {
+        const dragStart = nodeDragStartRef.current;
+        if (dragStart) {
+          snapshotHistory.push(dragStart);
         }
-        redoStackRef.current = [];
+        setStatus(
+          gesture.snapMarkerLabel
+            ? `已移动到“${gesture.snapMarkerLabel}”并绑定该 POI；保存线路后写入坐标。`
+            : gesture.snapMarkerLabel === null && gesture.hadPoiBinding
+              ? '已拖离原 POI，绑定已解除；保存线路后写入坐标。'
+              : '已移动节点；保存线路后写入坐标。',
+        );
       }
-      nodeDragStartRef.current = null;
-      setSelectedNodeId(null);
-      setStatus(
-        gesture.snapMarkerLabel
-          ? `已移动到“${gesture.snapMarkerLabel}”并绑定该 POI；保存线路后写入坐标。`
-          : gesture.snapMarkerLabel === null && gesture.hadPoiBinding
-            ? '已拖离原 POI，绑定已解除；保存线路后写入坐标。'
-            : '已移动节点；保存线路后写入坐标。',
-      );
+      // 单击节点即选中；拖动结束后也保持选中，方便继续在检查器里改坐标。
+      if (gesture.nodeId) {
+        setSelectedNodeId(gesture.nodeId);
+        setSelectedSegmentId(null);
+      }
     }
     nodeDragStartRef.current = null;
     gestureRef.current = null;
@@ -967,9 +1188,45 @@ export function AdminTransitLineMapEditor({
     setNodes((current) => current.map((node) => (node.id === id ? updater(node) : node)));
   };
 
+  /** 检查器里的坐标输入：保留另一轴，缺少坐标时以当前视野中心作为基准。 */
+  const updateSelectedNodeCoordinate = (axis: 0 | 1, text: string) => {
+    if (!selectedNode || text.trim() === '') {
+      return;
+    }
+    const value = Number(text);
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    updateNode(selectedNode.id, (node) => {
+      const coordinate = node.coordinate ?? [mapView.centerX, mapView.centerZ];
+      return {
+        ...node,
+        coordinate: axis === 0 ? [value, coordinate[1]] : [coordinate[0], value],
+      };
+    });
+  };
+
+  const selectNode = (id: string) => {
+    setSelectedNodeId(id);
+    setSelectedSegmentId(null);
+  };
+
+  const selectSegment = (key: string) => {
+    setSelectedSegmentId(key);
+    setSelectedNodeId(null);
+  };
+
+  const clearSelection = () => {
+    setSelectedNodeId(null);
+    setSelectedSegmentId(null);
+    closeInspector();
+  };
+
+  // 双击图层行时把焦点送进检查器的第一个字段（移动端会顺势展开属性抽屉）。
+  const focusInspector = useEditorInspectorFocus(inspectorRef);
+
   const focusNode = (node: EditorNode) => {
-    setSelectedNodeId(node.id);
-    setActiveTool(node.kind);
+    selectNode(node.id);
     const boundMarker = data?.markers.find(
       (marker) =>
         marker.geometry.type === 'Point' &&
@@ -1010,31 +1267,90 @@ export function AdminTransitLineMapEditor({
     });
   };
 
-  const save = async () => {
-    if (!data) {
+  const duplicateNodeById = (id: string) => {
+    const index = nodes.findIndex((node) => node.id === id);
+    const source = nodes[index];
+    if (!source) {
       return;
+    }
+    let copy: EditorNode;
+    if (source.kind === 'station') {
+      // 既有站点复制成新的草稿站点，避免保存时把同一 stationSourceId 重复写入序列。
+      const clientId = createClientId('station');
+      copy = {
+        ...source,
+        id: clientId,
+        stationSourceId: `draft:${clientId}`,
+        draftClientId: clientId,
+        name: source.name.trim() ? `${source.name} 副本` : '',
+      };
+    } else {
+      copy = { ...source, id: createClientId('waypoint') };
+    }
+    setNodes((current) => {
+      const next = [...current];
+      next.splice(index + 1, 0, copy);
+      return next;
+    });
+    selectNode(copy.id);
+    setStatus('已创建副本。');
+  };
+
+  const removeNodeById = (id: string) => {
+    setNodes((current) => current.filter((node) => node.id !== id));
+    if (selectedNodeId === id) {
+      setSelectedNodeId(null);
+    }
+  };
+
+  const moveNodeById = (id: string, offset: -1 | 1) => {
+    const index = nodes.findIndex((node) => node.id === id);
+    if (index < 0) {
+      return;
+    }
+    moveNode(index, offset);
+  };
+
+  /** 站点弹窗保存后同步服务端版本，保证后续线路保存使用最新站点与详情。 */
+  const applyRevision = (revision: TransitDataRevision) => {
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            revision,
+            line:
+              revision.lines.find((line) => line.sourceId === current.line.sourceId) ??
+              current.line,
+          }
+        : current,
+    );
+  };
+
+  const save = async (): Promise<void | boolean> => {
+    if (!data) {
+      return false;
     }
     const stationNodes = nodes.filter((node): node is EditorStationNode => node.kind === 'station');
     if (nodes[0]?.kind !== 'station' || nodes.at(-1)?.kind !== 'station') {
       setStatus('线路必须以站点开始并以站点结束。');
-      return;
+      return false;
     }
     if (stationNodes.length < 2) {
       setStatus('线路至少需要两个站点。');
-      return;
+      return false;
     }
     const unnamedDraft = stationNodes.find((node) => node.draftClientId && !node.name.trim());
     if (unnamedDraft) {
       setStatus('请先填写所有新站点的站名。');
-      return;
+      return false;
     }
     if (stationNodes.some((node) => !node.coordinate)) {
       setStatus('线路中仍有站点缺少地图坐标。');
-      return;
+      return false;
     }
     if (routeMode === 'road' && fullRouteResolution.unresolvedSegmentCount > 0) {
       setStatus('沿路模式仍有节点无法通过道路连通，请补充途径点或切换为折线模式。');
-      return;
+      return false;
     }
 
     const segmentPaths = buildEditorSegmentPaths(
@@ -1062,7 +1378,7 @@ export function AdminTransitLineMapEditor({
     );
     const payload = {
       mode: data.line.mode,
-      name: data.line.name,
+      name: lineName.trim() || data.line.name,
       color: data.line.color,
       routeMode,
       routeNodes,
@@ -1090,9 +1406,11 @@ export function AdminTransitLineMapEditor({
                 name: node.name.trim(),
                 x: node.coordinate[0],
                 z: node.coordinate[1],
+                operationStatus: node.operationStatus ?? 'operating',
                 boundPoiMarkerId: node.boundPoiMarkerId,
                 boundPoiLabel: node.boundPoiLabel,
                 boundPoiCategoryId: node.boundPoiCategoryId,
+                boundPoiRefs: node.boundPoiRefs?.length ? node.boundPoiRefs : undefined,
               },
             ]
           : [],
@@ -1109,10 +1427,19 @@ export function AdminTransitLineMapEditor({
           return false;
         }
         const original = originalStationById.get(node.stationSourceId);
-        return original?.x !== node.coordinate[0] || original?.z !== node.coordinate[1];
+        const coordinateChanged =
+          original?.x !== node.coordinate[0] || original?.z !== node.coordinate[1];
+        const bindingChanged = !areStationPoiBindingsEqual(
+          getStationBoundPoiRefs(original),
+          node.boundPoiRefs ?? [],
+        );
+        const statusChanged =
+          (original?.operationStatus ?? 'operating') !== (node.operationStatus ?? 'operating');
+        return coordinateChanged || bindingChanged || statusChanged;
       });
       for (const node of changedExistingStations) {
-        setStatus(`正在保存站点“${node.name}”的坐标`);
+        const original = originalStationById.get(node.stationSourceId);
+        setStatus(`正在保存站点“${node.name}”的坐标、运营状态与绑定`);
         const stationResponse = await fetch(
           appPath(
             `/api/admin/transit/datasets/${encodeURIComponent(normalizedRevisionId)}/stations/${encodeURIComponent(node.stationSourceId)}`,
@@ -1123,16 +1450,17 @@ export function AdminTransitLineMapEditor({
             body: JSON.stringify({
               x: node.coordinate![0],
               z: node.coordinate![1],
-              boundPoiMarkerId: node.boundPoiMarkerId,
-              boundPoiLabel: node.boundPoiLabel,
-              boundPoiRefs: node.boundPoiRefs?.length ? node.boundPoiRefs : undefined,
+              operationStatus: node.operationStatus ?? original?.operationStatus ?? 'operating',
+              boundPoiRefs: node.boundPoiRefs ?? [],
+              boundPoiMarkerId: node.boundPoiMarkerId ?? null,
+              boundPoiLabel: node.boundPoiLabel ?? null,
             }),
           },
         );
         if (!stationResponse.ok) {
           const stationResult = (await stationResponse.json()) as { message?: string };
           setStatus(stationResult.message ?? `站点“${node.name}”坐标保存失败。`);
-          return;
+          return false;
         }
       }
       setStatus('正在保存线路');
@@ -1149,463 +1477,1006 @@ export function AdminTransitLineMapEditor({
       const result = (await response.json()) as { message?: string };
       if (!response.ok) {
         setStatus(result.message ?? '线路保存失败。');
-        return;
+        return false;
       }
       publishAdminDataChanged({
         resource: 'transit',
         reason: 'record_updated',
         occurredAt: new Date().toISOString(),
       });
-      router.push(backToAdminHref);
+      setStatus('线路已保存。');
+      return true;
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '线路保存失败。');
+      return false;
     } finally {
       setIsSaving(false);
     }
   };
 
+  const editorTools = useMemo<EditorTool[]>(
+    () => [
+      {
+        id: 'select',
+        icon: 'near_me',
+        label: EDITOR_SHORTCUT_CATALOG.toolSelect.label,
+        shortcut: EDITOR_SHORTCUT_CATALOG.toolSelect.displayKeys[0],
+      },
+      {
+        id: 'pan',
+        icon: 'pan_tool',
+        label: EDITOR_SHORTCUT_CATALOG.toolPan.label,
+        shortcut: EDITOR_SHORTCUT_CATALOG.toolPan.displayKeys[0],
+      },
+      {
+        id: 'station',
+        icon: 'add_location_alt',
+        label: EDITOR_SHORTCUT_CATALOG.toolStation.label,
+        shortcut: EDITOR_SHORTCUT_CATALOG.toolStation.displayKeys[0],
+      },
+      {
+        id: 'waypoint',
+        icon: 'add_road',
+        label: EDITOR_SHORTCUT_CATALOG.toolWaypoint.label,
+        shortcut: EDITOR_SHORTCUT_CATALOG.toolWaypoint.displayKeys[0],
+      },
+    ],
+    [],
+  );
+
+  const removeSelectedNode = () => {
+    if (selectedNodeId) {
+      removeNodeById(selectedNodeId);
+    }
+  };
+
+  const duplicateSelectedNode = () => {
+    if (selectedNodeId) {
+      duplicateNodeById(selectedNodeId);
+    }
+  };
+
+  const moveSelectedNode = (offset: -1 | 1) => {
+    if (selectedNodeId) {
+      moveNodeById(selectedNodeId, offset);
+    }
+  };
+
+  // 业务操作随渲染刷新，注册表只负责键位分发；保存与保存并返回由外壳统一处理。
+  useEditorShortcuts([
+    defineShortcut('toolSelect', () => setActiveTool('select')),
+    defineShortcut('toolPan', () => setActiveTool('pan')),
+    defineShortcut('toolMove', () => setActiveTool('select')),
+    defineShortcut('toolStation', () => setActiveTool('station')),
+    defineShortcut('toolWaypoint', () => setActiveTool('waypoint')),
+    defineShortcut('insertPrepend', () => setInsertionMode('prepend')),
+    defineShortcut('insertAppend', () => setInsertionMode('append')),
+    defineShortcut('insertNearest', () => setInsertionMode('nearest')),
+    defineShortcut('undo', undoNodes),
+    defineShortcut('redo', redoNodes),
+    defineShortcut('redoY', redoNodes),
+    defineShortcut('duplicateSelection', duplicateSelectedNode),
+    defineShortcut('moveUp', () => moveSelectedNode(-1)),
+    defineShortcut('moveDown', () => moveSelectedNode(1)),
+    defineShortcut('deleteSelection', removeSelectedNode),
+    defineShortcut('deleteSelection', removeSelectedNode, {
+      id: `${EDITOR_SHORTCUT_CATALOG.deleteSelection.id}-backspace`,
+      keys: 'backspace',
+    }),
+  ]);
+
+  // 工具栏分组的单一来源：宽屏平铺到各自胶囊，窄屏收进各自的溢出菜单。
+  const insertionActionItems: EditorToolbarOverflowItem[] = [
+    {
+      id: 'prepend',
+      icon: 'first_page',
+      label: '反向追加模式（[）',
+      active: insertionMode === 'prepend',
+      onClick: () => setInsertionMode('prepend'),
+    },
+    {
+      id: 'append',
+      icon: 'last_page',
+      label: '追加模式（]）',
+      active: insertionMode === 'append',
+      onClick: () => setInsertionMode('append'),
+    },
+    {
+      id: 'nearest',
+      icon: 'conversion_path',
+      label: '就近模式（\\）',
+      active: insertionMode === 'nearest',
+      onClick: () => setInsertionMode('nearest'),
+    },
+  ];
+
+  const historyActionItems: EditorToolbarOverflowItem[] = [
+    {
+      id: 'undo',
+      icon: 'undo',
+      label: '撤销（Ctrl+Z）',
+      onClick: undoNodes,
+    },
+    {
+      id: 'redo',
+      icon: 'redo',
+      label: '重做（Ctrl+Shift+Z）',
+      onClick: redoNodes,
+    },
+  ];
+
+  const viewActionItems: EditorToolbarOverflowItem[] = [
+    {
+      id: 'snap',
+      icon: 'location_searching',
+      label: '切换吸附（Shift）',
+      active: snapEnabled,
+      onClick: () => setSnapEnabled((current) => !current),
+    },
+  ];
+
+  const locationActionItems: EditorToolbarOverflowItem[] = [
+    {
+      id: 'location',
+      icon: 'my_location',
+      label: '使用当前位置',
+      onClick: () => toolbarLocationProxyRef.current?.querySelector('button')?.click(),
+    },
+  ];
+
+  // 宽屏时工具胶囊移入标题栏；窄屏仍浮在画布上，所有非工具组统一收进一个图标菜单。
+  const renderEditorToolbar = (variant: 'full' | 'compact', inHeader: boolean) => (
+    <EditorToolbar
+      activeToolId={activeTool}
+      ariaLabel="线路编辑工具"
+      className={inHeader ? 'is-in-header' : undefined}
+      panels={{
+        visible: panelsVisible,
+        onToggle: togglePanels,
+        label: panelsVisible ? '隐藏全部面板' : '显示全部面板',
+      }}
+      onToolChange={(toolId) => setActiveTool(toolId as LineEditorTool)}
+      sections={buildEditorToolbarSections({
+        variant,
+        tools: editorTools,
+        toolsAriaLabel: '线路编辑工具',
+        compactAriaLabel: '线路编辑操作',
+        groups: [
+          { id: 'insertion', ariaLabel: '插入模式', items: insertionActionItems },
+          { id: 'history', ariaLabel: '历史', items: historyActionItems },
+          { id: 'view', ariaLabel: '视图', items: viewActionItems },
+          { id: 'location', ariaLabel: '定位', items: locationActionItems },
+        ],
+      })}
+    />
+  );
+
   if (!data) {
     return (
-      <main className="transit-visual-editor is-loading">
-        <span className="material-symbols-outlined" aria-hidden="true">
-          route
-        </span>
-        <p>{status}</p>
-        <Link href={backToAdminHref}>返回线路后台</Link>
-      </main>
+      <EditorLoadingState
+        backHref={backToAdminHref}
+        backLabel="返回线路后台"
+        icon="route"
+        status={status}
+      />
     );
   }
 
   return (
-    <main className="transit-visual-editor">
-      <SecondaryPageHeader
-        backHref={backToAdminPath}
-        secondaryActions={
-          <button
-            className="secondary-action-button is-primary"
-            type="button"
-            disabled={isSaving}
-            onClick={() => void save()}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              save
-            </span>
-            <span>保存</span>
-          </button>
-        }
-        title={`编辑${data.line.name}`}
-      />
-
+    <VisualEditorShell
+      backHref={backToAdminPath}
+      editorKind="transit-line"
+      headerTools={
+        <EditorHeaderToolbar
+          compact={renderEditorToolbar('compact', true)}
+          full={renderEditorToolbar('full', true)}
+        />
+      }
+      isBusy={isSaving}
+      onSave={() => save()}
+      sessionId={`transit-line:${normalizedRevisionId}:${normalizedLineSourceId}`}
+      title={`编辑${lineName || data.line.name}`}
+      workspace
+    >
       <div
-        className={`transit-visual-map-stage is-tool-${effectiveTool}`}
-        ref={stageRef}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          removeNodeAtClientPoint(event.clientX, event.clientY, 28);
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={finishPointerGesture}
-        onPointerCancel={finishPointerGesture}
-        onWheel={handleWheel}
+        className={`transit-visual-workspace is-tool-${effectiveTool}${panelStateClass}${
+          hasLayerSelection ? ' has-layer-selection' : ''
+        }`}
       >
-        <div className="transit-visual-map-tiles" aria-hidden="true">
-          {visibleTiles.map((tile) => (
-            <LayeredMapTile
-              className="transit-visual-map-tile"
-              fallbackUrl={tile.fallbackUrl}
-              freshUrl={tile.freshUrl}
-              key={tile.id}
-              tileKey={tile.id}
-              style={{
-                height: tile.displaySize,
-                left: tile.left,
-                top: tile.top,
-                width: tile.displaySize,
-              }}
-            />
-          ))}
+        <div
+          className={`transit-visual-map-stage is-tool-${effectiveTool}`}
+          ref={stageRef}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            removeNodeAtClientPoint(event.clientX, event.clientY, 28);
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={finishPointerGesture}
+          onPointerCancel={finishPointerGesture}
+          onWheel={handleWheel}
+        >
+          <div className="transit-visual-map-tiles" aria-hidden="true">
+            {visibleTiles.map((tile) => (
+              <LayeredMapTile
+                className="transit-visual-map-tile"
+                fallbackUrl={tile.fallbackUrl}
+                freshUrl={tile.freshUrl}
+                key={tile.id}
+                tileKey={tile.id}
+                style={{
+                  height: tile.displaySize,
+                  left: tile.left,
+                  top: tile.top,
+                  width: tile.displaySize,
+                }}
+              />
+            ))}
+          </div>
+          <svg className="transit-visual-map-overlay" aria-label="线路地图预览">
+            {data.markers.filter(isRoadLinearMarker).map((marker) => {
+              const coordinates = getLinearMarkerCoordinates(marker);
+              const points = projectCoordinateChain(coordinates, mapView, viewportSize);
+              return points ? (
+                <polyline className="transit-visual-road" points={points} key={marker.id} />
+              ) : null;
+            })}
+            {resolvedRouteCoordinates.length >= 2 ? (
+              <polyline
+                className="transit-visual-route"
+                points={
+                  projectCoordinateChain(resolvedRouteCoordinates, mapView, viewportSize) ?? ''
+                }
+                style={{ '--visual-line-color': data.line.color ?? '#2f9e85' } as CSSProperties}
+              />
+            ) : null}
+            {pointMarkers.map((marker) => {
+              const point = projectWorldCoordinate(
+                marker.geometry.coordinates,
+                mapView,
+                viewportSize,
+              );
+              const modeMatched = modeMatchedMarkerIds.has(marker.id);
+              const iconUrl = markerIconUrlById.get(marker.id) ?? '';
+              const iconSize = modeMatched ? 20 : 12;
+              return isPointVisible(point, viewportSize, 30) ? (
+                <g
+                  className={`transit-visual-poi${modeMatched ? ' is-mode-match' : ''}`}
+                  key={marker.id}
+                  style={
+                    {
+                      '--visual-mode-color': transitModeSemanticColors[data.line.mode],
+                    } as CSSProperties
+                  }
+                  transform={`translate(${point[0]} ${point[1]})`}
+                >
+                  {iconUrl ? (
+                    <image
+                      href={iconUrl}
+                      height={iconSize}
+                      preserveAspectRatio="xMidYMid meet"
+                      width={iconSize}
+                      x={-iconSize / 2}
+                      y={-iconSize / 2}
+                    />
+                  ) : (
+                    <circle r={modeMatched ? 4 : 2} />
+                  )}
+                  {modeMatched && !isStationAccessMarker(marker) ? (
+                    <text x={iconSize / 2 + 4} y="4">
+                      {formatVisualMarkerLabel(marker.label)}
+                    </text>
+                  ) : null}
+                  <title>{marker.label}</title>
+                </g>
+              ) : null;
+            })}
+            {previewNodes.map((node, index) => {
+              if (!node.coordinate) {
+                return null;
+              }
+              const point = projectWorldCoordinate(node.coordinate, mapView, viewportSize);
+              if (!isPointVisible(point, viewportSize, 40)) {
+                return null;
+              }
+              return (
+                <g
+                  className={
+                    node.kind === 'station'
+                      ? 'transit-visual-node is-station'
+                      : 'transit-visual-node is-waypoint'
+                  }
+                  key={node.id}
+                  transform={`translate(${point[0]} ${point[1]})`}
+                >
+                  <circle r={node.kind === 'station' ? 7 : 5} />
+                  <text y="-10">{node.kind === 'station' ? index + 1 : '·'}</text>
+                </g>
+              );
+            })}
+          </svg>
         </div>
-        <svg className="transit-visual-map-overlay" aria-label="线路地图预览">
-          {data.markers.filter(isRoadLinearMarker).map((marker) => {
-            const coordinates = getLinearMarkerCoordinates(marker);
-            const points = projectCoordinateChain(coordinates, mapView, viewportSize);
-            return points ? (
-              <polyline className="transit-visual-road" points={points} key={marker.id} />
-            ) : null;
-          })}
-          {resolvedRouteCoordinates.length >= 2 ? (
-            <polyline
-              className="transit-visual-route"
-              points={projectCoordinateChain(resolvedRouteCoordinates, mapView, viewportSize) ?? ''}
-              style={{ '--visual-line-color': data.line.color ?? '#2f9e85' } as CSSProperties}
-            />
-          ) : null}
-          {pointMarkers.map((marker) => {
-            const point = projectWorldCoordinate(
-              marker.geometry.coordinates,
-              mapView,
-              viewportSize,
-            );
-            const modeMatched = isTransitPoiMarkerCompatibleWithStation(marker, [data.line.mode]);
-            return isPointVisible(point, viewportSize, 30) ? (
-              <g
-                className={`transit-visual-poi${modeMatched ? ' is-mode-match' : ''}`}
-                key={marker.id}
-                style={
-                  {
-                    '--visual-mode-color': transitModeSemanticColors[data.line.mode],
-                  } as CSSProperties
-                }
-                transform={`translate(${point[0]} ${point[1]})`}
-              >
-                <circle r={modeMatched ? 5 : 3.5} />
-                {modeMatched ? (
-                  <text x="9" y="4">
-                    {formatVisualMarkerLabel(marker.label)}
-                  </text>
-                ) : null}
-                <title>{marker.label}</title>
-              </g>
-            ) : null;
-          })}
-          {previewNodes.map((node, index) => {
-            if (!node.coordinate) {
-              return null;
-            }
-            const point = projectWorldCoordinate(node.coordinate, mapView, viewportSize);
-            if (!isPointVisible(point, viewportSize, 40)) {
-              return null;
-            }
-            return (
-              <g
-                className={
-                  node.kind === 'station'
-                    ? 'transit-visual-node is-station'
-                    : 'transit-visual-node is-waypoint'
-                }
-                key={node.id}
-                transform={`translate(${point[0]} ${point[1]})`}
-              >
-                <circle r={node.kind === 'station' ? 7 : 5} />
-                <text y="-10">{node.kind === 'station' ? index + 1 : '·'}</text>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
 
-      <aside
-        className={`transit-visual-route-panel${routePanelCollapsed ? ' is-collapsed' : ''}`}
-        aria-label="站点和途径点列表"
-      >
-        <div className="transit-visual-route-panel-heading">
-          <div>
-            <strong>{data.line.name}</strong>
-            <span>{`${nodes.filter((node) => node.kind === 'station').length} 站 · ${nodes.filter((node) => node.kind === 'waypoint').length} 途径点`}</span>
-          </div>
-          <div className="transit-visual-route-panel-actions">
-            <div className="segmented-control transit-visual-route-direction">
-              <div>
-                <button
-                  className={previewDirection === 'forward' ? 'is-active' : ''}
-                  type="button"
-                  aria-label="预览正向线路"
-                  aria-pressed={previewDirection === 'forward'}
-                  title="预览正向线路（按站序）"
-                  onClick={() => setPreviewDirection('forward')}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    arrow_forward
-                  </span>
-                </button>
-                <button
-                  className={previewDirection === 'reverse' ? 'is-active' : ''}
-                  type="button"
-                  aria-label="预览反向线路"
-                  aria-pressed={previewDirection === 'reverse'}
-                  title="预览反向线路（逆站序）"
-                  onClick={() => setPreviewDirection('reverse')}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    arrow_back
-                  </span>
-                </button>
-              </div>
-            </div>
-            <div className="segmented-control transit-visual-route-mode">
-              <div>
-                <button
-                  className={routeMode === 'straight' ? 'is-active' : ''}
-                  type="button"
-                  aria-label="折线模式"
-                  aria-pressed={routeMode === 'straight'}
-                  title="折线模式"
-                  onClick={() => setRouteMode('straight')}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    polyline
-                  </span>
-                </button>
-                <button
-                  className={routeMode === 'road' ? 'is-active' : ''}
-                  type="button"
-                  aria-label="沿路模式"
-                  aria-pressed={routeMode === 'road'}
-                  title="沿路模式"
-                  onClick={() => setRouteMode('road')}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    route
-                  </span>
-                </button>
-              </div>
-            </div>
-            <button
-              className="transit-visual-route-panel-toggle"
-              type="button"
-              aria-expanded={!routePanelCollapsed}
-              aria-label={routePanelCollapsed ? '展开节点列表' : '收起节点列表'}
-              title={routePanelCollapsed ? '展开节点列表' : '收起节点列表'}
-              onClick={() => setRoutePanelCollapsed((current) => !current)}
+        {panelsVisible ? (
+          <aside className="poi-visual-layer-panel" aria-label="线路图层">
+            <EditorPanelHeading
+              meta={`${stationEntries.length} 站 · ${waypointEntries.length} 途径点 · ${segmentEntries.length} 区间`}
+              title="图层"
+              toolbar={
+                <div className="transit-visual-layer-heading-actions">
+                  <span>预览</span>
+                  <div className="segmented-control">
+                    <SegmentedControl
+                      ariaLabel="预览方向"
+                      className="transit-visual-segmented"
+                      onChange={setPreviewDirection}
+                      options={[
+                        { value: 'forward', label: '正向', title: '正向（按站序）' },
+                        { value: 'reverse', label: '反向', title: '反向（逆站序）' },
+                      ]}
+                      value={previewDirection}
+                    />
+                  </div>
+                </div>
+              }
+              withInspectorEntry
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {routePanelCollapsed ? 'expand_more' : 'expand_less'}
-              </span>
-            </button>
-          </div>
-        </div>
-        {routePanelCollapsed ? null : (
-          <div className="transit-visual-route-panel-body">
-            <p className="muted transit-visual-node-list-hint">
-              拖动站点节点会修改车站共享坐标与默认 POI，影响停靠该站的所有线路；只想调整本线路停靠
-              POI 时，请回到线路编辑弹窗的“本线路停靠 POI”设置。
-            </p>
-            <div className="transit-visual-node-list">
-              {nodes.map((node, index) => (
-                <div key={node.id}>
-                  <div
-                    className={`transit-visual-node-row is-${node.kind}${selectedNodeId === node.id ? ' is-selected' : ''}`}
-                  >
-                    <button
-                      className="transit-visual-node-focus"
-                      type="button"
-                      aria-label={
-                        node.coordinate
-                          ? `在地图定位${node.kind === 'station' ? node.name : '途径点'}`
-                          : `在地图设置${node.kind === 'station' ? node.name : '途径点'}坐标`
-                      }
-                      title={node.coordinate ? '在地图定位' : '在地图设置坐标'}
-                      onClick={() => focusNode(node)}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        {node.kind === 'station' ? 'location_on' : 'add_road'}
-                      </span>
-                    </button>
-                    <div className="transit-visual-node-main">
-                      {node.kind === 'station' && node.draftClientId ? (
-                        <input
-                          value={node.name}
-                          placeholder="填写新站点名称"
-                          aria-label={`第 ${index + 1} 个新站点名称`}
-                          onChange={(event) =>
-                            updateNode(node.id, (current) =>
+              <EditorInspectorEntry onOpen={openInspector} />
+            </EditorPanelHeading>
+            <div className="poi-visual-layer-body" ref={layerBodyRef}>
+              <p className="muted transit-visual-layer-hint">
+                站点、区间与途径点按里程顺序排列；拖动站点会修改车站共享坐标与默认
+                POI，属性检查器里可修改绑定 POI 与站内设施。
+              </p>
+              {status || routePreviewWarning ? (
+                <p className="transit-visual-panel-status" role="status">
+                  {status || routePreviewWarning}
+                </p>
+              ) : null}
+              <ul className="poi-visual-layer-tree">
+                {stationEntries.map(({ index, node }, stationOrder) => {
+                  const segment = segmentByFromIndex.get(index);
+                  return (
+                    <Fragment key={node.id}>
+                      <li>
+                        <div
+                          className={`poi-visual-layer-row${selectedNodeId === node.id ? ' is-active' : ''}`}
+                        >
+                          <button
+                            aria-pressed={selectedNodeId === node.id}
+                            className="poi-visual-layer-group"
+                            type="button"
+                            title={node.coordinate ? formatCoordinate(node.coordinate) : '缺少坐标'}
+                            onClick={() => focusNode(node)}
+                            onDoubleClick={() => {
+                              focusNode(node);
+                              focusInspector();
+                            }}
+                          >
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              location_on
+                            </span>
+                            <span className="poi-visual-layer-label">
+                              {node.name || '未命名站点'}
+                            </span>
+                            <span className="poi-visual-layer-count">{stationOrder + 1}</span>
+                          </button>
+                          <TransitLayerRowActions
+                            canMoveDown={index < nodes.length - 1}
+                            canMoveUp={index > 0}
+                            onDuplicate={() => duplicateNodeById(node.id)}
+                            onMoveDown={() => moveNode(index, 1)}
+                            onMoveUp={() => moveNode(index, -1)}
+                            onRemove={() => removeNodeById(node.id)}
+                          />
+                        </div>
+                      </li>
+                      {segment ? (
+                        <li key={segment.id}>
+                          <div
+                            className={`poi-visual-layer-row${
+                              selectedSegmentId === segment.id ? ' is-active' : ''
+                            }`}
+                          >
+                            <button
+                              aria-pressed={selectedSegmentId === segment.id}
+                              className="poi-visual-layer-group"
+                              type="button"
+                              title={`${segment.fromNode.name} 至 ${segment.toNode.name}`}
+                              onClick={() => selectSegment(segment.id)}
+                              onDoubleClick={() => {
+                                selectSegment(segment.id);
+                                focusInspector();
+                              }}
+                            >
+                              <span className="material-symbols-outlined" aria-hidden="true">
+                                route
+                              </span>
+                              <span className="poi-visual-layer-label">
+                                {`区间 ${stationOrder + 1} · ${segment.fromNode.name} → ${segment.toNode.name}`}
+                              </span>
+                              <span className="poi-visual-layer-count">
+                                {`${segment.waypointCount} 途经`}
+                              </span>
+                            </button>
+                          </div>
+                          {segment.waypoints.length > 0 ? (
+                            <ul className="poi-visual-layer-points">
+                              {segment.waypoints.map(({ index: waypointIndex, node: waypoint }) => (
+                                <li key={waypoint.id}>
+                                  <div
+                                    className={`poi-visual-layer-row${
+                                      selectedNodeId === waypoint.id ? ' is-active' : ''
+                                    }`}
+                                  >
+                                    <button
+                                      aria-pressed={selectedNodeId === waypoint.id}
+                                      className="poi-visual-layer-point"
+                                      type="button"
+                                      title={formatCoordinate(waypoint.coordinate)}
+                                      onClick={() => focusNode(waypoint)}
+                                      onDoubleClick={() => {
+                                        focusNode(waypoint);
+                                        focusInspector();
+                                      }}
+                                    >
+                                      <span className="poi-visual-layer-label">
+                                        {`途径点 ${waypointIndex + 1}`}
+                                      </span>
+                                      <span className="poi-visual-layer-coordinate">
+                                        {formatCoordinate(waypoint.coordinate)}
+                                      </span>
+                                    </button>
+                                    <TransitLayerRowActions
+                                      canMoveDown={waypointIndex < nodes.length - 1}
+                                      canMoveUp={waypointIndex > 0}
+                                      onDuplicate={() => duplicateNodeById(waypoint.id)}
+                                      onMoveDown={() => moveNode(waypointIndex, 1)}
+                                      onMoveUp={() => moveNode(waypointIndex, -1)}
+                                      onRemove={() => removeNodeById(waypoint.id)}
+                                    />
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </li>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+                {orphanWaypointEntries.length > 0 ? (
+                  <li>
+                    <p className="transit-visual-layer-section-title">未归属途径点</p>
+                    <ul className="poi-visual-layer-points">
+                      {orphanWaypointEntries.map(({ index, node }) => (
+                        <li key={node.id}>
+                          <div
+                            className={`poi-visual-layer-row${selectedNodeId === node.id ? ' is-active' : ''}`}
+                          >
+                            <button
+                              aria-pressed={selectedNodeId === node.id}
+                              className="poi-visual-layer-point"
+                              type="button"
+                              title={formatCoordinate(node.coordinate)}
+                              onClick={() => focusNode(node)}
+                              onDoubleClick={() => {
+                                focusNode(node);
+                                focusInspector();
+                              }}
+                            >
+                              <span className="poi-visual-layer-label">{`途径点 ${index + 1}`}</span>
+                              <span className="poi-visual-layer-coordinate">
+                                {formatCoordinate(node.coordinate)}
+                              </span>
+                            </button>
+                            <TransitLayerRowActions
+                              canMoveDown={index < nodes.length - 1}
+                              canMoveUp={index > 0}
+                              onDuplicate={() => duplicateNodeById(node.id)}
+                              onMoveDown={() => moveNode(index, 1)}
+                              onMoveUp={() => moveNode(index, -1)}
+                              onRemove={() => removeNodeById(node.id)}
+                            />
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ) : null}
+              </ul>
+            </div>
+            <div className="poi-visual-layer-footer">
+              <button type="button" onClick={() => addNodeFromPanel('station')}>
+                添加站点
+              </button>
+              <button type="button" onClick={() => addNodeFromPanel('waypoint')}>
+                添加途径点
+              </button>
+            </div>
+          </aside>
+        ) : null}
+
+        {panelsVisible ? (
+          <aside className="poi-visual-inspector" aria-label="属性检查器" ref={inspectorRef}>
+            <EditorPanelHeading
+              meta={
+                selectedNode
+                  ? selectedNode.coordinate
+                    ? formatCoordinate(selectedNode.coordinate)
+                    : '缺少坐标'
+                  : selectedSegment
+                    ? `${selectedSegment.waypointCount} 个途径点`
+                    : `${stationEntries.length} 站 · ${formatRouteLength(totalRouteLength)}`
+              }
+              title={
+                selectedNode
+                  ? selectedNode.kind === 'station'
+                    ? '站点属性'
+                    : '途径点属性'
+                  : selectedSegment
+                    ? '区间属性'
+                    : '全局属性'
+              }
+            >
+              <button
+                aria-label="返回图层"
+                className="poi-visual-inspector-back"
+                onClick={clearSelection}
+                title="返回图层"
+                type="button"
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  arrow_back
+                </span>
+              </button>
+            </EditorPanelHeading>
+            <div className="poi-visual-coordinate-panel-body">
+              {selectedNode ? (
+                <>
+                  <div className="poi-visual-inspector-heading">
+                    <strong>
+                      {selectedNode.kind === 'station'
+                        ? selectedNode.name || '未命名站点'
+                        : `途径点 ${nodes.findIndex((node) => node.id === selectedNode.id) + 1}`}
+                    </strong>
+                    <span>{selectedNode.kind === 'station' ? '站点' : '途径点'}</span>
+                  </div>
+                  {selectedNode.kind === 'station' && selectedNode.draftClientId ? (
+                    <label className="material-field">
+                      <span>站名</span>
+                      <input
+                        placeholder="填写新站点名称"
+                        value={selectedNode.name}
+                        onChange={(event) =>
+                          updateNode(selectedNode.id, (current) =>
+                            current.kind === 'station'
+                              ? { ...current, name: event.currentTarget.value }
+                              : current,
+                          )
+                        }
+                      />
+                    </label>
+                  ) : null}
+                  <div className="poi-visual-point-fields">
+                    <label className="material-field">
+                      <span>X</span>
+                      <input
+                        inputMode="decimal"
+                        value={selectedNode.coordinate?.[0] ?? ''}
+                        onChange={(event) =>
+                          updateSelectedNodeCoordinate(0, event.currentTarget.value)
+                        }
+                      />
+                    </label>
+                    <label className="material-field">
+                      <span>Z</span>
+                      <input
+                        inputMode="decimal"
+                        value={selectedNode.coordinate?.[1] ?? ''}
+                        onChange={(event) =>
+                          updateSelectedNodeCoordinate(1, event.currentTarget.value)
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="transit-visual-field">
+                    <span>方向</span>
+                    <div className="segmented-control">
+                      <SegmentedControl
+                        ariaLabel="节点方向"
+                        className="transit-visual-segmented"
+                        onChange={(direction) =>
+                          updateNode(selectedNode.id, (current) => ({
+                            ...current,
+                            direction,
+                          }))
+                        }
+                        options={[
+                          { value: 'both', label: '双向' },
+                          { value: 'down', label: '仅正向' },
+                          { value: 'up', label: '仅反向' },
+                        ]}
+                        value={selectedNode.direction}
+                      />
+                    </div>
+                  </div>
+                  {selectedNode.kind === 'station' ? (
+                    <div className="transit-visual-field">
+                      <span>运营状态</span>
+                      <div className="segmented-control">
+                        <SegmentedControl
+                          ariaLabel="站点运营状态"
+                          className="transit-visual-segmented"
+                          onChange={(operationStatus) =>
+                            updateNode(selectedNode.id, (current) =>
                               current.kind === 'station'
-                                ? { ...current, name: event.currentTarget.value }
+                                ? { ...current, operationStatus }
                                 : current,
                             )
                           }
+                          options={[
+                            { value: 'operating' as const, label: '运营中' },
+                            { value: 'planned' as const, label: '规划中' },
+                            { value: 'closed' as const, label: '已关闭' },
+                          ]}
+                          value={selectedNode.operationStatus ?? 'operating'}
                         />
-                      ) : (
-                        <strong>
-                          {node.kind === 'station' ? node.name : `途径点 ${index + 1}`}
-                        </strong>
-                      )}
-                      <span>
-                        {node.coordinate ? formatCoordinate(node.coordinate) : '缺少坐标'}
-                        {node.boundPoiLabel ? ` · ${node.boundPoiLabel}` : ''}
-                      </span>
+                      </div>
                     </div>
-                    <select
-                      value={node.direction}
-                      aria-label={`${node.kind === 'station' ? '站点' : '途径点'}方向`}
-                      onChange={(event) =>
-                        updateNode(node.id, (current) => ({
-                          ...current,
-                          direction: event.currentTarget.value as Direction,
-                        }))
-                      }
-                    >
-                      <option value="both">双向</option>
-                      <option value="down">仅正向（按站序）</option>
-                      <option value="up">仅反向（逆站序）</option>
-                    </select>
-                    <div className="transit-visual-node-actions">
-                      <button
-                        type="button"
-                        title="上移"
-                        aria-label="上移"
-                        disabled={index === 0}
-                        onClick={() => moveNode(index, -1)}
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          arrow_upward
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        title="下移"
-                        aria-label="下移"
-                        disabled={index === nodes.length - 1}
-                        onClick={() => moveNode(index, 1)}
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          arrow_downward
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        title="删除"
-                        aria-label="删除"
-                        onClick={() =>
-                          setNodes((current) => current.filter((item) => item.id !== node.id))
+                  ) : null}
+                  <dl className="poi-visual-global-summary">
+                    <div>
+                      <dt>类型</dt>
+                      <dd>{selectedNode.kind === 'station' ? '站点' : '途径点'}</dd>
+                    </div>
+                    <div>
+                      <dt>吸附对象</dt>
+                      <dd>{selectedNode.boundPoiLabel ?? '未吸附'}</dd>
+                    </div>
+                    <div>
+                      <dt>所属区间</dt>
+                      <dd>{describeNodeSegment(nodes, selectedNode.id)}</dd>
+                    </div>
+                  </dl>
+                  {selectedNode.kind === 'station' ? (
+                    <>
+                      <div className="transit-visual-inspector-section">
+                        <div className="transit-visual-inspector-section-heading">
+                          <h3 className="transit-visual-inspector-section-title">
+                            站点 POI / 出口
+                          </h3>
+                          <button
+                            className="transit-visual-inspector-edit"
+                            type="button"
+                            disabled={Boolean(selectedNode.draftClientId)}
+                            onClick={() => setStationCoordinateTargetId(selectedNode.id)}
+                          >
+                            编辑坐标与 POI
+                          </button>
+                        </div>
+                        {(selectedNode.boundPoiRefs ?? []).length === 0 ? (
+                          <p className="poi-visual-panel-empty">未绑定 POI。</p>
+                        ) : (
+                          <p className="transit-visual-summary-text">
+                            {(selectedNode.boundPoiRefs ?? [])
+                              .map((ref) => {
+                                const coordinate = markerCoordinateById.get(ref.markerId);
+                                return coordinate ? `${ref.label}（${coordinate}）` : ref.label;
+                              })
+                              .join('、')}
+                          </p>
+                        )}
+                        {selectedNode.draftClientId ? (
+                          <p className="poi-visual-panel-empty">
+                            保存站点后可在原弹窗中编辑坐标与 POI 绑定。
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="transit-visual-inspector-section">
+                        <div className="transit-visual-inspector-section-heading">
+                          <h3 className="transit-visual-inspector-section-title">站内设施</h3>
+                          <button
+                            className="transit-visual-inspector-edit"
+                            type="button"
+                            disabled={Boolean(selectedNode.draftClientId)}
+                            onClick={() => setStationDetailTargetId(selectedNode.id)}
+                          >
+                            编辑设施
+                          </button>
+                        </div>
+                        {selectedPlatformFacilities.length === 0 ? (
+                          <p className="poi-visual-panel-empty">站台层暂无设施。</p>
+                        ) : (
+                          <div className="transit-visual-facility-track">
+                            {selectedPlatformFacilities.map((facility, index) => {
+                              const icon = getStationFacilityIcon(facility);
+                              const label =
+                                TRANSIT_STATION_FACILITY_OPTIONS.find(
+                                  ([value]) => value === facility.type,
+                                )?.[1] ?? facility.type;
+                              return (
+                                <span
+                                  className="map-metro-station-facility-icon"
+                                  key={`${facility.type}-${facility.floor ?? 'default'}-${index}`}
+                                  title={label}
+                                >
+                                  <span
+                                    className="map-metro-station-facility-symbols"
+                                    aria-hidden="true"
+                                  >
+                                    {icon.assetName ? (
+                                      <i
+                                        className="map-metro-station-facility-asset"
+                                        style={
+                                          {
+                                            '--map-metro-station-facility-asset': `url("${appPath(
+                                              `/metro-facilities/plain/${icon.assetName}.svg`,
+                                            )}")`,
+                                          } as CSSProperties
+                                        }
+                                      />
+                                    ) : (
+                                      <i className="material-symbols-outlined">{icon.symbol}</i>
+                                    )}
+                                  </span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <p className="transit-visual-summary-text">
+                          {`${selectedStationDetail?.facilities.length ?? 0} 项设施 · ${
+                            selectedStationDetail?.layers.length ?? 0
+                          } 层 · ${selectedStationDetail?.exits.length ?? 0} 个出口`}
+                        </p>
+                        {selectedNode.draftClientId ? (
+                          <p className="poi-visual-panel-empty">
+                            保存站点后可在原弹窗中设置站内设施。
+                          </p>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : null}
+                </>
+              ) : selectedSegment ? (
+                <>
+                  <div className="poi-visual-inspector-heading">
+                    <strong>{`${selectedSegment.fromNode.name} → ${selectedSegment.toNode.name}`}</strong>
+                    <span>{`${selectedSegment.waypointCount} 个途径点`}</span>
+                  </div>
+                  <div className="transit-visual-field">
+                    <span>运营状态</span>
+                    <div className="segmented-control">
+                      <SegmentedControl
+                        ariaLabel="区间运营状态"
+                        className="transit-visual-segmented"
+                        onChange={(operationStatus) =>
+                          setSegmentOperationStatusByKey((current) => ({
+                            ...current,
+                            [selectedSegment.key]: operationStatus,
+                          }))
                         }
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          close
-                        </span>
-                      </button>
+                        options={[
+                          { value: 'operating', label: '已运营' },
+                          { value: 'planned', label: '规划中' },
+                          { value: 'closed', label: '已关闭' },
+                        ]}
+                        value={segmentOperationStatusByKey[selectedSegment.key] ?? 'operating'}
+                      />
                     </div>
                   </div>
-                  {node.kind === 'station' ? (
-                    <TransitSegmentOperationStatusEditor
-                      fromNode={node}
-                      nextStationNode={findNextEditorStationNode(nodes, index)}
-                      statusByKey={segmentOperationStatusByKey}
-                      travelMinutesByKey={segmentTravelMinutesByKey}
-                      onChange={(key, operationStatus) =>
-                        setSegmentOperationStatusByKey((current) => ({
-                          ...current,
-                          [key]: operationStatus,
-                        }))
-                      }
-                      onTravelMinutesChange={(key, travelMinutes) =>
+                  <label className="material-field">
+                    <span>区间用时（分钟，留空自动估算）</span>
+                    <input
+                      type="number"
+                      min={0.01}
+                      max={1440}
+                      step="0.01"
+                      value={segmentTravelMinutesByKey[selectedSegment.key] ?? ''}
+                      onChange={(event) =>
                         setSegmentTravelMinutesByKey((current) => ({
                           ...current,
-                          [key]: travelMinutes,
+                          [selectedSegment.key]: event.currentTarget.value,
                         }))
                       }
                     />
-                  ) : null}
-                </div>
-              ))}
+                  </label>
+                  <dl className="poi-visual-global-summary">
+                    <div>
+                      <dt>起点</dt>
+                      <dd>{selectedSegment.fromNode.name}</dd>
+                    </div>
+                    <div>
+                      <dt>终点</dt>
+                      <dd>{selectedSegment.toNode.name}</dd>
+                    </div>
+                    <div>
+                      <dt>途径点</dt>
+                      <dd>{`${selectedSegment.waypointCount} 个`}</dd>
+                    </div>
+                  </dl>
+                </>
+              ) : (
+                <>
+                  <div className="poi-visual-inspector-heading">
+                    <strong>全局</strong>
+                    <span>{data.line.mode}</span>
+                  </div>
+                  <label className="material-field">
+                    <span>线路名</span>
+                    <input
+                      value={lineName}
+                      onChange={(event) => setLineName(event.currentTarget.value)}
+                    />
+                  </label>
+                  <dl className="poi-visual-global-summary">
+                    <div>
+                      <dt>站点</dt>
+                      <dd>{`${stationEntries.length} 个`}</dd>
+                    </div>
+                    <div>
+                      <dt>途径点</dt>
+                      <dd>{`${waypointEntries.length} 个`}</dd>
+                    </div>
+                    <div>
+                      <dt>区间</dt>
+                      <dd>{`${segmentEntries.length} 段`}</dd>
+                    </div>
+                    <div>
+                      <dt>总长</dt>
+                      <dd>{formatRouteLength(totalRouteLength)}</dd>
+                    </div>
+                  </dl>
+                  <div className="transit-visual-field">
+                    <span>线路运行方式</span>
+                    <div className="segmented-control">
+                      <SegmentedControl
+                        ariaLabel="线路运行方式"
+                        className="transit-visual-segmented"
+                        onChange={setRouteMode}
+                        options={[
+                          { value: 'straight', label: '折线' },
+                          { value: 'road', label: '沿路' },
+                        ]}
+                        value={routeMode}
+                      />
+                    </div>
+                  </div>
+                  <p className="poi-visual-panel-empty">
+                    在画布或图层树中单击选中，双击直接进入编辑。
+                  </p>
+                </>
+              )}
             </div>
-          </div>
-        )}
-      </aside>
+          </aside>
+        ) : null}
 
-      <nav className="transit-visual-toolbar" aria-label="地图编辑工具">
-        {(
-          [
-            ['pan', 'pan_tool', '拖移地图（V）'],
-            ['move', 'open_with', '拖移端点（M）'],
-            ['station', 'add_location_alt', '站点工具（S）'],
-            ['waypoint', 'add_road', '途径点工具（R）'],
-          ] as const
-        ).map(([tool, icon, label]) => (
-          <button
-            className={activeTool === tool ? 'is-active' : ''}
-            type="button"
-            aria-label={label}
-            aria-pressed={activeTool === tool}
-            title={label}
-            key={tool}
-            onClick={() => setActiveTool(tool)}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              {icon}
-            </span>
-          </button>
-        ))}
-        <span className="transit-visual-toolbar-divider" aria-hidden="true" />
-        {(
-          [
-            ['prepend', 'first_page', '反向追加模式（[）'],
-            ['append', 'last_page', '追加模式（]）'],
-            ['nearest', 'conversion_path', '就近模式（\\）'],
-          ] as const
-        ).map(([mode, icon, label]) => (
-          <button
-            className={insertionMode === mode ? 'is-active' : ''}
-            type="button"
-            aria-label={label}
-            aria-pressed={insertionMode === mode}
-            title={label}
-            key={mode}
-            onClick={() => setInsertionMode(mode)}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              {icon}
-            </span>
-          </button>
-        ))}
-        <span className="transit-visual-toolbar-divider" aria-hidden="true" />
-        <button
-          className={snapEnabled ? 'is-active' : ''}
-          type="button"
-          aria-label="切换吸附"
-          aria-pressed={snapEnabled}
-          title="切换吸附（按住 Shift 临时反转）"
-          onClick={() => setSnapEnabled((current) => !current)}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            location_searching
-          </span>
-        </button>
-        <CurrentPlayerLocationButton
-          title="追加当前位置为途径点"
-          onUse={(coordinate) => {
-            const waypoint: EditorWaypointNode = {
-              id: createClientId('waypoint'),
-              kind: 'waypoint',
-              coordinate: roundCoordinate(coordinate),
-              direction: 'both',
-            };
-            setNodes((current) =>
-              insertEditorNode(current, waypoint, insertionMode, routeMode, roadGraph),
-            );
-            setMapView((current) => ({
-              ...current,
-              centerX: coordinate[0],
-              centerZ: coordinate[1],
-            }));
-            setStatus('已追加当前位置为途径点。');
+        {renderEditorToolbar('compact', false)}
+
+        <div className="transit-visual-rail-proxy" ref={toolbarLocationProxyRef} aria-hidden="true">
+          <CurrentPlayerLocationButton
+            title="追加当前位置为途径点"
+            onUse={appendLocationWaypoint}
+          />
+        </div>
+
+        <EditorRailBridge
+          activeToolId={activeTool}
+          ownerId="transit-line-editor"
+          panels={{ visible: panelsVisible, onToggle: togglePanels }}
+          sections={[
+            { id: 'insertion', priority: 50, items: insertionActionItems },
+            { id: 'history', priority: 70, items: historyActionItems },
+            { id: 'view', priority: 80, items: viewActionItems },
+            { id: 'location', priority: 60, items: locationActionItems },
+          ]}
+          tools={editorTools}
+          onToolChange={(toolId) => setActiveTool(toolId as LineEditorTool)}
+        />
+
+        <EditorZoomControls
+          fitLabel="适配整条线路"
+          onFit={fitView}
+          onZoomIn={() => zoomBy(0.5)}
+          onZoomOut={() => zoomBy(-0.5)}
+          scale={2 ** mapView.zoom}
+        />
+      </div>
+
+      {stationCoordinateTargetNode && stationCoordinateTargetStation ? (
+        <TransitStationCoordinateDialog
+          isBusy={stationDialogBusy}
+          mapMarkers={data.markers}
+          revision={data.revision}
+          station={stationCoordinateTargetStation}
+          tilePreviewFreshTemplate={data.freshTileTemplate}
+          tilePreviewTemplate={data.tileTemplate}
+          onClose={() => setStationCoordinateTargetId(null)}
+          onSubmit={async (payload) => {
+            setStationDialogBusy(true);
+            try {
+              const response = await fetch(
+                appPath(
+                  `/api/admin/transit/datasets/${encodeURIComponent(
+                    normalizedRevisionId,
+                  )}/stations/${encodeURIComponent(stationCoordinateTargetNode.stationSourceId)}`,
+                ),
+                {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload),
+                },
+              );
+              const result = (await response.json()) as TransitDataRevision & { message?: string };
+              if (!response.ok) {
+                return result.message ?? '站点坐标保存失败。';
+              }
+              applyRevision(result);
+              updateNode(stationCoordinateTargetNode.id, (node) =>
+                node.kind === 'station'
+                  ? {
+                      ...node,
+                      coordinate: [payload.x, payload.z],
+                      boundPoiRefs: payload.boundPoiRefs,
+                      boundPoiMarkerId: payload.boundPoiMarkerId,
+                      boundPoiLabel: payload.boundPoiLabel,
+                      boundPoiCategoryId: payload.boundPoiRefs?.[0]?.categoryId,
+                    }
+                  : node,
+              );
+              setStationCoordinateTargetId(null);
+              setStatus('站点坐标与 POI 绑定已保存。');
+              return null;
+            } finally {
+              setStationDialogBusy(false);
+            }
           }}
         />
-      </nav>
-      <nav className="transit-visual-viewport-controls" aria-label="地图视野工具">
-        <button type="button" aria-label="放大" title="放大" onClick={() => zoomBy(0.5)}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            add
-          </span>
-        </button>
-        <button type="button" aria-label="缩小" title="缩小" onClick={() => zoomBy(-0.5)}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            remove
-          </span>
-        </button>
-        <button type="button" aria-label="适配整条线路" title="适配整条线路" onClick={fitView}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            fit_screen
-          </span>
-        </button>
-      </nav>
-      {status || routePreviewWarning ? (
-        <p className="transit-visual-status" role="status">
-          {status || routePreviewWarning}
-        </p>
       ) : null}
-    </main>
+
+      {stationDetailTargetNode && stationDetailTarget ? (
+        <TransitStationDetailDialog
+          detail={stationDetailTarget}
+          isBusy={stationDialogBusy}
+          mapMarkers={data.markers}
+          revision={data.revision}
+          stationSourceId={stationDetailTargetNode.stationSourceId}
+          onClose={() => setStationDetailTargetId(null)}
+          onSubmit={async (patch) => {
+            setStationDialogBusy(true);
+            try {
+              const response = await fetch(
+                appPath(
+                  `/api/admin/transit/datasets/${encodeURIComponent(
+                    normalizedRevisionId,
+                  )}/stations/${encodeURIComponent(stationDetailTarget.sourceId)}/details`,
+                ),
+                {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    ...patch,
+                    lineSourceId: normalizedLineSourceId,
+                    stationSourceId: stationDetailTargetNode.stationSourceId,
+                  }),
+                },
+              );
+              const result = (await response.json()) as TransitDataRevision & { message?: string };
+              if (!response.ok) {
+                return result.message ?? '站内设施保存失败。';
+              }
+              applyRevision(result);
+              setStationDetailTargetId(null);
+              setStatus('站内设施已保存。');
+              return null;
+            } finally {
+              setStationDialogBusy(false);
+            }
+          }}
+        />
+      ) : null}
+    </VisualEditorShell>
   );
 }
 
@@ -1673,11 +2544,151 @@ function findNearestEditorNodeScreenIndex(
   return selectedIndex;
 }
 
-function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+/** 图层树行内操作：创建副本、上移、下移、移除，与 POI 几何工作台一致。 */
+function TransitLayerRowActions({
+  canMoveDown,
+  canMoveUp,
+  onDuplicate,
+  onMoveDown,
+  onMoveUp,
+  onRemove,
+}: Readonly<{
+  canMoveDown: boolean;
+  canMoveUp: boolean;
+  onDuplicate: () => void;
+  onMoveDown: () => void;
+  onMoveUp: () => void;
+  onRemove: () => void;
+}>) {
   return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName))
+    <EditorLayerRowActions
+      actions={[
+        {
+          id: 'duplicate',
+          icon: 'content_copy',
+          label: '创建副本',
+          title: '创建副本（Ctrl+D）',
+          onClick: onDuplicate,
+        },
+        {
+          id: 'move-up',
+          icon: 'arrow_upward',
+          label: '上移',
+          title: '上移（Ctrl+[）',
+          disabled: !canMoveUp,
+          onClick: onMoveUp,
+        },
+        {
+          id: 'move-down',
+          icon: 'arrow_downward',
+          label: '下移',
+          title: '下移（Ctrl+]）',
+          disabled: !canMoveDown,
+          onClick: onMoveDown,
+        },
+        { id: 'remove', icon: 'close', label: '移除', title: '移除（Delete）', onClick: onRemove },
+      ]}
+    />
   );
+}
+
+/** 判断站点 POI 绑定是否发生变化，顺序即主 POI 顺序。 */
+function areStationPoiBindingsEqual(
+  left: NonNullable<EditorStationNode['boundPoiRefs']>,
+  right: NonNullable<EditorStationNode['boundPoiRefs']>,
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((ref, index) => {
+    const other = right[index];
+    if (!other) {
+      return false;
+    }
+    return ref.markerId === other.markerId && ref.label === other.label;
+  });
+}
+
+/** 站台层设施图标沿用地图页的设施资产；无资产时退回 Material Symbols。 */
+function getStationFacilityIcon(facility: TransitStationFacilitySnapshot): {
+  assetName?: string;
+  symbol?: string;
+} {
+  if (facility.type === 'escalator_and_stairs') {
+    return { assetName: 'escalator-and-stairs' };
+  }
+  if (facility.type === 'stairs') {
+    return { assetName: facility.direction === 'downwards' ? 'stairs-down' : 'stairs-up' };
+  }
+  const assets: Record<string, string> = {
+    toilet: 'restroom',
+    mens_restroom: 'mens-restroom',
+    womens_restroom: 'womens-restroom',
+    family_restroom: 'family-restroom',
+    accessible_restroom: 'accessible-restroom',
+    third_restroom: 'family-restroom',
+    elevator: 'accessible-elevator',
+    stairs_two_way: 'stairs-two-way',
+    escalator: 'escalator',
+    nursing_room: 'nursing-room',
+    waiting_room: 'waiting-room',
+    wheelchair_lift: 'wheelchair-lift',
+    wheelchair: 'wheelchair',
+    subway: 'subway',
+    passenger_service_center: 'passenger-service-center',
+    ticket_machine: 'ticket-machine',
+    meeting_point: 'meeting-point',
+    exit: 'exit',
+  };
+  const assetName = assets[facility.type];
+  if (assetName) {
+    return { assetName };
+  }
+  const symbols: Record<string, string> = {
+    platform_door: 'door_open',
+    police: 'local_police',
+    wheelchair: 'accessible',
+  };
+  return { symbol: symbols[facility.type] ?? 'location_on' };
+}
+
+/** 检查器里的「所属区间」：取节点前后最近的站点。 */
+function describeNodeSegment(nodes: EditorNode[], nodeId: string): string {
+  const index = nodes.findIndex((node) => node.id === nodeId);
+  if (index < 0) {
+    return '—';
+  }
+  const previous = [...nodes.slice(0, index)]
+    .reverse()
+    .find((node): node is EditorStationNode => node.kind === 'station');
+  const next = nodes
+    .slice(index + 1)
+    .find((node): node is EditorStationNode => node.kind === 'station');
+  if (previous && next) {
+    return `${previous.name} → ${next.name}`;
+  }
+  if (next) {
+    return `起点 · 接 ${next.name}`;
+  }
+  if (previous) {
+    return `终点 · 接 ${previous.name}`;
+  }
+  return '尚未成区间';
+}
+
+function getCoordinateChainLength(coordinates: Array<[number, number]>): number {
+  return coordinates.slice(1).reduce((total, coordinate, index) => {
+    const previous = coordinates[index];
+    return previous ? total + coordinateDistance(previous, coordinate) : total;
+  }, 0);
+}
+
+function formatRouteLength(length: number): string {
+  if (!Number.isFinite(length) || length <= 0) {
+    return '—';
+  }
+  // 世界坐标以「格」为单位，与地图测距面板保持一致（1000 格 = 1 km）。
+  return length >= 1000 ? `${(length / 1000).toFixed(2)} km` : `${Math.round(length)} 格`;
 }
 
 function decodeRouteIdentifier(value: string): string {
@@ -1760,6 +2771,7 @@ function createExistingStationNode(
     name: station?.name ?? stationSourceId,
     coordinate: station?.x !== undefined && station.z !== undefined ? [station.x, station.z] : null,
     direction: routeNode?.direction ?? 'both',
+    operationStatus: station?.operationStatus ?? 'operating',
     boundPoiMarkerId: station?.boundPoiMarkerId ?? primaryBoundPoiRef?.markerId,
     boundPoiLabel: station?.boundPoiLabel ?? primaryBoundPoiRef?.label,
     boundPoiCategoryId: primaryBoundPoiRef?.categoryId,
@@ -1871,75 +2883,6 @@ function buildEditorSegmentPaths(
     }
   }
   return paths;
-}
-
-function TransitSegmentOperationStatusEditor({
-  fromNode,
-  nextStationNode,
-  onChange,
-  onTravelMinutesChange,
-  statusByKey,
-  travelMinutesByKey,
-}: Readonly<{
-  fromNode: EditorStationNode;
-  nextStationNode: EditorStationNode | undefined;
-  onChange: (
-    key: string,
-    operationStatus: NonNullable<TransitLineSegmentPathSnapshot['operationStatus']>,
-  ) => void;
-  onTravelMinutesChange: (key: string, travelMinutes: string) => void;
-  statusByKey: Record<string, NonNullable<TransitLineSegmentPathSnapshot['operationStatus']>>;
-  travelMinutesByKey: Record<string, string>;
-}>) {
-  if (!nextStationNode) {
-    return null;
-  }
-  const key = segmentOperationStatusKey(fromNode.stationSourceId, nextStationNode.stationSourceId);
-  return (
-    <div className="transit-visual-segment-status">
-      <span>
-        {fromNode.name} 至 {nextStationNode.name}
-      </span>
-      <label>
-        <span>运营状态</span>
-        <select
-          value={statusByKey[key] ?? 'operating'}
-          onChange={(event) =>
-            onChange(
-              key,
-              event.currentTarget.value as NonNullable<
-                TransitLineSegmentPathSnapshot['operationStatus']
-              >,
-            )
-          }
-        >
-          <option value="operating">已运营</option>
-          <option value="planned">规划中</option>
-          <option value="closed">已关闭</option>
-        </select>
-      </label>
-      <label>
-        <span>区间用时（分钟，留空自动估算）</span>
-        <input
-          type="number"
-          min={0.01}
-          max={1440}
-          step="0.01"
-          value={travelMinutesByKey[key] ?? ''}
-          onChange={(event) => onTravelMinutesChange(key, event.currentTarget.value)}
-        />
-      </label>
-    </div>
-  );
-}
-
-function findNextEditorStationNode(
-  nodes: EditorNode[],
-  currentIndex: number,
-): EditorStationNode | undefined {
-  return nodes
-    .slice(currentIndex + 1)
-    .find((node): node is EditorStationNode => node.kind === 'station');
 }
 
 function segmentOperationStatusKey(leftStationId: string, rightStationId: string): string {
@@ -2119,6 +3062,36 @@ function isRoadLinearMarker(marker: MapMarkerSnapshot['markers'][number]): boole
   return (
     isVisualRoadMarker(marker) &&
     (marker.geometry.type === 'MultiPoint' || marker.geometry.type === 'LineString')
+  );
+}
+
+function toMarkerIconUrl(fileName: string, baseUrl: string): string {
+  if (/^https?:\/\//i.test(fileName)) {
+    return fileName;
+  }
+  if (fileName.startsWith('/')) {
+    return appPath(fileName);
+  }
+  if (!baseUrl) {
+    // 没有图标基底地址时回退到圆形标记，避免渲染坏图。
+    return '';
+  }
+  return new URL(fileName.replace(/^\/+/, ''), baseUrl).toString();
+}
+
+/** 出入口标记不显示文本标签，避免地图上标签过密。 */
+function isStationAccessMarker(
+  marker: Pick<
+    MapMarkerSnapshot['markers'][number],
+    'categoryId' | 'iconFileName' | 'label' | 'symbolIcon'
+  >,
+): boolean {
+  const text = [marker.categoryId, marker.iconFileName, marker.symbolIcon, marker.label]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return /(entrance|exit|gate|出入口|入口|出口|正门|侧门|大门|后门|东门|西门|南门|北门)/i.test(
+    text,
   );
 }
 

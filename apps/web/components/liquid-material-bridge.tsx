@@ -22,7 +22,13 @@ const surfaceSelector = [
   '.map-layer-panel',
   '.transit-visual-route-panel',
   '.transit-visual-toolbar',
+  // 工具条本身保持透明，材质落在每个胶囊分组上。
+  '.editor-toolbar-group',
+  '.editor-zoom-controls',
+  '.editor-status-bar',
   '.poi-visual-coordinate-panel',
+  '.poi-visual-layer-panel',
+  '.poi-visual-inspector',
   '.poi-visual-toolbox',
   '.poi-visual-viewport-controls',
   '.telegraph-history-panel',

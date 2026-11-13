@@ -159,11 +159,14 @@ check(
     CSS,
   ),
 );
+// divider 的 style 只允许有 color，且不能再展开 style 对象（否则会盖掉 currentColor 竖线）。
+const dividerStyle =
+  /className=\{`[^`]*is-divider`\}\s*style=\{\{([^}]*)\}\}/.exec(EDITOR)?.[1] ?? '';
 check(
   'divider 渲染不再带行内 backgroundColor（否则会盖掉 currentColor 竖线）',
-  /className="metro-wayfinding-example-preview-element is-divider"[\s\S]{0,400}?color:\s*neutralizeColors/.test(
-    EDITOR,
-  ) && !/is-divider"[\s\S]{0,300}?style=\{style\}/.test(EDITOR),
+  dividerStyle.includes('color: neutralizeColors') &&
+    !dividerStyle.includes('backgroundColor') &&
+    !/is-divider`[\s\S]{0,300}?style=\{style\}/.test(EDITOR),
 );
 // D6 中性化：文本色 + 透明背景，对齐 element-list
 check(

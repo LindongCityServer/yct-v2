@@ -1,9 +1,7 @@
-import { SecondaryShell } from '../../../components/app-shell';
 import {
   MaterialStudioPanel,
   type MaterialTemplateGroup,
 } from '../../../components/material-studio-panel';
-import { MaterialStudioTopbarActions } from '../../../components/material-studio-topbar-actions';
 import { METRO_WAYFINDING_TEMPLATE_ID } from '../../../lib/metro-wayfinding';
 import {
   BUS_STOP_DETAIL_TEMPLATE_ID,
@@ -104,26 +102,20 @@ const transitMaterialTemplateGroups: MaterialTemplateGroup[] = [
 ];
 
 export default function TransitMaterialsPage() {
+  // 工作台模式自带 VisualEditorShell（标题栏 / 保存语义 / 移动端侧栏），不再套二级外壳。
   return (
-    <SecondaryShell
-      title="公共交通导视"
-      titleKey="page.transitMaterials"
-      backHref="/services"
-      desktopBackHref="/services"
-      secondaryActions={<MaterialStudioTopbarActions studioId="transit-materials" />}
-    >
-      <MaterialStudioPanel
-        studioId="transit-materials"
-        title="公共交通导视物料生成"
-        titleKey="materialStudio.transitTitle"
-        families={['bus_stop', 'metro_line']}
-        serverSources={{ bus_stop: 'transit_station', metro_line: 'transit_line' }}
-        serverFamilies={['bus_stop', 'metro_line']}
-        includedTemplateIds={[METRO_WAYFINDING_TEMPLATE_ID]}
-        templateGroups={transitMaterialTemplateGroups}
-        compactCanvasControls
-        allowTransitNetworkImport
-      />
-    </SecondaryShell>
+    <MaterialStudioPanel
+      studioId="transit-materials"
+      title="公共交通导视物料生成"
+      titleKey="materialStudio.transitTitle"
+      families={['bus_stop', 'metro_line']}
+      serverSources={{ bus_stop: 'transit_station', metro_line: 'transit_line' }}
+      serverFamilies={['bus_stop', 'metro_line']}
+      includedTemplateIds={[METRO_WAYFINDING_TEMPLATE_ID]}
+      templateGroups={transitMaterialTemplateGroups}
+      compactCanvasControls
+      allowTransitNetworkImport
+      workspace
+    />
   );
 }

@@ -153,7 +153,8 @@ console.log('\n── C5. 窄屏堆叠不受影响 ─────────�
 
 check(
   '窄屏回落：编辑器按 rendersInspector 就地渲染同一个 Inspector',
-  /rendersInspector=\{!isMetroInspectorDetached\}/.test(PANEL) &&
+  // 有画布引擎时由引擎接管，其余情况按宽窄屏决定是否由编辑器就地渲染。
+  /rendersInspector=\{engine \? false : !isMetroInspectorDetached\}/.test(PANEL) &&
     /\{rendersInspector \? \([\s\S]{0,200}?<MetroWayfindingInspector/.test(EDITOR),
 );
 check(

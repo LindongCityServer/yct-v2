@@ -1,4 +1,5 @@
-export type VisualEditorKind = 'markdown' | 'poi';
+export type VisualEditorKind =
+  'area' | 'markdown' | 'poi' | 'transit-line' | 'transit-material' | 'transit-trip';
 
 export interface EditorDraftChangedPayload {
   dirty: boolean;

@@ -515,40 +515,36 @@ function ServerStatusPanel({
       : availability === 'offline'
         ? t('operations.serverStatus.offline')
         : t('operations.serverStatus.unknown');
+  // 只在确实有玩家在线时展示人数，避免离线或空服时出现无意义的 0。
+  const onlinePlayerCount =
+    availability === 'online' && (status?.onlinePlayerCount ?? 0) > 0
+      ? status?.onlinePlayerCount
+      : undefined;
 
   return (
     <Link
       className={`server-status-panel is-${availability}`}
       href={appPath('/map?category=player')}
-      aria-label={t('operations.serverStatusAria')}
+      aria-label={
+        onlinePlayerCount !== undefined
+          ? t('serverStatus.pill.ariaPlayers', { count: onlinePlayerCount })
+          : t('serverStatus.pill.aria', { status: statusLabel })
+      }
       title={t('operations.serverStatus.openPlayers')}
       ref={panelRef}
     >
       <h2 className="server-status-title">{t('operations.serverStatus.title')}</h2>
       <div className="server-status-summary">
         <span className="server-status-indicator" aria-hidden="true" />
-        {availability === 'online' ? (
-          <>
-            {status?.latencyMs !== undefined ? (
-              <span className="server-status-latency">{status.latencyMs}ms</span>
-            ) : (
-              <span className="server-status-state">{statusLabel}</span>
-            )}
-            {status?.onlinePlayerCount !== undefined ? (
-              <span
-                className="server-status-player-count"
-                title={t('operations.serverStatus.players')}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  group
-                </span>
-                <span>{status.onlinePlayerCount}</span>
-              </span>
-            ) : null}
-          </>
-        ) : (
-          <span className="server-status-state">{statusLabel}</span>
-        )}
+        <span className="server-status-state">{statusLabel}</span>
+        {onlinePlayerCount !== undefined ? (
+          <span className="server-status-player-count" title={t('operations.serverStatus.players')}>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              group
+            </span>
+            <span>{onlinePlayerCount}</span>
+          </span>
+        ) : null}
       </div>
     </Link>
   );

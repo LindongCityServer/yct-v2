@@ -4,26 +4,23 @@ import { resolve } from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
 import type {
   MaterialCanvasConfig,
-  MaterialTemplateField,
   MaterialTemplateVersion,
-  MaterialTypographyProfile,
 } from '@yct/contracts';
-import { renderMaterialGlyph } from './material-glyphs';
+import { createServerMaterialGlyphAssets } from './material-glyph-server-assets';
+import {
+  composeMaterialTemplateSvg,
+  type MaterialInputValidationOptions,
+} from './material-svg';
 
-const prohibitedSourcePatterns = [
-  /<!doctype/i,
-  /<!entity/i,
-  /<\/?(?:script|foreignobject|iframe|object|embed|image|use)\b/i,
-  /\son[a-z]+\s*=/i,
-  /\b(?:xlink:)?href\s*=\s*["']\s*(?:javascript|data|https?:|\/\/)/i,
-  /\bsrc\s*=\s*["']\s*(?:javascript|data|https?:|\/\/)/i,
-  /@import\b/i,
-  // 仅允许同一 SVG 文档中定义的裁剪、渐变等本地片段引用，例如 url(#clip)。
-  /url\s*\(\s*(?:["']\s*)?(?!#)/i,
-];
-
-export class MaterialTemplateSourceError extends Error {}
-export class MaterialInputError extends Error {}
+export {
+  MaterialInputError,
+  MaterialTemplateSourceError,
+  isMaterialFieldEditableInServerMode,
+  resolveMaterialOutputSize,
+  validateMaterialInput,
+  validateMaterialTemplateSource,
+} from './material-svg';
+export type { MaterialInputValidationOptions } from './material-svg';
 
 export interface MaterialPreviewWatermark {
   traceLines: [string, string];
@@ -33,113 +30,7 @@ export interface MaterialPreviewWatermark {
 let materialWatermarkWordmarkImageCache:
   { dataUri: string; width: number; height: number } | undefined;
 
-export function validateMaterialTemplateSource(
-  source: string,
-  fields: MaterialTemplateField[] = [],
-): void {
-  const normalized = source.trim();
-  if (!/^<svg\b[^>]*>/i.test(normalized) || !/<\/svg>\s*$/i.test(normalized)) {
-    throw new MaterialTemplateSourceError('模板源码必须是完整的 SVG 文档。');
-  }
-  if (!/\bviewBox\s*=\s*["'][^"']+["']/i.test(normalized)) {
-    throw new MaterialTemplateSourceError('模板 SVG 必须声明 viewBox。');
-  }
-  if (prohibitedSourcePatterns.some((pattern) => pattern.test(normalized))) {
-    throw new MaterialTemplateSourceError('模板源码包含不允许的 SVG 功能或外部资源。');
-  }
-  for (const match of normalized.matchAll(/{{([^}]+)}}/g)) {
-    if (!isAllowedTemplateVariable(match[1], fields)) {
-      throw new MaterialTemplateSourceError(
-        `模板变量 {{${match[1]}}} 不可用，请改用已登记的数据字段。`,
-      );
-    }
-  }
-}
-
-/**
- * 「数据来源」模式下哪些字段允许用户自行填写：`material-studio-panel` 只为
- * `serverOverride && userEditable !== false` 的字段渲染输入框（`serverOverrideFields`），
- * 其余字段的值全部由数据来源派生。
- */
-export function isMaterialFieldEditableInServerMode(field: MaterialTemplateField): boolean {
-  return field.serverOverride === true && field.userEditable !== false;
-}
-
-export interface MaterialInputValidationOptions {
-  /**
-   * 「数据来源」模式下放宽必填校验：**用户填不了**的字段（见
-   * `isMaterialFieldEditableInServerMode`）在来源数据缺失时允许为空。
-   *
-   * 导入项目几乎不会存储运营时间这类信息，而面板上又没有对应的输入框，
-   * 照常按 `required` 校验的话预览会永远失败、用户也没有任何补救手段。
-   * 用户能自己填的字段（如主题颜色）不受影响，仍按必填校验。
-   */
-  allowMissingServerDerivedValues?: boolean;
-}
-
-export function validateMaterialInput(
-  fields: MaterialTemplateField[],
-  rawInput: Record<string, string>,
-  options?: MaterialInputValidationOptions,
-): Record<string, string> {
-  const allowedKeys = new Set(fields.map((field) => field.key));
-  for (const key of Object.keys(rawInput)) {
-    if (!allowedKeys.has(key)) {
-      throw new MaterialInputError(`字段 ${key} 不属于当前模板。`);
-    }
-  }
-
-  const input: Record<string, string> = {};
-  for (const field of fields) {
-    const value = rawInput[field.key]?.trim() || field.defaultValue?.trim() || '';
-    const allowMissing =
-      options?.allowMissingServerDerivedValues === true &&
-      !isMaterialFieldEditableInServerMode(field);
-    if (field.required && !value && !allowMissing) {
-      throw new MaterialInputError(`${field.label}不能为空。`);
-    }
-    if (field.maxLength && value.length > field.maxLength) {
-      throw new MaterialInputError(`${field.label}不能超过 ${field.maxLength} 个字符。`);
-    }
-    if (field.kind === 'select' && value && !field.options?.some((item) => item.value === value)) {
-      throw new MaterialInputError(`${field.label}包含无效选项。`);
-    }
-    if (field.kind === 'number' && value) {
-      const numberValue = Number(value);
-      if (!Number.isFinite(numberValue)) {
-        throw new MaterialInputError(`${field.label}必须是数字。`);
-      }
-      if (field.minimum !== undefined && numberValue < field.minimum) {
-        throw new MaterialInputError(`${field.label}不能小于 ${field.minimum}。`);
-      }
-      if (field.maximum !== undefined && numberValue > field.maximum) {
-        throw new MaterialInputError(`${field.label}不能大于 ${field.maximum}。`);
-      }
-    }
-    if (field.kind === 'color' && value && !/^#[0-9A-Fa-f]{6}$/.test(value)) {
-      throw new MaterialInputError(`${field.label}必须使用 #RRGGBB 格式。`);
-    }
-    input[field.key] = value;
-  }
-  return input;
-}
-
-export function resolveMaterialOutputSize(canvas: MaterialCanvasConfig): {
-  contentWidthPx: number;
-  contentHeightPx: number;
-  widthPx: number;
-  heightPx: number;
-} {
-  const contentWidthPx = Math.max(1, Math.round(canvas.widthM * canvas.pxPerMeter));
-  const contentHeightPx = Math.max(1, Math.round(canvas.heightM * canvas.pxPerMeter));
-  const widthPx = canvas.alignToTile
-    ? alignToTile(contentWidthPx, canvas.tileSizePx)
-    : contentWidthPx;
-  const heightPx = canvas.alignToTile
-    ? alignToTile(contentHeightPx, canvas.tileSizePx)
-    : contentHeightPx;
-  return { contentWidthPx, contentHeightPx, widthPx, heightPx };
-}
+let serverGlyphAssets: ReturnType<typeof createServerMaterialGlyphAssets> | undefined;
 
 export function renderMaterialTemplateToSvg(input: {
   template: MaterialTemplateVersion;
@@ -148,80 +39,8 @@ export function renderMaterialTemplateToSvg(input: {
   /** 渲染前复核字段时使用的校验口径，默认严格（必填空值直接报错）。 */
   validation?: MaterialInputValidationOptions;
 }): { svg: string; widthPx: number; heightPx: number; renderScale: number } {
-  validateMaterialTemplateSource(input.template.source, input.template.fields);
-  const values = validateMaterialInput(input.template.fields, input.values, input.validation);
-  const size = resolveMaterialOutputSize(input.canvas);
-  const logicalWidthPx = Math.max(1, Math.round(input.canvas.widthM * 128));
-  const logicalHeightPx = Math.max(1, Math.round(input.canvas.heightM * 128));
-  const typography = resolveTypography(
-    input.template.typographyProfile,
-    values,
-    input.canvas,
-    size,
-  );
-  const context: Record<string, string> = {
-    ...values,
-    'canvas.widthPx': String(size.contentWidthPx),
-    'canvas.heightPx': String(size.contentHeightPx),
-    // 设计坐标：与像素密度解耦，对齐单位（PPI）变化时整体等比缩放。
-    'canvas.logicalWidthPx': String(logicalWidthPx),
-    'canvas.logicalHeightPx': String(logicalHeightPx),
-    'canvas.innerWidthPx': String(Math.max(size.contentWidthPx - 16, 0)),
-    'canvas.innerHeightPx': String(Math.max(size.contentHeightPx - 16, 0)),
-    'canvas.primaryFontPx': String(Math.max(Math.round(size.contentHeightPx * 0.2), 14)),
-    'canvas.secondaryFontPx': String(Math.max(Math.round(size.contentHeightPx * 0.1), 11)),
-    'canvas.captionFontPx': String(Math.max(Math.round(size.contentHeightPx * 0.07), 10)),
-    'canvas.largeFontPx': String(Math.max(Math.round(size.contentHeightPx * 0.28), 20)),
-    'typography.primaryFontPx': String(typography.primaryFontPx),
-    'typography.secondaryFontPx': String(typography.secondaryFontPx),
-    'typography.captionFontPx': String(typography.captionFontPx),
-  };
-  // 公交站牌：板面上所有已填线路都开启临时停靠时，站名同步变红。
-  const temporaryStopAll = resolveMaterialTemporaryStopAll(values);
-  context['temporaryStopAll.stationNameFill'] = temporaryStopAll ? '#C11111' : '#073764';
-  context['temporaryStopAll.stationNamePinyinFill'] = temporaryStopAll ? '#C11111' : '#073764';
-  const trustedContext = new Set<string>();
-  for (const field of input.template.fields) {
-    if (field.glyph) {
-      const key = `glyph.${field.key}`;
-      context[key] = renderMaterialGlyph(values[field.key], field.glyph, {
-        ...values,
-        'canvas.widthPx': String(size.contentWidthPx),
-        'canvas.heightPx': String(size.contentHeightPx),
-        'canvas.logicalWidthPx': String(logicalWidthPx),
-        'canvas.logicalHeightPx': String(logicalHeightPx),
-      });
-      trustedContext.add(key);
-    }
-    if (!field.textFit) {
-      if (field.kind === 'select' && field.selectVariableValues) {
-        const selectedVariables = field.selectVariableValues[values[field.key]];
-        for (const [variableName, variableValue] of Object.entries(selectedVariables ?? {})) {
-          context[`select.${field.key}.${variableName}`] = variableValue;
-        }
-      }
-      continue;
-    }
-    const fit = resolveTextFit(values[field.key], field.textFit, values);
-    context[`fit.${field.key}.letterSpacing`] = formatSvgNumber(fit.letterSpacing);
-    context[`fit.${field.key}.scaleX`] = formatSvgNumber(fit.scaleX);
-  }
-  const resolved = input.template.source.replace(/{{([^}]+)}}/g, (_match, key: string) =>
-    trustedContext.has(key) ? (context[key] ?? '') : escapeXml(context[key] ?? ''),
-  );
-  const sourceOpenTag = resolved.match(/^<svg\b[^>]*>/i)?.[0];
-  const sourceViewBox = sourceOpenTag?.match(/\bviewBox\s*=\s*["']([^"']+)["']/i)?.[1];
-  if (!sourceViewBox) {
-    throw new MaterialTemplateSourceError('模板 SVG 未能解析 viewBox。');
-  }
-  const children = resolved.replace(/^<svg\b[^>]*>/i, '').replace(/<\/svg>\s*$/i, '');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.widthPx}" height="${size.heightPx}" viewBox="0 0 ${size.widthPx} ${size.heightPx}"><svg x="0" y="0" width="${size.contentWidthPx}" height="${size.contentHeightPx}" viewBox="${sourceViewBox}">${children}</svg></svg>`;
-  return {
-    svg,
-    widthPx: size.widthPx,
-    heightPx: size.heightPx,
-    renderScale: size.contentWidthPx / logicalWidthPx,
-  };
+  serverGlyphAssets ??= createServerMaterialGlyphAssets();
+  return composeMaterialTemplateSvg({ ...input, assets: serverGlyphAssets });
 }
 
 export async function renderMaterialTemplateToPng(input: {
@@ -364,109 +183,6 @@ function resolveMaterialPublicAssetPath(...relativePath: string[]): string {
   return sourcePath;
 }
 
-function alignToTile(value: number, tileSizePx: number): number {
-  return Math.ceil(value / tileSizePx) * tileSizePx;
-}
-
-function escapeXml(value: string): string {
-  return value.replace(/[<>&"']/g, (character) => {
-    const entityByCharacter: Record<string, string> = {
-      '<': '&lt;',
-      '>': '&gt;',
-      '&': '&amp;',
-      '"': '&quot;',
-      "'": '&apos;',
-    };
-    return entityByCharacter[character];
-  });
-}
-
-/** 判断板面上所有已填线路是否都开启了临时停靠。 */
-function resolveMaterialTemporaryStopAll(values: Record<string, string>): boolean {
-  let activeCount = 0;
-  let allTemporary = true;
-  for (const [key, value] of Object.entries(values)) {
-    const match = key.match(/^route(\d+)Number$/u);
-    if (!match || !value.trim()) {
-      continue;
-    }
-    activeCount += 1;
-    if (!isTemporaryStopValue(values[`route${match[1]}TemporaryStop`])) {
-      allTemporary = false;
-    }
-  }
-  if (values.routeNumber?.trim()) {
-    activeCount += 1;
-    if (!isTemporaryStopValue(values.routeTemporaryStop)) {
-      allTemporary = false;
-    }
-  }
-  return activeCount > 0 && allTemporary;
-}
-
-function isTemporaryStopValue(value: string | undefined): boolean {
-  return ['yes', 'true', '1'].includes((value ?? '').trim().toLowerCase());
-}
-
-function isAllowedTemplateVariable(variable: string, fields: MaterialTemplateField[]): boolean {
-  if (
-    /^(?:[a-z][a-zA-Z0-9_]*|canvas\.(?:widthPx|heightPx|logicalWidthPx|logicalHeightPx|innerWidthPx|innerHeightPx|primaryFontPx|secondaryFontPx|captionFontPx|largeFontPx)|typography\.(?:primaryFontPx|secondaryFontPx|captionFontPx))$/.test(
-      variable,
-    )
-  ) {
-    return true;
-  }
-  if (/^temporaryStopAll\.(?:stationNameFill|stationNamePinyinFill)$/.test(variable)) {
-    return true;
-  }
-  const fitMatch = variable.match(/^fit\.([a-z][a-zA-Z0-9_]*)\.(letterSpacing|scaleX)$/);
-  if (fitMatch) {
-    return fields.some((field) => field.key === fitMatch[1] && field.textFit);
-  }
-  const glyphMatch = variable.match(/^glyph\.([a-z][a-zA-Z0-9_]*)$/);
-  if (glyphMatch) {
-    return fields.some((field) => field.key === glyphMatch[1] && field.glyph);
-  }
-  const selectMatch = variable.match(/^select\.([a-z][a-zA-Z0-9_]*)\.([a-z][a-zA-Z0-9_]*)$/);
-  return Boolean(
-    selectMatch &&
-    fields.some(
-      (field) =>
-        field.key === selectMatch[1] &&
-        field.kind === 'select' &&
-        Object.values(field.selectVariableValues ?? {}).every((variables) =>
-          Object.hasOwn(variables, selectMatch[2]),
-        ),
-    ),
-  );
-}
-
-function resolveTextFit(
-  value: string,
-  config: NonNullable<MaterialTemplateField['textFit']>,
-  values: Record<string, string>,
-): { letterSpacing: number; scaleX: number } {
-  const defaultScaleX = config.defaultScaleX ?? 1;
-  const additionalWidth = (config.additionalFields ?? []).reduce(
-    (width, field) => width + estimateTextWidth(values[field.fieldKey] ?? '', field.fontSize),
-    0,
-  );
-  const naturalWidth = estimateTextWidth(value, config.fontSize) + additionalWidth;
-  const layoutWidth = config.maxWidth / defaultScaleX;
-  if (naturalWidth <= layoutWidth) {
-    const gapCount = Math.max(Array.from(value).length - 1, 0);
-    const maxLetterSpacing = config.maxLetterSpacing ?? config.fontSize * 0.12;
-    const letterSpacing = gapCount
-      ? Math.min(maxLetterSpacing, Math.max(layoutWidth - naturalWidth, 0) / gapCount)
-      : 0;
-    return {
-      letterSpacing,
-      scaleX: defaultScaleX,
-    };
-  }
-  return { letterSpacing: 0, scaleX: naturalWidth ? config.maxWidth / naturalWidth : 1 };
-}
-
 function resolveMaterialFontFiles(): string[] {
   return [
     resolveMaterialFontPath('HarmonyOS_Sans_SC_Regular.ttf'),
@@ -518,42 +234,19 @@ function characterWidthFactor(character: string): number {
   return 0.56;
 }
 
-function formatSvgNumber(value: number): string {
-  return String(Math.round(value * 1_000) / 1_000);
+function escapeXml(value: string): string {
+  return value.replace(/[<>&"']/g, (character) => {
+    const entityByCharacter: Record<string, string> = {
+      '<': '&lt;',
+      '>': '&gt;',
+      '&': '&amp;',
+      '"': '&quot;',
+      "'": '&apos;',
+    };
+    return entityByCharacter[character];
+  });
 }
 
-function resolveTypography(
-  profile: MaterialTypographyProfile | undefined,
-  values: Record<string, string>,
-  canvas: MaterialCanvasConfig,
-  size: { contentHeightPx: number },
-): { primaryFontPx: number; secondaryFontPx: number; captionFontPx: number } {
-  const fallback = {
-    primaryFontPx: Math.max(Math.round(size.contentHeightPx * 0.2), 14),
-    secondaryFontPx: Math.max(Math.round(size.contentHeightPx * 0.1), 11),
-    captionFontPx: Math.max(Math.round(size.contentHeightPx * 0.07), 10),
-  };
-  if (!profile) {
-    return fallback;
-  }
-  const designSpeed = Number(values[profile.designSpeedFieldKey]);
-  if (!Number.isFinite(designSpeed)) {
-    throw new MaterialInputError('设计时速必须是数字。');
-  }
-  const matchingRules = profile.rules.filter(
-    (item) => designSpeed >= item.minDesignSpeedKph && designSpeed <= item.maxDesignSpeedKph,
-  );
-  if (matchingRules.length !== 1) {
-    throw new MaterialInputError('当前设计时速不在模板配置的字高范围内。');
-  }
-  const rule = matchingRules[0];
-  const toPixels = (heightMm: number | undefined, fallbackPx: number) =>
-    heightMm === undefined
-      ? fallbackPx
-      : Math.max(Math.round((heightMm / 1000) * canvas.pxPerMeter), 1);
-  return {
-    primaryFontPx: toPixels(rule.primaryTextHeightMm, fallback.primaryFontPx),
-    secondaryFontPx: toPixels(rule.secondaryTextHeightMm, fallback.secondaryFontPx),
-    captionFontPx: toPixels(rule.captionTextHeightMm, fallback.captionFontPx),
-  };
+function formatSvgNumber(value: number): string {
+  return String(Math.round(value * 1_000) / 1_000);
 }

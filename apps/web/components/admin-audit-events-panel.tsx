@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { AdminRefreshButton } from './admin-refresh-button';
+import { SegmentedControl } from './segmented-control';
 
 type AdminAuditStatusFilter = AdminAuditEventRecord['status'] | 'all';
 
@@ -199,21 +200,16 @@ export function AdminAuditEventsPanel() {
         />
       </div>
       <div className="admin-poi-toolbar admin-content-toolbar" aria-label="后台审计筛选">
-        <label>
+        <div className="admin-segmented-field">
           <span>状态</span>
-          <select
+          <SegmentedControl
+            ariaLabel="审计事件状态"
+            className="material-mode-switch material-variant-switch"
             value={statusFilter}
-            onChange={(event) =>
-              setStatusFilter(event.currentTarget.value as AdminAuditStatusFilter)
-            }
-          >
-            {auditStatusFilterOptions.map((option) => (
-              <option value={option.value} key={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            onChange={setStatusFilter}
+            options={auditStatusFilterOptions}
+          />
+        </div>
         <label className="admin-poi-search">
           <span>事件类型</span>
           <input

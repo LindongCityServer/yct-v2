@@ -110,12 +110,12 @@ check(
 
 // 6. 渲染前会再复核一次字段，必须沿用同一口径，否则值过了解析仍会在渲染处被拒。
 const rendererSource = readFileSync(
-  resolve(import.meta.dirname, '../../apps/web/lib/material-renderer.ts'),
+  resolve(import.meta.dirname, '../../apps/web/lib/material-svg.ts'),
   'utf8',
 );
 check(
   '渲染复核把校验口径透传给 validateMaterialInput',
-  /renderMaterialTemplateToSvg[\s\S]{0,400}?validateMaterialInput\(\s*input\.template\.fields,\s*input\.values,\s*input\.validation,?\s*\)/.test(
+  /composeMaterialTemplateSvg[\s\S]{0,800}?validateMaterialInput\(\s*input\.template\.fields,\s*input\.values,\s*input\.validation,?\s*\)/.test(
     rendererSource,
   ),
 );

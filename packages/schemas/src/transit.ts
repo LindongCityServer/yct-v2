@@ -84,9 +84,20 @@ const transitVisualStationDraftSchema = z.object({
   name: z.string().trim().min(1).max(120),
   x: z.number().finite(),
   z: z.number().finite(),
+  operationStatus: z.enum(['operating', 'planned', 'closed']).optional(),
   boundPoiMarkerId: z.string().trim().min(1).max(220).optional(),
   boundPoiLabel: z.string().trim().min(1).max(160).optional(),
   boundPoiCategoryId: z.string().trim().min(1).max(80).optional(),
+  boundPoiRefs: z
+    .array(
+      z.object({
+        markerId: z.string().trim().min(1).max(220),
+        label: z.string().trim().min(1).max(160),
+        categoryId: z.string().trim().max(80).optional(),
+      }),
+    )
+    .max(12)
+    .optional(),
 });
 
 const transitDepartureScheduleRuleSchema = z.object({

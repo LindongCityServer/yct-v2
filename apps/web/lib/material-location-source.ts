@@ -59,6 +59,30 @@ export async function listMaterialLocations(): Promise<MaterialLocationOption[]>
 }
 
 /**
+ * 门牌模板的数据源：只保留能解析出地址信息（至少能识别道路名）的 POI。
+ * 不强制要求门牌号：只有地址、没有门牌号的 POI 也应可选，门牌号交给用户补录。
+ */
+export async function listMaterialAddressPoiLocations(): Promise<MaterialLocationOption[]> {
+  const locations = await readMaterialLocations();
+  return locations
+    .filter((location) => {
+      try {
+        resolveAddressInformation(location, locations);
+        return true;
+      } catch {
+        return false;
+      }
+    })
+    .map(({ id, label, categoryId, address, geometry }) => ({
+      id,
+      label,
+      categoryId,
+      address,
+      coordinate: getRepresentativeCoordinate(geometry),
+    }));
+}
+
+/**
  * 返回给物料来源使用的最近道路切线，供站点线路的东西或南北方向判定复用。
  */
 export async function findMaterialRoadAtCoordinate(
@@ -72,6 +96,44 @@ export async function findMaterialRoadAtCoordinate(
     id: road.entry.id,
     label: road.entry.label,
     projection: road.projection,
+  };
+}
+
+export interface MaterialRoadSideHint {
+  roadName: string;
+  /** 坐标位于道路的哪一侧：按地图坐标系的方位描述。 */
+  side: 'north' | 'south' | 'east' | 'west';
+  /** 路牌的实际安装点（道路中线上的投影点）。 */
+  installation: [number, number];
+  /** 坐标到道路中线的距离（米）。 */
+  distance: number;
+}
+
+/**
+ * 判断给定坐标落在最近道路的哪一侧，用于路牌套用向导里的落位提示。
+ * 约定与地图渲染一致：x 轴为东西向、z 轴为南北向。
+ */
+export async function resolveMaterialRoadSideHint(
+  coordinate: [number, number],
+): Promise<MaterialRoadSideHint | undefined> {
+  const road = findNearestRoad(coordinate, await readMaterialLocations());
+  if (!road) {
+    return undefined;
+  }
+  const installation = road.projection.coordinate;
+  const vertical = shouldUseVerticalMapRoadLabel(road.coordinates, installation);
+  const side: MaterialRoadSideHint['side'] = vertical
+    ? coordinate[0] > installation[0]
+      ? 'east'
+      : 'west'
+    : coordinate[1] > installation[1]
+      ? 'south'
+      : 'north';
+  return {
+    roadName: road.entry.label,
+    side,
+    installation,
+    distance: road.projection.distance,
   };
 }
 
@@ -277,9 +339,6 @@ function resolveAddressInformation(
   const roadName = linkedRoad?.label ?? parsed.roadName;
   if (!roadName) {
     throw new Error('所选地点的地址中缺少可识别的道路名称。');
-  }
-  if (!parsed.buildingNumber) {
-    throw new Error('所选地点的地址中缺少门牌号。');
   }
   return { roadName, buildingNumber: parsed.buildingNumber, buildingSuffix: parsed.buildingSuffix };
 }

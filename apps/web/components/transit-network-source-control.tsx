@@ -24,6 +24,7 @@ import {
 } from '../lib/rmp-transit-network';
 import { deriveMetroWayfindingLineIdentity } from '../lib/metro-wayfinding-line-source';
 import { useI18n } from '../lib/client-i18n';
+import { SegmentedControl } from './segmented-control';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
@@ -52,9 +53,9 @@ async function fetchDefaultTransitNetworkSample(
   const response = await fetch(appPath('/api/materials/transit-network-projects/sample'), {
     cache: 'no-store',
   });
-  const data = (await response.json()) as Partial<TransitNetworkSampleResponse> & {
+  const data = (await readJsonResponse<Partial<TransitNetworkSampleResponse> & {
     message?: string;
-  };
+  }>(response)) ?? {};
   if (
     !response.ok ||
     !data.fileName ||
@@ -67,6 +68,22 @@ async function fetchDefaultTransitNetworkSample(
     throw new Error(data.message ?? t('transitNetworkSource.error.sampleLoadFailed'));
   }
   return data as TransitNetworkSampleResponse;
+}
+
+/**
+ * 安全读取 JSON：401/重定向可能返回 HTML，直接 `json()` 会抛
+ * `Unexpected token '<'`。非 JSON 响应统一当作空对象处理。
+ */
+async function readJsonResponse<T>(response: Response): Promise<T | undefined> {
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    return undefined;
+  }
+  try {
+    return (await response.json()) as T;
+  } catch {
+    return undefined;
+  }
 }
 
 export function TransitNetworkSourceControl({
@@ -180,9 +197,9 @@ export function TransitNetworkSourceControl({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fileName: file.name, snapshot: nextSnapshot }),
         });
-        const data = (await response.json()) as MaterialTransitNetworkProject & {
-          message?: string;
-        };
+        const data = ((await readJsonResponse<
+          MaterialTransitNetworkProject & { message?: string }
+        >(response)) ?? {}) as Partial<MaterialTransitNetworkProject> & { message?: string };
         if (response.status === 401) {
           setProjectId('');
           setErrorMessage(t('transitNetworkSource.error.notSignedIn'));
@@ -192,9 +209,10 @@ export function TransitNetworkSourceControl({
           setProjectId('');
           return;
         }
-        if (!response.ok) throw new Error(data.message ?? t('transitNetworkSource.error.persistFailed'));
-        setProjectId(data.id);
-        setSnapshot(data.snapshot);
+        if (!response.ok)
+          throw new Error(data.message ?? t('transitNetworkSource.error.persistFailed'));
+        setProjectId(data.id!);
+        setSnapshot(data.snapshot!);
       } catch (error) {
         setProjectId('');
         setErrorMessage(
@@ -230,7 +248,7 @@ export function TransitNetworkSourceControl({
           return;
         }
         if (!response.ok) {
-          const data = (await response.json()) as { message?: string };
+          const data = (await readJsonResponse<{ message?: string }>(response)) ?? {};
           throw new Error(data.message ?? t('transitNetworkSource.error.deleteFailed'));
         }
       } catch (error) {
@@ -352,14 +370,15 @@ export function TransitNetworkSourceControl({
             body: JSON.stringify({ lineNames }),
           },
         );
-        const data = (await response.json()) as MaterialTransitNetworkProject & {
-          message?: string;
-        };
+        const data = ((await readJsonResponse<
+          MaterialTransitNetworkProject & { message?: string }
+        >(response)) ?? {}) as Partial<MaterialTransitNetworkProject> & { message?: string };
         if (publishLoginRequiredForResponse(response)) {
           return;
         }
-        if (!response.ok) throw new Error(data.message ?? t('transitNetworkSource.error.saveLineNamesFailed'));
-        savedSnapshot = data.snapshot;
+        if (!response.ok)
+          throw new Error(data.message ?? t('transitNetworkSource.error.saveLineNamesFailed'));
+        savedSnapshot = data.snapshot!;
       }
       setSnapshot(savedSnapshot);
       setErrorMessage(
@@ -373,7 +392,9 @@ export function TransitNetworkSourceControl({
       publishTransitNetworkProjectSnapshotChanged({ studioId, snapshot: savedSnapshot });
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : t('transitNetworkSource.error.saveLineNamesFailed'),
+        error instanceof Error
+          ? error.message
+          : t('transitNetworkSource.error.saveLineNamesFailed'),
       );
     } finally {
       setIsPersisting(false);
@@ -428,12 +449,13 @@ export function TransitNetworkSourceControl({
             body: JSON.stringify({ stationNames }),
           },
         );
-        const data = (await response.json()) as MaterialTransitNetworkProject & {
-          message?: string;
-        };
+        const data = ((await readJsonResponse<
+          MaterialTransitNetworkProject & { message?: string }
+        >(response)) ?? {}) as Partial<MaterialTransitNetworkProject> & { message?: string };
         if (publishLoginRequiredForResponse(response)) return;
-        if (!response.ok) throw new Error(data.message ?? t('transitNetworkSource.error.saveStationNamesFailed'));
-        savedSnapshot = data.snapshot;
+        if (!response.ok)
+          throw new Error(data.message ?? t('transitNetworkSource.error.saveStationNamesFailed'));
+        savedSnapshot = data.snapshot!;
       }
       setSnapshot(savedSnapshot);
       setErrorMessage(
@@ -481,18 +503,27 @@ export function TransitNetworkSourceControl({
         return;
       }
       let project: MaterialTransitNetworkProject | undefined;
+      let projectReadRequiresLogin = false;
       try {
         const response = await fetch(appPath('/api/materials/transit-network-projects'), {
           cache: 'no-store',
         });
         if (response.ok) {
-          const data = (await response.json()) as { items?: MaterialTransitNetworkProject[] };
+          const data = (await readJsonResponse<{ items?: MaterialTransitNetworkProject[] }>(
+            response,
+          )) ?? { items: [] };
           project = data.items?.[0];
+        } else if (response.status === 401) {
+          projectReadRequiresLogin = true;
         }
       } catch {
         project = undefined;
       }
       if (cancelled || projectLoadRevisionRef.current !== loadRevision) return;
+      if (projectReadRequiresLogin) {
+        // 未登录时项目线网接口返回 401：给出稳定提示，不读取响应体更不会触发 JSON 解析异常。
+        setErrorMessage(t('transitNetworkSource.notice.loginToReadProjects'));
+      }
       if (project) {
         setProjectId(project.id);
         setProjectOrigin('imported');
@@ -533,11 +564,11 @@ export function TransitNetworkSourceControl({
         if (cancelled || projectLoadRevisionRef.current !== loadRevision) return;
         setErrorMessage(
           t('transitNetworkSource.error.sampleLoadFailedHint', {
-          message:
-            error instanceof Error
-              ? error.message
-              : t('transitNetworkSource.error.sampleLoadFailed'),
-        }),
+            message:
+              error instanceof Error
+                ? error.message
+                : t('transitNetworkSource.error.sampleLoadFailed'),
+          }),
         );
       } finally {
         if (!cancelled && projectLoadRevisionRef.current === loadRevision) {
@@ -619,29 +650,31 @@ export function TransitNetworkSourceControl({
       </div>
 
       <div
-        className="material-mode-switch"
+        className="segmented-control"
         role="group"
         aria-label={t('transitNetworkSource.sourceAria')}
       >
-        <button
-          type="button"
-          className={source === 'server' ? 'is-active' : ''}
-          onClick={() => selectSource('server')}
-        >
-          {t('transitNetworkSource.source.server')}
-        </button>
-        <button
-          type="button"
-          className={source === 'rmp' ? 'is-active' : ''}
-          disabled={!snapshot}
-          onClick={() => selectSource('rmp')}
-        >
-          {isProjectLoading
-            ? t('transitNetworkSource.source.loading')
-            : projectOrigin === 'sample'
-              ? t('transitNetworkSource.source.sample')
-              : t('transitNetworkSource.source.imported')}
-        </button>
+        <SegmentedControl
+          ariaLabel={t('transitNetworkSource.sourceAria')}
+          className="transit-visual-segmented"
+          value={source}
+          options={[
+            {
+              value: 'server',
+              label: t('transitNetworkSource.source.server'),
+            },
+            {
+              value: 'rmp',
+              label: isProjectLoading
+                ? t('transitNetworkSource.source.loading')
+                : projectOrigin === 'sample'
+                  ? t('transitNetworkSource.source.sample')
+                  : t('transitNetworkSource.source.imported'),
+              disabled: !snapshot,
+            },
+          ]}
+          onChange={(nextSource) => selectSource(nextSource)}
+        />
       </div>
 
       {snapshot ? (

@@ -19,18 +19,27 @@ import {
   type WorkbenchTripStop,
 } from '../lib/transit-trip-workbench';
 
-// 右侧留给站名，站点多时也不与折线争空间。
-const chartRight = 160;
-const chartTop = 34;
-// 底部留白避开右下角的缩放按钮，最后几个站名不会被遮住。
-const chartBottom = 56;
+/** 右侧站名区宽度；站名贴在可见绘图区右边缘并右对齐。 */
+const stationLabelWidth = 132;
+/** 顶部时间刻度带高度。 */
+const axisHeaderHeight = 26;
+/** 底部默认留白，避开右下角的缩放按钮。 */
+const defaultBottomInset = 56;
 const longPressDelay = 500;
 
-/** 主工作台按同一套上下边距计算站点纵坐标，保证色带与折线对齐。 */
-export const transitTripRunChartLayout = {
-  top: chartTop,
-  bottom: chartBottom,
-};
+/**
+ * 主工作台与运行图共用的布局：顶部留出标题栏与时间刻度，底部留出缩放条。
+ * 画布本身铺满窗口，坐标轴贴可见区边缘，滚动边界仍以可见绘图区为准。
+ */
+export function resolveTransitTripRunChartLayout(input: {
+  topInset: number;
+  bottomInset?: number;
+}) {
+  return {
+    top: input.topInset + axisHeaderHeight,
+    bottom: input.bottomInset ?? defaultBottomInset,
+  };
+}
 
 export interface ChartTrip {
   id: string;
@@ -60,14 +69,17 @@ interface DragState {
 }
 
 export function TransitTripRunChart({
+  bottomInset,
   height,
   leftGutter,
   linkMode,
+  rightInset,
   rows,
   selectedTripId,
   stationOffset,
   stationScale,
   tool,
+  topInset,
   trips,
   viewport,
   onAddPoint,
@@ -79,15 +91,21 @@ export function TransitTripRunChart({
   onStationViewportChange,
   onViewportChange,
 }: Readonly<{
+  /** 底部留白；默认避开右下角缩放条。 */
+  bottomInset?: number;
   height: number;
-  /** 覆盖左侧留白；折叠班次面板后可以让时间轴左移。 */
+  /** 可见绘图区左边界；桌面端为图层树宽度，移动端为小留白。 */
   leftGutter?: number;
   linkMode: WorkbenchLinkMode;
+  /** 可见绘图区右边界；桌面端为属性面板宽度，站名画在它左侧。 */
+  rightInset?: number;
   rows: WorkbenchStationRow[];
   selectedTripId: string | null;
   stationOffset: number;
   stationScale: number;
   tool: WorkbenchTool;
+  /** 标题栏高度；时间刻度贴在这条线下方。 */
+  topInset?: number;
   trips: ChartTrip[];
   viewport: { start: number; duration: number };
   onAddPoint: (tripId: string, stopIndex: number, edge: WorkbenchEdge, minutes: number) => void;
@@ -102,8 +120,8 @@ export function TransitTripRunChart({
   ) => void;
   onRemovePoint: (tripId: string, stopIndex: number) => void;
   onResizeRange: (tripId: string, startStationName: string, endStationName: string) => void;
-  /** 点中任意班次端点时直接选中该班次，不再要求先在列表里选中。 */
-  onSelectTrip?: (tripId: string) => void;
+  /** 点中任意班次端点时直接选中该班次，并回传停站下标供属性检查器同步。 */
+  onSelectTrip?: (tripId: string, stopIndex?: number) => void;
   onStationViewportChange: (next: { scale: number; offset: number }) => void;
   onViewportChange: (next: { start: number; duration: number }) => void;
 }>) {
@@ -127,23 +145,54 @@ export function TransitTripRunChart({
     return () => observer.disconnect();
   }, []);
 
-  // 左侧给悬浮班次面板让位；窄屏或面板折叠时时间轴起点左移。
-  const chartLeft = leftGutter ?? (width >= 900 ? 440 : 150);
-  const plotWidth = Math.max(120, width - chartLeft - chartRight);
-  const plotHeight = Math.max(80, height - chartTop - chartBottom);
+  // 坐标轴贴可见区域边缘，折线与网格铺满整个窗口（含标题栏与面板下方）。
+  const axisLeft = leftGutter ?? 16;
+  const axisRight = width - (rightInset ?? 16);
+  const axisTop = topInset ?? 0;
+  const axisBottom = height - (bottomInset ?? defaultBottomInset);
+  // 站点轴的有效可视高度：扣掉标题栏与底部缩放条，与父组件的 stationOffset 边界一致。
+  const stationContentHeight = Math.max(80, axisBottom - (axisTop + axisHeaderHeight));
+  const plotWidth = Math.max(1, width);
+  const plotHeight = Math.max(1, height);
+  const stationLabelX = axisRight - 12;
   const xFor = useCallback(
-    (minutes: number) => chartLeft + ((minutes - viewport.start) / viewport.duration) * plotWidth,
-    [chartLeft, plotWidth, viewport.duration, viewport.start],
+    (minutes: number) => ((minutes - viewport.start) / viewport.duration) * plotWidth,
+    [plotWidth, viewport.duration, viewport.start],
   );
   const minutesFor = useCallback(
-    (x: number) => viewport.start + ((x - chartLeft) / plotWidth) * viewport.duration,
-    [chartLeft, plotWidth, viewport.duration, viewport.start],
+    (x: number) => viewport.start + (x / plotWidth) * viewport.duration,
+    [plotWidth, viewport.duration, viewport.start],
   );
   const rowByName = useMemo(() => new Map(rows.map((row) => [row.stationName, row])), [rows]);
   const timeLines = useMemo(
-    () => buildTimeLines(viewport.start, viewport.start + viewport.duration),
-    [viewport.duration, viewport.start],
+    () => buildTimeLines(viewport.start, viewport.start + viewport.duration, plotWidth),
+    [viewport.duration, viewport.start, plotWidth],
   );
+  // 刻度只显示在可见红框内，但位置仍按全窗口时间映射，保证与折线一致。
+  const visibleTimeLines = useMemo(
+    () =>
+      timeLines.filter((minutes) => {
+        const x = xFor(minutes);
+        return x >= axisLeft && x <= axisRight;
+      }),
+    [axisLeft, axisRight, timeLines, xFor],
+  );
+  // 站点密集时按最终像素间距抽稀站名，保证文字不重叠。
+  const visibleStationLabels = useMemo(() => {
+    const labels: WorkbenchStationRow[] = [];
+    let lastY = Number.NEGATIVE_INFINITY;
+    for (const row of rows) {
+      if (row.y < axisTop - 2 || row.y > axisBottom + 2) {
+        continue;
+      }
+      if (row.y - lastY < 18) {
+        continue;
+      }
+      labels.push(row);
+      lastY = row.y;
+    }
+    return labels;
+  }, [axisBottom, axisTop, rows]);
 
   const localPoint = (event: { clientX: number; clientY: number }) => {
     const rect = stageRef.current?.getBoundingClientRect();
@@ -217,7 +266,7 @@ export function TransitTripRunChart({
     };
 
     if (hitTripId && stopIndex !== undefined) {
-      onSelectTrip?.(hitTripId);
+      onSelectTrip?.(hitTripId, stopIndex);
     }
 
     // 只有真正会改草稿的操作才记一条撤销历史；纯平移不算。
@@ -291,10 +340,13 @@ export function TransitTripRunChart({
         return;
       }
       const deltaMinutes = ((drag.startClientX - event.clientX) / plotWidth) * viewport.duration;
-      const nextStart = clampViewportStart(drag.startViewportStart + deltaMinutes);
-      onViewportChange({ start: nextStart, duration: viewport.duration });
+      // 平移边界由父组件按可见区计算，这里只上报原始位移。
+      onViewportChange({
+        start: drag.startViewportStart + deltaMinutes,
+        duration: viewport.duration,
+      });
       // 纵向拖动同步平移站点轴，放大后才能看到远处的站。
-      const maxOffset = Math.max(0, plotHeight * (stationScale - 1));
+      const maxOffset = Math.max(0, stationContentHeight * (stationScale - 1));
       const nextOffset = Math.min(
         Math.max(drag.startStationOffset - (event.clientY - drag.startClientY), 0),
         maxOffset,
@@ -390,9 +442,9 @@ export function TransitTripRunChart({
     // Shift + 滚轮缩放站点轴，普通滚轮缩放时间轴。
     if (event.shiftKey) {
       const nextScale = Math.min(4, Math.max(0.6, stationScale * (event.deltaY < 0 ? 1.18 : 0.85)));
-      const anchor = plotHeight / 2;
+      const anchor = stationContentHeight / 2;
       const nextOffset = (stationOffset + anchor) * (nextScale / stationScale) - anchor;
-      const maxOffset = Math.max(0, plotHeight * (nextScale - 1));
+      const maxOffset = Math.max(0, stationContentHeight * (nextScale - 1));
       onStationViewportChange({
         scale: nextScale,
         offset: Math.min(Math.max(nextOffset, 0), maxOffset),
@@ -404,9 +456,10 @@ export function TransitTripRunChart({
     const anchorMinutes = minutesFor(x);
     const factor = event.deltaY < 0 ? 0.82 : 1.22;
     const duration = Math.min(1440, Math.max(30, viewport.duration * factor));
-    const ratio = (x - chartLeft) / plotWidth;
+    const ratio = x / plotWidth;
+    // 平移边界由父组件按可见区计算，这里只上报缩放后的锚点时刻。
     onViewportChange({
-      start: clampViewportStart(anchorMinutes - ratio * duration),
+      start: anchorMinutes - ratio * duration,
       duration,
     });
   };
@@ -431,64 +484,56 @@ export function TransitTripRunChart({
         onContextMenu={handleContextMenu}
         onWheel={handleWheel}
       >
-        <defs>
-          <clipPath id="transit-trip-run-plot-clip">
-            <rect x={chartLeft} y={0} width={plotWidth} height={height} />
-          </clipPath>
-        </defs>
         {rows.map((row, index) => (
           <rect
             className={index % 2 === 0 ? 'transit-trip-run-band' : 'transit-trip-run-band is-alt'}
             key={`band-${row.stationSourceId}`}
-            x={chartLeft}
+            x={0}
             y={row.bandTop}
-            width={plotWidth}
+            width={width}
             height={Math.max(0, row.bandBottom - row.bandTop)}
           />
         ))}
-        {timeLines.map((minutes) => (
-          <g key={`time-${minutes}`}>
-            <line
-              className={
-                minutes % 60 === 0
-                  ? 'transit-trip-run-time-line is-hour'
-                  : 'transit-trip-run-time-line'
-              }
-              x1={xFor(minutes)}
-              x2={xFor(minutes)}
-              y1={chartTop - 8}
-              y2={height - chartBottom}
-            />
-            <text
-              className="transit-trip-run-time-label"
-              x={xFor(minutes)}
-              y={chartTop - 14}
-              textAnchor="middle"
-            >
-              {formatWorkbenchMinutes(minutes)}
-            </text>
-          </g>
+        {/* 顶部时间刻度带与右侧站名带：坐标贴可见边缘并带底色，保证叠在运行图上仍可读。 */}
+        <rect
+          className="transit-trip-run-axis-band"
+          x={axisLeft}
+          y={axisTop}
+          width={Math.max(0, axisRight - axisLeft)}
+          height={axisHeaderHeight}
+        />
+        <rect
+          className="transit-trip-run-station-band"
+          x={axisRight - stationLabelWidth}
+          y={axisTop}
+          width={stationLabelWidth}
+          height={Math.max(0, axisBottom - axisTop)}
+        />
+        {visibleTimeLines.map((minutes) => (
+          <line
+            className={
+              minutes % 60 === 0
+                ? 'transit-trip-run-time-line is-hour'
+                : 'transit-trip-run-time-line'
+            }
+            key={`time-${minutes}`}
+            x1={xFor(minutes)}
+            x2={xFor(minutes)}
+            y1={0}
+            y2={height}
+          />
         ))}
         {rows.map((row) => (
-          <g key={`station-${row.stationSourceId}`}>
-            <line
-              className="transit-trip-run-station-line"
-              x1={chartLeft}
-              x2={chartLeft + plotWidth}
-              y1={row.y}
-              y2={row.y}
-            />
-            <text
-              className="transit-trip-run-station-label"
-              x={chartLeft + plotWidth + 12}
-              y={row.y + 4}
-              textAnchor="start"
-            >
-              {row.stationName}
-            </text>
-          </g>
+          <line
+            className="transit-trip-run-station-line"
+            key={`station-line-${row.stationSourceId}`}
+            x1={0}
+            x2={width}
+            y1={row.y}
+            y2={row.y}
+          />
         ))}
-        <g clipPath="url(#transit-trip-run-plot-clip)">
+        <g>
           {trips.map((trip) => {
             const points = buildTripPoints(trip, rowByName, xFor);
             if (points.length < 2) {
@@ -562,15 +607,38 @@ export function TransitTripRunChart({
                   return (
                     <g key={`extend-${trip.id}`} className="transit-trip-run-extend">
                       {(linkMode === 'before' || linkMode === 'all') && (
-                        <line x1={chartLeft} x2={first.x} y1={first.y} y2={first.y} />
+                        <line x1={0} x2={first.x} y1={first.y} y2={first.y} />
                       )}
                       {(linkMode === 'after' || linkMode === 'all') && (
-                        <line x1={last.x} x2={chartLeft + plotWidth} y1={last.y} y2={last.y} />
+                        <line x1={last.x} x2={width} y1={last.y} y2={last.y} />
                       )}
                     </g>
                   );
                 })
             : null}
+          {/* 坐标文字画在折线与节点之后，避免被班次线条盖住。 */}
+          {visibleTimeLines.map((minutes) => (
+            <text
+              className="transit-trip-run-time-label"
+              key={`time-label-${minutes}`}
+              x={xFor(minutes)}
+              y={axisTop + 17}
+              textAnchor="middle"
+            >
+              {formatWorkbenchMinutes(minutes)}
+            </text>
+          ))}
+          {visibleStationLabels.map((row) => (
+            <text
+              className="transit-trip-run-station-label"
+              key={`station-label-${row.stationSourceId}`}
+              x={stationLabelX}
+              y={row.y + 4}
+              textAnchor="end"
+            >
+              {row.stationName}
+            </text>
+          ))}
         </g>
       </svg>
       {hover ? (
@@ -605,17 +673,16 @@ function buildTripPoints(
   return points;
 }
 
-function buildTimeLines(start: number, end: number): number[] {
+/** 按最终像素间距挑选时间刻度步长，保证标签不重叠。 */
+function buildTimeLines(start: number, end: number, plotWidth: number): number[] {
   const span = Math.max(1, end - start);
-  const step = span > 600 ? 60 : span > 300 ? 30 : span > 120 ? 15 : 10;
+  const pxPerMinute = Math.max(0.001, plotWidth / span);
+  const steps = [5, 10, 15, 20, 30, 60, 120, 180, 240, 360, 720];
+  const step = steps.find((candidate) => candidate * pxPerMinute >= 62) ?? 720;
   const first = Math.max(0, Math.ceil(start / step) * step);
   const lines: number[] = [];
   for (let minutes = first; minutes <= end; minutes += step) {
     lines.push(minutes);
   }
   return lines;
-}
-
-function clampViewportStart(value: number): number {
-  return Math.min(Math.max(value, -120), 24 * 60);
 }

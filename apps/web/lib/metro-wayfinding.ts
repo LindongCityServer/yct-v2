@@ -100,7 +100,8 @@ export type MetroArrowIconAssetName =
   | 'turn-right-up'
   | 'turn-right-down'
   | 'u-turn-left'
-  | 'u-turn-right';
+  | 'u-turn-right'
+  | 'no-entry';
 
 export interface MetroWayfindingIconOption {
   id: string;
@@ -289,6 +290,8 @@ export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
   { id: 'turn-right-down', label: '先右后下', symbol: 'arrow_top_right', group: 'arrow' },
   { id: 'u-turn-left', label: '左掉头', symbol: 'u_turn_left', group: 'arrow' },
   { id: 'u-turn-right', label: '右掉头', symbol: 'u_turn_right', group: 'arrow' },
+  // 方向选择器的中心格：禁止通行不是方向，但在 5×3 网格里承担「无方向」语义。
+  { id: 'no-entry', label: '禁止通行', symbol: 'block', group: 'arrow' },
 ];
 
 export const metroWayfindingFacilityOptions = metroWayfindingIconOptions.filter(
@@ -1249,10 +1252,7 @@ export function appendMetroLargeTextSuffix<T extends MetroWayfindingLargeTextLik
   const last = suffixes.at(-1);
   const next =
     last && last.at === length
-      ? [
-          ...suffixes.slice(0, -1),
-          { at: length, value: `${last.value}${addition}`.slice(0, 24) },
-        ]
+      ? [...suffixes.slice(0, -1), { at: length, value: `${last.value}${addition}`.slice(0, 24) }]
       : [...suffixes, { at: length, value: addition.slice(0, 24) }];
   return { suffixes: next, suffix: next.filter((item) => item.at === length).at(-1)?.value ?? '' };
 }
@@ -1704,9 +1704,7 @@ export function collectMetroWayfindingTexts(layout: MetroWayfindingLayout): stri
  * 用于判断「套用或导入模板后只动图形、没有改任何文本」的免审核导出条件。
  */
 export function buildMetroWayfindingTextSignature(layoutValue: string): string {
-  return collectMetroWayfindingTexts(parseMetroWayfindingLayout(layoutValue))
-    .sort()
-    .join('\u0001');
+  return collectMetroWayfindingTexts(parseMetroWayfindingLayout(layoutValue)).sort().join('\u0001');
 }
 
 export function summarizeMetroWayfindingLayout(

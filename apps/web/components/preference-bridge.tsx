@@ -116,11 +116,18 @@ export function applyLocalePreferenceState(state: ClientLocalePreferenceState) {
   document.documentElement.lang = state.resolvedLocale;
 }
 
+/** 反转调色后保留的原始调色强度（0 = 完全中和，1 = 不削弱）。 */
+const materialInvertTintRetention = 0.25;
+
 export function applyMaterialPreference(preference: MaterialPreference) {
   const root = document.documentElement;
   const amount = preference.thickness / 100;
   const blur = 0.5 + Math.pow(amount, 2.6) * 30;
-  const saturation = 1.55 - amount * 0.15;
+  const invertTint = preference.mode === 'advanced' && preference.invertTint;
+  // 反转调色：把亮度/对比度/饱和度的偏移取反，并收敛到原强度的 25%，避免背景被反向过曝。
+  const tint = (value: number) =>
+    invertTint ? 1 - (value - 1) * materialInvertTintRetention : value;
+  const saturation = tint(1.55 - amount * 0.15);
   const reducedTransparency = window.matchMedia('(prefers-reduced-transparency: reduce)').matches;
   const prefersDark =
     root.dataset.colorScheme === 'dark' ||
@@ -128,8 +135,9 @@ export function applyMaterialPreference(preference: MaterialPreference) {
       window.matchMedia('(prefers-color-scheme: dark)').matches);
   const opacityFactor = 1 - amount;
   const innerShadowOpacityFactor = 1 - amount;
-  const edgeTopOpacity = (prefersDark ? 5 : 22) * opacityFactor;
-  const innerShadowOpacity = (prefersDark ? 13 : 38) * innerShadowOpacityFactor;
+  // 浅色材质的顶部高光描边与内阴影比深色更依赖白色叠层，加浓一档以拉开表面层次。
+  const edgeTopOpacity = (prefersDark ? 5 : 34) * opacityFactor;
+  const innerShadowOpacity = (prefersDark ? 13 : 52) * innerShadowOpacityFactor;
   const controlSurfaceOpacity = 32 + amount * 14;
 
   // 系统减少透明度偏好只记录为兼容标记，不能覆盖用户显式选择的高级材质。
@@ -143,9 +151,9 @@ export function applyMaterialPreference(preference: MaterialPreference) {
   root.style.setProperty('--yct-material-blur-strong', `${blur * 1.35}px`);
   root.style.setProperty('--yct-material-blur-medium', `${blur * 0.8}px`);
   root.style.setProperty('--yct-material-blur-soft', `${blur * 0.35}px`);
-  root.style.setProperty('--yct-material-brightness-light', String(1.38 - amount * 0.32));
-  root.style.setProperty('--yct-material-brightness-dark', String(0.68 + amount * 0.26));
-  root.style.setProperty('--yct-material-contrast', String(1.24 - amount * 0.2));
+  root.style.setProperty('--yct-material-brightness-light', String(tint(1.38 - amount * 0.32)));
+  root.style.setProperty('--yct-material-brightness-dark', String(tint(0.68 + amount * 0.26)));
+  root.style.setProperty('--yct-material-contrast', String(tint(1.24 - amount * 0.2)));
   root.style.setProperty('--yct-material-saturation', String(saturation));
   root.style.setProperty('--yct-material-floating-surface', `${36 + amount * 58}%`);
   root.style.setProperty('--yct-material-action-surface', 'var(--yct-material-floating-surface)');

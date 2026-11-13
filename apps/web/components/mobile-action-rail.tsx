@@ -35,6 +35,8 @@ export interface MobileActionRailItem {
   group: MobileActionRailGroup;
   /** 组内显示顺序，数字越小越靠上。 */
   order?: number;
+  /** 同一 zone 内再按工具栏分组切开，每个分组各渲染一块胶囊。 */
+  section?: string;
   /** 空间不足时的保留优先级：数字越小越先收进“更多”菜单，100 表示永不收缩。 */
   priority?: number;
   href?: string;
@@ -328,13 +330,19 @@ function MobileActionRail({
         }
         ref={scrollAreaRef}
       >
-        {topGroups.map((entry) => (
-          <RailGroup key={entry.group}>
-            {entry.items.map((item) => (
-              <RailAction item={item} key={item.id} onActivate={closeMenu} />
-            ))}
-          </RailGroup>
-        ))}
+        {topGroups.map((entry) =>
+          splitRailSections(entry.items).map((sectionItems) => (
+            <RailGroup
+              key={`${entry.group}:${sectionItems[0]?.section ?? 'default'}:${
+                sectionItems[0]?.id ?? ''
+              }`}
+            >
+              {sectionItems.map((item) => (
+                <RailAction item={item} key={item.id} onActivate={closeMenu} />
+              ))}
+            </RailGroup>
+          )),
+        )}
       </div>
 
       <div className="mobile-action-rail-bottom">
@@ -390,6 +398,20 @@ function MobileActionRail({
       ) : null}
     </aside>
   );
+}
+
+/** 按 section 把同一 zone 的条目切成连续分组，每组渲染成独立胶囊。 */
+function splitRailSections(items: MobileActionRailItem[]) {
+  const sections: MobileActionRailItem[][] = [];
+  let section: string | undefined;
+  for (const item of items) {
+    if (sections.length === 0 || item.section !== section) {
+      sections.push([]);
+      section = item.section;
+    }
+    sections[sections.length - 1].push(item);
+  }
+  return sections;
 }
 
 function RailGroup({ children }: Readonly<{ children: ReactNode }>) {

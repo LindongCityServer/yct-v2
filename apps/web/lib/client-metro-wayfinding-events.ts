@@ -1,4 +1,8 @@
-import type { MetroWayfindingElement, MetroWayfindingLayout } from './metro-wayfinding';
+import type {
+  MetroWayfindingElement,
+  MetroWayfindingLayout,
+  MetroWayfindingLayoutMode,
+} from './metro-wayfinding';
 import type {
   MetroWayfindingImportPreview,
   MetroWayfindingImportSource,
@@ -33,7 +37,9 @@ export type MetroWayfindingElementAction =
 export type MetroWayfindingCompositionAction =
   | (MetroWayfindingElementAction & { rowIndex: number })
   | { type: 'reverse' }
-  | { type: 'replace'; layout: MetroWayfindingLayout };
+  | { type: 'replace'; layout: MetroWayfindingLayout }
+  /** 工作台左树 / 画布发起的选中同步；不修改版式。 */
+  | { type: 'select'; rowIndex: number; elementId: string };
 
 export interface MetroWayfindingCompositionChangedPayload {
   editorId: string;
@@ -199,4 +205,46 @@ export function subscribeMetroWayfindingImportLifecycleEvents(
   };
   window.addEventListener(metroWayfindingImportLifecycleEventName, handleEvent);
   return () => window.removeEventListener(metroWayfindingImportLifecycleEventName, handleEvent);
+}
+
+/**
+ * 工作台命令：工具栏与全局属性需要驱动编辑器内部动作（打开模板库、清空元素、切换版式），
+ * 但这些动作依赖编辑器内部状态，不能由宿主直接改写 layout。沿用事件总线，保持编辑器不变。
+ */
+export type MetroWayfindingWorkspaceCommand =
+  | { type: 'open-project-dialog'; view?: 'examples' | 'import' }
+  | { type: 'close-project-dialog' }
+  | { type: 'clear-layout' }
+  | { type: 'set-layout-mode'; mode: MetroWayfindingLayoutMode };
+
+export interface MetroWayfindingWorkspaceCommandPayload {
+  editorId: string;
+  command: MetroWayfindingWorkspaceCommand;
+}
+
+export const metroWayfindingWorkspaceCommandEventName = 'yct:metro-wayfinding-workspace-command';
+
+export function dispatchMetroWayfindingWorkspaceCommand(
+  payload: MetroWayfindingWorkspaceCommandPayload,
+): void {
+  window.dispatchEvent(
+    new CustomEvent<MetroWayfindingWorkspaceCommandPayload>(
+      metroWayfindingWorkspaceCommandEventName,
+      { detail: payload },
+    ),
+  );
+}
+
+export function subscribeMetroWayfindingWorkspaceCommands(
+  editorId: string,
+  listener: (command: MetroWayfindingWorkspaceCommand) => void,
+): () => void {
+  const handleEvent = (event: Event) => {
+    const detail = (event as CustomEvent<MetroWayfindingWorkspaceCommandPayload>).detail;
+    if (detail?.editorId === editorId) {
+      listener(detail.command);
+    }
+  };
+  window.addEventListener(metroWayfindingWorkspaceCommandEventName, handleEvent);
+  return () => window.removeEventListener(metroWayfindingWorkspaceCommandEventName, handleEvent);
 }
