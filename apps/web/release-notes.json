@@ -3,6 +3,50 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.21.0",
+      "releasedAt": "2026-11-13T13:20:59.290Z",
+      "sourceFingerprint": "ded6eb46caba847435cf8d9d90257c38b30c940473251c948d27ad3ef44cf357",
+      "themes": ["materials", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "模板库支持跨模板映射套用线路与站点，版式切换即时生效"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地铁导视牌与公交模板可直接互相切换，并保留各自草稿"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复导视牌主副文本在中文输入法下重复上屏"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复中等宽度下工作台全局属性没有返回入口"
+        },
+        {
+          "category": "perf",
+          "breaking": false,
+          "summary": "套用版式先本地切换，再在后台补全服务端线网字段"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "套用向导缩略图按模板真实配色渲染，空线路槽位改为橙底细描边"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "顶部工具条改为按单个按钮收纳，更多按钮随分组归属"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.20.0",
       "releasedAt": "2026-11-04T09:48:32.417Z",
       "sourceFingerprint": "3380ba51501d1f64f1c585f6ee31dd97e44fa18f31d8b75bcd619952217959e8",
