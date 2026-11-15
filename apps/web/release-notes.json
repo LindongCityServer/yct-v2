@@ -3,6 +3,30 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.21.1",
+      "releasedAt": "2026-11-15T07:38:34.849Z",
+      "sourceFingerprint": "d63aee583529dc3185c52707d7f65da6655d3ce76c7813d61e7a34d7696bca45",
+      "themes": ["map", "web", "materials"],
+      "changes": [
+        {
+          "category": "perf",
+          "breaking": false,
+          "summary": "地图或瓦片源无响应时接口按超时快速失败，工作台不再长时间停在加载状态"
+        },
+        {
+          "category": "perf",
+          "breaking": false,
+          "summary": "线路编辑工作台缓存道路点排序，拖动与缩放更流畅"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "旧版地铁线路图本站换乘标记调整：竖版保留换乘线路文字，横版保留胶囊形标记并把本站圆圈箭头移到标签外侧"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.21.0",
       "releasedAt": "2026-11-13T13:20:59.290Z",
       "sourceFingerprint": "ded6eb46caba847435cf8d9d90257c38b30c940473251c948d27ad3ef44cf357",
@@ -19,6 +43,46 @@
           "summary": "地铁导视牌与公交模板可直接互相切换，并保留各自草稿"
         },
         {
+          "category": "feat",
+          "breaking": false,
+          "summary": "新增行政区划编辑工作台，可独立绘制边界并设置标签位置、语义色或线路色"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "运营内容编辑器升级为可视化 Markdown 工作台，支持区块大纲、区块属性、封面色与素材选择"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地图区域与几何 POI 支持「减去图形」，渲染时按内环挖空"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "线路、班次、POI 几何与区划工作台统一工具栏、图层面板、属性面板和缩放控件，并新增移动端侧边操作栏"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "快捷键说明按当前工作台展示对应快捷键分组"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "物料保存与下载合并为统一弹窗，可在弹窗内选择保存草稿或直接下载"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "新增路牌与门牌物料模板，门牌提供旧版与怀旧门牌两种样式"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "高级材质新增「反转调色」开关，可按需削弱透光材质的背景调色"
+        },
+        {
           "category": "fix",
           "breaking": false,
           "summary": "修复导视牌主副文本在中文输入法下重复上屏"
@@ -29,9 +93,24 @@
           "summary": "修复中等宽度下工作台全局属性没有返回入口"
         },
         {
+          "category": "fix",
+          "breaking": false,
+          "summary": "门牌物料数据源只列出能解析出道路名称的地点"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "本地管理员登录支持通过环境变量放行局域网主机，便于局域网联调"
+        },
+        {
           "category": "perf",
           "breaking": false,
           "summary": "套用版式先本地切换，再在后台补全服务端线网字段"
+        },
+        {
+          "category": "perf",
+          "breaking": false,
+          "summary": "工作台首屏不再等待瓦片区域索引，地图源不可用时按超时快速降级"
         },
         {
           "category": "style",
@@ -42,6 +121,11 @@
           "category": "style",
           "breaking": false,
           "summary": "顶部工具条改为按单个按钮收纳，更多按钮随分组归属"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "服务器状态改为在线状态与在线人数并列展示，不再用人数替代在线文案"
         }
       ],
       "bump": "minor"
@@ -281,6 +365,11 @@
           "category": "feat",
           "breaking": false,
           "summary": "地铁导视支持导入 MoeRT-GuideGen 工程，转换预览会标注近似映射与版本兼容提示"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复门户窄屏下导航项隐藏顺序不正确的问题"
         }
       ],
       "bump": "minor"
