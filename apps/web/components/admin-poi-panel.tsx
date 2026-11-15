@@ -780,6 +780,25 @@ export function AdminPoiPanel({
     setImageReviews(data.items ?? []);
   };
 
+  // 区域索引只用于瓦片预览遮罩，单独异步加载：
+  // 源站较慢时不能让整个工作台首屏一直等它。
+  const loadTilePreviewRegionIndex = async () => {
+    try {
+      const regionResponse = await fetch(appPath('/api/map/unmined-regions'), {
+        cache: 'no-store',
+      });
+      if (!regionResponse.ok) {
+        setTilePreviewRegionResponse(null);
+        return;
+      }
+
+      const regionData = (await regionResponse.json()) as PoiTileRegionResponse;
+      setTilePreviewRegionResponse(regionData);
+    } catch {
+      setTilePreviewRegionResponse(null);
+    }
+  };
+
   const loadTilePreviewConfig = async () => {
     const response = await fetch(appPath('/api/map/tile-providers'), { cache: 'no-store' });
     const data = (await response.json()) as { items?: TileProviderDescriptor[] };
@@ -807,14 +826,7 @@ export function AdminPoiPanel({
       return;
     }
 
-    const regionResponse = await fetch(appPath('/api/map/unmined-regions'), { cache: 'no-store' });
-    if (!regionResponse.ok) {
-      setTilePreviewRegionResponse(null);
-      return;
-    }
-
-    const regionData = (await regionResponse.json()) as PoiTileRegionResponse;
-    setTilePreviewRegionResponse(regionData);
+    void loadTilePreviewRegionIndex();
   };
 
   const loadEntityTranslations = async () => {

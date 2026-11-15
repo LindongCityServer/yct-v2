@@ -16,6 +16,8 @@ export const dynamic = 'force-dynamic';
 
 const tileCoordinatePattern = /^-?\d+$/;
 const imageContentTypePattern = /^image\//i;
+/** 上游瓦片超时：避免源站无响应时请求长期占住 Node 进程，拖慢工作台与地图打开。 */
+const upstreamTileTimeoutMs = 10_000;
 const transparentTileSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"></svg>';
 
@@ -60,7 +62,10 @@ export async function GET(request: NextRequest) {
   const upstreamUrl = fillMapTileTemplate(template, { z, x, y, xd, yd });
 
   try {
-    const upstreamResponse = await fetch(upstreamUrl, { cache: 'no-store' });
+    const upstreamResponse = await fetch(upstreamUrl, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(upstreamTileTimeoutMs),
+    });
     if (upstreamResponse.status === 404 || upstreamResponse.status === 204) {
       return createTransparentTileResponse('not-found');
     }
@@ -123,7 +128,10 @@ async function respondHistoryTile(
   const upstreamUrl = fillMapTileTemplate(version.tileTemplate, coordinates);
 
   try {
-    const upstreamResponse = await fetch(upstreamUrl, { cache: 'no-store' });
+    const upstreamResponse = await fetch(upstreamUrl, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(upstreamTileTimeoutMs),
+    });
     if (upstreamResponse.status === 404 || upstreamResponse.status === 204) {
       return createHistoryTileEmptyResponse(versionId, 'not-found');
     }

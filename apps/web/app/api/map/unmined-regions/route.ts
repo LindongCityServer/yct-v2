@@ -60,8 +60,11 @@ export async function GET() {
 }
 
 async function fetchText(url: URL): Promise<string> {
+  // 源站不可达时必须尽快失败：该接口会参与工作台首屏加载，
+  // 没有超时时 Node 默认要等 5 分钟，表现为工作台长时间停在“正在读取”。
   const response = await fetch(url, {
     next: { revalidate: 300 },
+    signal: AbortSignal.timeout(readRuntimeConfig().markerBdslmTimeoutMs),
   });
 
   if (!response.ok) {
