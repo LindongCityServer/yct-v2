@@ -3112,9 +3112,20 @@ function getLinearMarkerCoordinates(
   return [];
 }
 
+// 最近邻排序是 O(n²)，且每次渲染都会为每条道路重算；道路坐标数组来自状态且引用稳定，
+// 用 WeakMap 缓存排序结果，避免拖动/缩放时反复做全量排序。
+const orderedRoadCoordinatesCache = new WeakMap<
+  ReadonlyArray<[number, number]>,
+  Array<[number, number]>
+>();
+
 function orderRoadPoints(coordinates: Array<[number, number]>): Array<[number, number]> {
   if (coordinates.length < 3) {
     return coordinates;
+  }
+  const cached = orderedRoadCoordinatesCache.get(coordinates);
+  if (cached) {
+    return cached;
   }
   const remaining = [...coordinates];
   const first = remaining.reduce((selected, coordinate) =>
@@ -3137,6 +3148,7 @@ function orderRoadPoints(coordinates: Array<[number, number]>): Array<[number, n
       ordered.push(next);
     }
   }
+  orderedRoadCoordinatesCache.set(coordinates, ordered);
   return ordered;
 }
 
