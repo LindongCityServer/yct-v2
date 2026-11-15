@@ -864,6 +864,9 @@ function renderMetroLineMap(
     const labelAbove = displayIndex % 2 === 0;
     const pinyin = toUppercasePinyin(station);
     const transferList = transfersByStation.get(station) ?? [];
+    // 旧版本站若是换乘站，线路上的站点图标让给换乘胶囊；
+    // 圆圈加箭头移到本站标签未连线的一端（标签外侧）。
+    let detachedCurrentMarkerY: number | undefined;
 
     if (isCurrent) {
       const nameWidth = Math.min(
@@ -879,6 +882,9 @@ function renderMetroLineMap(
       const boxNameBaseline = labelAbove ? 39 : 79.2;
       const boxPinyinBaseline = labelAbove ? 44.6 : 84.6;
       const boxTop = boxNameBaseline - 10.2;
+      if (style === 'classic' && transferList.length) {
+        detachedCurrentMarkerY = labelAbove ? boxTop - 7 : boxTop + boxHeight + 7;
+      }
       const boxX = Math.min(Math.max(x - boxWidth / 2, 2), Math.max(canvasWidth - boxWidth - 2, 2));
       labels.push(
         `<rect x="${formatNumber(boxX)}" y="${formatNumber(boxTop)}" width="${formatNumber(boxWidth)}" height="${boxHeight}" rx="2" fill="${accentColor}"/>`,
@@ -956,6 +962,7 @@ function renderMetroLineMap(
     markers.push(
       renderMetroLineMapStationMarker({
         x,
+        centerY: detachedCurrentMarkerY,
         kind:
           style === 'classic'
             ? isCurrent
@@ -1303,7 +1310,8 @@ function renderMetroLineMapVertical(
       if (isCurrent) {
         if (isClassicBoth) {
           // 旧版不画实心框：本站站名用线路色，中间标注「本站」。
-          currentParts.push(
+          // 本站同时是换乘站时，中间留给换乘线路文字，避免「本站」盖住换乘信息。
+          const currentPartsMarkup = [
             renderMetroVerticalLabelPair({
               station,
               pinyin,
@@ -1326,12 +1334,17 @@ function renderMetroLineMapVertical(
               maxWidth: 30 * widthScale,
               fit: stationTextFit,
             }),
-            renderMetroVerticalClassicThisStation({
-              centerX: (leftTrackX + rightTrackX) / 2,
-              y,
-              widthScale,
-            }),
-          );
+          ];
+          if (!transferList.length) {
+            currentPartsMarkup.push(
+              renderMetroVerticalClassicThisStation({
+                centerX: (leftTrackX + rightTrackX) / 2,
+                y,
+                widthScale,
+              }),
+            );
+          }
+          currentParts.push(...currentPartsMarkup);
         } else {
           currentParts.push(
             renderMetroVerticalCurrentLabel({
@@ -3126,18 +3139,22 @@ function renderMetroLineMapStationMarker(input: {
   ringColor: string;
   terminalColor: string;
   doorDirection: 'left' | 'right';
+  /** 站点圆心纵坐标；默认落在 128 高设计稿的线路中线上。 */
+  centerY?: number;
 }): string {
-  const white = `<circle cx="${formatNumber(input.x)}" cy="58.5" r="4" fill="#FFFFFF"/>`;
-  const ring = `<path transform="translate(${formatNumber(input.x - 5.5)} 53)" fill="${input.ringColor}" fill-rule="evenodd" d="${metroLineMapStationRingPath}"/>`;
+  const centerY = input.centerY ?? 58.5;
+  const ringTop = centerY - 5.5;
+  const white = `<circle cx="${formatNumber(input.x)}" cy="${formatNumber(centerY)}" r="4" fill="#FFFFFF"/>`;
+  const ring = `<path transform="translate(${formatNumber(input.x - 5.5)} ${formatNumber(ringTop)})" fill="${input.ringColor}" fill-rule="evenodd" d="${metroLineMapStationRingPath}"/>`;
   if (input.kind === 'current') {
     const arrowTransform =
       input.doorDirection === 'left'
-        ? `translate(${formatNumber(input.x - 5.5)} 53)`
-        : `translate(${formatNumber(input.x + 5.5)} 53) scale(-1 1)`;
+        ? `translate(${formatNumber(input.x - 5.5)} ${formatNumber(ringTop)})`
+        : `translate(${formatNumber(input.x + 5.5)} ${formatNumber(ringTop)}) scale(-1 1)`;
     return `${white}${ring}<path transform="${arrowTransform}" d="${metroLineMapCurrentArrowPath}" stroke="#000000" stroke-width="0.6" fill="#000000"/>`;
   }
   if (input.kind === 'terminal') {
-    return `${white}${ring}<circle cx="${formatNumber(input.x)}" cy="58.5" r="2.5" fill="${input.terminalColor}"/>`;
+    return `${white}${ring}<circle cx="${formatNumber(input.x)}" cy="${formatNumber(centerY)}" r="2.5" fill="${input.terminalColor}"/>`;
   }
   return `${white}${ring}`;
 }
