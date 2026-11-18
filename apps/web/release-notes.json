@@ -3,6 +3,20 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.21.3",
+      "releasedAt": "2026-11-18T04:53:22.667Z",
+      "sourceFingerprint": "a50a3809d5981397cf564646e678d157831f9bf60d1fb326d0563288fe82241a",
+      "themes": ["qqbot"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "QQ 机器人回答配图改为先上传、再以 Markdown 图文消息与简化文字合并发送；上传失败才回退完整纯文字"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.21.2",
       "releasedAt": "2026-11-18T03:45:48.764Z",
       "sourceFingerprint": "da7f4cf94075dd9d72d27685c72c0d9acf29cc672daa6dca8dafc787e1cb372a",
