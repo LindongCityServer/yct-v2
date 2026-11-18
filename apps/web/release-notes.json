@@ -3,6 +3,35 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.21.2",
+      "releasedAt": "2026-11-18T03:45:48.764Z",
+      "sourceFingerprint": "da7f4cf94075dd9d72d27685c72c0d9acf29cc672daa6dca8dafc787e1cb372a",
+      "themes": ["web", "admin", "materials", "qqbot"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "工作台的显示/隐藏面板按钮移到标题栏返回按钮与页面标题之间，并调整为 34px"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "QQ 机器人新增 B 站视频链接与封面海报、可配置今日运势文案、按群进退群文案和玩家进出播报"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "指令卡片加高底栏，改用 wordmark、发送人和发送时间"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "中文电码、GB2312 和对联卡片使用新的格纸与答题卡样式"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.21.1",
       "releasedAt": "2026-11-15T07:38:34.849Z",
       "sourceFingerprint": "d63aee583529dc3185c52707d7f65da6655d3ce76c7813d61e7a34d7696bca45",
