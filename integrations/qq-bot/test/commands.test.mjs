@@ -22,12 +22,40 @@ test('算式指令', async () => {
   assert.equal(result.reply, '= 9');
 });
 
+test('查 IP 不带地址时只提示用法，不查询机器人出口 IP', async () => {
+  let called = false;
+  const result = await handleCommand({
+    ...base,
+    text: '/查IP',
+    ipLookup: async () => {
+      called = true;
+      return '203.0.113.5：错误结果';
+    },
+  });
+  assert.equal(called, false);
+  assert.match(result.reply, /请提供要查询的 IP/);
+  assert.equal(result.card, undefined);
+});
+
 test('随机数和骰子指令', async () => {
   const random = await handleCommand({ ...base, text: '/随机 5 5' });
   assert.equal(random.reply, '随机数：5（5-5）');
 
   const dice = await handleCommand({ ...base, text: '/骰子 2d6+2' });
   assert.match(dice.reply, /^2d6 \+ 2：\d+ \+ \d+ \+ 2 = \d+$/u);
+  assert.equal(dice.card?.type, 'dice');
+  assert.equal(dice.card?.count, 2);
+  assert.equal(dice.card?.sides, 6);
+  assert.equal(dice.card?.rolls?.length, 2);
+
+  const natural = await handleCommand({ ...base, text: '掷 2个6面骰' });
+  assert.equal(natural.card?.type, 'dice');
+  assert.equal(natural.card?.count, 2);
+  assert.equal(natural.card?.sides, 6);
+
+  const notation = await handleCommand({ ...base, text: '/2d6+1' });
+  assert.equal(notation.card?.type, 'dice');
+  assert.match(notation.reply, /^2d6 \+ 1：/u);
 });
 
 test('中文电码与 GB2312 转换', async () => {

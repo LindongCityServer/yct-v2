@@ -15,11 +15,14 @@ export async function lookupIp({
   now = Date.now,
 } = {}) {
   const target = String(ip ?? '').trim();
-  if (target && isIP(target) === 0) {
+  if (!target) {
+    throw new Error('请提供要查询的 IP，例如：/查IP 8.8.8.8。');
+  }
+  if (isIP(target) === 0) {
     throw new Error('请提供一个 IPv4 或 IPv6 地址，例如 /ip 8.8.8.8。');
   }
 
-  const key = target || 'self';
+  const key = target;
   const cached = cache.get(key);
   const timestamp = now();
   if (cached && cached.expiresAt > timestamp) {
@@ -28,12 +31,10 @@ export async function lookupIp({
 
   let primaryError;
   try {
-    const data = await getJson(
-      target
-        ? `https://ipwho.is/${encodeURIComponent(target)}?lang=zh-CN`
-        : 'https://ipwho.is/?lang=zh-CN',
-      { timeoutMs, fetchImpl },
-    );
+    const data = await getJson(`https://ipwho.is/${encodeURIComponent(target)}?lang=zh-CN`, {
+      timeoutMs,
+      fetchImpl,
+    });
     if (data?.success === false) {
       throw new Error(data?.message || 'ipwho.is 没有查到结果');
     }
@@ -45,7 +46,7 @@ export async function lookupIp({
   }
 
   try {
-    const fallbackUrl = target ? `https://ipapi.co/${target}/json/` : 'https://ipapi.co/json/';
+    const fallbackUrl = `https://ipapi.co/${target}/json/`;
     const data = await getJson(fallbackUrl, { timeoutMs, fetchImpl });
     if (data?.error) {
       throw new Error(data?.reason || 'ipapi.co 没有查到结果');

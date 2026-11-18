@@ -68,7 +68,15 @@ export class ConversationStore {
   }
 }
 
-const resetCommands = new Set(['/new', '新对话', '重置', '清空', '重新开始', '换个话题']);
+const resetCommands = new Set([
+  '/new',
+  '/新对话',
+  '新对话',
+  '重置',
+  '清空',
+  '重新开始',
+  '换个话题',
+]);
 
 /** 只识别完全匹配的短指令，避免把「帮助我查一下…」当成命令。 */
 export function classifyCommand(content) {

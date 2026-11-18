@@ -25,6 +25,11 @@ const commandAliases = new Map([
   ['random', 'random'],
   ['骰子', 'dice'],
   ['dice', 'dice'],
+  ['掷骰子', 'dice'],
+  ['摇骰子', 'dice'],
+  ['扔骰子', 'dice'],
+  ['掷骰', 'dice'],
+  ['摇骰', 'dice'],
   ['算', 'calc'],
   ['计算', 'calc'],
   ['calc', 'calc'],
@@ -141,25 +146,18 @@ export async function handleCommand({
         };
       }
       case 'dice': {
-        const reply = diceReply(args);
-        const sum = /=\s*(\d+)$/u.exec(reply)?.[1] ?? reply;
-        const detail = reply
-          .split('：')
-          .slice(1)
-          .join('：')
-          .replace(/\s*=\s*\d+$/u, '');
+        const dice = rollDiceCommand(args);
         return {
           handled: true,
-          reply,
+          reply: dice.reply,
           card: {
-            type: 'result',
-            icon: 'casino',
-            title: `${args || '1d6'} 骰子`,
-            eyebrow: `随机数 · ${contextDate(context)}`,
-            color: '#168F78',
-            result: sum,
-            resultLabel: '点数合计',
-            note: detail,
+            type: 'dice',
+            count: dice.count,
+            sides: dice.sides,
+            bonus: dice.bonus,
+            rolls: dice.rolls,
+            total: dice.sum,
+            date: contextDate(context),
             footer: '由本机随机生成',
           },
         };
@@ -236,6 +234,13 @@ export async function handleCommand({
         };
       }
       case 'ip': {
+        if (!args) {
+          return {
+            handled: true,
+            reply:
+              '请提供要查询的 IP，例如：查IP 8.8.8.8。不带地址时不会查询机器人所在服务器的出口 IP。',
+          };
+        }
         const reply = await ipLookup({ ip: args, fetchImpl });
         const [head, ...tail] = reply.split('：');
         const detail = tail.length > 0 ? tail.join('：') : head;
@@ -723,8 +728,12 @@ function parseSlashCommand(raw) {
   if (!match) {
     return null;
   }
+  const diceBody = raw.slice(1).trim();
+  if (/^\d*d\d+(?:\s*[+-]\s*\d+)?$/iu.test(diceBody)) {
+    return { command: 'dice', args: diceBody, label: '/骰子' };
+  }
   const name = match[1].toLowerCase();
-  const command = commandAliases.get(name);
+  const command = commandAliases.get(name) ?? (/^\d*d\d+$/u.test(name) ? 'dice' : undefined);
   return {
     command,
     args: match[2].trim(),
@@ -806,6 +815,19 @@ function parseNaturalCommand(raw) {
   rest = matchPrefix(input, '骰子');
   if (rest !== null) {
     return { command: 'dice', args: cleanArgs(rest), label: '骰子' };
+  }
+  for (const prefix of ['掷骰子', '摇骰子', '扔骰子', '掷骰', '摇骰']) {
+    rest = matchPrefix(input, prefix);
+    if (rest !== null) {
+      return { command: 'dice', args: cleanArgs(rest), label: '骰子' };
+    }
+  }
+  if (
+    /^(?:掷|摇|扔)?\s*\d*[dD]\d+(?:\s*[+-]\s*\d+)?$/u.test(input) ||
+    /^(?:掷|摇|扔)?\s*\d+\s*(?:个|颗)\s*\d+\s*面(?:骰|骰子)?(?:\s*[+-]\s*\d+)?$/u.test(input) ||
+    /^(?:掷|摇|扔)?\s*\d+\s*面骰子?(?:\s*[+-]\s*\d+)?$/u.test(input)
+  ) {
+    return { command: 'dice', args: input.replace(/^(?:掷|摇|扔)\s*/u, ''), label: '骰子' };
   }
 
   const coupletRest = matchPrefix(input, '对对联') ?? matchPrefix(input, '对联');
@@ -940,17 +962,63 @@ function randomReply(args) {
   throw new Error('用法：/随机、/随机 10、/随机 5 10 或 /随机 5-10');
 }
 
-function diceReply(args) {
-  const match = /^(\d*)d(\d+)(?:\s*([+-])\s*(\d+))?$/iu.exec(args);
-  if (!match) {
-    throw new Error('用法：/骰子 2d6、/骰子 d20 或 /骰子 3d6+2');
+function rollDiceCommand(rawArgs) {
+  const spec = parseDiceSpec(rawArgs);
+  const result = rollDice(spec.count, spec.sides, spec.bonus);
+  const bonusText =
+    spec.bonus === 0 ? '' : spec.bonus > 0 ? ` + ${spec.bonus}` : ` - ${Math.abs(spec.bonus)}`;
+  return {
+    ...spec,
+    rolls: result.rolls,
+    sum: result.sum,
+    reply: `${spec.count}d${spec.sides}${bonusText}：${result.rolls.join(' + ')}${bonusText} = ${result.sum}`,
+  };
+}
+
+function parseDiceSpec(rawArgs) {
+  const text = String(rawArgs ?? '').trim();
+  if (!text) {
+    return { count: 1, sides: 6, bonus: 0 };
   }
-  const count = match[1] ? Number(match[1]) : 1;
-  const sides = Number(match[2]);
-  const bonus = match[4] ? (match[3] === '-' ? -Number(match[4]) : Number(match[4])) : 0;
-  const result = rollDice(count, sides, bonus);
-  const bonusText = bonus === 0 ? '' : bonus > 0 ? ` + ${bonus}` : ` - ${Math.abs(bonus)}`;
-  return `${count}d${sides}${bonusText}：${result.rolls.join(' + ')}${bonusText} = ${result.sum}`;
+
+  const standard = /^(\d*)d(\d+)(?:\s*([+-])\s*(\d+))?$/iu.exec(text);
+  if (standard) {
+    return {
+      count: standard[1] ? Number(standard[1]) : 1,
+      sides: Number(standard[2]),
+      bonus: standard[4] ? (standard[3] === '-' ? -Number(standard[4]) : Number(standard[4])) : 0,
+    };
+  }
+
+  const chineseCount = /^(\d+)\s*(?:个|颗)\s*(\d+)\s*面(?:骰|骰子)?(?:\s*([+-])\s*(\d+))?$/u.exec(
+    text,
+  );
+  if (chineseCount) {
+    return {
+      count: Number(chineseCount[1]),
+      sides: Number(chineseCount[2]),
+      bonus: chineseCount[4]
+        ? chineseCount[3] === '-'
+          ? -Number(chineseCount[4])
+          : Number(chineseCount[4])
+        : 0,
+    };
+  }
+
+  const chineseSides = /^(\d+)\s*面骰子?(?:\s*([+-])\s*(\d+))?$/u.exec(text);
+  if (chineseSides) {
+    return {
+      count: 1,
+      sides: Number(chineseSides[1]),
+      bonus: chineseSides[3]
+        ? chineseSides[2] === '-'
+          ? -Number(chineseSides[3])
+          : Number(chineseSides[3])
+        : 0,
+    };
+  }
+
+  throw new Error('用法：/掷骰子、/掷骰子 2d6、/掷骰子 2个6面骰 或 /掷骰子 3d6+2');
 }
 
 function parseWeatherCurrent(line) {

@@ -50,23 +50,18 @@ test('ipwho.is 失败时回退 ipapi.co', async () => {
   assert.match(text, /Google LLC AS15169/);
 });
 
-test('不传 IP 时查询调用方自己的地址', async () => {
+test('不传 IP 时拒绝查询，避免泄露机器人出口地址', async () => {
   clearIpCache();
-  let requested = '';
-  const fetchImpl = async (url) => {
-    requested = url;
-    return jsonResponse({
-      ip: '203.0.113.5',
-      success: true,
-      country: '中国',
-      region: '浙江省',
-      city: '杭州',
-      connection: { isp: '示例运营商', asn: 64512 },
-    });
-  };
-  const text = await lookupIp({ fetchImpl });
-  assert.equal(requested, 'https://ipwho.is/?lang=zh-CN');
-  assert.match(text, /203\.0\.113\.5：中国 浙江省 杭州/);
+  let called = false;
+  await assert.rejects(
+    lookupIp({
+      fetchImpl: async () => {
+        called = true;
+      },
+    }),
+    /请提供要查询的 IP/,
+  );
+  assert.equal(called, false);
 });
 
 test('非法 IP 直接报错，不发请求', async () => {

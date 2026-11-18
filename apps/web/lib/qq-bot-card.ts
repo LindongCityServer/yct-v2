@@ -213,6 +213,17 @@ export interface PoiCard {
   footer?: string;
 }
 
+export interface DiceCard {
+  type: 'dice';
+  count: number;
+  sides: number;
+  bonus: number;
+  rolls: number[];
+  total: number;
+  date: string;
+  footer?: string;
+}
+
 export type QqBotCard =
   | SigninCard
   | SigninBoardCard
@@ -225,7 +236,8 @@ export type QqBotCard =
   | TelegraphCard
   | Gb2312Card
   | CoupletCard
-  | PoiCard;
+  | PoiCard
+  | DiceCard;
 
 export function parseQqBotCardPayload(payload: string): QqBotCard | null {
   if (!payload || payload.length > 4096) {
@@ -417,6 +429,23 @@ export function normalizeCard(input: unknown): QqBotCard | null {
         footer: cleanText(card.footer, 80),
       };
     }
+    case 'dice': {
+      const sides = clampInt(card.sides, 2, 1000, 6);
+      const count = clampInt(card.count, 1, 20, 1);
+      const rolls = (Array.isArray(card.rolls) ? card.rolls : [])
+        .slice(0, 20)
+        .map((roll) => clampInt(roll, 1, sides, 1));
+      return {
+        type: 'dice',
+        count: rolls.length || count,
+        sides,
+        bonus: clampInt(card.bonus, -1000, 1000, 0),
+        rolls: rolls.length > 0 ? rolls : [1],
+        total: clampInt(card.total, -20_000, 20_000, 0),
+        date,
+        footer: cleanText(card.footer, 80),
+      };
+    }
     default:
       return null;
   }
@@ -440,6 +469,8 @@ export function buildQqBotCardSvg(card: QqBotCard): string {
       return buildCoupletCard(card);
     case 'poi':
       return buildPoiCard(card);
+    case 'dice':
+      return buildDiceCard(card);
     default:
       return buildGenericCard(card);
   }
@@ -837,6 +868,114 @@ function buildPoiCard(card: PoiCard): string {
     footer: card.footer || '在雨城通地图查看',
     body,
   });
+}
+
+function buildDiceCard(card: DiceCard): string {
+  const color = '#168F78';
+  const diceSize = 84;
+  const gap = 16;
+  const perRow = 5;
+  const gridWidth = perRow * diceSize + (perRow - 1) * gap;
+  const startX = 40 + (640 - gridWidth) / 2;
+  const rows = Math.max(1, Math.ceil(card.rolls.length / perRow));
+  const gridTop = 180;
+  const gridHeight = rows * diceSize + (rows - 1) * gap;
+  const totalY = gridTop + gridHeight + 54;
+  const height = Math.max(560, totalY + 180);
+  const bonusText =
+    card.bonus === 0 ? '' : card.bonus > 0 ? ` + ${card.bonus}` : ` - ${Math.abs(card.bonus)}`;
+  const dice = card.rolls
+    .map((roll, index) =>
+      renderDiceFace({
+        roll,
+        sides: card.sides,
+        x: startX + (index % perRow) * (diceSize + gap),
+        y: gridTop + Math.floor(index / perRow) * (diceSize + gap),
+        size: diceSize,
+        color,
+      }),
+    )
+    .join('');
+
+  const body = [
+    dice,
+    `<text x="40" y="${totalY}" font-size="14" font-weight="700" letter-spacing="2" fill="${colors.textMuted}">合计</text>`,
+    `<text x="40" y="${totalY + 58}" font-size="56" font-weight="700" fill="${color}">${card.total}</text>`,
+    `<text x="${card.total >= 100 ? 184 : 150}" y="${totalY + 58}" font-size="20" fill="${colors.textSecondary}">点</text>`,
+    `<text x="40" y="${totalY + 88}" font-size="14" fill="${colors.textMuted}">${escapeXml(
+      card.rolls.join(' + ') + bonusText,
+    )}</text>`,
+  ].join('');
+
+  return buildFrame({
+    height,
+    color,
+    icon: 'casino',
+    title: '掷骰子',
+    eyebrow: `${card.count}d${card.sides}${bonusText} · ${displayDate(card.date)}`,
+    footer: card.footer || '由本机随机生成',
+    body,
+  });
+}
+
+function renderDiceFace(input: {
+  roll: number;
+  sides: number;
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+}): string {
+  const { roll, sides, x, y, size, color } = input;
+  const center = size / 2;
+  const low = size * 0.26;
+  const high = size * 0.74;
+  const pips: Record<number, Array<[number, number]>> = {
+    1: [[center, center]],
+    2: [
+      [low, low],
+      [high, high],
+    ],
+    3: [
+      [low, low],
+      [center, center],
+      [high, high],
+    ],
+    4: [
+      [low, low],
+      [high, low],
+      [low, high],
+      [high, high],
+    ],
+    5: [
+      [low, low],
+      [high, low],
+      [center, center],
+      [low, high],
+      [high, high],
+    ],
+    6: [
+      [low, low],
+      [high, low],
+      [low, center],
+      [high, center],
+      [low, high],
+      [high, high],
+    ],
+  };
+  const faces =
+    sides === 6 && pips[roll]
+      ? pips[roll]
+          .map(([cx, cy]) => `<circle cx="${cx}" cy="${cy}" r="${size * 0.075}" fill="${color}"/>`)
+          .join('')
+      : `<text x="${center}" y="${center + size * 0.12}" text-anchor="middle" font-size="${size * 0.38}" font-weight="700" fill="${color}">${roll}</text>`;
+
+  return [
+    `<g transform="translate(${x},${y})">`,
+    `<rect width="${size}" height="${size}" rx="${size * 0.22}" fill="${color}" fill-opacity="0.07" stroke="${color}" stroke-opacity="0.2"/>`,
+    faces,
+    '</g>',
+  ].join('');
 }
 
 function buildCoupletCard(card: CoupletCard): string {
