@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="220" viewBox="0 0 640 220">
+  <defs>
+    <linearGradient id="poi-placeholder-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#dbeafe"/>
+      <stop offset="1" stop-color="#bfdbfe"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="220" fill="url(#poi-placeholder-bg)"/>
+  <path d="M-20 160C120 80 240 190 380 110S560 60 700 130" fill="none" stroke="#93c5fd" stroke-width="18"/>
+  <path d="M40 30v170M180 20v180M380 20v180M540 20v180" stroke="#ffffff" stroke-width="8" opacity=".7"/>
+  <circle cx="400" cy="100" r="20" fill="#2584e8"/>
+  <circle cx="400" cy="100" r="8" fill="#ffffff"/>
+</svg>

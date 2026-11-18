@@ -426,9 +426,9 @@ function buildTelegraphCard(card) {
   const rowHeight = 44 * scale;
   const startX = 50;
   const startY = 180;
-  const gap = 8;
+  const rowStep = rowHeight - 12 * scale;
   const rowsSvg = Array.from({ length: rows }, (_, rowIndex) => {
-    const rowY = startY + rowIndex * (rowHeight + gap);
+    const rowY = startY + rowIndex * rowStep;
     const chars = Array.from({ length: columns }, (_2, columnIndex) => {
       const entry = card.entries[rowIndex * columns + columnIndex];
       if (!entry) {
@@ -452,7 +452,7 @@ function buildTelegraphCard(card) {
       codes
     ].join("");
   });
-  const height = startY + rows * (rowHeight + gap) + 90;
+  const height = startY + rows * rowStep + rowHeight + 70;
   return buildFrame({
     height,
     color,
@@ -579,7 +579,8 @@ function buildFortuneCard(card) {
 }
 function buildPoiCard(card) {
   const color = "#2584E8";
-  const hasImage = Boolean(card.imageDataUri);
+  const cover = card.imageDataUri ?? getCardTemplateDataUri("poi-placeholder.svg");
+  const hasImage = Boolean(cover);
   const description = card.description || "\u5728\u96E8\u57CE\u901A\u5730\u56FE\u4E0A\u53D1\u73B0\u7684\u4E00\u4E2A\u5730\u70B9\u3002";
   const lines = wrapPlainText(description, 30, 3);
   const contentY = hasImage ? 410 : 180;
@@ -589,7 +590,7 @@ function buildPoiCard(card) {
   const body = [
     hasImage ? [
       `<defs><clipPath id="poi-cover-clip"><rect x="40" y="160" width="640" height="220" rx="20"/></clipPath></defs>`,
-      `<image x="40" y="160" width="640" height="220" href="${card.imageDataUri}" preserveAspectRatio="xMidYMid slice" clip-path="url(#poi-cover-clip)"/>`
+      `<image x="40" y="160" width="640" height="220" href="${cover}" preserveAspectRatio="xMidYMid slice" clip-path="url(#poi-cover-clip)"/>`
     ].join("") : "",
     `<g transform="translate(40,${contentY})">`,
     `<text x="0" y="0" font-size="13" font-weight="700" letter-spacing="2" fill="${color}">${escapeXml(card.category || "\u5730\u70B9")}</text>`,
@@ -705,9 +706,9 @@ function diceFacePolygon(sides, size) {
   const radius = size * 0.46;
   if (sides === 4 || sides === 20) {
     return [
-      [center, size * 0.06],
-      [size * 0.08, size * 0.9],
-      [size * 0.92, size * 0.9]
+      [center, size * 0.13],
+      [size * 0.07, size * 0.875],
+      [size * 0.93, size * 0.875]
     ];
   }
   if (sides === 8) {

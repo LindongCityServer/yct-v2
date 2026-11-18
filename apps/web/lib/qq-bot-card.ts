@@ -657,9 +657,9 @@ function buildTelegraphCard(card: TelegraphCard): string {
   const rowHeight = 44 * scale;
   const startX = 50;
   const startY = 180;
-  const gap = 8;
+  const rowStep = rowHeight - 12 * scale;
   const rowsSvg = Array.from({ length: rows }, (_, rowIndex) => {
-    const rowY = startY + rowIndex * (rowHeight + gap);
+    const rowY = startY + rowIndex * rowStep;
     const chars = Array.from({ length: columns }, (_, columnIndex) => {
       const entry = card.entries[rowIndex * columns + columnIndex];
       if (!entry) {
@@ -685,7 +685,7 @@ function buildTelegraphCard(card: TelegraphCard): string {
       codes,
     ].join('');
   });
-  const height = startY + rows * (rowHeight + gap) + 90;
+  const height = startY + rows * rowStep + rowHeight + 70;
 
   return buildFrame({
     height,
@@ -827,7 +827,8 @@ function buildFortuneCard(card: FortuneCard): string {
 
 function buildPoiCard(card: PoiCard): string {
   const color = '#2584E8';
-  const hasImage = Boolean(card.imageDataUri);
+  const cover = card.imageDataUri ?? getCardTemplateDataUri('poi-placeholder.svg');
+  const hasImage = Boolean(cover);
   const description = card.description || '在雨城通地图上发现的一个地点。';
   const lines = wrapPlainText(description, 30, 3);
   const contentY = hasImage ? 410 : 180;
@@ -838,7 +839,7 @@ function buildPoiCard(card: PoiCard): string {
     hasImage
       ? [
           `<defs><clipPath id="poi-cover-clip"><rect x="40" y="160" width="640" height="220" rx="20"/></clipPath></defs>`,
-          `<image x="40" y="160" width="640" height="220" href="${card.imageDataUri}" preserveAspectRatio="xMidYMid slice" clip-path="url(#poi-cover-clip)"/>`,
+          `<image x="40" y="160" width="640" height="220" href="${cover}" preserveAspectRatio="xMidYMid slice" clip-path="url(#poi-cover-clip)"/>`,
         ].join('')
       : '',
     `<g transform="translate(40,${contentY})">`,
@@ -990,9 +991,9 @@ function diceFacePolygon(sides: number, size: number): Array<[number, number]> |
   const radius = size * 0.46;
   if (sides === 4 || sides === 20) {
     return [
-      [center, size * 0.06],
-      [size * 0.08, size * 0.9],
-      [size * 0.92, size * 0.9],
+      [center, size * 0.13],
+      [size * 0.07, size * 0.875],
+      [size * 0.93, size * 0.875],
     ];
   }
   if (sides === 8) {
