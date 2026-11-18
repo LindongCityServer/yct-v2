@@ -3,6 +3,30 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.21.7",
+      "releasedAt": "2026-11-18T09:05:16.867Z",
+      "sourceFingerprint": "bc12dbd11c1aa3680af9311b6b91815194778a71484bda6cbb4e9b4785219f91",
+      "themes": ["qqbot"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "查 IP 不带地址时拒绝查询，避免泄露机器人出口 IP"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "骰子指令支持无参数、2d6、2个6面骰和 /2d6，并新增点数卡片"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "按 QQ 指令入口限制补充无空格斜线指令和 /新对话 入口"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.21.6",
       "releasedAt": "2026-11-18T07:38:20.613Z",
       "sourceFingerprint": "7d5da6a6a912d5b7aeb451c5d1620573cb979a5e4f333d3c28b668fde1c7640f",
