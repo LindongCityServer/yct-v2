@@ -5,13 +5,18 @@
     {
       "version": "2.21.5",
       "releasedAt": "2026-11-18T06:05:34.162Z",
-      "sourceFingerprint": "89c0ce58c8090a49fe711ddd453b54875b7b0ba0e77e57bf1fdbeb407b30d764",
+      "sourceFingerprint": "63202793eaaa6dc8d9bf7339257e7cb3e3df394d2e3e8c0262bf0c33ad0825a3",
       "themes": ["qqbot"],
       "changes": [
         {
           "category": "feat",
           "breaking": false,
           "summary": "QQ 机器人新增随机地点指令，调用公开 POI 随机接口并生成地点分享卡片"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "随机地点卡片复用地图分享海报的封面、二维码和页脚布局"
         }
       ],
       "bump": "patch"
