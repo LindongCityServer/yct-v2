@@ -5,7 +5,7 @@
     {
       "version": "2.21.5",
       "releasedAt": "2026-11-18T06:05:34.162Z",
-      "sourceFingerprint": "63202793eaaa6dc8d9bf7339257e7cb3e3df394d2e3e8c0262bf0c33ad0825a3",
+      "sourceFingerprint": "7d5da6a6a912d5b7aeb451c5d1620573cb979a5e4f333d3c28b668fde1c7640f",
       "themes": ["qqbot"],
       "changes": [
         {
@@ -17,6 +17,16 @@
           "category": "style",
           "breaking": false,
           "summary": "随机地点卡片复用地图分享海报的封面、二维码和页脚布局"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "手机 QQ 不兼容 Markdown 图片：回答配图、B 站封面和指令卡片改为主动图片，群聊不再重复 at"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "天气卡片增加天气预报标题、温度区间和更稳的预报解析"
         }
       ],
       "bump": "patch"
