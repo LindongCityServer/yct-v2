@@ -7,6 +7,7 @@ import { appPath } from '../lib/app-paths';
 import { subscribeEditorDraftChanged, type VisualEditorKind } from '../lib/client-editor-events';
 import { SecondaryPageHeader } from './app-shell';
 import { MobileActionRailProvider, useMobileActionRail } from './mobile-action-rail';
+import { Button } from './ui/button';
 
 interface VisualEditorShellProps {
   actions?: ReactNode;
@@ -247,21 +248,15 @@ function VisualEditorShellContent({
             ? null
             : (actions ??
               (onSave ? (
-                <button
-                  className="secondary-action-button is-primary"
-                  type="button"
-                  aria-busy={isBusy}
+                <Button
+                  variant="primary"
+                  icon="save"
+                  loading={isBusy}
                   disabled={isBusy}
                   onClick={onSave}
                 >
-                  <span
-                    className={`material-symbols-outlined${isBusy ? ' busy-state-indicator' : ''}`}
-                    aria-hidden="true"
-                  >
-                    {isBusy ? 'progress_activity' : 'save'}
-                  </span>
-                  <span>{isBusy ? '保存中' : '保存'}</span>
-                </button>
+                  {isBusy ? '保存中' : '保存'}
+                </Button>
               ) : null))
         }
         title={title}

@@ -52,6 +52,9 @@ import {
 } from '../lib/operating-calendar';
 import { TicketOrderDraftPanel } from './ticket-order-draft-panel';
 import { AdminEditLink } from './admin-edit-link';
+import { EmptyState } from './ui/status';
+import { Button, ButtonLink, IconButton } from './ui/button';
+import { SearchField } from './ui/field';
 
 type ServiceFilter = TicketableServiceKind | 'all';
 type Translate = ReturnType<typeof useI18n>['t'];
@@ -71,13 +74,15 @@ export function TravelScheduleEmptyState({ message }: Readonly<{ message?: strin
   const { t } = useI18n();
 
   return (
-    <section className="module-panel empty-state" aria-labelledby="schedule-empty-title">
-      <span className="material-symbols-outlined" aria-hidden="true">
-        departure_board
-      </span>
+    <EmptyState
+      as="section"
+      className="module-panel"
+      aria-labelledby="schedule-empty-title"
+      icon="departure_board"
+    >
       <h2 id="schedule-empty-title">{t('travelSchedule.empty.unavailable')}</h2>
       <p>{message ?? t('travelSchedule.empty.noData')}</p>
-    </section>
+    </EmptyState>
   );
 }
 
@@ -501,31 +506,17 @@ export function TravelScheduleQueryPanel({
       </div>
 
       <div className="schedule-filter-panel" aria-label={t('travelSchedule.filters.aria')}>
-        <div className="search-box schedule-search-box">
-          <span className="material-symbols-outlined" aria-hidden="true">
-            search
-          </span>
-          <input
-            ref={searchInputRef}
-            type="search"
-            aria-label={t('travelSchedule.search.aria')}
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder={t('travelSchedule.search.placeholder')}
-          />
-          {query ? (
-            <button
-              className="search-clear-button"
-              type="button"
-              aria-label={t('travelSchedule.search.clear')}
-              onClick={() => setQuery('')}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                close
-              </span>
-            </button>
-          ) : null}
-        </div>
+        <SearchField
+          className="schedule-search-box"
+          ref={searchInputRef}
+          type="search"
+          aria-label={t('travelSchedule.search.aria')}
+          value={query}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+          placeholder={t('travelSchedule.search.placeholder')}
+          clearLabel={t('travelSchedule.search.clear')}
+          onClear={() => setQuery('')}
+        />
 
         <div className="schedule-filter-row">
           <label>
@@ -607,21 +598,18 @@ export function TravelScheduleQueryPanel({
               </span>
               <span>{t('travelSchedule.journey.swapEndpoints')}</span>
             </button>
-            <button
-              className="secondary-action-button is-primary"
-              type="button"
+            <Button
+              variant="primary"
+              icon="route"
               disabled={journeyBusy}
               onClick={() => void planJourneys()}
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                route
-              </span>
               <span>
                 {journeyBusy
                   ? t('travelSchedule.journey.combining')
                   : t('travelSchedule.journey.query')}
               </span>
-            </button>
+            </Button>
             {journeyStatusText ? <span className="muted">{journeyStatusText}</span> : null}
           </div>
         </div>
@@ -687,12 +675,9 @@ export function TravelScheduleQueryPanel({
           )}
         </div>
       ) : (
-        <div className="empty-state schedule-empty-state">
-          <span className="material-symbols-outlined" aria-hidden="true">
-            event_busy
-          </span>
+        <EmptyState icon="event_busy" className="schedule-empty-state">
           <p>{emptyMessage}</p>
-        </div>
+        </EmptyState>
       )}
     </section>
   );
@@ -871,21 +856,18 @@ function ScheduleJourneyPlanPanel({
                 {formatJourneyTicketingStatus(journey.ticketingStatus, t)}
               </span>
               {journey.legs.length > 1 ? (
-                <button
-                  className="secondary-action-button is-primary"
-                  type="button"
+                <Button
+                  variant="primary"
+                  icon="confirmation_number"
                   disabled={busy || journey.ticketingStatus !== 'order_available'}
                   onClick={() => onCreateOrder(journey)}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    confirmation_number
-                  </span>
                   <span>
                     {busy
                       ? t('travelSchedule.journey.locking')
                       : t('travelSchedule.journey.bookJoint', { count: journey.legs.length })}
                   </span>
-                </button>
+                </Button>
               ) : (
                 <span className="muted">
                   {t('travelSchedule.journey.planIndex', { index: index + 1 })}
@@ -1017,16 +999,11 @@ function ScheduleLocalHistoryPanel({
             })}
           </span>
         </div>
-        <button
-          className="icon-action-button"
-          type="button"
+        <IconButton
+          icon="delete_sweep"
+          label={t('travelSchedule.history.clear')}
           onClick={onClear}
-          aria-label={t('travelSchedule.history.clear')}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            delete_sweep
-          </span>
-        </button>
+        />
       </div>
       <div className="schedule-history-list" aria-label={t('travelSchedule.history.recentAria')}>
         {state.items.slice(0, 5).map((item) => (
@@ -1249,30 +1226,22 @@ function ScheduleTripCard({
           href={`/admin/transit?section=trips&tripInstanceId=${encodeURIComponent(trip.tripInstanceId)}`}
           labelKey="travelSchedule.journey.editTrip"
         />
-        <button className="secondary-action-button is-primary" type="button" onClick={addReminder}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            add_alarm
-          </span>
-          <span>{t('travelSchedule.action.addReminder')}</span>
-        </button>
-        <button className="secondary-action-button" type="button" onClick={saveHistory}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            bookmark_add
-          </span>
-          <span>{t('travelSchedule.action.saveRecord')}</span>
-        </button>
+        <Button variant="primary" icon="add_alarm" onClick={addReminder}>
+          {t('travelSchedule.action.addReminder')}
+        </Button>
+        <Button variant="secondary" icon="bookmark_add" onClick={saveHistory}>
+          {t('travelSchedule.action.saveRecord')}
+        </Button>
         {trip.bookingUrl ? (
-          <a
-            className="secondary-action-button"
+          <ButtonLink
+            variant="secondary"
             href={trip.bookingUrl}
             target="_blank"
             rel="noreferrer"
+            icon="open_in_new"
           >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              open_in_new
-            </span>
-            <span>{t('travelSchedule.action.legacyReference')}</span>
-          </a>
+            {t('travelSchedule.action.legacyReference')}
+          </ButtonLink>
         ) : null}
         <TicketingStatusButton
           ticketing={trip.ticketing}
@@ -1298,18 +1267,16 @@ function TicketingStatusButton({
   const state = getTicketingButtonState(ticketing, t);
 
   return (
-    <button
-      className="secondary-action-button"
-      type="button"
+    <Button
+      variant="secondary"
+      loading={busy}
+      icon={state.icon}
       disabled={busy || !state.canCreate}
       title={state.message}
       onClick={onCreateOrder}
     >
-      <span className="material-symbols-outlined" aria-hidden="true">
-        {busy ? 'progress_activity' : state.icon}
-      </span>
-      <span>{busy ? t('travelSchedule.ticketing.creating') : state.label}</span>
-    </button>
+      {busy ? t('travelSchedule.ticketing.creating') : state.label}
+    </Button>
   );
 }
 

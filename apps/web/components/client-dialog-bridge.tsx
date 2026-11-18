@@ -10,6 +10,7 @@ import {
   type ClientDialogRequestedPayload,
 } from '../lib/client-dialog-events';
 import { useI18n } from '../lib/client-i18n';
+import { Button, IconButton } from './ui/button';
 
 export function ClientDialogBridge() {
   const [queue, setQueue] = useState<ClientDialogRequestedPayload[]>([]);
@@ -77,16 +78,7 @@ function ClientDialog({ request }: Readonly<{ request: ClientDialogRequestedPayl
         <h2 id={`${request.requestId}-title`}>
           {request.kind === 'page' ? request.message : labels.title}
         </h2>
-        <button
-          className="icon-button"
-          type="button"
-          aria-label={labels.close}
-          onClick={() => dismiss()}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            close
-          </span>
-        </button>
+        <IconButton variant="icon" icon="close" label={labels.close} onClick={() => dismiss()} />
       </div>
       {request.kind === 'page' ? (
         <iframe src={request.url} title={request.message} />
@@ -94,17 +86,12 @@ function ClientDialog({ request }: Readonly<{ request: ClientDialogRequestedPayl
         <>
           <p id={`${request.requestId}-message`}>{request.message}</p>
           <div className="client-dialog-actions">
-            <button
-              className="secondary-action-button"
-              type="button"
-              autoFocus
-              onClick={() => dismiss()}
-            >
-              <span>{labels.cancel}</span>
-            </button>
-            <button className="primary-action-button" type="button" onClick={() => dismiss(true)}>
-              <span>{labels.confirm}</span>
-            </button>
+            <Button variant="secondary" autoFocus onClick={() => dismiss()}>
+              {labels.cancel}
+            </Button>
+            <Button variant="primary" onClick={() => dismiss(true)}>
+              {labels.confirm}
+            </Button>
           </div>
         </>
       )}

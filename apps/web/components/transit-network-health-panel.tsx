@@ -12,6 +12,10 @@ import type {
   TransitNetworkHealthSuggestionTarget,
 } from '@yct/contracts';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import { SwitchControl } from './ui/switch';
+import { EmptyState, Eyebrow } from './ui/status';
+import { SegmentedTabs } from './ui/segmented-control';
+import { Button, IconButton } from './ui/button';
 
 type ActiveMode = 'all' | TransitNetworkHealthModeStats['mode'];
 type SortDirection = 'ascending' | 'descending';
@@ -31,10 +35,7 @@ interface OperatorSortState {
   direction: SortDirection;
 }
 
-const dimensionLabels: Record<
-  TransitNetworkHealthSuggestion['dimension'],
-  CommonMessageKey
-> = {
+const dimensionLabels: Record<TransitNetworkHealthSuggestion['dimension'], CommonMessageKey> = {
   topology: 'transitHealth.dimension.topology',
   operations: 'transitHealth.dimension.operations',
   scale: 'transitHealth.dimension.scale',
@@ -96,12 +97,14 @@ export function TransitNetworkHealthPanel({
     <section className="transit-health-panel module-panel" aria-labelledby="transit-health-title">
       <header className="transit-health-header">
         <div>
-          <p className="eyebrow">{t('transitHealth.analysisEyebrow')}</p>
+          <Eyebrow as="p">{t('transitHealth.analysisEyebrow')}</Eyebrow>
           <h1 id="transit-health-title">{t('page.transitNetworkHealth')}</h1>
           <p>{t('transitHealth.subtitle')}</p>
         </div>
         <p className="transit-health-source">
-          <span>{isOnline ? t('transitHealth.onlineSnapshot') : t('transitHealth.offlineSnapshot')}</span>
+          <span>
+            {isOnline ? t('transitHealth.onlineSnapshot') : t('transitHealth.offlineSnapshot')}
+          </span>
           {t('transitHealth.dataTime')} {formatDateTime(report.analyzedAt, locale)}
           {report.sourceMessage ? <span>{report.sourceMessage}</span> : null}
           {report.planningSourceMessage ? <span>{report.planningSourceMessage}</span> : null}
@@ -109,60 +112,57 @@ export function TransitNetworkHealthPanel({
       </header>
 
       {report.lineCount === 0 ? (
-        <div className="empty-state">
-          <span className="material-symbols-outlined" aria-hidden="true">
-            account_tree
-          </span>
+        <EmptyState icon="account_tree">
           <p>{t('transitHealth.noLines')}</p>
-        </div>
+        </EmptyState>
       ) : (
         <>
-          <fieldset
-            className="segmented-control transit-health-mode-filter"
-            aria-label={t('transitHealth.filterAria')}
-          >
-            <legend className="sr-only">{t('transitHealth.modeLegend')}</legend>
-            <div>
-              <button
-                type="button"
-                className={activeMode === 'all' ? 'is-active' : undefined}
-                aria-pressed={activeMode === 'all'}
-                onClick={() => setActiveMode('all')}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  commute
-                </span>
-                {t('search.category.all')}
-                <small>{report.lineCount}</small>
-              </button>
-              {report.modes.map((mode) => (
-                <button
-                  key={mode.mode}
-                  type="button"
-                  className={activeMode === mode.mode ? 'is-active' : undefined}
-                  aria-pressed={activeMode === mode.mode}
-                  onClick={() => setActiveMode(mode.mode)}
-                >
-                  <span
-                    className="material-symbols-outlined"
-                    aria-hidden="true"
-                    style={{ color: mode.color }}
-                  >
-                    {mode.icon}
-                  </span>
-                  {mode.label}
-                  <small>{mode.lineCount}</small>
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          <SegmentedTabs
+            className="transit-health-mode-filter"
+            ariaLabel={t('transitHealth.filterAria')}
+            label={t('transitHealth.modeLegend')}
+            legendClassName="sr-only"
+            options={[
+              {
+                value: 'all' as const,
+                label: (
+                  <>
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      commute
+                    </span>
+                    {t('search.category.all')}
+                    <small>{report.lineCount}</small>
+                  </>
+                ),
+              },
+              ...report.modes.map((mode) => ({
+                value: mode.mode as string,
+                label: (
+                  <>
+                    <span
+                      className="material-symbols-outlined"
+                      aria-hidden="true"
+                      style={{ color: mode.color }}
+                    >
+                      {mode.icon}
+                    </span>
+                    {mode.label}
+                    <small>{mode.lineCount}</small>
+                  </>
+                ),
+              })),
+            ]}
+            value={activeMode}
+            onChange={(next) => setActiveMode(next as typeof activeMode)}
+          />
 
           <div className="transit-health-scope-row">
             <div className="transit-health-active-scope" aria-live="polite">
               <span className="material-symbols-outlined" aria-hidden="true">
                 filter_alt
               </span>
-              {t('transitHealth.scopeCurrent')}<strong>{scopeLabel}</strong>
+              {t('transitHealth.scopeCurrent')}
+              <strong>{scopeLabel}</strong>
             </div>
             <div className="transit-health-demand-toggle">
               <strong id="transit-health-demand-toggle-label">
@@ -170,16 +170,11 @@ export function TransitNetworkHealthPanel({
                   ? t('transitHealth.demandWithLines')
                   : t('transitHealth.demandPotentialOnly')}
               </strong>
-              <label className="switch-control">
-                <input
-                  type="checkbox"
-                  role="switch"
-                  checked={considerExistingNetwork}
-                  onChange={(event) => setConsiderExistingNetwork(event.target.checked)}
-                  aria-labelledby="transit-health-demand-toggle-label"
-                />
-                <span aria-hidden="true" />
-              </label>
+              <SwitchControl
+                checked={considerExistingNetwork}
+                onChange={(event) => setConsiderExistingNetwork(event.target.checked)}
+                aria-labelledby="transit-health-demand-toggle-label"
+              />
             </div>
           </div>
 
@@ -257,7 +252,7 @@ export function TransitNetworkHealthPanel({
           >
             <div className="section-heading">
               <div>
-                <p className="eyebrow">{t('transitHealth.chartEyebrow')}</p>
+                <Eyebrow as="p">{t('transitHealth.chartEyebrow')}</Eyebrow>
                 <h2 id="transit-health-visuals-title">{t('transitHealth.chartTitle')}</h2>
               </div>
               <span className="muted">{t('transitHealth.locatedSampleHint')}</span>
@@ -282,7 +277,7 @@ export function TransitNetworkHealthPanel({
           >
             <div className="section-heading">
               <div>
-                <p className="eyebrow">{t('transitHealth.opEyebrow')}</p>
+                <Eyebrow as="p">{t('transitHealth.opEyebrow')}</Eyebrow>
                 <h2 id="transit-health-operators-title">{t('transitHealth.opTitle')}</h2>
               </div>
               <span className="muted">
@@ -373,7 +368,7 @@ export function TransitNetworkHealthPanel({
           <section className="transit-health-method" aria-labelledby="transit-health-method-title">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">{t('transitHealth.methodEyebrow')}</p>
+                <Eyebrow as="p">{t('transitHealth.methodEyebrow')}</Eyebrow>
                 <h2 id="transit-health-method-title">{t('transitHealth.methodTitle')}</h2>
               </div>
               <span className="muted">{t('transitHealth.noMockHint')}</span>
@@ -429,7 +424,7 @@ export function TransitNetworkHealthPanel({
           >
             <div className="section-heading">
               <div>
-                <p className="eyebrow">{t('transitHealth.sugEyebrow')}</p>
+                <Eyebrow as="p">{t('transitHealth.sugEyebrow')}</Eyebrow>
                 <h2 id="transit-health-suggestions-title">{t('transitHealth.sugTitle')}</h2>
               </div>
               <span className="muted">{t('transitHealth.sugMergedHint')}</span>
@@ -904,16 +899,11 @@ function SuggestionCard({
               </li>
             ))}
           </ul>
-          <button type="button" className="secondary-action-button" onClick={onShowTargets}>
-            <span className="material-symbols-outlined" aria-hidden="true">
-              list_alt
-            </span>
-            <span>
-              {t('transitHealth.viewAllTargets', {
-                count: suggestion.targetCount ?? targets.length,
-              })}
-            </span>
-          </button>
+          <Button variant="secondary" icon="list_alt" onClick={onShowTargets}>
+            {t('transitHealth.viewAllTargets', {
+              count: suggestion.targetCount ?? targets.length,
+            })}
+          </Button>
         </div>
       ) : null}
     </article>
@@ -986,17 +976,13 @@ function SuggestionTargetsDialog({
             })}
           </p>
         </div>
-        <button
-          type="button"
-          className="icon-button"
-          onClick={onClose}
+        <IconButton
+          variant="icon"
+          icon="close"
+          label={t('transitHealth.dialogCloseAria')}
           title={t('transitHealth.dialogClose')}
-          aria-label={t('transitHealth.dialogCloseAria')}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            close
-          </span>
-        </button>
+          onClick={onClose}
+        />
       </header>
       {targets.length > 8 ? (
         <label className="transit-health-target-search">
@@ -1057,13 +1043,8 @@ function suggestionTargetIcon(kind: TransitNetworkHealthSuggestionTarget['kind']
   }
 }
 
-function targetKindKey(
-  kind: TransitNetworkHealthSuggestionTarget['kind'],
-): CommonMessageKey {
-  const keys: Record<
-    TransitNetworkHealthSuggestionTarget['kind'],
-    CommonMessageKey
-  > = {
+function targetKindKey(kind: TransitNetworkHealthSuggestionTarget['kind']): CommonMessageKey {
+  const keys: Record<TransitNetworkHealthSuggestionTarget['kind'], CommonMessageKey> = {
     operator: 'transitHealth.kindOperator',
     line: 'transitHealth.kindLine',
     station: 'transitHealth.kindStation',

@@ -18,6 +18,7 @@ import {
   type MapMeasureMode,
 } from '../lib/map-measure';
 import { SegmentedControl } from './segmented-control';
+import { IconButton } from './ui/button';
 
 type Translate = (key: CommonMessageKey, values?: Record<string, string | number>) => string;
 
@@ -221,16 +222,7 @@ export function MapMeasurePanel({
           </span>
           <strong>{t('map.measure.panelAria')}</strong>
         </span>
-        <button
-          className="icon-action-button"
-          type="button"
-          aria-label={t('map.measure.exit')}
-          onClick={onExit}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            close
-          </span>
-        </button>
+        <IconButton icon="close" label={t('map.measure.exit')} onClick={onExit} />
       </header>
 
       <SegmentedControl

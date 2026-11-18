@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Design system & type checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: UI controls inventory
+        run: pnpm ui:controls:check
+
+      - name: Portal design tokens
+        run: pnpm portal:tokens:check
+
+      - name: Breakpoint registry
+        run: pnpm ui:breakpoints:check
+
+      - name: UI primitives tests
+        run: pnpm ui:primitives:test
+
+      - name: UI plan gates
+        run: pnpm ui:plan:check
+
+      - name: UI plan summary
+        if: always()
+        run: node scripts/ui-plan.mjs --summary >> "$GITHUB_STEP_SUMMARY"

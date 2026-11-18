@@ -56,6 +56,7 @@ import { buildEditorToolbarSections } from './editor/editor-toolbar-sections';
 import type { EditorToolbarOverflowItem } from './editor/editor-toolbar-overflow';
 import { EditorZoomControls } from './editor/editor-zoom-controls';
 import { VisualEditorShell } from './visual-editor-shell';
+import { Field, Input } from './ui/field';
 
 // 站点弹窗体量较大且只在点开时使用，按需加载避免拖慢线路工作台首屏。
 const TransitStationCoordinateDialog = dynamic(
@@ -1805,18 +1806,17 @@ export function AdminTransitLineMapEditor({
               toolbar={
                 <div className="transit-visual-layer-heading-actions">
                   <span>预览</span>
-                  <div className="segmented-control">
-                    <SegmentedControl
-                      ariaLabel="预览方向"
-                      className="transit-visual-segmented"
-                      onChange={setPreviewDirection}
-                      options={[
-                        { value: 'forward', label: '正向', title: '正向（按站序）' },
-                        { value: 'reverse', label: '反向', title: '反向（逆站序）' },
-                      ]}
-                      value={previewDirection}
-                    />
-                  </div>
+                  <SegmentedControl
+                    ariaLabel="预览方向"
+                    className="transit-visual-segmented"
+                    onChange={setPreviewDirection}
+                    options={[
+                      { value: 'forward', label: '正向', title: '正向（按站序）' },
+                      { value: 'reverse', label: '反向', title: '反向（逆站序）' },
+                    ]}
+                    value={previewDirection}
+                    wrapperClassName=""
+                  />
                 </div>
               }
               withInspectorEntry
@@ -2043,9 +2043,8 @@ export function AdminTransitLineMapEditor({
                     <span>{selectedNode.kind === 'station' ? '站点' : '途径点'}</span>
                   </div>
                   {selectedNode.kind === 'station' && selectedNode.draftClientId ? (
-                    <label className="material-field">
-                      <span>站名</span>
-                      <input
+                    <Field label={<>站名</>}>
+                      <Input
                         placeholder="填写新站点名称"
                         value={selectedNode.name}
                         onChange={(event) =>
@@ -2056,73 +2055,67 @@ export function AdminTransitLineMapEditor({
                           )
                         }
                       />
-                    </label>
+                    </Field>
                   ) : null}
                   <div className="poi-visual-point-fields">
-                    <label className="material-field">
-                      <span>X</span>
-                      <input
+                    <Field label={<>X</>}>
+                      <Input
                         inputMode="decimal"
                         value={selectedNode.coordinate?.[0] ?? ''}
                         onChange={(event) =>
                           updateSelectedNodeCoordinate(0, event.currentTarget.value)
                         }
                       />
-                    </label>
-                    <label className="material-field">
-                      <span>Z</span>
-                      <input
+                    </Field>
+                    <Field label={<>Z</>}>
+                      <Input
                         inputMode="decimal"
                         value={selectedNode.coordinate?.[1] ?? ''}
                         onChange={(event) =>
                           updateSelectedNodeCoordinate(1, event.currentTarget.value)
                         }
                       />
-                    </label>
+                    </Field>
                   </div>
                   <div className="transit-visual-field">
                     <span>方向</span>
-                    <div className="segmented-control">
-                      <SegmentedControl
-                        ariaLabel="节点方向"
-                        className="transit-visual-segmented"
-                        onChange={(direction) =>
-                          updateNode(selectedNode.id, (current) => ({
-                            ...current,
-                            direction,
-                          }))
-                        }
-                        options={[
-                          { value: 'both', label: '双向' },
-                          { value: 'down', label: '仅正向' },
-                          { value: 'up', label: '仅反向' },
-                        ]}
-                        value={selectedNode.direction}
-                      />
-                    </div>
+                    <SegmentedControl
+                      ariaLabel="节点方向"
+                      className="transit-visual-segmented"
+                      onChange={(direction) =>
+                        updateNode(selectedNode.id, (current) => ({
+                          ...current,
+                          direction,
+                        }))
+                      }
+                      options={[
+                        { value: 'both', label: '双向' },
+                        { value: 'down', label: '仅正向' },
+                        { value: 'up', label: '仅反向' },
+                      ]}
+                      value={selectedNode.direction}
+                      wrapperClassName=""
+                    />
                   </div>
                   {selectedNode.kind === 'station' ? (
                     <div className="transit-visual-field">
                       <span>运营状态</span>
-                      <div className="segmented-control">
-                        <SegmentedControl
-                          ariaLabel="站点运营状态"
-                          className="transit-visual-segmented"
-                          onChange={(operationStatus) =>
-                            updateNode(selectedNode.id, (current) =>
-                              current.kind === 'station'
-                                ? { ...current, operationStatus }
-                                : current,
-                            )
-                          }
-                          options={[
-                            { value: 'operating' as const, label: '运营中' },
-                            { value: 'planned' as const, label: '规划中' },
-                            { value: 'closed' as const, label: '已关闭' },
-                          ]}
-                          value={selectedNode.operationStatus ?? 'operating'}
-                        />
-                      </div>
+                      <SegmentedControl
+                        ariaLabel="站点运营状态"
+                        className="transit-visual-segmented"
+                        onChange={(operationStatus) =>
+                          updateNode(selectedNode.id, (current) =>
+                            current.kind === 'station' ? { ...current, operationStatus } : current,
+                          )
+                        }
+                        options={[
+                          { value: 'operating' as const, label: '运营中' },
+                          { value: 'planned' as const, label: '规划中' },
+                          { value: 'closed' as const, label: '已关闭' },
+                        ]}
+                        value={selectedNode.operationStatus ?? 'operating'}
+                        wrapperClassName=""
+                      />
                     </div>
                   ) : null}
                   <dl className="poi-visual-global-summary">
@@ -2247,28 +2240,26 @@ export function AdminTransitLineMapEditor({
                   </div>
                   <div className="transit-visual-field">
                     <span>运营状态</span>
-                    <div className="segmented-control">
-                      <SegmentedControl
-                        ariaLabel="区间运营状态"
-                        className="transit-visual-segmented"
-                        onChange={(operationStatus) =>
-                          setSegmentOperationStatusByKey((current) => ({
-                            ...current,
-                            [selectedSegment.key]: operationStatus,
-                          }))
-                        }
-                        options={[
-                          { value: 'operating', label: '已运营' },
-                          { value: 'planned', label: '规划中' },
-                          { value: 'closed', label: '已关闭' },
-                        ]}
-                        value={segmentOperationStatusByKey[selectedSegment.key] ?? 'operating'}
-                      />
-                    </div>
+                    <SegmentedControl
+                      ariaLabel="区间运营状态"
+                      className="transit-visual-segmented"
+                      onChange={(operationStatus) =>
+                        setSegmentOperationStatusByKey((current) => ({
+                          ...current,
+                          [selectedSegment.key]: operationStatus,
+                        }))
+                      }
+                      options={[
+                        { value: 'operating', label: '已运营' },
+                        { value: 'planned', label: '规划中' },
+                        { value: 'closed', label: '已关闭' },
+                      ]}
+                      value={segmentOperationStatusByKey[selectedSegment.key] ?? 'operating'}
+                      wrapperClassName=""
+                    />
                   </div>
-                  <label className="material-field">
-                    <span>区间用时（分钟，留空自动估算）</span>
-                    <input
+                  <Field label={<>区间用时（分钟，留空自动估算）</>}>
+                    <Input
                       type="number"
                       min={0.01}
                       max={1440}
@@ -2281,7 +2272,7 @@ export function AdminTransitLineMapEditor({
                         }))
                       }
                     />
-                  </label>
+                  </Field>
                   <dl className="poi-visual-global-summary">
                     <div>
                       <dt>起点</dt>
@@ -2303,13 +2294,12 @@ export function AdminTransitLineMapEditor({
                     <strong>全局</strong>
                     <span>{data.line.mode}</span>
                   </div>
-                  <label className="material-field">
-                    <span>线路名</span>
-                    <input
+                  <Field label={<>线路名</>}>
+                    <Input
                       value={lineName}
                       onChange={(event) => setLineName(event.currentTarget.value)}
                     />
-                  </label>
+                  </Field>
                   <dl className="poi-visual-global-summary">
                     <div>
                       <dt>站点</dt>
@@ -2330,18 +2320,17 @@ export function AdminTransitLineMapEditor({
                   </dl>
                   <div className="transit-visual-field">
                     <span>线路运行方式</span>
-                    <div className="segmented-control">
-                      <SegmentedControl
-                        ariaLabel="线路运行方式"
-                        className="transit-visual-segmented"
-                        onChange={setRouteMode}
-                        options={[
-                          { value: 'straight', label: '折线' },
-                          { value: 'road', label: '沿路' },
-                        ]}
-                        value={routeMode}
-                      />
-                    </div>
+                    <SegmentedControl
+                      ariaLabel="线路运行方式"
+                      className="transit-visual-segmented"
+                      onChange={setRouteMode}
+                      options={[
+                        { value: 'straight', label: '折线' },
+                        { value: 'road', label: '沿路' },
+                      ]}
+                      value={routeMode}
+                      wrapperClassName=""
+                    />
                   </div>
                   <p className="poi-visual-panel-empty">
                     在画布或图层树中单击选中，双击直接进入编辑。

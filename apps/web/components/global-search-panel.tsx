@@ -85,6 +85,8 @@ import { AssistantUiBlocks } from './assistant-ui-blocks';
 import { MaterialSymbol } from './material-symbol';
 import { SmartQaGlyph } from './smart-qa-icon';
 import { TitleWithBreaks } from './title-with-breaks';
+import { EmptyState, StatusText } from './ui/status';
+import { Chip, FilterStrip } from './ui/chip';
 
 type DataStatus = 'idle' | 'loading' | 'ready' | 'partial' | 'unavailable';
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'unavailable';
@@ -1820,7 +1822,7 @@ export function GlobalSearchPanel({
   if (!entryPreference.enabled) {
     return isPage ? (
       <div className="global-search-page">
-        <p className="status-note">{t('globalSearch.pageDisabled')}</p>
+        <StatusText>{t('globalSearch.pageDisabled')}</StatusText>
       </div>
     ) : null;
   }
@@ -1949,15 +1951,15 @@ export function GlobalSearchPanel({
                   ) : null}
                 </div>
                 {entryPreference.aiSuggestions && aiSuggestionsStatus === 'loading' ? (
-                  <p className="status-note">{t('globalSearch.suggestion.aiLoading')}</p>
+                  <StatusText>{t('globalSearch.suggestion.aiLoading')}</StatusText>
                 ) : null}
                 {entryPreference.aiSuggestions && aiSuggestionsStatus === 'unavailable' ? (
-                  <p className="status-note">
+                  <StatusText>
                     {aiSuggestionsError || t('globalSearch.suggestion.aiUnavailable')}
-                  </p>
+                  </StatusText>
                 ) : null}
                 {!entryPreference.aiSuggestions ? (
-                  <p className="status-note">
+                  <StatusText>
                     {t('globalSearch.suggestion.aiOff')}{' '}
                     <Link
                       className="global-search-answer-link"
@@ -1966,7 +1968,7 @@ export function GlobalSearchPanel({
                     >
                       {t('globalSearch.suggestion.aiSettings')}
                     </Link>
-                  </p>
+                  </StatusText>
                 ) : null}
                 <div className="global-search-suggestions">
                   {displayedSuggestions.map((suggestion) => (
@@ -1989,7 +1991,7 @@ export function GlobalSearchPanel({
                   ))}
                 </div>
                 {dataStatus === 'loading' ? (
-                  <p className="status-note">{t('globalSearch.status.loadingData')}</p>
+                  <StatusText>{t('globalSearch.status.loadingData')}</StatusText>
                 ) : null}
               </section>
             ) : (
@@ -2371,32 +2373,24 @@ export function GlobalSearchPanel({
 
                     {hasResults ? (
                       <>
-                        <div
-                          className="category-strip search-filter-strip"
+                        <FilterStrip
+                          className="category-strip"
                           aria-label={t('search.resultFilters')}
                         >
                           {searchCategories.map((category) => (
-                            <button
-                              className={
-                                activeCategory === category.key
-                                  ? 'category-chip tone-primary is-active'
-                                  : 'category-chip tone-primary'
-                              }
-                              type="button"
+                            <Chip
+                              key={category.key}
+                              tone="primary"
+                              active={activeCategory === category.key}
+                              icon={category.icon}
                               disabled={results.counts[category.key] === 0}
                               onClick={() => setActiveCategory(category.key)}
-                              key={category.key}
                             >
-                              <span className="material-symbols-outlined" aria-hidden="true">
-                                {category.icon}
-                              </span>
-                              <span>
-                                {t(category.labelKey)}
-                                <small>{results.counts[category.key]}</small>
-                              </span>
-                            </button>
+                              {t(category.labelKey)}
+                              <small>{results.counts[category.key]}</small>
+                            </Chip>
                           ))}
-                        </div>
+                        </FilterStrip>
 
                         <div className="search-result-groups">
                           {shouldShowCategory(activeCategory, 'operations') &&
@@ -2717,7 +2711,7 @@ export function GlobalSearchPanel({
                         </div>
 
                         {wikiStatus === 'loading' ? (
-                          <p className="status-note">{t('search.wiki.loading')}</p>
+                          <StatusText>{t('search.wiki.loading')}</StatusText>
                         ) : null}
 
                         {!showAll && results.total > 3 ? (
@@ -2731,18 +2725,15 @@ export function GlobalSearchPanel({
                         ) : null}
                       </>
                     ) : isLoading ? (
-                      <p className="status-note">{t('globalSearch.status.searching')}</p>
+                      <StatusText>{t('globalSearch.status.searching')}</StatusText>
                     ) : (
-                      <div className="empty-state">
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          inbox
-                        </span>
+                      <EmptyState icon="inbox">
                         <p>{t('globalSearch.noMatch')}</p>
-                      </div>
+                      </EmptyState>
                     )}
 
                     {hasUnavailableData ? (
-                      <p className="status-note">{t('globalSearch.unavailable')}</p>
+                      <StatusText>{t('globalSearch.unavailable')}</StatusText>
                     ) : null}
                   </section>
                 )}

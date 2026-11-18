@@ -96,6 +96,12 @@ pwsh -NoProfile -ExecutionPolicy Bypass `
 
 如果反代需要限流，应根据实际流量和服务器容量在 Nginx 或上游网关中配置，并保留查询参数、`data/meta` JSON 结构和应用响应头。没有确认容量前不要在部署模板中猜测固定限额。
 
+## QQ 机器人（问一问的聊天渠道）
+
+[`integrations/qq-bot`](../integrations/qq-bot/README.md) 是问一问的 QQ 官方机器人接入层，作为独立 Node 进程运行，不进入 Next.js 部署包。它通过 WebSocket 接收群 @ 和单聊消息，再调用 `/api/assistant/chat`，模型 Key 只保存在机器人自己的 `.env` 里。
+
+聊天渠道和网页的差异通过请求体里的 `channel` 表达：`qq-group` / `qq-c2c` 会在系统提示末尾追加更短、纯文本、不带引用编号和链接的回复规则；网页端不传该字段，行为不变。QQ 回复还会按被动消息窗口和次数切段，平台侧限制见 [QQ_BOT.md](./QQ_BOT.md)。
+
 ## 事件边界
 
 公共只读请求本身不发布领域事件。未来如果增加搜索索引或 MCP 审计，应由现有业务事件驱动监听器：

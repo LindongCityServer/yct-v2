@@ -1,5 +1,6 @@
 :root {
   color-scheme: light;
+  /* === GENERATED:yct-tokens START（由 scripts/portal-tokens.mjs 生成，勿手改） === */
   --yct-radius-xs: 4px;
   --yct-radius-sm: 6px;
   --yct-radius-md: 8px;
@@ -19,6 +20,7 @@
   --yct-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
   --yct-motion-easing-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
   --yct-motion-scale-press: 0.98;
+  /* === GENERATED:yct-tokens END === */
   --ink: #111817;
   --muted: #5c6862;
   --line: #dfe5e4;

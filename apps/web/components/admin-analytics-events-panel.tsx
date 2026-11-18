@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { analyticsEventNames, type AnalyticsEventListItem } from '../lib/analytics/schema';
 import { appPath } from '../lib/app-paths';
 import { AdminRefreshButton } from './admin-refresh-button';
+import { Button } from './ui/button';
 
 const pageSize = 50;
 
@@ -154,12 +155,9 @@ export function AdminAnalyticsEventsPanel() {
           <span>结束日期</span>
           <input type="date" value={toDay} onChange={(event) => setToDay(event.target.value)} />
         </label>
-        <button className="secondary-action-button" type="submit" disabled={isBusy}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            search
-          </span>
-          <span>查询</span>
-        </button>
+        <Button type="submit" variant="secondary" icon="search" loading={isBusy}>
+          查询
+        </Button>
       </form>
 
       {items.length > 0 ? (
@@ -199,9 +197,8 @@ export function AdminAnalyticsEventsPanel() {
       )}
 
       <div className="admin-analytics-pagination">
-        <button
-          className="secondary-action-button"
-          type="button"
+        <Button
+          variant="secondary"
           disabled={offset === 0 || isBusy}
           onClick={() => void loadEvents(Math.max(offset - pageSize, 0))}
         >
@@ -209,11 +206,10 @@ export function AdminAnalyticsEventsPanel() {
             chevron_left
           </span>
           <span>上一页</span>
-        </button>
+        </Button>
         <span>{rangeText}</span>
-        <button
-          className="secondary-action-button"
-          type="button"
+        <Button
+          variant="secondary"
           disabled={offset + pageSize >= total || isBusy}
           onClick={() => void loadEvents(offset + pageSize)}
         >
@@ -221,7 +217,7 @@ export function AdminAnalyticsEventsPanel() {
           <span className="material-symbols-outlined" aria-hidden="true">
             chevron_right
           </span>
-        </button>
+        </Button>
       </div>
     </section>
   );

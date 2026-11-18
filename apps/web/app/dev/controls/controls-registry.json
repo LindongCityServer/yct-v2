@@ -76,6 +76,16 @@
       ]
     },
     {
+      "id": "controls-ui-primitives",
+      "text": "UI 原语",
+      "name": "UI Primitives 原语层",
+      "category": "actions",
+      "status": "stable",
+      "summary": "components/ui 下的原语：Button / IconButton / Field（含 Input / Select / Textarea）/ SegmentedControl / CheckboxRow / SwitchControl / EmptyState / StatusText / MaterialSymbol / Chip / StatusChip / Modal。直接渲染标准类名，内置状态、错误关联与可访问名称。",
+      "classes": [],
+      "aliases": []
+    },
+    {
       "id": "controls-switch",
       "text": "开关",
       "name": "Switch 开关",
@@ -104,9 +114,18 @@
       "name": "Route Mode 选路控件",
       "category": "map-transit",
       "status": "stable",
-      "summary": "出行方式多选与排序单选的真实业务组合：mode 组使用语义色且无背景填充，sort 组使用灰轨单选。",
-      "classes": ["map-route-preference-toolbar", "map-route-sort-control"],
-      "aliases": []
+      "summary": "选路控件由标准控件组合：出行方式为多选 Chip 组，排序为单选 SegmentedControl；地图内的紧凑变体（map-route-preference-toolbar / map-route-sort-control）只复用同一套视觉 token，作为历史别名保留。",
+      "classes": ["segmented-control", "category-chip"],
+      "aliases": [
+        {
+          "name": "map-route-preference-toolbar",
+          "note": "地图内紧凑选路容器，按标准控件组合布局"
+        },
+        {
+          "name": "map-route-sort-control",
+          "note": "地图内紧凑排序分段，视觉 token 与 segmented-control 一致"
+        }
+      ]
     },
     {
       "id": "controls-text-field",
@@ -115,8 +134,8 @@
       "category": "forms",
       "status": "stable",
       "summary": "输入框、日期、下拉与多行文本共用同一字段壳：44px 高、radius-md、聚焦主色描边加 3px 光晕。",
-      "classes": ["material-field", "controls-field-wide"],
-      "aliases": [{ "name": "search-box", "note": "46px 高的搜索档字段" }]
+      "classes": ["material-field"],
+      "aliases": []
     },
     {
       "id": "controls-titlebar-buttons",
@@ -124,7 +143,7 @@
       "name": "Titlebar Action 标题栏按钮",
       "category": "actions",
       "status": "stable",
-      "summary": "标题栏里的独立图标按钮；透光模式下只有 only-child 的独立按钮挂材质滤镜，成组按钮在容器组统一处理。",
+      "summary": "直接渲染真实的 SecondaryPageHeader 组件（含 TopbarMaterialLayers、返回链接、标题与动作区）；透光模式下只有 only-child 的独立按钮挂材质滤镜，成组按钮在容器组统一处理。",
       "classes": ["icon-button", "icon-action-button", "secondary-topbar"],
       "aliases": []
     },
@@ -135,7 +154,7 @@
       "category": "navigation",
       "status": "stable",
       "summary": "顶栏快捷入口、账户入口与徽标、后台编辑入口，以及桌面 rail / 移动 bottom-nav / 长文目录三套导航骨架。",
-      "classes": ["pill-button", "account-button", "account-badge", "rail", "bottom-nav"],
+      "classes": ["account-badge", "rail", "bottom-nav"],
       "aliases": []
     },
     {
@@ -174,7 +193,7 @@
       "category": "forms",
       "status": "stable",
       "summary": "复选框、单选行与整行可点的选择列表；命中区覆盖整行，避免只有小方块可点。",
-      "classes": ["checkbox-control", "selection-row"],
+      "classes": ["material-checkbox-row", "checkbox-row"],
       "aliases": []
     },
     {
@@ -184,7 +203,7 @@
       "category": "forms",
       "status": "stable",
       "summary": "单选框放进 fieldset 后的回归场景，验证原生分组语义与字段壳不互相覆盖。",
-      "classes": ["material-field", "controls-field"],
+      "classes": ["material-field"],
       "aliases": []
     },
     {
@@ -194,7 +213,7 @@
       "category": "data-display",
       "status": "stable",
       "summary": "横向滚动筛选条、邮编切换与地铁导控分段；已统一轨道高度、内边距与选中态。",
-      "classes": ["filter-strip", "segmented-control", "metro-wayfinding-segmented-control"],
+      "classes": ["search-filter-strip", "segmented-control", "metro-wayfinding-segmented-control"],
       "aliases": []
     },
     {
@@ -213,8 +232,8 @@
       "name": "List 列表项与卡片",
       "category": "data-display",
       "status": "stable",
-      "summary": "运营信息、行程、公告与附件列表的条目骨架，包含缩略图、摘要、元信息与操作区。",
-      "classes": ["operation-list-item", "trip-card", "attachment-row"],
+      "summary": "运营信息、行程、公告与附件列表的条目骨架，包含缩略图、摘要、元信息与操作区。当前无统一标准类名，示例为手写对照，待 Phase 1 原语化后登记。",
+      "classes": [],
       "aliases": []
     },
     {
@@ -224,7 +243,7 @@
       "category": "forms",
       "status": "stable",
       "summary": "滑杆、开关组与带说明的复合字段；滑杆填充进度由组件内部换算，不手写背景渐变。",
-      "classes": ["material-field", "range-input", "switch-control"],
+      "classes": ["material-field", "switch-control", "dual-range-input"],
       "aliases": []
     },
     {
@@ -243,8 +262,8 @@
       "name": "Toolbar 工具栏与批量操作条",
       "category": "data-display",
       "status": "stable",
-      "summary": "列表页顶部的筛选、排序与批量操作条，选中数量与主操作保持同一行对齐。",
-      "classes": ["list-toolbar", "batch-action-bar"],
+      "summary": "列表页顶部的筛选、排序与批量操作条，选中数量与主操作保持同一行对齐。当前无统一标准类名，示例为手写对照，待 Phase 1 原语化后登记。",
+      "classes": [],
       "aliases": []
     },
     {
@@ -264,13 +283,7 @@
       "category": "feedback",
       "status": "stable",
       "summary": "加载、错误、无数据、弱化说明与 eyebrow 小标题等文本层级，状态必须可读而不能只靠动画。",
-      "classes": [
-        "map-loading-panel",
-        "form-error-text",
-        "status-note",
-        "empty-state",
-        "eyebrow"
-      ],
+      "classes": ["map-loading-panel", "form-error-text", "status-note", "empty-state", "eyebrow"],
       "aliases": []
     },
     {
@@ -319,7 +332,7 @@
     },
     {
       "component": "SegmentedControl",
-      "source": "apps/web/components/segmented-control.tsx",
+      "source": "apps/web/components/ui/segmented-control.tsx",
       "section": "controls-strips",
       "exclusiveClasses": []
     },
@@ -351,6 +364,78 @@
       "component": "OperationTableOfContents",
       "source": "apps/web/components/operation-table-of-contents.tsx",
       "section": "controls-navigation",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "Button",
+      "source": "apps/web/components/ui/button.tsx",
+      "section": "controls-ui-primitives",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "IconButton",
+      "source": "apps/web/components/ui/button.tsx",
+      "section": "controls-ui-primitives",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "Field",
+      "source": "apps/web/components/ui/field.tsx",
+      "section": "controls-ui-primitives",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "CheckboxRow",
+      "source": "apps/web/components/ui/checkbox-row.tsx",
+      "section": "controls-ui-primitives",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "SwitchControl",
+      "source": "apps/web/components/ui/switch.tsx",
+      "section": "controls-ui-primitives",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "EmptyState",
+      "source": "apps/web/components/ui/status.tsx",
+      "section": "controls-ui-primitives",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "StatusText",
+      "source": "apps/web/components/ui/status.tsx",
+      "section": "controls-ui-primitives",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "MaterialSymbol",
+      "source": "apps/web/components/ui/material-symbol.tsx",
+      "section": "controls-ui-primitives",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "ButtonLink",
+      "source": "apps/web/components/ui/button.tsx",
+      "section": "controls-ui-primitives",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "Chip",
+      "source": "apps/web/components/ui/chip.tsx",
+      "section": "controls-ui-primitives",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "StatusChip",
+      "source": "apps/web/components/ui/chip.tsx",
+      "section": "controls-ui-primitives",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "Modal",
+      "source": "apps/web/components/ui/modal.tsx",
+      "section": "controls-ui-primitives",
       "exclusiveClasses": []
     }
   ]

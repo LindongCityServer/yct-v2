@@ -1,3 +1,5 @@
+export * from './breakpoints';
+
 export const yctTokens = {
   color: {
     primary: '#168F78',

@@ -20,7 +20,11 @@ import { useEditorFieldDraft } from '../lib/editor/use-editor-field-draft';
 import { ContentCoverColorPicker } from './content-cover-color-picker';
 import { ContentPoiBindingEditor } from './content-poi-binding-editor';
 import { EditorDialogPortal } from './editor/editor-dialog-portal';
+import { CheckboxRow } from './ui/checkbox-row';
 import { MarkdownAssetSection } from './markdown-asset-section';
+import { Modal } from './ui/modal';
+import { Field, Input, Select, Textarea } from './ui/field';
+import { Button, IconButton } from './ui/button';
 
 /** 未选中块时的全局属性：内容摘要 + 发布标签 + 关联内容入口。 */
 export function MarkdownDocumentInspector({
@@ -115,9 +119,17 @@ export function MarkdownDocumentInspector({
         <div className="markdown-inspector-section-heading">
           <p className="markdown-inspector-section-title">发布与标签</p>
         </div>
-        <label className="material-field">
-          <span>有效期</span>
-          <input
+        <Field
+          label="有效期"
+          hint={
+            published
+              ? '已发布内容不可修改有效期。'
+              : expiresError
+                ? '请输入有效的日期时间。'
+                : undefined
+          }
+        >
+          <Input
             disabled={disabled || published}
             type="datetime-local"
             value={expiresField.value}
@@ -132,15 +144,9 @@ export function MarkdownDocumentInspector({
             }}
             onFocus={expiresField.handleFocus}
           />
-          {published ? (
-            <small className="muted">已发布内容不可修改有效期。</small>
-          ) : expiresError ? (
-            <small className="muted">请输入有效的日期时间。</small>
-          ) : null}
-        </label>
-        <label className="material-field">
-          <span>标签</span>
-          <textarea
+        </Field>
+        <Field label={<>标签</>}>
+          <Textarea
             disabled={disabled}
             placeholder="每行一个标签，或用逗号分隔"
             value={tagsField.value}
@@ -157,7 +163,7 @@ export function MarkdownDocumentInspector({
             }}
             onFocus={tagsField.handleFocus}
           />
-        </label>
+        </Field>
         <p className="poi-visual-panel-empty">
           状态流转（提交审核 / 发布 / 归档）仍在内容列表完成，工作台只负责正文与元数据。
         </p>
@@ -167,9 +173,9 @@ export function MarkdownDocumentInspector({
         <div className="markdown-inspector-section-heading">
           <p className="markdown-inspector-section-title">关联内容</p>
         </div>
-        <button
-          className="secondary-action-button markdown-dialog-entry"
-          type="button"
+        <Button
+          variant="secondary"
+          className="markdown-dialog-entry"
           onClick={() => setActiveDialog('poi')}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
@@ -180,10 +186,10 @@ export function MarkdownDocumentInspector({
           <span className="material-symbols-outlined" aria-hidden="true">
             chevron_right
           </span>
-        </button>
-        <button
-          className="secondary-action-button markdown-dialog-entry"
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
+          className="markdown-dialog-entry"
           onClick={() => setActiveDialog('assets')}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
@@ -194,97 +200,57 @@ export function MarkdownDocumentInspector({
           <span className="material-symbols-outlined" aria-hidden="true">
             chevron_right
           </span>
-        </button>
+        </Button>
       </div>
 
       <EditorDialogPortal>
         {activeDialog === 'poi' ? (
-          <div
-            className="modal-backdrop editor-dialog-backdrop"
-            role="presentation"
-            onMouseDown={() => setActiveDialog(null)}
+          <Modal
+            labelledBy="markdown-poi-dialog-title"
+            backdropClassName="editor-dialog-backdrop"
+            className="markdown-editor-dialog"
+            onBackdropClick={() => setActiveDialog(null)}
           >
-            <section
-              className="modal-panel markdown-editor-dialog"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="markdown-poi-dialog-title"
-              onMouseDown={(event) => event.stopPropagation()}
-            >
-              <div className="section-heading">
-                <h2 id="markdown-poi-dialog-title">关联 POI</h2>
-                <button
-                  className="icon-action-button"
-                  type="button"
-                  aria-label="关闭关联 POI"
-                  onClick={() => setActiveDialog(null)}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    close
-                  </span>
-                </button>
-              </div>
-              <p className="muted">{`当前已关联 ${relatedPoiCount} 个 POI。`}</p>
-              <ContentPoiBindingEditor
-                selectedIds={draft.metadata.relatedPoiMarkerIds ?? []}
-                onChange={(ids) => updateMetadata({ relatedPoiMarkerIds: ids })}
-              />
-              <div className="admin-content-actions">
-                <button
-                  className="secondary-action-button is-primary"
-                  type="button"
-                  onClick={() => setActiveDialog(null)}
-                >
-                  完成
-                </button>
-              </div>
-            </section>
-          </div>
+            <div className="section-heading">
+              <h2 id="markdown-poi-dialog-title">关联 POI</h2>
+              <IconButton icon="close" label="关闭关联 POI" onClick={() => setActiveDialog(null)} />
+            </div>
+            <p className="muted">{`当前已关联 ${relatedPoiCount} 个 POI。`}</p>
+            <ContentPoiBindingEditor
+              selectedIds={draft.metadata.relatedPoiMarkerIds ?? []}
+              onChange={(ids) => updateMetadata({ relatedPoiMarkerIds: ids })}
+            />
+            <div className="admin-content-actions">
+              <Button variant="primary" onClick={() => setActiveDialog(null)}>
+                完成
+              </Button>
+            </div>
+          </Modal>
         ) : null}
 
         {activeDialog === 'assets' ? (
-          <div
-            className="modal-backdrop editor-dialog-backdrop"
-            role="presentation"
-            onMouseDown={() => setActiveDialog(null)}
+          <Modal
+            labelledBy="markdown-asset-dialog-title"
+            backdropClassName="editor-dialog-backdrop"
+            className="markdown-editor-dialog"
+            onBackdropClick={() => setActiveDialog(null)}
           >
-            <section
-              className="modal-panel markdown-editor-dialog"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="markdown-asset-dialog-title"
-              onMouseDown={(event) => event.stopPropagation()}
-            >
-              <div className="section-heading">
-                <h2 id="markdown-asset-dialog-title">素材</h2>
-                <button
-                  className="icon-action-button"
-                  type="button"
-                  aria-label="关闭素材"
-                  onClick={() => setActiveDialog(null)}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    close
-                  </span>
-                </button>
-              </div>
-              <MarkdownAssetSection
-                assetIds={draft.assetIds}
-                disabled={disabled}
-                onAssetIdsChange={(assetIds) => onChange({ assetIds })}
-                onInsert={onInsertAsset}
-              />
-              <div className="admin-content-actions">
-                <button
-                  className="secondary-action-button is-primary"
-                  type="button"
-                  onClick={() => setActiveDialog(null)}
-                >
-                  完成
-                </button>
-              </div>
-            </section>
-          </div>
+            <div className="section-heading">
+              <h2 id="markdown-asset-dialog-title">素材</h2>
+              <IconButton icon="close" label="关闭素材" onClick={() => setActiveDialog(null)} />
+            </div>
+            <MarkdownAssetSection
+              assetIds={draft.assetIds}
+              disabled={disabled}
+              onAssetIdsChange={(assetIds) => onChange({ assetIds })}
+              onInsert={onInsertAsset}
+            />
+            <div className="admin-content-actions">
+              <Button variant="primary" onClick={() => setActiveDialog(null)}>
+                完成
+              </Button>
+            </div>
+          </Modal>
         ) : null}
       </EditorDialogPortal>
     </div>
@@ -374,18 +340,16 @@ export function MarkdownHeaderFields({
         <div className="markdown-inspector-section-heading">
           <p className="markdown-inspector-section-title">基本信息</p>
         </div>
-        <label className="material-field">
-          <span>标题</span>
-          <input
+        <Field label={<>标题</>}>
+          <Input
             disabled={disabled}
             maxLength={200}
             value={draft.title}
             onChange={(event) => onChange({ title: event.currentTarget.value })}
           />
-        </label>
-        <label className="material-field">
-          <span>分类</span>
-          <select
+        </Field>
+        <Field label={<>分类</>}>
+          <Select
             disabled={disabled}
             value={draft.categoryId}
             onChange={(event) => onChange({ categoryId: event.currentTarget.value })}
@@ -399,18 +363,17 @@ export function MarkdownHeaderFields({
                 {category}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="material-field">
-          <span>摘要</span>
-          <textarea
+          </Select>
+        </Field>
+        <Field label={<>摘要</>}>
+          <Textarea
             disabled={disabled}
             maxLength={500}
             placeholder="展示在首页与列表卡片上的摘要"
             value={draft.metadata.excerpt ?? ''}
             onChange={(event) => updateMetadata({ excerpt: event.currentTarget.value })}
           />
-        </label>
+        </Field>
       </div>
 
       <div className="markdown-inspector-section">
@@ -438,9 +401,8 @@ export function MarkdownHeaderFields({
             )}
           </div>
           <div className="markdown-cover-picker-actions">
-            <label className="material-field">
-              <span>选择封面图</span>
-              <input
+            <Field label={<>选择封面图</>}>
+              <Input
                 ref={coverFileRef}
                 accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/avif"
                 disabled={disabled || coverUploading}
@@ -452,27 +414,23 @@ export function MarkdownHeaderFields({
                   }
                 }}
               />
-            </label>
+            </Field>
             {coverImage ? (
-              <button
-                aria-label="清除封面图"
-                className="icon-action-button"
+              <IconButton
+                icon="delete"
+                label="清除封面图"
                 disabled={disabled}
-                title="清除封面图"
-                type="button"
                 onClick={() => updateMetadata({ coverImageUrl: undefined })}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  delete
-                </span>
-              </button>
+              />
             ) : null}
             {coverUploading ? <small className="muted">正在上传封面图…</small> : null}
           </div>
         </div>
-        <label className="material-field">
-          <span>封面图链接</span>
-          <input
+        <Field
+          label="封面图链接"
+          hint={coverImageInvalid ? '封面图链接必须是站内路径或完整 URL。' : undefined}
+        >
+          <Input
             disabled={disabled}
             placeholder="/content-assets/cover.png 或 https://..."
             value={draft.metadata.coverImageUrl ?? ''}
@@ -480,22 +438,15 @@ export function MarkdownHeaderFields({
               updateMetadata({ coverImageUrl: event.currentTarget.value || undefined })
             }
           />
-          {coverImageInvalid ? (
-            <small className="muted">封面图链接必须是站内路径或完整 URL。</small>
-          ) : null}
-        </label>
-        <label className="checkbox-row">
-          <input
-            checked={draft.metadata.showInBanner}
-            disabled={disabled}
-            type="checkbox"
-            onChange={(event) => updateMetadata({ showInBanner: event.currentTarget.checked })}
-          />
-          <span>作为首页重点资讯候选</span>
-        </label>
-        <label className="material-field">
-          <span>重点排序</span>
-          <input
+        </Field>
+        <CheckboxRow
+          checked={draft.metadata.showInBanner}
+          disabled={disabled}
+          onChange={(event) => updateMetadata({ showInBanner: event.currentTarget.checked })}
+          label="作为首页重点资讯候选"
+        />
+        <Field label="重点排序" hint={bannerSortError ? '请输入整数排序值。' : undefined}>
+          <Input
             disabled={disabled}
             inputMode="numeric"
             placeholder="数值越小越靠前"
@@ -511,8 +462,7 @@ export function MarkdownHeaderFields({
             }}
             onFocus={bannerSortField.handleFocus}
           />
-          {bannerSortError ? <small className="muted">请输入整数排序值。</small> : null}
-        </label>
+        </Field>
       </div>
     </div>
   );

@@ -37,6 +37,7 @@ import {
 import { ProgressiveImage } from './progressive-image';
 import { ServerStatusPill, ServerStatusRailIcon, serverStatusPillText } from './server-status-pill';
 import { SmartQaGlyph } from './smart-qa-icon';
+import { IconButton } from './ui/button';
 import {
   MobileActionRailProvider,
   useMobileActionRail,
@@ -425,15 +426,14 @@ function AppShellFrame({
     >
       <header className="topbar">
         <TopbarMaterialLayers />
-        <button
-          className="icon-button desktop-menu"
-          type="button"
-          aria-label={navOpen ? t('nav.collapse') : t('nav.expand')}
+        <IconButton
+          variant="icon"
+          className="desktop-menu"
+          icon="menu"
+          label={navOpen ? t('nav.collapse') : t('nav.expand')}
           aria-expanded={navOpen}
           onClick={() => setNavOpen((current) => !current)}
-        >
-          <span className="material-symbols-outlined">menu</span>
-        </button>
+        />
         <Link
           className={useSymbolBrand ? 'brand is-symbol-brand' : 'brand is-wordmark-brand'}
           href={appPath('/')}
@@ -464,14 +464,13 @@ function AppShellFrame({
             <span>{t('quickAction.rideCode')}</span>
           </button>
           {!mobileActionRail?.enabled && assistantEnabled && !hideAssistantEntry ? (
-            <button
-              className="icon-button"
-              type="button"
-              aria-label={t('globalSearch.action.open')}
+            <IconButton
+              variant="icon"
+              label={t('globalSearch.action.open')}
               onClick={openGlobalSearch}
             >
               <SmartQaGlyph size={22} />
-            </button>
+            </IconButton>
           ) : null}
           <Link
             className={accountButtonClassName(accountStatus, accountBadge)}
@@ -732,14 +731,14 @@ function SecondaryShellFrame({
     showAssistantInHeader || secondaryActions ? (
       <>
         {showAssistantInHeader ? (
-          <button
-            className="icon-button secondary-assistant-entry"
-            type="button"
-            aria-label={t('globalSearch.action.open')}
+          <IconButton
+            variant="icon"
+            className="secondary-assistant-entry"
+            label={t('globalSearch.action.open')}
             onClick={() => publishGlobalSearchRequested()}
           >
             <SmartQaGlyph size={22} />
-          </button>
+          </IconButton>
         ) : null}
         {secondaryActions}
       </>
@@ -879,7 +878,10 @@ export function SecondaryPageHeader({
           <span className="material-symbols-outlined">arrow_back</span>
         </Link>
       ) : null}
-      <h1 className="secondary-title">{renderedTitle}</h1>
+      <div className="secondary-title-group">
+        <div className="secondary-leading-slot" data-editor-header-panel-slot />
+        <h1 className="secondary-title">{renderedTitle}</h1>
+      </div>
       <div className="secondary-center-content" data-editor-header-tools-slot>
         {centerContent}
       </div>

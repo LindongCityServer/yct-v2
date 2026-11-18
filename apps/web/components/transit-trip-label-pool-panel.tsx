@@ -7,6 +7,7 @@ import {
   buildTripLabelNumberRange,
   expandTripLabelBatchText,
 } from '../lib/transit-trip-label-batch';
+import { Modal } from './ui/modal';
 
 interface PoolDraft {
   id: string;
@@ -426,14 +427,7 @@ function PoolDialog({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onCancel}>
-      <div
-        className="modal-panel admin-transit-dialog transit-trip-label-pool-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="transit-trip-label-pool-dialog-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
+    <Modal labelledBy="transit-trip-label-pool-dialog-title" className="admin-transit-dialog transit-trip-label-pool-dialog" as="div" onBackdropClick={() => onCancel}>
         <div className="section-heading">
           <h2 id="transit-trip-label-pool-dialog-title">
             {draft.isNew ? '新建标签池' : '编辑标签池'}
@@ -589,8 +583,7 @@ function PoolDialog({
             {draft.isNew ? '创建标签池' : '保存标签池'}
           </button>
         </div>
-      </div>
-    </div>
+      </Modal>
   );
 }
 

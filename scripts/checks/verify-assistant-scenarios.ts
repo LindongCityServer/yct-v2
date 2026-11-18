@@ -12,7 +12,10 @@ import {
   buildAssistantRetrieval,
   buildQueryCandidates,
 } from '../../apps/web/lib/assistant/retrieval';
-import { buildAssistantContextBlock } from '../../apps/web/lib/assistant/chat';
+import {
+  buildAssistantChannelPrompt,
+  buildAssistantContextBlock,
+} from '../../apps/web/lib/assistant/chat';
 import { buildPlaceQueryCandidates } from '../../apps/web/lib/assistant/place-synonyms';
 import {
   getMaterialWorkspaceGuide,
@@ -895,6 +898,26 @@ console.log('── 14. 玩家别名匹配 ────────────�
   check(
     '普通问题不误命中玩家',
     findPlayerMatch('今天天气怎么样', baseLocation, new Map(), new Map()) === undefined,
+  );
+}
+
+console.log('── 15. QQ 聊天渠道提示 ───────────────────────────────');
+
+{
+  const groupPrompt = buildAssistantChannelPrompt('qq-group');
+  const directPrompt = buildAssistantChannelPrompt('qq-c2c');
+  check(
+    '群聊提示覆盖网页版输出格式',
+    groupPrompt.includes('不要输出 Markdown') &&
+      groupPrompt.includes('不要输出引用编号') &&
+      groupPrompt.includes('约 120-180 字') &&
+      groupPrompt.includes('不要描述网页操作'),
+  );
+  check(
+    '单聊提示比群聊宽松且都不带链接示例',
+    directPrompt.includes('约 150-220 字') &&
+      !/https?:\/\//.test(groupPrompt) &&
+      !/https?:\/\//.test(directPrompt),
   );
 }
 

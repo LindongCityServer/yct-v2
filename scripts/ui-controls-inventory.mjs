@@ -231,7 +231,8 @@ const inputTypes = (files) =>
     [...files].flatMap((file) =>
       modules
         .get(file)
-        .controls.filter((control) => control.element === 'input')
+        // Input 原语也是原生输入的类型入口（展示板/业务统一用 Field + Input）。
+        .controls.filter((control) => control.element === 'input' || control.element === 'Input')
         .flatMap((control) => (control.types.length ? control.types : ['text'])),
     ),
   );

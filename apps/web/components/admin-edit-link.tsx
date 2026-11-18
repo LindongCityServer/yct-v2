@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { useMobileActionRail, type MobileActionRailItem } from './mobile-action-rail';
+import { ButtonLink, IconLink } from './ui/button';
 
 interface AccountStatusResponse {
   admin?: { role: 'admin' | 'super_admin' };
@@ -73,20 +74,28 @@ export function AdminEditLink({
     return null;
   }
 
+  if (compact) {
+    return (
+      <IconLink
+        className="admin-edit-link"
+        href={appPath(href)}
+        label={renderedLabel}
+        icon="edit"
+      />
+    );
+  }
+
   return (
-    <a
-      className={
-        compact ? 'icon-action-button admin-edit-link' : 'secondary-action-button admin-edit-link'
-      }
+    <ButtonLink
+      variant="secondary"
+      className="admin-edit-link"
       href={appPath(href)}
+      icon="edit"
       aria-label={renderedLabel}
       title={renderedLabel}
     >
-      <span className="material-symbols-outlined" aria-hidden="true">
-        edit
-      </span>
-      {compact ? null : <span>{renderedLabel}</span>}
-    </a>
+      {renderedLabel}
+    </ButtonLink>
   );
 }
 

@@ -21,7 +21,15 @@ import {
   resolveRequestLocale,
   serializeJsonLd,
 } from '../lib/site-metadata';
-import './globals.css';
+import './styles/10-base.css';
+import './styles/20-layout.css';
+import './styles/30-components.css';
+import './styles/40-admin.css';
+import './styles/50-materials.css';
+import './styles/60-pages.css';
+import './styles/70-data.css';
+import './styles/80-controls-board.css';
+import './styles/90-compat-standard.css';
 
 // 站点地址来自部署环境，确保 JSON-LD 和 metadataBase 不会在构建机上固化为 localhost。
 export const dynamic = 'force-dynamic';

@@ -1,0 +1,5283 @@
+/* 从 apps/web/app/globals.css 按顺序拆出（60-pages）：本文件顺序参与全局级联，勿调换 layout.tsx 的 import 顺序。 */
+
+.schedule-route-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-2) var(--yct-space-1);
+}
+
+/* 电报页面最终覆盖：该区块位于历史样式之后，确保新纸面布局优先。 */
+.telegraph-studio {
+  max-width: 980px;
+  gap: 24px;
+}
+/*
+ * 电报发送台与输出区一样「设计上完全透明」（纸张本身就是内容，容器不该再垫一层底），
+ * 因此这里必须带 !important：简约材质模式的「面板实色化」规则把 .telegraph-send-stage
+ * 也列进了实色清单，普通声明压不过它，会在发送台背后刷出一块完整面板底。
+ * 同批的 .telegraph-output-section 早已用 !important 自保，发送台这里是漏掉的那一半。
+ */
+.telegraph-send-stage {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 0 !important;
+  background: transparent !important;
+  touch-action: pan-y;
+}
+.telegraph-send-paper {
+  width: min(100%, 760px);
+  aspect-ratio: 2380 / 3368;
+  transition:
+    transform 680ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 420ms ease;
+}
+.telegraph-send-stage.is-flying-up .telegraph-send-paper {
+  animation: telegraph-paper-fly-up 680ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.telegraph-send-stage.is-sent .telegraph-send-paper {
+  visibility: hidden;
+  pointer-events: none;
+}
+.telegraph-paper-value,
+.telegraph-grid-preview,
+.telegraph-paper-input {
+  font-family: 'Telegraph Handwriting', '平方韶华体', 'Kaiti SC', 'STKaiti', 'KaiTi', serif;
+}
+.telegraph-paper-value {
+  font-size: clamp(13px, 2vw, 22px);
+  line-height: 1.2;
+}
+.telegraph-stat-count {
+  left: 16%;
+  top: 7.1%;
+  width: 16%;
+}
+.telegraph-stat-fare {
+  left: 16%;
+  top: 11.2%;
+  width: 16%;
+}
+.telegraph-flow {
+  left: 76%;
+  top: 7.1%;
+  width: 18%;
+}
+.telegraph-out-date {
+  left: 76%;
+  top: 11.2%;
+  width: 18%;
+}
+.telegraph-out-time {
+  left: 76%;
+  top: 15.3%;
+  width: 18%;
+}
+.telegraph-office {
+  left: 17%;
+  top: 22.3%;
+  width: 24%;
+}
+.telegraph-destination-province {
+  left: 30%;
+  top: 43.4%;
+  width: 20%;
+}
+.telegraph-destination-city {
+  left: 50%;
+  top: 43.4%;
+  width: 20%;
+}
+.telegraph-destination-county {
+  left: 72%;
+  top: 43.4%;
+  width: 20%;
+}
+.telegraph-sender-name {
+  left: 4.5%;
+  top: 88.8%;
+  width: 17%;
+}
+.telegraph-sender-address {
+  left: 25%;
+  top: 88.8%;
+  width: 31%;
+}
+.telegraph-grid-preview {
+  left: 13.7%;
+  width: 82.4%;
+  z-index: 1;
+}
+.telegraph-recipient-grid {
+  top: 31.6%;
+  height: 11.8%;
+  grid-template-rows: repeat(2, 1fr);
+}
+.telegraph-body-grid {
+  top: 46.4%;
+  height: 31.4%;
+  grid-template-rows: repeat(5, 1fr);
+}
+.telegraph-grid-preview span {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-width: 0;
+  overflow: hidden;
+  color: #17372b;
+  font-size: clamp(12px, 2.25vw, 21px);
+  line-height: 1;
+}
+.telegraph-grid-preview b,
+.telegraph-grid-preview small {
+  display: block;
+  min-height: 1em;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.telegraph-grid-preview small {
+  color: #3b5f4d;
+  font-family: 'Telegraph Dot Matrix', ui-monospace, monospace;
+  font-size: clamp(5px, 0.9vw, 8px);
+  line-height: 1;
+}
+.telegraph-paper-input {
+  position: absolute;
+  z-index: 3;
+  display: block;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  padding: 0 4px;
+  resize: none;
+  background: transparent;
+  color: transparent;
+  caret-color: #167d42;
+  font-size: clamp(15px, 2.4vw, 24px);
+  line-height: 1.4;
+}
+.telegraph-paper-input:focus {
+  outline: 1px dashed rgb(22 125 66 / 55%);
+  outline-offset: 2px;
+}
+.telegraph-input-province {
+  left: 29%;
+  top: 40.8%;
+  width: 20%;
+  height: 4%;
+}
+.telegraph-input-city {
+  left: 49%;
+  top: 40.8%;
+  width: 21%;
+  height: 4%;
+}
+.telegraph-input-county {
+  left: 71%;
+  top: 40.8%;
+  width: 21%;
+  height: 4%;
+}
+.telegraph-input-district {
+  left: 13.8%;
+  top: 24%;
+  width: 13%;
+  height: 4%;
+}
+.telegraph-input-recipient-address {
+  left: 14%;
+  top: 31.3%;
+  width: 82%;
+  height: 5.4%;
+}
+.telegraph-input-recipient-name {
+  left: 14%;
+  top: 37%;
+  width: 82%;
+  height: 5.4%;
+}
+.telegraph-input-body {
+  left: 14%;
+  top: 46.1%;
+  width: 82%;
+  height: 31.8%;
+}
+.telegraph-input-sender-name {
+  left: 4%;
+  top: 86.5%;
+  width: 18%;
+  height: 5%;
+}
+.telegraph-input-sender-address {
+  left: 24%;
+  top: 86.5%;
+  width: 32%;
+  height: 5%;
+}
+.telegraph-sender-lock {
+  position: absolute;
+  z-index: 4;
+  left: 4.5%;
+  top: 94%;
+  color: #527061;
+  font-size: clamp(7px, 1vw, 10px);
+}
+.telegraph-paper-tools {
+  display: grid;
+  width: min(100%, 760px);
+  gap: 12px;
+}
+.telegraph-paper-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px 20px;
+  color: var(--yct-color-text-muted);
+  font-size: 0.8rem;
+}
+.telegraph-paper-summary strong {
+  color: var(--yct-color-text);
+  font-size: 1.1rem;
+}
+.telegraph-paper-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.telegraph-paper-actions button {
+  min-height: 42px;
+}
+.telegraph-auto-field {
+  animation: telegraph-auto-writing 420ms ease both;
+}
+.telegraph-output-grid.is-sealed {
+  align-items: center;
+}
+.telegraph-output-grid.is-sealed .telegraph-receive-paper {
+  transform: translateY(24px) scale(0.92);
+  opacity: 0.42;
+}
+.telegraph-output-grid.is-opened .telegraph-receive-paper {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+.telegraph-receive-paper {
+  transition:
+    transform 700ms ease,
+    opacity 500ms ease,
+    clip-path 700ms ease;
+}
+.telegraph-receive-paper.is-folded {
+  clip-path: inset(0 0 70% 0);
+}
+.telegraph-receive-header {
+  border-bottom: 0;
+  padding-bottom: 8px;
+}
+.telegraph-receive-header code:first-child {
+  font-size: 0.85rem;
+}
+.telegraph-receive-terminator {
+  border-top: 0;
+}
+.telegraph-receive-text-line.is-compressed {
+  transform: scaleY(0.6);
+}
+.telegraph-envelope-wrap {
+  transition: transform 700ms ease;
+}
+.telegraph-envelope-wrap.is-sealed {
+  transform: translateY(-34px);
+}
+.telegraph-envelope-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: default;
+  font: inherit;
+  text-align: left;
+}
+.telegraph-envelope-button:disabled {
+  opacity: 1;
+}
+.telegraph-envelope-wrap.is-sealed .telegraph-envelope-button {
+  cursor: pointer;
+}
+.telegraph-history-overlay,
+.telegraph-confirm-overlay {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  padding: 84px 16px 24px;
+  background: rgb(12 31 24 / 34%);
+}
+.telegraph-history-panel,
+.telegraph-confirm-dialog {
+  width: min(520px, 100%);
+  max-height: min(720px, calc(100vh - 108px));
+  /* iOS 16.7 支持 dvh；避免地址栏收起时弹窗超出可视区。 */
+  max-height: min(720px, calc(100dvh - 108px));
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--yct-color-border);
+  background: var(--yct-color-surface-panel);
+  box-shadow: 0 22px 60px rgb(0 0 0 / 22%);
+}
+.telegraph-history-panel {
+  display: grid;
+  gap: 12px;
+}
+.telegraph-confirm-dialog {
+  display: grid;
+  gap: 16px;
+}
+.telegraph-confirm-dialog > p {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  line-height: 1.6;
+}
+.telegraph-confirm-label {
+  color: var(--yct-color-text-muted);
+  font-size: 0.75rem;
+}
+.telegraph-confirm-message {
+  max-height: 150px;
+  overflow: auto;
+  margin: 5px 0 0;
+  padding: 10px;
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text);
+  font: inherit;
+  white-space: pre-wrap;
+}
+.telegraph-confirm-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.telegraph-confirm-summary div {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  background: var(--yct-color-surface);
+}
+.telegraph-confirm-summary span {
+  color: var(--yct-color-text-muted);
+  font-size: 0.75rem;
+}
+.telegraph-confirm-summary strong {
+  overflow-wrap: anywhere;
+  color: var(--yct-color-text);
+}
+.telegraph-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@keyframes telegraph-paper-fly-up {
+  from {
+    transform: translateY(0) rotate(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-115vh) rotate(-2deg);
+    opacity: 0;
+  }
+}
+@keyframes telegraph-auto-writing {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+@media (max-width: 560px) {
+  .telegraph-studio {
+    padding-inline: 0;
+  }
+  .telegraph-send-stage {
+    padding-inline: 4px;
+  }
+  .telegraph-paper-summary {
+    gap: 8px 12px;
+    font-size: 0.72rem;
+  }
+  .telegraph-paper-value {
+    font-size: clamp(12px, 3.2vw, 18px);
+  }
+  .telegraph-paper-input {
+    font-size: clamp(15px, 3.7vw, 21px);
+  }
+  .telegraph-confirm-actions {
+    flex-direction: column-reverse;
+  }
+  .telegraph-confirm-actions button {
+    width: 100%;
+  }
+  .telegraph-receive-paper {
+    padding: 24px 20px;
+  }
+}
+
+.schedule-route-group-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.schedule-route-group-heading strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-15);
+}
+
+.schedule-route-group-heading span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 650;
+}
+
+.schedule-route-group-trips {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.schedule-journey-leg-index {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--yct-color-primary);
+  color: var(--yct-color-on-primary) !important;
+}
+
+.schedule-journey-ticketing {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+  font-weight: 700;
+}
+
+.schedule-journey-ticketing.is-order_available {
+  color: var(--yct-color-success);
+}
+
+.schedule-journey-ticketing.is-partially_available {
+  color: var(--yct-color-warning);
+}
+
+.schedule-trip-list {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.schedule-trip-card {
+  --schedule-service-tone: var(--yct-color-primary);
+  display: grid;
+  gap: var(--yct-space-4);
+  padding: var(--yct-space-5) var(--yct-space-4) var(--yct-space-4);
+  border-radius: var(--yct-radius-xl);
+  background: var(--yct-color-surface-panel);
+  overflow: hidden;
+}
+
+.schedule-trip-header {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: var(--yct-space-2);
+  align-items: center;
+}
+
+.schedule-trip-service-mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--schedule-service-tone);
+}
+
+.schedule-trip-service-mark .material-symbols-outlined {
+  --icon-fill: 1;
+  font-size: var(--yct-font-size-26);
+}
+
+.schedule-trip-title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.schedule-trip-title span,
+.schedule-trip-fare span,
+.schedule-trip-time-block span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+  font-weight: 700;
+}
+
+.schedule-trip-title strong {
+  min-width: 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-18);
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-trip-fare {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  min-width: 92px;
+  justify-items: end;
+  gap: var(--yct-space-1);
+  color: var(--schedule-service-tone);
+  text-align: right;
+}
+
+.schedule-trip-fare strong {
+  color: var(--schedule-service-tone);
+  font-size: var(--yct-font-size-28);
+  font-weight: 900;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.schedule-trip-journey {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.85fr) minmax(0, 1fr);
+  gap: var(--yct-space-4);
+  align-items: end;
+}
+
+.schedule-trip-time-block {
+  display: grid;
+  min-width: 0;
+  gap: var(--yct-space-1);
+}
+
+.schedule-trip-time-block time {
+  color: var(--yct-color-text);
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.schedule-trip-time-block time .schedule-trip-day-offset {
+  display: inline-block;
+  margin-left: 0.14em;
+  color: var(--yct-color-text-secondary);
+  font-size: 0.32em;
+  font-weight: 800;
+  line-height: 0;
+  white-space: nowrap;
+  vertical-align: super;
+}
+
+.schedule-trip-time-block small {
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-15);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.schedule-trip-time-block.is-arrival {
+  justify-items: end;
+  text-align: right;
+}
+
+.schedule-trip-duration {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-muted);
+  text-align: center;
+}
+
+.schedule-trip-duration::after {
+  width: 100%;
+  max-width: 180px;
+  height: 2px;
+  background: currentColor;
+  content: '';
+  opacity: 0.62;
+}
+
+.schedule-trip-duration strong {
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-14);
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.schedule-trip-main {
+  display: grid;
+  min-width: 0;
+  gap: var(--yct-space-2);
+}
+
+.schedule-trip-main p {
+  margin: 0;
+  min-width: 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+  overflow-wrap: anywhere;
+}
+
+.screen-station-flow span.is-pass-through {
+  border-style: dashed;
+  opacity: 0.55;
+}
+
+.schedule-trip-meta {
+  grid-column: auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.schedule-trip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.schedule-trip-actions .secondary-action-button {
+  min-height: var(--yct-control-height-md);
+  border-radius: var(--yct-radius-pill);
+}
+
+.schedule-trip-actions .secondary-action-button.is-primary {
+  flex: 1 1 220px;
+  justify-content: center;
+}
+
+.schedule-trip-feedback {
+  margin: 0;
+  color: var(--schedule-service-tone);
+  font-size: var(--yct-font-size-13);
+  font-weight: 700;
+}
+
+.schedule-empty-state {
+  background: var(--yct-color-surface-panel);
+}
+
+.transit-overview {
+  display: grid;
+  gap: var(--yct-space-4);
+  margin-top: var(--yct-space-4);
+}
+
+.transit-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--yct-space-2);
+}
+
+.transit-summary-item {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--yct-space-4);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-muted);
+}
+
+.transit-summary-item span:first-child {
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  font-weight: 700;
+}
+
+.transit-summary-item strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-24);
+  line-height: 1.1;
+}
+
+.line-list {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.transit-filter-strip {
+  gap: var(--yct-space-2);
+}
+
+.line-list-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.line-mode-icon {
+  flex: 0 0 auto;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-30);
+}
+
+.line-badge {
+  --line-badge-color: var(--yct-color-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  min-height: 32px;
+  max-width: 100%;
+  padding: 0 var(--yct-space-2);
+  border-radius: var(--yct-radius-md);
+  background: var(--line-badge-color);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.line-badge.is-metro-token {
+  gap: var(--yct-space-1);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-22);
+  font-weight: 700;
+}
+
+.line-metro-token {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--line-badge-color);
+  color: #ffffff;
+  font-size: var(--yct-font-size-20);
+  line-height: 1;
+}
+
+.line-badge.is-outline {
+  border: 2px solid var(--line-badge-color);
+  background: transparent;
+  color: var(--line-badge-color);
+}
+
+.line-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+  min-height: 48px;
+  padding: var(--yct-space-3) var(--yct-space-4);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+  transition:
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    transform var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.line-list-item:hover {
+  background: var(--yct-color-surface-muted);
+}
+
+.line-list-detail {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-line-detail {
+  display: grid;
+  gap: var(--yct-space-4);
+  padding-bottom: var(--yct-space-8);
+}
+
+.line-detail-card {
+  display: grid;
+  gap: var(--yct-space-4);
+  padding: var(--yct-space-6);
+  border-radius: 28px;
+  background: var(--yct-color-surface-panel);
+}
+
+.line-detail-identity-card {
+  gap: var(--yct-space-5);
+}
+
+.line-detail-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.line-attribute-list {
+  display: grid;
+  gap: var(--yct-space-4);
+  margin: 0;
+}
+
+.line-attribute-list div {
+  display: grid;
+  grid-template-columns: minmax(104px, 0.8fr) minmax(0, 1fr);
+  gap: var(--yct-space-4);
+  align-items: start;
+}
+
+.line-attribute-list dt,
+.line-attribute-list dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.line-attribute-list dt {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-18);
+  font-weight: 700;
+}
+
+.line-attribute-list dd {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-18);
+  text-align: right;
+}
+
+/* 与分段控件统一：3px 轨道内边距 + 3px 间隙 + surface-muted 底
+ * （原为 border-subtle 底与 6px 内边距）；48px 大按钮属线路详情的大尺寸档，保留。 */
+.line-direction-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+}
+
+.line-direction-switch button {
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 var(--yct-space-4);
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  transition:
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    transform var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.line-direction-switch button.is-active {
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  font-weight: 800;
+  box-shadow: var(--yct-shadow-soft);
+}
+
+.line-direction-switch button:active {
+  transform: scale(0.98);
+}
+
+.station-sequence {
+  display: grid;
+  gap: var(--yct-space-4);
+}
+
+.station-timeline {
+  position: relative;
+  display: grid;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.station-timeline::before {
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 15px;
+  width: 6px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--line-detail-color, var(--yct-color-primary));
+  content: '';
+}
+
+.station-timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: var(--yct-space-2);
+  align-items: center;
+  min-height: 52px;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-19);
+}
+
+.station-node {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 6px;
+  border: 5px solid var(--line-detail-color, var(--yct-color-primary));
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+}
+
+.station-timeline strong {
+  min-width: 0;
+  font-size: var(--yct-font-size-20);
+  line-height: 1.35;
+}
+
+.station-detail-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.station-detail-link:hover {
+  color: var(--line-detail-color, var(--yct-color-primary));
+}
+
+.station-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.station-stop-direction {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 22px;
+  padding: 0 var(--yct-space-2);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(
+    in srgb,
+    var(--line-detail-color, var(--yct-color-primary)) 12%,
+    transparent
+  );
+  color: var(--line-detail-color, var(--yct-color-primary));
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+.station-detail-summary {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.station-detail-page {
+  display: grid;
+  gap: var(--yct-space-4);
+}
+
+.station-detail-hero,
+.station-detail-section {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-5);
+  border-radius: 28px;
+  background: var(--yct-color-surface-panel);
+}
+
+.station-detail-hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.station-detail-kicker {
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-14);
+  font-weight: 800;
+}
+
+.station-detail-hero h2 {
+  margin: var(--yct-space-1) 0 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-32);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.station-detail-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  min-height: 38px;
+  padding: 0 var(--yct-space-3);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  font-weight: 800;
+}
+
+.station-detail-mode .material-symbols-outlined {
+  --icon-fill: 1;
+}
+
+.station-detail-section h3 {
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-20);
+}
+
+.station-layer-list,
+.station-exit-grid,
+.station-facility-list,
+.station-related-grid {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.station-layer-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.station-layer-item,
+.station-exit-item,
+.station-facility-item,
+.station-related-card,
+.station-empty-block {
+  min-width: 0;
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.station-layer-item,
+.station-exit-item {
+  display: grid;
+  gap: 3px;
+}
+
+.station-layer-item strong,
+.station-exit-item strong,
+.station-facility-item strong,
+.station-related-card strong {
+  color: var(--yct-color-text);
+}
+
+.station-layer-item span,
+.station-exit-item span,
+.station-related-card p {
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.station-exit-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.station-facility-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.station-facility-item,
+.station-related-card,
+.station-empty-block {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: var(--yct-space-2);
+  align-items: start;
+}
+
+.station-facility-item > .material-symbols-outlined,
+.station-related-card > .material-symbols-outlined,
+.station-empty-block > .material-symbols-outlined {
+  --icon-fill: 1;
+  color: var(--yct-color-primary);
+}
+
+.station-facility-item > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.station-empty-block {
+  color: var(--yct-color-text-muted);
+  font-weight: 700;
+}
+
+.service-groups {
+  display: grid;
+  gap: var(--yct-space-5);
+}
+
+.service-group {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.service-entry-grid {
+  --yct-service-entry-min: 144px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--yct-service-entry-min)), 1fr));
+  gap: var(--yct-space-3);
+}
+
+.service-entry {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: var(--yct-space-3);
+  align-items: center;
+  min-height: 86px;
+  padding: var(--yct-space-4);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  transition:
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.service-entry > .material-symbols-outlined {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-primary) 14%, transparent);
+  color: var(--yct-color-primary);
+}
+
+.service-entry > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.service-entry strong,
+.service-entry .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.service-entry strong {
+  color: var(--yct-color-text);
+  white-space: nowrap;
+}
+
+.service-entry .muted {
+  display: -webkit-box;
+  font-size: var(--yct-font-size-13);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.faq-page {
+  display: grid;
+  gap: var(--yct-space-6);
+  padding-bottom: var(--yct-space-6);
+}
+
+.faq-intro {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-3) 0 var(--yct-space-5);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.faq-intro > .material-symbols-outlined {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-primary) 14%, transparent);
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-26);
+}
+
+.faq-intro h2,
+.faq-intro p,
+.faq-group-heading h2,
+.faq-answer p {
+  margin: 0;
+}
+
+.faq-intro h2 {
+  font-size: var(--yct-font-size-20);
+  line-height: 1.35;
+}
+
+.faq-intro p {
+  margin-top: 4px;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-14);
+  line-height: 1.6;
+}
+
+.faq-groups,
+.faq-group {
+  display: grid;
+}
+
+.faq-groups {
+  gap: var(--yct-space-6);
+}
+
+.faq-group {
+  gap: var(--yct-space-3);
+  scroll-margin-top: calc(var(--yct-topbar-height) + var(--yct-space-4));
+}
+
+.faq-group-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.faq-group-heading > .material-symbols-outlined {
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-22);
+}
+
+.faq-group-heading h2 {
+  font-size: var(--yct-font-size-17);
+  line-height: 1.4;
+}
+
+.faq-group-heading .muted {
+  margin-left: auto;
+  font-size: var(--yct-font-size-12);
+}
+
+.faq-list {
+  border-block: 1px solid var(--yct-color-border);
+}
+
+.faq-item + .faq-item {
+  border-top: 1px solid var(--yct-color-border);
+}
+
+.faq-item {
+  scroll-margin-top: calc(var(--yct-topbar-height) + var(--yct-space-4));
+}
+
+.faq-item summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: var(--yct-space-3);
+  min-height: 56px;
+  padding: var(--yct-space-3) var(--yct-space-2);
+  border-radius: var(--yct-radius-md);
+  cursor: pointer;
+  color: var(--yct-color-text);
+  font-weight: 700;
+  line-height: 1.5;
+  list-style: none;
+}
+
+/* 文本 span 被拉伸至整列宽，默认中心缩放会让左缘横向漂移；
+   锚定左缘向右展开，并预留缩放后的宽度补偿，避免长标题挤压展开图标。 */
+.faq-item summary > span:first-child {
+  max-width: calc(100% / var(--yct-motion-scale-hover));
+  transform-origin: left center;
+}
+
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-item summary:hover,
+.faq-item summary:focus-visible {
+  background: var(--yct-material-hover-state);
+}
+
+.faq-item-expand {
+  color: var(--yct-color-text-muted);
+  transition: transform var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.faq-item[open] .faq-item-expand {
+  transform: rotate(180deg);
+}
+
+.faq-item:target > summary {
+  background: var(--yct-material-selected-state);
+  color: var(--yct-color-primary);
+}
+
+.faq-answer {
+  padding: 0 calc(24px + var(--yct-space-5)) var(--yct-space-4) var(--yct-space-2);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-14);
+  line-height: 1.8;
+}
+
+.faq-answer a {
+  display: inline;
+  margin-inline: 2px;
+  color: var(--yct-color-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.faq-answer-link-label {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.faq-answer-control {
+  display: inline;
+  margin-inline: 2px;
+  color: var(--yct-color-text);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.faq-answer-icon {
+  display: inline-block;
+  margin-inline-end: 3px;
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-18);
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: -0.17em;
+}
+
+.map-layer-panel {
+  position: absolute;
+  /* 竖向工具条宽约 52px，图层面板停靠在它的左侧 */
+  top: var(--yct-map-top-controls-offset);
+  right: calc(var(--yct-map-control-inset) + 52px);
+  z-index: 4;
+  display: grid;
+  gap: var(--yct-space-2);
+  width: min(260px, calc(100% - var(--yct-map-control-inset) * 2 - 52px));
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  box-shadow: var(--yct-shadow-floating);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+.map-browse-mode-control {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-surface-muted) 72%, transparent);
+}
+
+.map-browse-mode-control button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: var(--yct-control-height-sm);
+  padding: 0 var(--yct-space-2);
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  font: inherit;
+  font-size: var(--yct-font-size-13);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.map-browse-mode-control button .material-symbols-outlined {
+  --icon-fill: 0;
+  font-size: var(--yct-font-size-18);
+}
+
+.map-browse-mode-control button.is-active {
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  box-shadow: 0 1px 4px rgba(17, 24, 23, 0.14);
+  font-weight: 800;
+}
+
+.map-browse-mode-control button.is-active .material-symbols-outlined {
+  --icon-fill: 1;
+}
+
+.map-tile-provider-select {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+  color: var(--yct-color-text-secondary);
+}
+
+.map-tile-provider-select > .material-symbols-outlined {
+  justify-self: center;
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-22);
+}
+
+.map-tile-provider-select strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+}
+
+.map-tile-provider-select select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 var(--yct-space-2);
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  color: var(--yct-color-text);
+  font: inherit;
+  font-size: var(--yct-font-size-13);
+  font-weight: 650;
+}
+
+.map-history-panel {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-muted) 55%, transparent);
+}
+
+.map-history-header {
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.map-history-header > .material-symbols-outlined {
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-20);
+}
+
+.map-history-header strong {
+  flex: 1;
+  min-width: 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+}
+
+.map-history-badge {
+  padding: 1px 6px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-11);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.map-history-select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 var(--yct-space-2);
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  color: var(--yct-color-text);
+  font: inherit;
+  font-size: var(--yct-font-size-13);
+  font-weight: 650;
+}
+
+.map-history-switch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-1);
+}
+
+.map-history-switch .secondary-action-button {
+  min-height: var(--yct-control-height-xs);
+  padding: 0 var(--yct-space-1);
+  font-size: var(--yct-font-size-12);
+}
+
+.map-history-position {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 650;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.map-history-note {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.map-history-warning {
+  margin: 0;
+  color: var(--yct-color-warning);
+  font-size: var(--yct-font-size-12);
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.map-history-current-data {
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  font-weight: 650;
+}
+
+.map-history-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-1);
+}
+
+.map-history-actions .secondary-action-button {
+  min-height: var(--yct-control-height-dense);
+  font-size: var(--yct-font-size-12);
+}
+
+.map-history-tile-status {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--yct-map-bottom-controls-offset) + 140px);
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  max-width: min(420px, calc(100% - var(--yct-map-control-inset) * 2));
+  min-height: 34px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  color: var(--yct-color-text-secondary);
+  box-shadow: var(--yct-shadow-floating);
+  font-size: var(--yct-font-size-13);
+  font-weight: 650;
+  transform: translateX(-50%);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  pointer-events: none;
+}
+
+.map-history-tile-status .material-symbols-outlined {
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-20);
+}
+
+.map-history-tile-status.is-missing {
+  border-color: color-mix(in srgb, var(--yct-color-danger) 35%, transparent);
+  color: var(--yct-color-danger);
+}
+
+.map-history-tile-status.is-missing .material-symbols-outlined {
+  color: var(--yct-color-danger);
+}
+
+.map-history-notice {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--yct-map-bottom-controls-offset) + 190px);
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  max-width: min(460px, calc(100% - var(--yct-map-control-inset) * 2));
+  min-height: 36px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid color-mix(in srgb, var(--yct-color-warning) 40%, transparent);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  color: var(--yct-color-warning);
+  box-shadow: var(--yct-shadow-floating);
+  font-size: var(--yct-font-size-13);
+  font-weight: 650;
+  transform: translateX(-50%);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  pointer-events: none;
+}
+
+.map-history-notice .material-symbols-outlined {
+  color: inherit;
+  font-size: var(--yct-font-size-20);
+}
+
+.unmined-tile.is-history-missing {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--yct-color-danger) 12%, transparent) 0 6px,
+      transparent 6px 12px
+    ),
+    color-mix(in srgb, var(--yct-color-surface-muted) 70%, transparent);
+  outline: 1px dashed color-mix(in srgb, var(--yct-color-danger) 40%, transparent);
+  outline-offset: -1px;
+  filter: none;
+}
+
+.map-layer-note {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.map-layer-option-list {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.map-layer-toggle {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+  color: var(--yct-color-text-secondary);
+}
+
+.map-layer-toggle > .material-symbols-outlined {
+  justify-self: center;
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-24);
+}
+
+.map-layer-toggle strong,
+.map-layer-toggle small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-layer-toggle strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-14);
+}
+
+.map-layer-toggle small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 600;
+}
+
+.map-poi-submit-modal {
+  width: min(480px, 100%);
+}
+
+.map-share-dialog {
+  width: min(440px, 100%);
+}
+
+.map-share-preview {
+  --map-share-color: var(--yct-color-primary);
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: 0;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--map-share-color) 10%, transparent),
+      transparent 52%
+    ),
+    var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+}
+
+.map-share-preview-heading {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-3);
+}
+
+.map-share-preview-heading > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.map-share-preview-heading small {
+  display: block;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.map-share-preview-heading strong {
+  display: block;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-20);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+/* 分享图标题图标按图3的圆角色块呈现，色块取分享主题色，白图标保证对比。 */
+.map-share-preview-icon {
+  --icon-fill: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--yct-radius-md);
+  background: var(--map-share-color);
+  color: #ffffff;
+  font-size: var(--yct-font-size-26);
+  line-height: 1;
+  text-align: center;
+}
+
+/* 使用 POI 原始图标时改用浅色底块，让图标自身的颜色和像素细节透出来。 */
+.map-share-preview-icon.is-image {
+  padding: 7px;
+  background: color-mix(in srgb, var(--map-share-color) 12%, var(--yct-color-surface-panel));
+}
+
+.map-share-preview-icon.is-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.map-share-detail-symbol {
+  --icon-fill: 1;
+  display: inline-grid;
+  place-items: center;
+  color: var(--route-step-color);
+  font-size: var(--yct-font-size-17);
+}
+
+.map-share-preview-steps li.is-alighting .map-route-step-marker .material-symbols-outlined,
+.map-share-preview-steps li.is-transfer.is-place .map-route-step-marker .material-symbols-outlined {
+  color: var(--route-step-color);
+}
+
+.map-share-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-1);
+}
+
+.map-share-preview-meta span {
+  min-height: 26px;
+  padding: 3px var(--yct-space-2);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  font-weight: 650;
+}
+
+/* POI 简介使用普通文本块，不再包胶囊；超长时最多 6 行并以省略号收尾。 */
+.map-share-preview-description {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+/* 分享图固定宽高比、等比裁切，避免竖图被拉伸成长图；
+ * 有封面时贴到卡片上缘，承担图3的“封面大图置顶”视觉层级。 */
+.map-share-preview-media {
+  margin: calc(-1 * var(--yct-space-4)) calc(-1 * var(--yct-space-4)) 0;
+  overflow: hidden;
+  aspect-ratio: 16 / 8;
+  background: var(--yct-color-surface-muted);
+}
+
+.map-share-preview-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.map-share-preview-steps {
+  --route-option-color: var(--map-share-color);
+  font-size: var(--yct-font-size-13);
+}
+
+.map-share-preview-steps .map-route-step-label {
+  font-size: var(--yct-font-size-13);
+}
+
+.map-share-preview-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+  padding-top: var(--yct-space-2);
+  border-top: 1px solid var(--yct-color-border-subtle);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.4;
+}
+
+.map-share-preview-footer-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.map-share-preview-footer-copy > :is(img, svg) {
+  display: block;
+  width: auto;
+  max-width: 112px;
+  height: 22px;
+}
+
+.map-share-preview-footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text);
+}
+
+.map-share-preview-footer-brand :is(img, svg) {
+  width: 22px;
+  height: 22px;
+}
+
+.map-share-preview-footer-brand strong {
+  font-size: var(--yct-font-size-14);
+  font-weight: 780;
+}
+
+.map-share-preview-footer-copy small {
+  flex-basis: 100%;
+  color: var(--yct-color-text-muted);
+  font: inherit;
+}
+
+.map-share-preview-footer .map-share-preview-qr,
+.map-share-preview-qr-placeholder {
+  display: block;
+  width: 72px;
+  max-width: none;
+  height: 72px;
+  border-radius: 4px;
+  background: var(--yct-color-surface-panel);
+}
+
+.map-share-preview-qr-placeholder {
+  border: 1px solid var(--yct-color-border-subtle);
+}
+
+.map-share-preview-url {
+  display: none;
+}
+
+.map-share-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: var(--yct-space-2);
+}
+
+.map-share-copy-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--yct-space-2);
+  align-items: stretch;
+  grid-column: 1 / -1;
+}
+
+.map-share-copy-select {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+  padding: 7px var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-secondary);
+}
+
+.map-share-copy-select > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.map-share-copy-select strong {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 700;
+}
+
+.map-share-copy-select select {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--yct-color-text);
+  color-scheme: light;
+  font: inherit;
+  font-size: var(--yct-font-size-13);
+  font-weight: 750;
+}
+
+.map-share-copy-select option {
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+}
+
+.map-share-copy-select option:checked {
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-text);
+}
+
+:root[data-color-scheme='dark'] .map-share-copy-select select {
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-color-scheme='system'] .map-share-copy-select select,
+  :root:not([data-color-scheme]) .map-share-copy-select select {
+    color-scheme: dark;
+  }
+}
+
+.map-share-copy-control > .secondary-action-button {
+  min-width: 92px;
+  justify-content: center;
+}
+
+.map-share-actions .secondary-action-button {
+  justify-content: center;
+}
+
+.secondary-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: var(--yct-space-2);
+}
+
+.secondary-title {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--yct-font-size-18);
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secondary-title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.secondary-title-group > .secondary-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 工作台的“显示/隐藏全部面板”从工具条移到返回按钮和页面标题之间。 */
+.secondary-leading-slot {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.secondary-leading-slot:empty {
+  display: none;
+}
+
+.editor-header-panel-toggle {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
+
+.editor-header-panel-toggle .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.secondary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--yct-space-2);
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.secondary-topbar > .icon-button,
+.secondary-topbar .operation-toc-toggle {
+  width: var(--yct-control-size-md);
+  height: var(--yct-control-size-md);
+}
+
+/* 返回按钮交给移动端侧边操作栏后，用占位保持标题栏三列栅格。 */
+.secondary-back-placeholder {
+  display: block;
+  width: 40px;
+  height: 40px;
+}
+
+.material-studio-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  margin-left: 0;
+  padding: 0;
+}
+
+.material-studio-review-action {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.material-studio-review-badge {
+  max-width: 96px;
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--yct-color-primary) 34%, transparent);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-primary-soft);
+  color: var(--yct-color-primary-hover);
+  font-size: var(--yct-font-size-10);
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+button.material-studio-review-badge {
+  font-family: inherit;
+}
+
+.material-studio-review-badge.is-login-action {
+  cursor: pointer;
+}
+
+.material-studio-review-badge.is-login-action:is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary);
+  background: var(--yct-color-primary-soft);
+}
+
+.material-studio-topbar-actions .icon-button:disabled {
+  cursor: progress;
+  opacity: 0.45;
+}
+
+.secondary-topbar .secondary-actions .material-studio-topbar-actions .icon-button {
+  width: var(--yct-control-size-md);
+  height: var(--yct-control-size-md);
+  color: var(--yct-color-text);
+}
+
+.secondary-topbar
+  .secondary-actions
+  .material-studio-topbar-actions
+  .icon-button:is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+}
+
+.secondary-topbar .secondary-actions .material-studio-topbar-actions .icon-button.is-primary {
+  background: var(--yct-color-primary);
+  color: #ffffff;
+}
+
+/* 免审核无水印下载：按钮直接显示文字提示，而不是只靠 hover title。 */
+.secondary-topbar
+  .secondary-actions
+  .material-studio-topbar-actions
+  .icon-button.material-watermark-free-download {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  min-width: 40px;
+  padding-inline: 10px 14px;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: var(--yct-font-size-12);
+  font-weight: 750;
+}
+
+.material-watermark-free-download-text {
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+.secondary-topbar
+  .secondary-actions
+  .material-studio-topbar-actions
+  .icon-button.is-primary:is(:hover, :focus-visible) {
+  background: var(--yct-color-primary);
+  color: #ffffff;
+}
+
+.secondary-topbar .secondary-actions .operation-toc-toggle:is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+}
+
+.secondary-topbar .secondary-actions .operation-toc.is-expanded .operation-toc-toggle {
+  background: var(--yct-material-selected-panel-state);
+  color: var(--yct-color-primary);
+}
+
+:root[data-material-mode='advanced']
+  .secondary-topbar
+  .secondary-actions:has(> *):not(:has(> .material-studio-topbar-actions)) {
+  height: 40px;
+  gap: 2px;
+  padding: 0 2px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  box-shadow: var(--yct-shadow-floating);
+}
+
+.secondary-topbar
+  .secondary-actions:has(> *):not(:has(> .material-studio-topbar-actions))
+  > :is(.admin-edit-link, .secondary-assistant-entry),
+.secondary-topbar
+  .secondary-actions:has(> *):not(:has(> .material-studio-topbar-actions))
+  > .operation-toc
+  .operation-toc-toggle {
+  height: 38px;
+  min-height: 38px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+  text-shadow: inherit;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.secondary-topbar
+  .secondary-actions:has(> *):not(:has(> .material-studio-topbar-actions))
+  > .operation-toc
+  .operation-toc-toggle {
+  width: 38px;
+  min-width: 38px;
+}
+
+.secondary-topbar
+  .secondary-actions:has(> .admin-edit-link)
+  > .admin-edit-link:is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+  color: var(--yct-color-text);
+}
+
+:root[data-embedded] {
+  background: transparent;
+}
+
+:root[data-embedded] body,
+:root[data-embedded] .app-shell,
+:root[data-embedded] .secondary-shell {
+  background: transparent;
+}
+
+:root[data-embedded] .topbar {
+  border-bottom-color: transparent;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-embedded] :is(.topbar-page-title, .secondary-title) {
+  text-shadow:
+    0 1px 4px color-mix(in srgb, var(--yct-color-surface-panel) 82%, transparent),
+    0 2px 10px color-mix(in srgb, var(--yct-color-text) 22%, transparent);
+}
+
+:root[data-embedded] .brand-logo {
+  filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--yct-color-text) 28%, transparent));
+}
+
+/* 浮动药丸只允许加在「真正的顶栏工具栏」一层，绝不能写成
+   `:is(.topbar-actions, .secondary-actions)`：物料/电报二级页面的 DOM 是
+   `.secondary-actions > .topbar-actions.material-studio-topbar-actions`——
+   内层 div 复用了 `topbar-actions` 类，并列选择器会让内外两层同时命中，
+   宽屏下变成药丸套药丸（工具栏高度从 44px 撑到 60px）；窄屏下外层的
+   `backdrop-filter` 还会成为内层 fixed 元素的包含块，使右下角浮动工具栏
+   错位到顶栏。因此一级页面限定「非二级 header 的直接子级」，二级页面
+   限定「二级 header 的直接子级」，各只匹配一次。
+   `:has(> *)` 是必要的：`secondaryActions` 是可选 prop，其余二级页面的
+   `.secondary-actions` 是空 div，加背景后会渲染出一个空药丸。 */
+:root[data-embedded]:not([data-material-mode='advanced'])
+  .topbar:not(.secondary-topbar)
+  > .topbar-actions:has(> *) {
+  gap: var(--yct-space-1);
+  padding: var(--yct-space-1);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
+  box-shadow: var(--yct-shadow-floating);
+  -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
+  backdrop-filter: blur(var(--yct-material-blur-medium));
+}
+
+/* 二级页面宽屏：内层工具栏是正常流，药丸加在 header 直接子级
+   `.secondary-actions` 上即可正确包裹。窄屏内层被
+   `.material-studio-topbar-actions { position: fixed }` 规则移出文档流，
+   自身就是右下角浮动药丸（见 9382 行媒体查询），外层 `.secondary-actions`
+   只剩 40px 空占位——这里用 min-width 把外层药丸限定在宽屏，避免窄屏
+   双重叠加与 fixed 包含块错位。 */
+@media (min-width: 761px) {
+  :root[data-embedded]:not([data-material-mode='advanced'])
+    .secondary-topbar
+    > .secondary-actions:has(> *):not(:has(> .material-studio-topbar-actions)) {
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--yct-color-border);
+    border-radius: var(--yct-radius-pill);
+    background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
+    box-shadow: var(--yct-shadow-floating);
+    -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
+    backdrop-filter: blur(var(--yct-material-blur-medium));
+  }
+
+  /* 工作台工具栏独立成胶囊，不再被外层简单工具胶囊包住。 */
+  :root[data-embedded]:not([data-material-mode='advanced'])
+    .secondary-topbar
+    .secondary-actions
+    > .material-studio-topbar-actions {
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--yct-color-border);
+    border-radius: var(--yct-radius-pill);
+    background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
+    box-shadow: var(--yct-shadow-floating);
+    -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
+    backdrop-filter: blur(var(--yct-material-blur-medium));
+  }
+}
+
+/* 二级页面窄屏：物料/电报内层工具栏保持自身的 fixed 浮动药丸（9382 行规则
+   已带边框、底色与阴影），这里只补一层与宽屏一致的背景模糊；模糊加在
+   内层自身不改变它的 fixed 包含块（外层此时没有任何 filter）。
+   FAQ 的目录按钮不是 fixed、也没有内层药丸，单独给它一个与返回按钮
+   同款的独立底色，否则嵌入透明背景下只剩一个看不见的透明按钮。 */
+@media (max-width: 760px) {
+  :root[data-embedded]:not([data-material-mode='advanced'])
+    .secondary-topbar
+    .material-studio-topbar-actions {
+    -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
+    backdrop-filter: blur(var(--yct-material-blur-medium));
+  }
+
+  :root[data-embedded]:not([data-material-mode='advanced'])
+    .secondary-topbar
+    .operation-toc-toggle {
+    border-color: var(--yct-color-border);
+    background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
+    box-shadow: var(--yct-shadow-floating);
+  }
+}
+
+/* 返回按钮同理：二级顶栏的 `<header>` 同时带 `topbar` 与 `secondary-topbar`
+   两个类，原先这里写成 `.topbar:not(.secondary-topbar) > .icon-button`，
+   等于把二级页面的返回按钮排除在外。 */
+:root[data-embedded]:not([data-material-mode='advanced']) .topbar > .icon-button {
+  border-color: var(--yct-color-border);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
+  box-shadow: var(--yct-shadow-floating);
+  -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
+  backdrop-filter: blur(var(--yct-material-blur-medium));
+}
+
+/* 悬停反馈同样要覆盖二级页面：原先二级返回按钮只在 advanced（透光）材质下
+   才有 hover 规则，非透光材质下会变成「有底色但不响应悬停」。 */
+:root[data-embedded] .topbar > .icon-button:hover,
+:root[data-embedded] .topbar > .icon-button:focus-visible,
+:root[data-embedded] :is(.topbar-actions, .secondary-actions) > .icon-button:hover,
+:root[data-embedded] :is(.topbar-actions, .secondary-actions) > .icon-button:focus-visible,
+:root[data-embedded] :is(.topbar-actions, .secondary-actions) > .account-button:hover,
+:root[data-embedded] :is(.topbar-actions, .secondary-actions) > .account-button:focus-visible {
+  background: var(--yct-material-hover-state);
+}
+
+/* 嵌入模式下二级顶栏必须保持 grid 的三列结构（返回 / 标题 / 工具栏）。
+   标题列是 `minmax(0, 1fr)`，只有它撑满才能把 `.secondary-actions` 顶到右上角；
+   `.secondary-actions` 本身没有 `margin-left: auto`（它靠的是 grid 第三列），
+   一旦这里改成 flex，工具栏就会紧贴标题右侧。 */
+:root[data-embedded] .secondary-topbar {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+}
+
+/* 嵌入模式下的登录浮层。
+   登录本身必须走顶层弹窗完成，这里只负责给出可点击的入口与进度反馈。 */
+.embedded-auth-prompt {
+  position: fixed;
+  inset-inline: var(--yct-space-4);
+  inset-block-end: var(--yct-space-4);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-3);
+  max-width: 520px;
+  margin-inline: auto;
+  padding: var(--yct-space-3) var(--yct-space-4);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+  box-shadow: var(--yct-shadow-floating);
+  animation: embedded-auth-prompt-in 220ms ease-out;
+}
+
+.embedded-auth-prompt.is-error {
+  border-color: color-mix(in srgb, var(--yct-color-danger) 42%, var(--yct-color-border));
+}
+
+.embedded-auth-prompt-icon {
+  flex: none;
+  font-size: var(--yct-font-size-22);
+  color: var(--yct-color-text);
+}
+
+.embedded-auth-prompt-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.embedded-auth-prompt-title {
+  margin: 0;
+  font-size: var(--yct-font-size-13);
+  font-weight: 500;
+  color: var(--yct-color-text);
+}
+
+.embedded-auth-prompt-message {
+  margin: 2px 0 0;
+  font-size: var(--yct-font-size-12);
+  line-height: 1.55;
+  color: var(--yct-color-text);
+  opacity: 0.78;
+}
+
+.embedded-auth-prompt-actions {
+  flex: none;
+  display: flex;
+  gap: var(--yct-space-2);
+}
+
+@keyframes embedded-auth-prompt-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .embedded-auth-prompt {
+    flex-wrap: wrap;
+  }
+
+  .embedded-auth-prompt-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .embedded-auth-prompt {
+    animation: none;
+  }
+}
+
+.secondary-content {
+  width: min(720px, calc(100% - 32px));
+  margin: var(--yct-space-4) auto 0;
+}
+
+.secondary-page-content {
+  min-width: 0;
+}
+
+.secondary-content .module-panel {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+/*
+ * 简约材质模式下，`.secondary-content` 内的 `.module-panel` 应继续保持透明——
+ * 上面基础规则（transparent）已经声明，但 `:root[data-material-mode='performance']`
+ * 的「面板实色化」规则把 `.module-panel` 强制刷成了 surface-panel 实色底，会破坏二级页面
+ * 的"轻量卡片"观感（changelog/faq/settings/account 等页面里模块直接落在 secondary-content
+ * 的窄列里，叠一层完整面板底会让卡片看着发糊、像浮在一个大灰块上）。
+ *
+ * 这里用更高特异性的选择器把背景重新压回 transparent，仅作用于二级页面。
+ * 不加 !important：那条 @media (prefers-reduced-transparency) 的无障碍退路用的是
+ * !important（但它只覆盖 .app-toast/.modal-panel/.bottom-nav 等浮层，不含
+ * .module-panel——二级页面容器本来就不是浮层，保持透明是对的）。
+ */
+:root[data-material-mode='performance'] .secondary-content .module-panel {
+  background: transparent;
+}
+
+.secondary-content:has(.material-studio) {
+  width: min(1280px, calc(100% - 32px));
+}
+
+.secondary-content:has(.transit-health-panel) {
+  width: min(1280px, calc(100% - 32px));
+}
+
+.transit-health-panel {
+  display: grid;
+  gap: var(--yct-space-4);
+}
+
+/* 方式筛选条复用标准分段控件：仅保留轨道横向滚动、按钮按内容定宽两处差异。 */
+.segmented-control.transit-health-mode-filter {
+  min-width: 0;
+}
+
+.segmented-control.transit-health-mode-filter > div {
+  flex: 1 1 auto;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.segmented-control.transit-health-mode-filter button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 var(--yct-space-3);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.transit-health-mode-filter .material-symbols-outlined {
+  font-size: var(--yct-font-size-19);
+}
+
+.transit-health-mode-filter small {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--yct-color-text-muted) 12%, transparent);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  text-align: center;
+}
+
+.transit-health-active-scope {
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  margin-top: calc(var(--yct-space-2) * -1);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-health-active-scope strong {
+  color: var(--yct-color-text);
+}
+
+.transit-health-active-scope .material-symbols-outlined {
+  font-size: var(--yct-font-size-16);
+}
+
+.transit-health-scope-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+  margin-top: calc(var(--yct-space-2) * -1);
+}
+
+.transit-health-scope-row .transit-health-active-scope {
+  margin-top: 0;
+}
+
+/* 开关本体使用标准 .switch-control；该容器仅负责文案与开关的排列。 */
+.transit-health-demand-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-secondary);
+}
+
+.transit-health-demand-toggle strong {
+  font-size: var(--yct-font-size-12);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.transit-health-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 280px);
+  gap: var(--yct-space-4);
+  align-items: end;
+}
+
+.transit-health-header h1,
+.transit-health-section h2,
+.transit-health-method h2,
+.transit-health-suggestion h3,
+.transit-health-chart h3,
+.transit-health-source-list h3 {
+  margin: 0;
+}
+
+.transit-health-header p:not(.eyebrow),
+.transit-health-source,
+.transit-health-suggestion p,
+.transit-health-empty-suggestions {
+  margin: var(--yct-space-2) 0 0;
+  color: var(--yct-color-text-secondary);
+}
+
+.transit-health-source {
+  display: grid;
+  gap: var(--yct-space-1);
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+  text-align: right;
+}
+
+.transit-health-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--yct-space-2);
+}
+
+.transit-health-metric {
+  display: grid;
+  gap: var(--yct-space-1);
+  min-width: 0;
+  min-height: 104px;
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.transit-health-metric span,
+.transit-health-metric small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-health-metric strong {
+  color: var(--yct-color-text);
+  font-size: 25px;
+  line-height: 1;
+}
+
+.transit-health-section,
+.transit-health-method {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.transit-health-table-wrap {
+  overflow-x: auto;
+}
+
+.transit-health-table {
+  width: 100%;
+  min-width: 1380px;
+  border-collapse: collapse;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+}
+
+.transit-health-table th,
+.transit-health-table td {
+  padding: var(--yct-space-3);
+  border-bottom: 1px solid var(--yct-color-border-subtle);
+  text-align: right;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.transit-health-table thead th {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 650;
+}
+
+.transit-health-table thead th button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.transit-health-table thead th:first-child button {
+  justify-content: flex-start;
+}
+
+.transit-health-table thead th button:hover {
+  color: var(--yct-color-text);
+}
+
+.transit-health-table thead th button .material-symbols-outlined {
+  font-size: var(--yct-font-size-15);
+}
+
+.transit-health-table th:first-child,
+.transit-health-table td:first-child {
+  width: 28%;
+  min-width: 170px;
+  text-align: left;
+}
+
+.transit-health-table tbody th {
+  color: var(--yct-color-text);
+  font-weight: 600;
+}
+
+.transit-health-table tbody th strong,
+.transit-health-table tbody th small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transit-health-table tbody th small,
+.transit-health-rank {
+  margin-top: 3px;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 500;
+}
+
+.transit-health-table tbody tr:last-child th,
+.transit-health-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.transit-health-table-note {
+  margin: 0;
+  padding-top: var(--yct-space-2);
+  border-top: 1px solid var(--yct-color-border);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.6;
+}
+
+.transit-health-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--yct-space-4);
+}
+
+.transit-health-chart {
+  display: grid;
+  align-content: start;
+  gap: var(--yct-space-3);
+  min-width: 0;
+  padding: var(--yct-space-3) 0 var(--yct-space-4);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.transit-health-chart:nth-last-child(2) {
+  border-bottom: 0;
+}
+
+.transit-health-chart.is-wide {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--yct-color-border);
+  border-bottom: 0;
+}
+
+.transit-health-chart > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+}
+
+.transit-health-chart > header h3 {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-14);
+  line-height: 1.3;
+}
+
+.transit-health-chart > header p,
+.transit-health-chart-empty {
+  margin: 4px 0 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.5;
+}
+
+.transit-health-chart > header > .material-symbols-outlined {
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-20);
+}
+
+.transit-health-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.transit-health-pie-layout {
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr);
+  gap: var(--yct-space-4);
+  align-items: center;
+}
+
+.transit-health-donut {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-content: center;
+  width: 116px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  text-align: center;
+}
+
+.transit-health-donut::before {
+  position: absolute;
+  z-index: -1;
+  inset: 18px;
+  border-radius: 50%;
+  background: var(--yct-color-surface-panel);
+  content: '';
+}
+
+.transit-health-donut strong,
+.transit-health-donut span {
+  display: block;
+}
+
+.transit-health-donut strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-22);
+  line-height: 1.1;
+}
+
+.transit-health-donut span {
+  max-width: 68px;
+  margin-top: 3px;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-10);
+  line-height: 1.2;
+}
+
+.transit-health-donut.is-ratio {
+  width: 94px;
+}
+
+.transit-health-donut.is-ratio::before {
+  inset: 14px;
+}
+
+.transit-health-donut.is-ratio strong {
+  font-size: var(--yct-font-size-18);
+}
+
+.transit-health-pie-legend {
+  display: grid;
+  gap: 8px;
+}
+
+.transit-health-pie-legend > div {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-health-pie-legend > div.is-muted {
+  opacity: 0.38;
+}
+
+.transit-health-pie-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.transit-health-pie-legend span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-health-pie-legend strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-11);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.transit-health-ratio-summary {
+  display: grid;
+  grid-template-columns: 94px minmax(0, 1fr);
+  gap: var(--yct-space-3);
+  align-items: center;
+  min-height: 94px;
+}
+
+.transit-health-ratio-summary > p {
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.6;
+}
+
+.transit-health-ratio-summary > p strong {
+  color: var(--yct-color-text);
+}
+
+.transit-health-bar {
+  display: grid;
+  grid-template-columns: minmax(72px, 120px) minmax(80px, 1fr) minmax(90px, auto);
+  gap: var(--yct-space-2);
+  align-items: center;
+  min-height: 20px;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-health-bar > span {
+  overflow: hidden;
+  color: var(--yct-color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-health-bar > div {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--yct-color-text-muted) 12%, transparent);
+}
+
+.transit-health-bar > div i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.transit-health-bar > strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-11);
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.transit-health-bar.is-muted {
+  opacity: 0.38;
+}
+
+.transit-health-bars.is-operator-bars {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px var(--yct-space-4);
+}
+
+.transit-health-bars.is-operator-bars .transit-health-bar {
+  grid-template-columns: minmax(130px, 190px) minmax(80px, 1fr) minmax(92px, auto);
+}
+
+.transit-health-method {
+  background: var(--yct-color-surface-muted);
+}
+
+.transit-health-method dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--yct-space-3);
+  margin: 0;
+}
+
+.transit-health-method dl div {
+  display: grid;
+  gap: var(--yct-space-1);
+}
+
+.transit-health-method dt {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+  font-weight: 650;
+}
+
+.transit-health-method dd {
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  line-height: 1.6;
+}
+
+.transit-health-source-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--yct-space-3);
+  padding-bottom: var(--yct-space-3);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.transit-health-source-list article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.transit-health-source-list .material-symbols-outlined {
+  color: var(--yct-color-success);
+  font-size: var(--yct-font-size-18);
+}
+
+.transit-health-source-list article.is-partial .material-symbols-outlined {
+  color: var(--yct-color-warning);
+}
+
+.transit-health-source-list article.is-unavailable .material-symbols-outlined {
+  color: var(--yct-color-error);
+}
+
+.transit-health-source-list h3 {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+}
+
+.transit-health-source-list p {
+  margin: 4px 0 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.55;
+}
+
+.transit-health-suggestions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: var(--yct-space-3);
+}
+
+.transit-health-suggestion {
+  display: grid;
+  gap: var(--yct-space-2);
+  min-width: 0;
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+}
+
+.transit-health-suggestion.is-attention {
+  border-color: color-mix(in srgb, var(--yct-color-error) 48%, var(--yct-color-border));
+}
+
+.transit-health-suggestion > .transit-health-suggestion-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--yct-space-2);
+  align-items: start;
+}
+
+.transit-health-suggestion .material-symbols-outlined {
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-20);
+}
+
+.transit-health-suggestion.is-attention .material-symbols-outlined {
+  color: var(--yct-color-error);
+}
+
+.transit-health-suggestion p {
+  margin: 0;
+  font-size: var(--yct-font-size-13);
+  line-height: 1.65;
+}
+
+.transit-health-dimension {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-11);
+  font-weight: 650;
+}
+
+.transit-health-suggestion > small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.5;
+}
+
+.transit-health-operator {
+  display: inline-flex;
+  margin-top: 4px;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-health-target-preview {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding-top: var(--yct-space-2);
+  border-top: 1px solid var(--yct-color-border);
+}
+
+.transit-health-target-preview > span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 650;
+}
+
+.transit-health-target-preview ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.transit-health-target-preview li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-health-target-preview li .material-symbols-outlined {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-15);
+}
+
+.transit-health-target-preview li > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-health-target-preview .secondary-action-button {
+  justify-self: start;
+}
+
+.transit-health-target-preview .secondary-action-button .material-symbols-outlined {
+  font-size: var(--yct-font-size-18);
+}
+
+dialog.transit-health-target-dialog::backdrop {
+  background: color-mix(in srgb, #000 48%, transparent);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+/* 复用标准 modal-panel，覆盖为“固定头尾 + 正文滚动”的全屏列表布局。 */
+dialog.transit-health-target-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: min(760px, calc(100vw - var(--yct-space-6)));
+  max-height: min(82dvh, 820px);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--yct-radius-md);
+}
+
+dialog.transit-health-target-dialog > header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--yct-space-4);
+  padding: var(--yct-space-4);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+dialog.transit-health-target-dialog > header > div {
+  min-width: 0;
+}
+
+dialog.transit-health-target-dialog > header > div > span {
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-11);
+  font-weight: 700;
+}
+
+dialog.transit-health-target-dialog h2 {
+  margin: 4px 0 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-19);
+  line-height: 1.35;
+}
+
+dialog.transit-health-target-dialog > header p {
+  margin: 5px 0 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-health-target-search {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--yct-space-2);
+  align-items: center;
+  margin: var(--yct-space-3) var(--yct-space-4) 0;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface);
+}
+
+.transit-health-target-search:focus-within {
+  border-color: var(--yct-color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--yct-color-primary) 14%, transparent);
+}
+
+.transit-health-target-search .material-symbols-outlined {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-18);
+}
+
+.transit-health-target-search input {
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--yct-color-text);
+  font: inherit;
+  font-size: var(--yct-font-size-13);
+}
+
+.transit-health-target-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--yct-space-3) var(--yct-space-4) var(--yct-space-4);
+  overflow-y: auto;
+}
+
+.transit-health-target-dialog-body ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.transit-health-target-dialog-body li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: var(--yct-space-2);
+  min-width: 0;
+  padding: var(--yct-space-3) 0;
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.transit-health-target-dialog-body li:last-child {
+  border-bottom: 0;
+}
+
+.transit-health-target-dialog-body li > .material-symbols-outlined {
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-19);
+}
+
+.transit-health-target-dialog-body li > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.transit-health-target-dialog-body li > div > span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-10);
+  font-weight: 650;
+}
+
+.transit-health-target-dialog-body li strong {
+  overflow-wrap: anywhere;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+}
+
+.transit-health-target-dialog-body li small {
+  overflow-wrap: anywhere;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.5;
+}
+
+.transit-health-target-empty {
+  margin: 0;
+  padding: var(--yct-space-5) 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+  text-align: center;
+}
+
+.secondary-content .settings-row {
+  border: 0;
+  background: var(--yct-color-surface-panel);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.bottom-nav {
+  position: fixed;
+  right: max(16px, var(--yct-safe-area-right));
+  /* 避开 iPhone 底部 Home 指示条；安全区为 0 时保持原有 14px。 */
+  bottom: max(14px, calc(var(--yct-safe-area-bottom) + 8px));
+  left: max(16px, var(--yct-safe-area-left));
+  z-index: 20;
+  display: none;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--yct-space-1);
+  height: 62px;
+  padding: var(--yct-space-1);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  box-shadow: var(--yct-shadow-floating);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  transition:
+    opacity var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
+    transform var(--yct-motion-duration-layout) var(--yct-motion-easing-emphasized);
+}
+
+.bottom-nav-item {
+  justify-content: center;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: var(--yct-radius-pill);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  font-weight: 500;
+  transition:
+    background-color var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
+    color var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
+    font-weight var(--yct-motion-duration-standard) var(--yct-motion-easing-standard);
+}
+
+.bottom-nav-item.is-active {
+  --icon-fill: 1;
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  font-weight: 700;
+}
+
+.map-route-plan-card,
+.map-marker-list,
+.map-poi-detail-panel,
+.transit-visual-route-panel {
+  transition:
+    max-height var(--yct-motion-duration-layout) var(--yct-motion-easing-emphasized),
+    padding var(--yct-motion-duration-layout) var(--yct-motion-easing-emphasized),
+    gap var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
+    background-color var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
+    border-color var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
+    box-shadow var(--yct-motion-duration-standard) var(--yct-motion-easing-standard);
+}
+
+.map-route-plan-card.is-collapsed {
+  /* 折叠态除起终点外还保留一段选中路线概要 */
+  max-height: 208px;
+}
+
+.map-marker-list.is-collapsed {
+  max-height: calc(40px + var(--yct-space-2) * 2 + 2px);
+}
+
+.map-poi-detail-panel {
+  max-height: min(620px, calc(var(--yct-visible-map-height) - var(--yct-map-control-inset) * 2));
+  overflow: hidden;
+}
+
+.map-poi-detail-panel.is-collapsed {
+  max-height: 70px;
+}
+
+.transit-visual-route-panel.is-collapsed {
+  max-height: 80px;
+}
+
+.map-category-strip,
+.map-route-mode-toggle-list {
+  transition: max-height var(--yct-motion-duration-layout) var(--yct-motion-easing-emphasized);
+}
+
+/* 折叠态仅保留一行 chip（30px 高 + 上下 1px 描边）。 */
+.map-route-mode-toggle-list.is-collapsed {
+  max-height: 32px;
+  overflow: hidden;
+}
+
+.map-route-mode-toggle-list.is-expanded {
+  max-height: 200px;
+  overflow: hidden;
+}
+
+:is(
+  .map-route-plan-card:not(.is-collapsed) > :not(.map-route-plan-top),
+  .map-marker-list:not(.is-collapsed) > :not(.map-marker-list-header),
+  .map-marker-list:not(.is-collapsed) > .map-marker-list-header > :not(.map-marker-list-toggle),
+  .map-poi-detail-panel:not(.is-collapsed) > :not(.map-poi-detail-header),
+  .transit-visual-route-panel:not(.is-collapsed) > :not(.transit-visual-route-panel-heading)
+) {
+  animation: yct-panel-content-enter var(--yct-motion-duration-enter)
+    var(--yct-motion-easing-emphasized) both;
+}
+
+:is(.modal-panel, .map-layer-panel) {
+  animation: yct-floating-enter var(--yct-motion-duration-enter) var(--yct-motion-easing-emphasized)
+    both;
+}
+
+:is(.modal-backdrop) {
+  animation: yct-fade-in var(--yct-motion-duration-fast) var(--yct-motion-easing-standard) both;
+}
+
+:is(
+  .rail-item,
+  .bottom-nav-item,
+  .category-chip,
+  .segmented-control button,
+  .map-route-mode-toggle-list button,
+  .map-route-sort-control button,
+  .map-nearby-scope-switch button,
+  .map-category-pill,
+  .map-marker-list-item,
+  .map-route-option-card,
+  .map-poi-detail-tabs button,
+  .map-line-direction-switch button,
+  .screen-time-filter button,
+  .schedule-service-strip button,
+  .transit-visual-toolbar button,
+  .transit-visual-node-row
+) {
+  transition:
+    background-color var(--yct-motion-duration-state) var(--yct-motion-easing-standard),
+    color var(--yct-motion-duration-state) var(--yct-motion-easing-standard),
+    border-color var(--yct-motion-duration-state) var(--yct-motion-easing-standard),
+    box-shadow var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
+    transform var(--yct-motion-duration-state) var(--yct-motion-easing-standard);
+}
+
+:is(
+  .rail-item,
+  .bottom-nav-item,
+  .category-chip,
+  .segmented-control button,
+  .map-route-mode-toggle-list button,
+  .map-route-sort-control button,
+  .map-nearby-scope-switch button,
+  .map-category-pill,
+  .map-marker-list-item,
+  .map-poi-detail-tabs button,
+  .map-line-direction-switch button,
+  .screen-time-filter button,
+  .schedule-service-strip button,
+  .transit-visual-toolbar button
+):active {
+  transform: scale(var(--yct-motion-scale-press));
+}
+
+@keyframes yct-panel-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(calc(0px - var(--yct-motion-distance-sm)));
+  }
+}
+
+@keyframes yct-floating-enter {
+  from {
+    opacity: 0;
+    transform: translateY(calc(0px - var(--yct-motion-distance-sm))) scale(0.985);
+  }
+}
+
+@keyframes yct-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+:root:not([data-embedded])[data-material-mode='performance'] .topbar {
+  border-bottom-color: var(--yct-color-border);
+  background: var(--yct-color-surface-panel);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root:not([data-embedded])[data-material-mode='performance']
+  :is(
+    .topbar > :has(> :is(button, a)):not(.secondary-actions):not(.topbar-actions),
+    .topbar > :is(button, a):not(.brand)
+  ) {
+  background: var(--yct-color-surface-panel);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  text-shadow: none;
+}
+
+:root[data-material-mode='performance']
+  :is(
+    .rail,
+    .app-toast,
+    .map-search-box,
+    .map-route-plan-card,
+    .map-routing-status,
+    .map-marker-list,
+    .map-coordinate-pick-hint,
+    .map-toolbar,
+    .map-poi-detail-panel,
+    .map-layer-panel,
+    .hero-panel,
+    .reminder-panel,
+    .server-status-panel,
+    .feed-panel,
+    .module-panel,
+    .offline-page-panel,
+    .account-auth-panel,
+    .material-studio-sidebar,
+    .material-preview,
+    .telegraph-control-panel,
+    .telegraph-send-stage,
+    .telegraph-output-section,
+    .material-template-examples-toolbar,
+    .modal-panel,
+    .bottom-nav
+  ) {
+  background: var(--yct-color-surface-panel);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  text-shadow: none;
+}
+
+:root[data-material-mode='performance'] .modal-backdrop {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-material-mode='advanced'] .topbar {
+  border-bottom-color: transparent;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-material-mode='advanced'] .topbar-material-layers {
+  display: block;
+}
+
+/* 地图类页面（地图探索与使用卫星图瓦片的线路/班次/POI 几何工作台）在透光材质下强制深色标题栏：
+ * 只替换标题栏底色与标题文本，按钮、工具栏仍沿用各自的材质配色，保证彩色卫星图上的可读性。 */
+:root[data-material-mode='advanced']
+  :is(
+    .app-shell.is-map-shell > .topbar,
+    .transit-visual-editor > .secondary-topbar,
+    .visual-editor-page.is-poi-editor > .secondary-topbar,
+    .visual-editor-page.is-area-editor > .secondary-topbar,
+    .visual-editor-page.is-transit-line-editor > .secondary-topbar
+  ) {
+  --yct-material-content-shadow-color: rgb(0 0 0 / 42%);
+  --yct-material-text-shadow: 0 1px 8px rgb(0 0 0 / 56%);
+  border-bottom-color: transparent;
+  color: var(--yct-material-dark-text);
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .app-shell.is-map-shell > .topbar,
+    .transit-visual-editor > .secondary-topbar,
+    .visual-editor-page.is-poi-editor > .secondary-topbar,
+    .visual-editor-page.is-area-editor > .secondary-topbar,
+    .visual-editor-page.is-transit-line-editor > .secondary-topbar
+  )
+  > .topbar-material-layers {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--yct-material-dark-surface) 72%, transparent) 0%,
+    color-mix(in srgb, var(--yct-material-dark-surface) 30%, transparent) 62%,
+    transparent 100%
+  );
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .app-shell.is-map-shell > .topbar,
+    .transit-visual-editor > .secondary-topbar,
+    .visual-editor-page.is-poi-editor > .secondary-topbar,
+    .visual-editor-page.is-area-editor > .secondary-topbar,
+    .visual-editor-page.is-transit-line-editor > .secondary-topbar
+  )
+  :is(.topbar-page-title, .secondary-title) {
+  color: var(--yct-material-dark-text);
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+:root[data-material-mode='advanced'] {
+  --yct-material-floating-border: color-mix(in srgb, var(--yct-color-border) 76%, transparent);
+}
+
+:root[data-color-scheme='dark'][data-material-mode='advanced'] {
+  --yct-material-floating-border: rgb(255 255 255 / 7%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-color-scheme='system'][data-material-mode='advanced'],
+  :root:not([data-color-scheme])[data-material-mode='advanced'] {
+    --yct-material-floating-border: rgb(255 255 255 / 7%);
+  }
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .topbar > :has(> :is(button, a)):not(.secondary-actions),
+    .topbar > :is(button, a):not(.brand),
+    .secondary-topbar > .secondary-actions:has(> *):not(:has(> .material-studio-topbar-actions))
+  ) {
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  box-shadow: var(--yct-material-surface-shadow);
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+:root[data-material-mode='advanced'] .topbar-actions {
+  gap: var(--yct-space-1);
+  padding: 3px;
+}
+
+:root[data-material-mode='advanced']
+  .secondary-topbar
+  .secondary-actions
+  .material-studio-topbar-actions {
+  padding: 2px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  box-shadow: var(--yct-material-surface-shadow);
+}
+
+:root[data-material-mode='advanced'] :is(.topbar-page-title, .secondary-title) {
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+:root[data-material-mode='advanced'] .brand-logo {
+  filter: drop-shadow(
+      0 0 var(--yct-material-content-shadow-core) var(--yct-material-content-shadow-color)
+    )
+    drop-shadow(
+      0 1px var(--yct-material-content-shadow-halo) var(--yct-material-content-shadow-color)
+    );
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .rail,
+    .app-toast,
+    .map-search-box,
+    .map-route-plan-card,
+    .map-routing-status,
+    .map-marker-list,
+    .map-coordinate-pick-hint,
+    .map-toolbar,
+    .map-measure-panel,
+    .map-poi-detail-panel,
+    .map-layer-panel,
+    .transit-visual-route-panel,
+    .transit-visual-toolbar,
+    /* 材质只挂在每个工具胶囊上；.editor-toolbar 与 .editor-header-tools 保持完全透明。 */
+    .editor-toolbar-group,
+    .editor-zoom-controls,
+    .editor-status-bar,
+    .poi-visual-coordinate-panel,
+    .poi-visual-layer-panel,
+    .poi-visual-inspector,
+    .poi-visual-toolbox,
+    .poi-visual-viewport-controls,
+    .telegraph-history-panel,
+    .telegraph-confirm-dialog,
+    .telegraph-floating-toolbar,
+    .modal-panel,
+    .bottom-nav
+  ) {
+  border: 0;
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-floating-surface),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  text-shadow: var(--yct-material-text-shadow);
+  box-shadow: var(--yct-material-surface-shadow);
+}
+
+/* 透光材质下测距面板内部的模式切换与图标工具条同步材质化，避免面板透光但控件仍是实心白。 */
+:root[data-material-mode='advanced'] .map-measure-mode,
+:root[data-material-mode='advanced'] .map-measure-actions {
+  background: var(--yct-material-control-surface);
+}
+
+:root[data-material-mode='advanced'] .map-measure-mode button.is-active {
+  background: var(--yct-material-selected-state);
+  color: var(--yct-color-primary-hover);
+  box-shadow: none;
+}
+
+:root[data-material-mode='advanced'] .modal-backdrop {
+  background: rgb(0 0 0 / 44%);
+  -webkit-backdrop-filter: blur(var(--yct-material-blur-soft));
+  backdrop-filter: blur(var(--yct-material-blur-soft));
+}
+
+:root[data-material-mode='advanced'] .modal-panel {
+  border: 0;
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 88%, transparent);
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+/* 高级材质下弹窗标题栏渐变遮罩：由伪元素承担「渐变背景 + 渐变滤镜」。
+ * mask 让 backdrop-filter 强度随遮罩透明度同步衰减（顶部 100% → 60% 处 50% → 底部 0），
+ * 实现滤镜与透明度一致的平滑过渡；z-index:-1 使遮罩位于头部内容之下、面板背景之上
+ * （头部自身为 stacking context：sticky + z-index:3）。 */
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .section-heading,
+    .modal-panel > .shortcut-dialog-header,
+    .modal-panel > .material-preview-heading,
+    .modal-panel > .material-history-heading,
+    .modal-panel > .telegraph-output-heading,
+    .modal-panel.metro-wayfinding-import-dialog > header,
+    .modal-panel.metro-wayfinding-combination-dialog > header,
+    .modal-panel.metro-wayfinding-project-dialog > header
+  ) {
+  border-bottom-color: transparent;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .section-heading,
+    .modal-panel > .shortcut-dialog-header,
+    .modal-panel > .material-preview-heading,
+    .modal-panel > .material-history-heading,
+    .modal-panel > .telegraph-output-heading,
+    .modal-panel.metro-wayfinding-import-dialog > header,
+    .modal-panel.metro-wayfinding-combination-dialog > header,
+    .modal-panel.metro-wayfinding-project-dialog > header
+  )::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-title-surface),
+    transparent
+  );
+  -webkit-backdrop-filter: blur(var(--yct-material-blur-soft));
+  backdrop-filter: blur(var(--yct-material-blur-soft));
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgb(0 0 0 / 50%) 60%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgb(0 0 0 / 50%) 60%, transparent 100%);
+}
+
+:root .modal-backdrop.shortcut-backdrop {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-embedded][data-material-mode='advanced'] .topbar {
+  border-bottom-color: transparent;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-embedded][data-material-mode='advanced'] .topbar-material-layers {
+  display: none;
+}
+
+:root[data-material-mode='performance'] .hero-carousel-controls {
+  border: 1px solid rgb(255 255 255 / 16%);
+  background: rgb(17 24 23 / 68%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+:root[data-material-mode='advanced'] .hero-carousel-controls {
+  border: 1px solid color-mix(in srgb, var(--yct-color-border) 76%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  box-shadow: var(--yct-material-surface-shadow);
+}
+
+/* 弹窗标题栏上的独立操作按钮（关闭钮等）：高级材质下作为独立液态表面，
+ * 与 liquid-material-bridge 的 surfaceSelector 一一对应。
+ * 未开启高级材质时这些规则不生效，按钮保持默认样式；hover/按下交互由
+ * [data-liquid-material] 按钮的公共规则自动接管。 */
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .section-heading,
+    .modal-panel > .shortcut-dialog-header,
+    .modal-panel > .material-preview-heading,
+    .modal-panel > .material-history-heading,
+    .modal-panel > .telegraph-output-heading,
+    .modal-panel > header
+  )
+  > :is(.icon-action-button, .icon-button),
+/* 物料历史弹窗的关闭钮多包了一层 .material-history-heading-actions，
+ * 不是头部直接子级，需单独覆盖，否则不会挂上液态材质。 */
+:root[data-material-mode='advanced']
+  .modal-panel
+  > .material-history-heading
+  > .material-history-heading-actions
+  > :is(.icon-action-button, .icon-button) {
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+/* 透光模式下弹窗标题栏关闭钮（独立液态表面）的交互规范：
+ * 交互区域沿用 icon-action-button 主基准 38×38（不小于 38px，移动端响应式规则不缩小）；
+ * 悬停提升底色不透明度，按下略增底色并缩放 0.98、阴影收敛为拇指阴影，形成明确点击反馈。 */
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .section-heading,
+    .modal-panel > .shortcut-dialog-header,
+    .modal-panel > .material-preview-heading,
+    .modal-panel > .material-history-heading,
+    .modal-panel > .telegraph-output-heading,
+    .modal-panel > header
+  )
+  > :is(.icon-action-button, .icon-button):is(:hover, :focus-visible),
+:root[data-material-mode='advanced']
+  .modal-panel
+  > .material-history-heading
+  > .material-history-heading-actions
+  > :is(.icon-action-button, .icon-button):is(:hover, :focus-visible) {
+  /* 88% 白底在弹窗白底上仍偏接近，故同时把图标色由 muted 提升到正文色，保证悬停可辨识。 */
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 88%, transparent);
+  color: var(--yct-color-text);
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .section-heading,
+    .modal-panel > .shortcut-dialog-header,
+    .modal-panel > .material-preview-heading,
+    .modal-panel > .material-history-heading,
+    .modal-panel > .telegraph-output-heading,
+    .modal-panel > header
+  )
+  > :is(.icon-action-button, .icon-button):active,
+:root[data-material-mode='advanced']
+  .modal-panel
+  > .material-history-heading
+  > .material-history-heading-actions
+  > :is(.icon-action-button, .icon-button):active {
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  box-shadow: var(--yct-material-thumb-shadow);
+  transform: scale(var(--yct-motion-scale-press));
+}
+
+/* 弹窗底栏高级材质（两种形态，选择器与 liquid-material-bridge 逐字对应）：
+ * B. 复合胶囊（map-share、导视导入 footer）整块注册为一块液态材质；
+ * A. 纯按钮组容器裸悬浮（无底板/分隔线/阴影/模糊），内部按钮逐个注册。 */
+:root[data-material-mode='advanced']
+  :is(.modal-panel > .map-share-actions, .modal-panel.metro-wayfinding-import-dialog > footer) {
+  border: 0;
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .admin-content-actions,
+    .modal-panel > .telegraph-confirm-actions,
+    .modal-panel > .material-action-row,
+    .modal-panel.metro-wayfinding-combination-dialog > footer
+  ) {
+  /* 底栏容器完全裸露（无渐变背景、无内阴影、无分隔线、无滤镜）：
+   * 悬浮感由按钮自身携带（见下方按钮材质规则）；滚动内容从按钮之间的
+   * 空隙穿过属于透光模式的预期表现。 */
+  border-top: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* 裸悬浮底栏内的成组按钮：非强调按钮是半透明液态胶囊（与标题栏关闭钮同配方）；
+ * 强调按钮由「强调按钮材质化」规则接管（主色半透明 + 背景滤镜 + 扭曲 + 内阴影 + 描边）。 */
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .admin-content-actions,
+    .modal-panel > .telegraph-confirm-actions,
+    .modal-panel > .material-action-row,
+    .modal-panel.metro-wayfinding-combination-dialog > footer
+  )
+  > :is(button, a):not(.is-primary, .primary-action-button) {
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+  /* 与强调按钮口径一致：底栏内按钮去掉内阴影（顶部高光/内凹），只保留外投影。 */
+  box-shadow: var(--yct-material-floating-shadow);
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+/* 目录浮层自身仍是独立材质；顶栏里的目录按钮由 .secondary-actions 分组胶囊承载。 */
+:root[data-material-mode='advanced'] .operation-toc-panel {
+  border-color: color-mix(in srgb, var(--yct-color-border) 76%, transparent);
+  background: var(--yct-material-neutral-surface);
+  color: var(--yct-color-text);
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  box-shadow: var(--yct-material-surface-shadow);
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+:root[data-material-mode='advanced']
+  .secondary-topbar
+  .secondary-actions
+  :is(.operation-toc-toggle, .secondary-assistant-entry):is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+}
+
+:root[data-material-mode='advanced']
+  .secondary-topbar
+  .secondary-actions
+  .operation-toc.is-expanded
+  .operation-toc-toggle {
+  background: var(--yct-material-selected-panel-state);
+  color: var(--yct-color-primary);
+}
+
+:root[data-material-mode='advanced'] :is(.hero-carousel-controls, .app-toast) {
+  --yct-material-content-background: var(--yct-material-dark-surface);
+  --yct-material-surface-base-background: var(--yct-material-dark-surface);
+  border-color: var(--yct-material-dark-border);
+  background: color-mix(
+    in srgb,
+    var(--yct-material-dark-surface) var(--yct-material-action-surface),
+    transparent
+  );
+  color: var(--yct-material-dark-text);
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness-dark))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness-dark))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  box-shadow: var(--yct-material-surface-shadow);
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+:root[data-material-mode='performance'] {
+  --yct-material-hover-state: var(--yct-color-interaction-hover);
+  --yct-material-selected-state: var(--yct-color-surface-selected);
+  --yct-material-selected-panel-state: var(--yct-color-surface-selected);
+}
+
+:root[data-material-mode]
+  :is(
+    .icon-button.is-active,
+    .rail-item.is-active,
+    .bottom-nav-item.is-active,
+    .admin-home-entry[aria-current='page'],
+    .transit-visual-toolbar button.is-active
+  ) {
+  background: var(--yct-material-selected-state);
+}
+
+:root[data-material-mode]
+  :is(
+    .icon-button,
+    .account-button,
+    .search-clear-button,
+    .rail-item,
+    .bottom-nav-item,
+    .category-chip,
+    .map-route-plan-header-actions button,
+    .map-stage .icon-action-button,
+    .icon-action-button,
+    .material-template-example,
+    .metro-wayfinding-element-list button,
+    .metro-wayfinding-main-segments-caret-actions button,
+    .metro-wayfinding-main-segments-chip button,
+    .metro-wayfinding-segmented-control button,
+    .metro-wayfinding-icon-picker button,
+    .transit-visual-toolbar button,
+    .transit-visual-viewport-controls button
+  ):not(:disabled):active {
+  transform: scale(var(--yct-motion-scale-press));
+}
+
+:root[data-material-mode]
+  :is(
+    .map-nearby-scope-switch button.is-active,
+    .map-poi-detail-tabs button.is-active,
+    .segmented-control button.is-active,
+    .screen-time-filter button.is-active,
+    .schedule-time-filter button.is-active,
+    .line-direction-switch button.is-active,
+    .map-browse-mode-control button.is-active
+  ) {
+  background: var(--yct-material-selected-panel-state);
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] {
+  border: 0;
+  border-color: transparent;
+  text-shadow: var(--yct-material-text-shadow);
+  box-shadow: var(--yct-material-surface-shadow);
+}
+
+/* 弹窗底栏复合胶囊（形态 B：map-share、导视导入 footer）：
+ * 容器整体注册为液态材质，但按底栏规范去掉内阴影（顶部高光/内凹），
+ * 只保留外投影，与底栏裸悬浮按钮口径一致；
+ * 需置于上一条 [data-liquid-material] 兜底之后以同特异性胜出。 */
+:root[data-material-mode='advanced']
+  :is(.modal-panel > .map-share-actions, .modal-panel.metro-wayfinding-import-dialog > footer) {
+  box-shadow: var(--yct-material-floating-shadow);
+}
+
+/* 透光模式下禁用的强调按钮：彻底退出液态材质（无内阴影/外阴影/文字光晕），
+ * 回落到对应正常态的淡化版本，保证禁用态在三种材质模式下观感一致。
+ * 特异性 (0,4,0) 压过上方 [data-liquid-material] 兜底的 (0,3,0)。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .primary-action-button,
+    .secondary-action-button.is-primary,
+    .visual-editor-page-actions button.is-primary,
+    .material-action-row button.is-primary,
+    .material-history-item button.is-primary
+  ):disabled,
+:root[data-material-mode='advanced']
+  :is(
+    .visual-editor-page-actions > button.is-primary,
+    .transit-entity-heading-actions > button.is-primary,
+    .primary-action-button[data-liquid-material],
+    .secondary-action-button.is-primary[data-liquid-material]
+  ):disabled {
+  box-shadow: none;
+  text-shadow: none;
+}
+
+/* 普通工作区面板不继承高级材质的模糊、扭曲、内阴影和文字阴影。 */
+:root[data-material-mode='advanced']
+  :is(
+    .hero-panel,
+    .reminder-panel,
+    .server-status-panel,
+    .feed-panel,
+    .module-panel,
+    .offline-page-panel,
+    .account-auth-panel,
+    .material-studio-sidebar,
+    .material-preview:not(.modal-panel),
+    .material-template-examples-toolbar,
+    .markdown-canvas-source,
+    .markdown-visual-preview,
+    .telegraph-control-panel,
+    .telegraph-send-stage,
+    .telegraph-output-section
+  ) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .hero-panel,
+    .reminder-panel,
+    .server-status-panel,
+    .feed-panel,
+    .module-panel,
+    .offline-page-panel,
+    .account-auth-panel,
+    .material-studio-sidebar,
+    .material-preview:not(.modal-panel),
+    .material-template-examples-toolbar,
+    .markdown-canvas-source,
+    .markdown-visual-preview,
+    .telegraph-control-panel,
+    .telegraph-send-stage,
+    .telegraph-output-section
+  )
+  :where(.material-symbols-outlined, .material-icon, svg, [data-icon]) {
+  filter: none;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+/* 字体图标和文字共用材质底色阴影，SVG 仅对实际图形投影，不给图标添加内阴影。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :where(.material-symbols-outlined, .material-icon, svg, [data-icon]) {
+  filter: none;
+  box-shadow: none;
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :where(svg, [data-material-symbol-mask]) {
+  text-shadow: none;
+  filter: var(--yct-material-icon-filter);
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] :where(svg *) {
+  text-shadow: none;
+}
+
+/* 每块材质建立底色边界；内部填充色由桥接层写入并自然继承给透明子元素。 */
+:root[data-material-mode='advanced'] :where([data-liquid-material]) {
+  --yct-material-content-background: var(--yct-color-surface-panel);
+  --yct-material-surface-base-background: var(--yct-color-surface-panel);
+}
+
+/* 在内容自身解析阴影，避免悬停祖先预先解析的颜色盖过更近的填充底色。 */
+:root[data-material-mode='advanced'] :where([data-liquid-material], [data-liquid-material] *) {
+  --yct-material-content-shadow-color: color-mix(
+    in srgb,
+    color-mix(
+        in srgb,
+        var(--yct-material-content-background) 60%,
+        var(--yct-material-surface-base-background)
+      )
+      var(--yct-material-text-shadow-strength),
+    transparent
+  );
+  --yct-material-resolved-shadow-core: var(
+    --yct-material-interaction-shadow-core,
+    var(--yct-material-content-shadow-core)
+  );
+  --yct-material-resolved-shadow-halo: var(
+    --yct-material-interaction-shadow-halo,
+    var(--yct-material-content-shadow-halo)
+  );
+  --yct-material-resolved-shadow-offset: var(--yct-material-interaction-shadow-offset, 1px);
+  --yct-material-text-shadow:
+    0 0 var(--yct-material-resolved-shadow-core) var(--yct-material-content-shadow-color),
+    0 var(--yct-material-resolved-shadow-offset) var(--yct-material-resolved-shadow-halo)
+      var(--yct-material-content-shadow-color);
+  --yct-material-icon-filter: drop-shadow(
+      0 0 calc(var(--yct-material-resolved-shadow-core) / 2)
+        var(--yct-material-content-shadow-color)
+    )
+    drop-shadow(
+      0 calc(var(--yct-material-resolved-shadow-offset) / 2)
+        calc(var(--yct-material-resolved-shadow-halo) / 2) var(--yct-material-content-shadow-color)
+    );
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root:not([data-material-mode='advanced']):not([data-embedded]) .topbar,
+  :root:not([data-material-mode='advanced'])
+    :is(
+      .rail,
+      .app-toast,
+      .map-search-box,
+      .map-route-plan-card,
+      .map-routing-status,
+      .map-marker-list,
+      .map-coordinate-pick-hint,
+      .map-toolbar,
+      .map-poi-detail-panel,
+      .map-layer-panel,
+      .modal-panel,
+      .bottom-nav
+    ) {
+    background: var(--yct-color-surface-panel) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    text-shadow: none !important;
+  }
+
+  :root:not([data-material-mode='advanced']):not([data-embedded])
+    :is(
+      .topbar > :has(> :is(button, a)):not(.secondary-actions):not(.topbar-actions),
+      .topbar > :is(button, a):not(.brand)
+    ) {
+    background: var(--yct-color-surface-panel) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    text-shadow: none !important;
+  }
+
+  :root:not([data-material-mode='advanced']) .topbar-material-layers {
+    display: none !important;
+  }
+
+  :root:not([data-material-mode='advanced']) .modal-backdrop {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+@media (max-width: 760px) {
+  body {
+    --yct-topbar-height: calc(56px + var(--yct-safe-area-top));
+    --yct-bottom-nav-reserved-height: calc(90px + var(--yct-safe-area-bottom));
+    --yct-visible-map-height: calc(
+      100dvh - var(--yct-topbar-height) - var(--yct-bottom-nav-reserved-height)
+    );
+    --yct-map-stage-height: calc(100dvh - var(--yct-topbar-height));
+    --yct-map-control-inset: var(--yct-space-3);
+    --yct-map-bottom-controls-offset: calc(
+      var(--yct-bottom-nav-reserved-height) + var(--yct-space-3)
+    );
+  }
+
+  .app-shell {
+    padding-bottom: calc(92px + var(--yct-safe-area-bottom));
+  }
+
+  .app-shell.is-map-shell {
+    padding-bottom: 0;
+  }
+
+  .app-shell.is-map-shell.has-map-route-panel {
+    --yct-bottom-nav-reserved-height: 0px;
+    --yct-visible-map-height: calc(100dvh - var(--yct-topbar-height));
+    --yct-map-bottom-controls-offset: var(--yct-map-control-inset);
+  }
+
+  .app-shell.is-map-shell.has-map-route-panel .search-box.map-search-box {
+    display: none;
+  }
+
+  .topbar {
+    padding: var(--yct-safe-area-top) max(var(--yct-space-3), var(--yct-safe-area-right)) 0
+      max(var(--yct-space-3), var(--yct-safe-area-left));
+  }
+
+  .desktop-menu,
+  .pill-button span:last-child {
+    display: none;
+  }
+
+  .brand {
+    height: 25px;
+  }
+
+  .topbar-page-title {
+    font-size: var(--yct-font-size-17);
+  }
+
+  .workspace {
+    display: block;
+    width: min(100% - 24px, 560px);
+    margin-top: var(--yct-space-3);
+  }
+
+  .sidebar-stack {
+    display: none;
+  }
+
+  .app-shell.is-map-shell .content {
+    min-height: var(--yct-map-stage-height);
+  }
+
+  .app-shell.is-map-shell .rail {
+    display: none;
+  }
+
+  .map-stage {
+    height: var(--yct-map-stage-height);
+    min-height: var(--yct-map-stage-height);
+  }
+
+  .map-empty {
+    min-height: var(--yct-visible-map-height);
+  }
+
+  .content {
+    gap: var(--yct-space-3);
+  }
+
+  .site-legal-content-fallback,
+  .site-legal-sidebar,
+  .app-shell.is-nav-collapsed .site-legal-content-fallback {
+    display: none;
+  }
+
+  .site-legal-mobile-only {
+    display: grid;
+  }
+
+  .site-legal-secondary {
+    width: min(100% - 24px, 560px);
+    margin-top: var(--yct-space-3);
+    padding-bottom: var(--yct-space-4);
+  }
+
+  .content-stack {
+    gap: var(--yct-space-3);
+  }
+
+  .hero-panel {
+    padding: 0;
+  }
+
+  .hero-feature-link {
+    padding: var(--yct-space-4);
+  }
+
+  .hero-panel > .hero-copy {
+    padding: var(--yct-space-4);
+  }
+
+  .hero-panel h1 {
+    font-size: var(--yct-font-size-28);
+  }
+
+  .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .settings-control-grid,
+  .notification-type-grid,
+  .time-control-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-history-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .settings-history-summary span {
+    justify-content: center;
+    padding: 0 var(--yct-space-2);
+    text-align: center;
+  }
+
+  .offline-package-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .offline-package-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .trip-reminder-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .trip-reminder-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .trip-reminder-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .admin-poi-coordinate-row,
+  .admin-poi-rectangle-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-poi-coordinate-row > span {
+    text-align: left;
+  }
+
+  .admin-poi-coordinate-actions,
+  .admin-poi-geometry-toolbar {
+    justify-content: flex-start;
+  }
+
+  .transit-admin-toolbar label,
+  .transit-admin-search,
+  .transit-admin-toolbar select,
+  .transit-admin-toolbar input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .transit-revision-detail dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transit-station-coordinate-heading,
+  .transit-station-coordinate-row,
+  .transit-station-coordinate-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transit-station-binding-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .travel-schedule-revision-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .travel-schedule-trip-row,
+  .schedule-trip-edit-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transit-summary-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .screen-detail-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .screen-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .screen-time-filter button {
+    font-size: var(--yct-font-size-13);
+  }
+
+  .schedule-filter-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .schedule-time-filter {
+    grid-column: auto;
+  }
+
+  .schedule-time-filter button {
+    font-size: var(--yct-font-size-13);
+  }
+
+  .schedule-trip-card {
+    padding: var(--yct-space-4) var(--yct-space-3);
+  }
+
+  .ticket-order-draft-item {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .ticket-order-draft-item .secondary-action-button {
+    justify-content: center;
+  }
+
+  .ticket-order-detail-panel {
+    padding: var(--yct-space-4);
+  }
+
+  .ticket-order-detail-hero {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .ticket-order-status-badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .schedule-trip-header {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    gap: var(--yct-space-2);
+  }
+
+  .schedule-trip-fare {
+    min-width: 72px;
+  }
+
+  .schedule-trip-fare strong {
+    font-size: var(--yct-font-size-24);
+  }
+
+  .schedule-trip-journey {
+    grid-template-columns: minmax(0, 1fr) minmax(82px, 0.75fr) minmax(0, 1fr);
+    gap: var(--yct-space-2);
+    align-items: end;
+  }
+
+  .schedule-trip-time-block.is-arrival,
+  .schedule-trip-duration {
+    justify-items: center;
+    text-align: center;
+  }
+
+  .schedule-trip-time-block.is-arrival {
+    justify-items: end;
+    text-align: right;
+  }
+
+  .schedule-trip-time-block time {
+    font-size: var(--yct-font-size-32);
+  }
+
+  .schedule-trip-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .travel-task-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .screen-detail-trip-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .screen-detail-trip-time {
+    grid-template-columns: auto auto;
+    align-items: center;
+    justify-content: start;
+  }
+
+  .screen-detail-trip-meta {
+    grid-column: auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .line-list-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .line-list-detail {
+    text-align: left;
+  }
+
+  .operations-feed-item {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .feed-item-cover {
+    width: 64px;
+  }
+
+  .map-sidebar-stack,
+  .app-shell.is-nav-collapsed .map-sidebar-stack {
+    right: var(--yct-map-control-inset);
+    bottom: var(--yct-map-bottom-controls-offset);
+    left: var(--yct-map-control-inset);
+    top: auto;
+    display: grid;
+    width: auto;
+    max-height: min(52dvh, calc(var(--yct-visible-map-height) - var(--yct-map-control-inset) * 2));
+    padding: 0;
+  }
+
+  /* 收起态贴近底部导航：搜索结果列表与折叠的 POI 详情整体下移；展开态由浮层规则接管高度。 */
+  .app-shell:not(.has-map-sidebar-overlay) .map-sidebar-stack:has(> .map-panel-section),
+  .app-shell:not(.has-map-sidebar-overlay)
+    .map-sidebar-stack:has(> .map-poi-detail-panel.is-collapsed),
+  .app-shell.is-nav-collapsed:not(.has-map-sidebar-overlay)
+    .map-sidebar-stack:has(> .map-panel-section),
+  .app-shell.is-nav-collapsed:not(.has-map-sidebar-overlay)
+    .map-sidebar-stack:has(> .map-poi-detail-panel.is-collapsed) {
+    bottom: calc(var(--yct-map-bottom-controls-offset) - 16px);
+  }
+
+  .map-route-plan-card {
+    max-height: min(
+      52dvh,
+      calc(var(--yct-visible-map-height) - var(--yct-map-control-inset) * 2 - 56px)
+    );
+  }
+
+  .map-marker-list {
+    max-height: min(28dvh, 220px);
+  }
+
+  .map-poi-detail-body {
+    /* 为固定在滚动区外的操作底栏预留空间，保证 52dvh 侧栏栈内底栏不被裁切 */
+    max-height: min(18dvh, 130px);
+  }
+
+  .map-routing-status {
+    top: calc(var(--yct-map-top-controls-offset) + 92px);
+    bottom: auto;
+    max-width: calc(100% - var(--yct-map-control-inset) * 2);
+  }
+
+  .map-hud {
+    /* 顶端与 map-toolbar 对齐 */
+    top: var(--yct-map-top-controls-offset);
+    bottom: auto;
+    /* 移动端信息胶囊在上、比例尺在下 */
+    flex-direction: column-reverse;
+    /* 右侧预留地图工具条宽度，避免文字与之重叠 */
+    max-width: calc(100% - var(--yct-map-control-inset) * 2 - 52px);
+  }
+
+  .map-legal {
+    display: none;
+  }
+
+  /* 移动端面板自下而上展开，展开/折叠箭头方向与桌面相反 */
+  .map-marker-list-toggle > .material-symbols-outlined,
+  .map-poi-detail-header .icon-action-button[aria-expanded] .material-symbols-outlined,
+  .map-route-plan-header-actions button[aria-expanded] .material-symbols-outlined {
+    transform: rotate(180deg);
+  }
+
+  /* 侧栏面板展开态：底部导航让位，面板接近全屏，底图降亮以突出面板内容。 */
+  .app-shell.is-map-shell.has-map-sidebar-overlay {
+    --yct-bottom-nav-reserved-height: 0px;
+    --yct-visible-map-height: calc(100dvh - var(--yct-topbar-height));
+    --yct-map-bottom-controls-offset: var(--yct-map-control-inset);
+    --yct-map-overlay-panel-max-height: calc(
+      100dvh - var(--yct-topbar-height) - var(--yct-map-control-inset) * 2
+    );
+  }
+
+  /* 底部导航用透明度 + 下移隐显，动效时长取自 motion token，关闭动态效果时自动为 0ms。 */
+  .app-shell.is-map-shell:is(.has-map-route-panel, .has-map-sidebar-overlay) .bottom-nav {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(calc(var(--yct-motion-distance-md) + 100%));
+    transition:
+      opacity var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
+      transform var(--yct-motion-duration-layout) var(--yct-motion-easing-emphasized),
+      visibility 0s linear var(--yct-motion-duration-layout);
+  }
+
+  /* 工具条与 HUD 用透明度隐显：动效时长取自 motion token，设置关闭动态效果时自动为 0ms。 */
+  .app-shell.is-map-shell.has-map-sidebar-overlay :is(.map-toolbar, .map-hud) {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
+      visibility 0s linear var(--yct-motion-duration-standard);
+  }
+
+  .app-shell.is-map-shell.has-map-sidebar-overlay .map-sidebar-stack {
+    max-height: var(--yct-map-overlay-panel-max-height);
+  }
+
+  /* 展开态统一底色：往默认面板透明度（94%~96%）之外再退约 2~3 倍透光量。 */
+  .app-shell.is-map-shell.has-map-sidebar-overlay
+    :is(.map-route-plan-card, .map-marker-list, .map-poi-detail-panel) {
+    max-height: var(--yct-map-overlay-panel-max-height);
+    background: color-mix(in srgb, var(--yct-color-surface-panel) 86%, transparent);
+  }
+
+  .app-shell.is-map-shell.has-map-sidebar-overlay .map-marker-list {
+    /* 扣除同级搜索框与间距，保证结果列表不越出侧栏栈 */
+    max-height: calc(var(--yct-map-overlay-panel-max-height) - 54px);
+  }
+
+  .app-shell.is-map-shell.has-map-sidebar-overlay .map-poi-detail-body {
+    /* 扣除标题、页签、操作底栏与内边距 */
+    max-height: calc(var(--yct-map-overlay-panel-max-height) - 190px);
+  }
+
+  .app-shell.is-map-shell.has-map-sidebar-overlay .map-stage .unmined-tile-stack {
+    opacity: 0.5;
+  }
+
+  .unmined-tile-stack,
+  .map-marker-layer {
+    transition: opacity var(--yct-motion-duration-standard) var(--yct-motion-easing-standard);
+  }
+
+  .line-detail-card {
+    padding: var(--yct-space-5);
+    border-radius: 28px;
+  }
+
+  .line-attribute-list div {
+    grid-template-columns: minmax(84px, 0.7fr) minmax(0, 1fr);
+    gap: var(--yct-space-3);
+  }
+
+  .line-attribute-list dt,
+  .line-attribute-list dd {
+    font-size: var(--yct-font-size-17);
+  }
+
+  .line-direction-switch button {
+    min-height: 44px;
+    padding: 0 var(--yct-space-3);
+    font-size: var(--yct-font-size-16);
+  }
+
+  .station-timeline strong {
+    font-size: var(--yct-font-size-19);
+  }
+
+  .station-detail-hero {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--yct-space-5);
+  }
+
+  .station-detail-hero h2 {
+    font-size: var(--yct-font-size-28);
+  }
+
+  .station-detail-mode {
+    width: fit-content;
+  }
+
+  .station-detail-section {
+    padding: var(--yct-space-4);
+    border-radius: 24px;
+  }
+
+  .station-layer-list,
+  .station-exit-grid,
+  .station-facility-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-editor,
+  .admin-editor-markdown-grid,
+  .admin-content-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-report-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-content-actions {
+    justify-content: flex-start;
+  }
+
+  .service-entry-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-home-grid.is-admin-home .admin-home-entry.is-overview-entry {
+    display: none;
+  }
+
+  .admin-home-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bottom-nav {
+    display: grid;
+  }
+
+  .transit-health-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transit-health-source {
+    text-align: left;
+  }
+
+  .transit-health-scope-row {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-top: 0;
+  }
+
+  .transit-health-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .transit-health-method dl,
+  .transit-health-chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transit-health-chart,
+  .transit-health-chart:nth-last-child(2) {
+    border-bottom: 1px solid var(--yct-color-border);
+  }
+
+  .transit-health-chart.is-wide {
+    grid-column: auto;
+    border-top: 0;
+    border-bottom: 0;
+  }
+
+  .transit-health-source-list,
+  .transit-health-bars.is-operator-bars {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transit-health-source-list {
+    gap: var(--yct-space-3);
+  }
+
+  .transit-health-pie-layout {
+    grid-template-columns: 116px minmax(0, 1fr);
+    gap: var(--yct-space-3);
+  }
+
+  /* 原生弹窗在窄屏退化为底部抽屉：贴底对齐并保留 8px 安全间距。 */
+  dialog.transit-health-target-dialog {
+    width: calc(100vw - var(--yct-space-4));
+    max-height: calc(100dvh - var(--yct-space-4));
+    margin-top: auto;
+    margin-right: auto;
+    margin-bottom: var(--yct-space-2);
+    margin-left: auto;
+  }
+
+  .transit-health-target-dialog > header {
+    padding: var(--yct-space-3);
+  }
+
+  .transit-health-target-search {
+    margin: var(--yct-space-3) var(--yct-space-3) 0;
+  }
+
+  .transit-health-target-dialog-body {
+    padding: var(--yct-space-2) var(--yct-space-3) var(--yct-space-3);
+  }
+
+  .transit-health-bar,
+  .transit-health-bars.is-operator-bars .transit-health-bar {
+    grid-template-columns: minmax(76px, 108px) minmax(60px, 1fr) minmax(78px, auto);
+  }
+
+  /* ===== 弹窗窄屏适配 ===== */
+  /* 契约要求遮罩四边至少 max(16px, safe-area)，窄屏也保持 16px。 */
+  .modal-backdrop {
+    padding: max(var(--yct-space-4), var(--yct-safe-area-top))
+      max(var(--yct-space-4), var(--yct-safe-area-right))
+      max(var(--yct-space-4), var(--yct-safe-area-bottom))
+      max(var(--yct-space-4), var(--yct-safe-area-left));
+  }
+
+  .modal-panel {
+    max-width: calc(100vw - var(--yct-space-4));
+  }
+
+  /* 含关闭钮的弹窗头部强制保持“标题 + 关闭钮”同一行：抵消全局 section-heading
+   * 竖排规则；无按钮的标题栏（如“标题 + 副标题”）继续沿用竖排，避免互相挤压 */
+  .modal-panel > .section-heading:has(> :is(.icon-action-button, .icon-button)) {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .modal-panel
+    :is(
+      .section-heading,
+      .shortcut-dialog-header,
+      .material-preview-heading,
+      .material-history-heading,
+      .telegraph-output-heading
+    )
+    :is(h2, h3) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .modal-panel.metro-wayfinding-import-dialog > header :is(h2, h3),
+  .modal-panel.metro-wayfinding-combination-dialog > header :is(h2, h3) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .modal-panel
+    :is(
+      .section-heading,
+      .shortcut-dialog-header,
+      .material-preview-heading,
+      .material-history-heading,
+      .telegraph-output-heading
+    )
+    > :is(.icon-action-button, .icon-button) {
+    flex: 0 0 auto;
+  }
+
+  .modal-panel:is(.metro-wayfinding-import-dialog, .metro-wayfinding-combination-dialog)
+    > header
+    > .icon-button {
+    flex: 0 0 auto;
+  }
+
+  /* 胶囊操作栏按钮：等宽伸缩、40px 触控高度；空间不足时自动整行换行，不溢出。
+   * import 弹窗 footer 内部按钮由其 640px 断点的两列网格规则接管，此处不重复。 */
+  .modal-panel > .admin-content-actions > button,
+  .modal-panel > .material-action-row > button,
+  .modal-panel > .telegraph-confirm-actions > button,
+  .modal-panel.metro-wayfinding-combination-dialog > footer > button {
+    flex: 1 1 auto;
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 460px) {
+  .transit-health-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transit-health-section,
+  .transit-health-method {
+    padding: var(--yct-space-3);
+  }
+
+  .transit-health-bar,
+  .transit-health-bars.is-operator-bars .transit-health-bar {
+    grid-template-columns: minmax(0, 1fr) minmax(72px, 1fr);
+  }
+
+  .transit-health-bar > div {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .transit-health-bar > strong {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .transit-health-pie-layout {
+    grid-template-columns: 94px minmax(0, 1fr);
+  }
+
+  .transit-health-pie-layout .transit-health-donut {
+    width: 90px;
+  }
+
+  .transit-health-pie-layout .transit-health-donut::before {
+    inset: 14px;
+  }
+}
+
+.dynamic-routemap-panel {
+  --dynamic-line-color: #168f78;
+  display: grid;
+  gap: 14px;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+}
+
+.dynamic-routemap-panel.is-immersive {
+  width: 100%;
+}
+
+.dynamic-routemap-stage {
+  overflow: hidden;
+  border: 1px solid var(--yct-color-border);
+  background: #f8fbfa;
+  box-shadow: 0 10px 28px rgb(28 62 54 / 10%);
+}
+
+.dynamic-route-map {
+  position: relative;
+  min-height: 260px;
+  padding: 62px 7% 34px;
+}
+
+.dynamic-route-map-track {
+  position: absolute;
+  top: 128px;
+  left: 7%;
+  right: 7%;
+  height: 8px;
+  border-radius: 999px;
+  opacity: 0.88;
+}
+
+.dynamic-route-station {
+  position: absolute;
+  top: 114px;
+  display: grid;
+  justify-items: center;
+  width: 120px;
+  transform: translateX(-50%);
+  color: #53635f;
+  text-align: center;
+  transition:
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.dynamic-route-station.is-current {
+  color: #8d252e;
+  transform: translateX(-50%) translateY(-5px);
+}
+
+.dynamic-route-station.is-active {
+  color: #1d3f37;
+}
+
+.dynamic-route-station-dot {
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border: 4px solid;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.dynamic-route-station-label {
+  margin-top: 14px;
+  font-size: 0.95rem;
+  font-weight: 650;
+  white-space: normal;
+}
+
+.dynamic-route-station small {
+  margin-top: 3px;
+  color: #758580;
+  font-size: 0.72rem;
+}
+
+.dynamic-route-map-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 132px;
+  color: #65756f;
+  font-size: 0.82rem;
+}
+
+.dynamic-routemap-info-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 20px;
+  color: #fff;
+  background: var(--dynamic-line-color);
+  text-align: center;
+}
+
+.dynamic-routemap-info-bar strong {
+  justify-self: start;
+  font-size: 1.05rem;
+}
+
+.dynamic-routemap-info-bar span:last-child {
+  justify-self: end;
+}
+
+.dynamic-routemap-controls {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--yct-color-border);
+  background: #fff;
+}
+
+.dynamic-routemap-control-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+
+.dynamic-routemap-control-row label {
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  color: #60716b;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.dynamic-routemap-control-row select,
+.dynamic-routemap-control-row button {
+  min-height: var(--yct-control-height-compact);
+  border: 1px solid #cad7d2;
+  border-radius: 6px;
+  background: #fff;
+  color: #243a34;
+  font: inherit;
+}
+
+.dynamic-routemap-control-row select {
+  padding: 0 10px;
+}
+
+.dynamic-routemap-control-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 11px;
+  cursor: pointer;
+}
+
+.dynamic-routemap-control-row button:hover,
+.dynamic-routemap-control-row button:focus-visible {
+  border-color: var(--dynamic-line-color);
+  color: var(--dynamic-line-color);
+}
+
+.dynamic-routemap-control-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.dynamic-routemap-control-row button.is-active,
+.dynamic-routemap-segmented button.is-active {
+  border-color: var(--dynamic-line-color);
+  background: color-mix(in srgb, var(--dynamic-line-color) 12%, transparent);
+  color: var(--dynamic-line-color);
+}
+
+.dynamic-routemap-control-row.is-secondary {
+  align-items: center;
+}
+
+.dynamic-routemap-segmented {
+  display: inline-flex;
+}
+
+.dynamic-routemap-segmented button {
+  border-radius: 0;
+}
+
+.dynamic-routemap-segmented button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.dynamic-routemap-segmented button:last-child {
+  border-radius: 0 6px 6px 0;
+  border-left: 0;
+}
+
+.dynamic-routemap-car-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-height: var(--yct-control-height-compact);
+  padding: 0 6px;
+  border: 1px solid #cad7d2;
+  border-radius: 6px;
+}
+
+.dynamic-routemap-car-controls > button {
+  min-height: var(--yct-chip-height);
+  min-width: 28px;
+  padding: 0;
+  border: 0;
+}
+
+.dynamic-routemap-car-controls strong {
+  min-width: 44px;
+  color: #435650;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.dynamic-routemap-car-picker {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 270px;
+}
+
+.dynamic-routemap-car-picker button {
+  min-width: 22px;
+  min-height: 24px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+
+.dynamic-routemap-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.dynamic-routemap-navigation button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #cad7d2;
+  border-radius: 6px;
+  background: #fff;
+  color: #243a34;
+  cursor: pointer;
+}
+
+.dynamic-routemap-navigation button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.dynamic-routemap-navigation > span {
+  flex: 1;
+  color: #64756f;
+  font-size: 0.86rem;
+  text-align: center;
+}

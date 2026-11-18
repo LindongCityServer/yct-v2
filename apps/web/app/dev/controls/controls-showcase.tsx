@@ -14,14 +14,22 @@ import {
   type ThemeMode,
 } from '../../../components/preference-bridge';
 import { publishToastRequested, type ClientToastTone } from '../../../lib/client-toast-events';
-import { RouteModeToggleList } from '../../../components/route-mode-toggle-list';
 import { RangeInput } from '../../../components/range-input';
-import { SecondaryShell } from '../../../components/app-shell';
+import { RouteModeToggleList } from '../../../components/route-mode-toggle-list';
+import { SecondaryPageHeader, SecondaryShell } from '../../../components/app-shell';
 import { OperationTableOfContents } from '../../../components/operation-table-of-contents';
 import { SegmentedControl } from '../../../components/segmented-control';
+import { SegmentedTabs } from '../../../components/ui/segmented-control';
 import { MapLayerToggle } from '../../../components/map-layer-toggle';
-import { MaterialSymbol } from '../../../components/material-symbol';
+import { MaterialSymbol } from '../../../components/ui/material-symbol';
+import { CheckboxRow, RadioRow } from '../../../components/ui/checkbox-row';
+import { SwitchControl } from '../../../components/ui/switch';
+import { EmptyState, Eyebrow, FormErrorText, StatusText } from '../../../components/ui/status';
+import { Chip, StatusChip } from '../../../components/ui/chip';
+import { Modal } from '../../../components/ui/modal';
 import { ScheduleStopTimeTable } from '../../../components/schedule-stop-time-table';
+import { Button, ButtonLink, IconButton } from '../../../components/ui/button';
+import { Field, Input, Select, Textarea } from '../../../components/ui/field';
 import { requestConfirmation, requestPageWindow } from '../../../lib/client-dialog-events';
 import { appPath } from '../../../lib/app-paths';
 import registry from './controls-registry.json';
@@ -79,6 +87,13 @@ const preferenceSegmentOptions = [
   { value: 'fewestTransfers', label: '最少换乘' },
 ];
 
+const routeFallbackModes: Array<{ mode: string; icon: string; label: string; color: string }> = [
+  { mode: 'bus', icon: 'directions_bus', label: '公交', color: '#F59B22' },
+  { mode: 'metro', icon: 'subway', label: '地铁', color: '#2584E8' },
+  { mode: 'coach', icon: 'airport_shuttle', label: '客运', color: 'var(--yct-color-coach)' },
+  { mode: 'tram', icon: 'tram', label: '有轨电车', color: '#C64255' },
+];
+
 const longFormParagraphCount = 24;
 
 export function ControlsShowcase() {
@@ -97,6 +112,7 @@ export function ControlsShowcase() {
     data.trips.find((trip) => trip.stopTimes?.length) ??
     data.trips[0];
   const [dialogResult, setDialogResult] = useState('');
+  const [primitiveModalOpen, setPrimitiveModalOpen] = useState(false);
   const [materialPreference, setMaterialPreference] = useState(readMaterialPreference);
   // readThemeMode 直接访问 localStorage，不能在 SSR 阶段调用，挂载后再读取真实值。
   const [themeMode, setThemeMode] = useState<ThemeMode>('system');
@@ -153,10 +169,15 @@ export function ControlsShowcase() {
     applyThemeMode(mode);
   };
 
-  const allModesEnabled = showcaseModes.every((mode) => enabledModes[mode.mode]);
+  // 展示板在公开数据不可用/未加载时也要能看到标准控件的真实形态。
+  const routeModes = showcaseModes.length ? showcaseModes : routeFallbackModes;
+  const allRouteModesEnabled = routeModes.every((mode) => enabledModes[mode.mode]);
 
-  const toggleAllModes = (enabled: boolean) => {
-    setEnabledModes(Object.fromEntries(showcaseModes.map((mode) => [mode.mode, enabled])));
+  const toggleAllRouteModes = (enabled: boolean) => {
+    setEnabledModes((current) => ({
+      ...current,
+      ...Object.fromEntries(routeModes.map((mode) => [mode.mode, enabled])),
+    }));
   };
 
   const handleFormDialogSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -514,27 +535,138 @@ export function ControlsShowcase() {
           </ControlsDocBlock>
         </section>
 
+        <section className="controls-card" id="controls-ui-primitives">
+          <ControlsDocHeader sectionId="controls-ui-primitives" />
+          <ControlsDocBlock
+            title="真实组件预览"
+            hint="直接渲染 components/ui 原语；业务页与展示板共用同一份实现"
+          >
+            <div className="controls-row">
+              <Button icon="check">主按钮</Button>
+              <Button variant="secondary">次按钮</Button>
+              <Button variant="emphasis">次要强调</Button>
+              <Button icon="download" loading>
+                加载中
+              </Button>
+              <Button disabled>禁用</Button>
+              <ButtonLink href="#controls-ui-primitives" icon="link">
+                链接型按钮
+              </ButtonLink>
+              <IconButton icon="close" label="关闭" />
+              <IconButton variant="icon" icon="delete" label="删除" />
+            </div>
+          </ControlsDocBlock>
+          <ControlsDocBlock title="字段族" hint="Field 自动关联 label、required、错误与提示">
+            <div className="controls-grid">
+              <Field label="标题" required>
+                <Input defaultValue="示例标题" />
+              </Field>
+              <Field label="每格像素数" hint="输出尺寸：1024 × 768 px">
+                <Input type="number" defaultValue={1024} />
+              </Field>
+              <Field label="错误示例" error="该字段为必填">
+                <Input defaultValue="" />
+              </Field>
+            </div>
+          </ControlsDocBlock>
+          <ControlsDocBlock
+            title="选择与开关"
+            hint="整行命中区；输入尺寸与配色由全局原生控件规则接管"
+          >
+            <div className="controls-row">
+              <CheckboxRow label="作为首页重点资讯候选" defaultChecked />
+              <CheckboxRow label="禁用复选框" disabled />
+              <RadioRow label="线路 A" name="ui-primitive-line" defaultChecked />
+              <SwitchControl label="启用宽屏侧栏" defaultChecked />
+              <SwitchControl label="禁用开关" disabled />
+            </div>
+          </ControlsDocBlock>
+          <ControlsDocBlock title="状态与空态" hint="加载 / 空数据 / 弱化说明共用可读文本层级">
+            <div className="controls-row">
+              <StatusText role="status">正在读取数据…</StatusText>
+              <EmptyState icon="event_upcoming" compact>
+                <p>暂无行程提醒</p>
+              </EmptyState>
+            </div>
+          </ControlsDocBlock>
+          <ControlsDocBlock title="图标" hint="本地 Material Symbols 字体 + 必需可访问名称">
+            <div className="controls-row">
+              <MaterialSymbol name="close" aria-hidden="true" />
+              <MaterialSymbol name="check" aria-hidden="true" />
+              <MaterialSymbol name="event_upcoming" aria-hidden="true" />
+            </div>
+          </ControlsDocBlock>
+          <ControlsDocBlock
+            title="芯片与状态"
+            hint="Chip 用于筛选分类；StatusChip 按语义族与状态着色，不按页面自定义"
+          >
+            <div className="controls-row">
+              <Chip tone="metro" icon="subway" active>
+                地铁
+              </Chip>
+              <Chip tone="bus" icon="directions_bus">
+                公交
+              </Chip>
+              <StatusChip tone="ok">已启用</StatusChip>
+              <StatusChip tone="warning">已停用</StatusChip>
+              <StatusChip variant="poi" tone="approved">
+                允许公开投稿
+              </StatusChip>
+              <StatusChip variant="poi" tone="legacy">
+                旧有数据
+              </StatusChip>
+            </div>
+          </ControlsDocBlock>
+          <ControlsDocBlock
+            title="弹窗结构壳"
+            hint="只负责遮罩 / 面板 / 对话框语义；打开方式与事件架构保持现状"
+          >
+            <div className="controls-row">
+              <Button
+                variant="secondary"
+                icon="open_in_new"
+                onClick={() => setPrimitiveModalOpen(true)}
+              >
+                打开 Modal 预览
+              </Button>
+            </div>
+            {primitiveModalOpen ? (
+              <Modal
+                labelledBy="controls-ui-modal-title"
+                onBackdropClick={() => setPrimitiveModalOpen(false)}
+              >
+                <div className="section-heading">
+                  <h3 id="controls-ui-modal-title">Modal 结构壳</h3>
+                  <IconButton
+                    icon="close"
+                    label="关闭"
+                    onClick={() => setPrimitiveModalOpen(false)}
+                  />
+                </div>
+                <p>Header / 正文 / 底部操作由业务组合；弹窗关闭与焦点恢复仍由既有链路负责。</p>
+              </Modal>
+            ) : null}
+          </ControlsDocBlock>
+        </section>
+
         <section className="controls-card" id="controls-switch">
           <ControlsDocHeader sectionId="controls-switch" />
           <div className="controls-row">
             {switchDemos.map((demo, index) => (
               <span className="controls-switch-item" key={demo.label}>
-                <label className="switch-control" title={demo.label}>
-                  <input
-                    type="checkbox"
-                    aria-label={demo.label}
-                    checked={switchStates[index]}
-                    disabled={demo.disabled}
-                    onChange={(event) =>
-                      setSwitchStates((current) =>
-                        current.map((checked, checkedIndex) =>
-                          checkedIndex === index ? event.currentTarget.checked : checked,
-                        ),
-                      )
-                    }
-                  />
-                  <span />
-                </label>
+                <SwitchControl
+                  label={demo.label}
+                  labelTitle={demo.label}
+                  checked={switchStates[index]}
+                  disabled={demo.disabled}
+                  onChange={(event) =>
+                    setSwitchStates((current) =>
+                      current.map((checked, checkedIndex) =>
+                        checkedIndex === index ? event.currentTarget.checked : checked,
+                      ),
+                    )
+                  }
+                />
                 <span className="controls-switch-label">{demo.label}</span>
               </span>
             ))}
@@ -553,80 +685,111 @@ export function ControlsShowcase() {
 
         <section className="controls-card" id="controls-route-mode">
           <ControlsDocHeader sectionId="controls-route-mode" />
-          <p className="controls-note">
-            mode 组为语义色多选且无背景填充；sort 为灰轨单选；展开钮在折叠项有选中时显示 +N。
-          </p>
-          <div className="map-route-preference-toolbar">
-            {showcaseModes.length ? (
-              <RouteModeToggleList
-                options={showcaseModes.map((mode) => ({ ...mode }))}
-                enabledModes={enabledModes}
-                allModesEnabled={allModesEnabled}
-                onToggle={(mode) =>
-                  setEnabledModes((current) => ({ ...current, [mode]: !current[mode] }))
-                }
-                onSetAll={toggleAllModes}
-                labels={{
-                  groupAria: '出行方式',
-                  all: '全选',
-                  more: (count) => `展开，另有 ${count} 种方式`,
-                  collapse: '收起',
-                }}
-              />
-            ) : (
-              <p className="status-note">{data.loaded ? '暂无可用交通方式' : '尚未读取公开数据'}</p>
-            )}
-            <div className="map-route-sort-control" aria-label="排序方式">
-              {sortOptions.map((option) => (
-                <button
-                  className={sortMode === option.value ? 'is-active' : ''}
-                  type="button"
-                  key={option.value}
-                  aria-label={option.label}
-                  title={option.label}
-                  aria-pressed={sortMode === option.value}
-                  onClick={() => setSortMode(option.value)}
+          <div className="controls-route-demo">
+            {routeModes.length ? (
+              <div className="controls-row" role="group" aria-label="出行方式（可多选）">
+                <Chip
+                  active={allRouteModesEnabled}
+                  icon={allRouteModesEnabled ? 'check_box' : 'select_check_box'}
+                  onClick={() => toggleAllRouteModes(!allRouteModesEnabled)}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    {option.icon}
-                  </span>
-                </button>
-              ))}
+                  全选
+                </Chip>
+                {routeModes.map((mode) => (
+                  <Chip
+                    key={mode.mode}
+                    tone={mode.mode}
+                    active={Boolean(enabledModes[mode.mode])}
+                    icon={mode.icon}
+                    onClick={() =>
+                      setEnabledModes((current) => ({
+                        ...current,
+                        [mode.mode]: !current[mode.mode],
+                      }))
+                    }
+                  >
+                    {mode.label}
+                  </Chip>
+                ))}
+              </div>
+            ) : (
+              <StatusText>{data.loaded ? '暂无可用交通方式' : '尚未读取公开数据'}</StatusText>
+            )}
+            <fieldset className="segmented-control controls-route-sort-demo">
+              <legend>排序方式（单选）</legend>
+              <SegmentedControl
+                ariaLabel="排序方式"
+                value={sortMode}
+                options={sortOptions.map((option) => ({
+                  value: option.value,
+                  label: (
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      {option.icon}
+                    </span>
+                  ),
+                  ariaLabel: option.label,
+                  title: option.label,
+                }))}
+                onChange={setSortMode}
+              />
+            </fieldset>
+          </div>
+          <div>
+            <p className="controls-sub-label">
+              地图内紧凑变体（历史布局类，视觉 token 与上方标准控件一致）
+            </p>
+            <div className="map-route-preference-toolbar">
+              {routeModes.length ? (
+                <RouteModeToggleList
+                  options={routeModes.map((mode) => ({ ...mode }))}
+                  enabledModes={enabledModes}
+                  allModesEnabled={allRouteModesEnabled}
+                  onToggle={(mode) =>
+                    setEnabledModes((current) => ({ ...current, [mode]: !current[mode] }))
+                  }
+                  onSetAll={toggleAllRouteModes}
+                  labels={{
+                    groupAria: '出行方式',
+                    all: '全选',
+                    more: (count) => `展开，另有 ${count} 种方式`,
+                    collapse: '收起',
+                  }}
+                />
+              ) : (
+                <StatusText>{data.loaded ? '暂无可用交通方式' : '尚未读取公开数据'}</StatusText>
+              )}
             </div>
           </div>
         </section>
 
         <section className="controls-card" id="controls-text-field">
           <ControlsDocHeader sectionId="controls-text-field" />
-          <p className="controls-note">
-            输入框统一 44px 高、radius-md、surface-panel 底；聚焦时主色描边 + 3px
-            光晕；多行文本域可垂直拉伸。
-          </p>
           <div className="controls-grid">
-            <label className="material-field">
-              <span>文本输入</span>
-              <input type="text" placeholder="请输入文本" />
-            </label>
-            <label className="material-field">
-              <span>密钥输入</span>
-              <input type="password" placeholder="请输入密钥" autoComplete="off" />
-            </label>
-            <label className="material-field">
-              <span>日期时间</span>
-              <input type="datetime-local" />
-            </label>
-            <label className="material-field">
-              <span>下拉选择</span>
-              <select defaultValue="bus">
+            <Field label="文本输入">
+              <Input type="text" placeholder="请输入文本" />
+            </Field>
+            <Field label="密钥输入">
+              <Input type="password" placeholder="请输入密钥" autoComplete="off" />
+            </Field>
+            <Field label="日期时间">
+              <Input type="datetime-local" />
+            </Field>
+            <Field label="下拉选择">
+              <Select defaultValue="bus">
                 <option value="bus">公交</option>
                 <option value="metro">地铁</option>
                 <option value="ferry">轮渡</option>
-              </select>
-            </label>
-            <label className="material-field controls-field-wide">
-              <span>多行文本</span>
-              <textarea rows={3} placeholder="请输入多行内容" />
-            </label>
+              </Select>
+            </Field>
+            <Field label="多行文本" className="controls-field-wide">
+              <Textarea rows={3} placeholder="请输入多行内容" />
+            </Field>
+            <Field label="必填字段" required>
+              <Input type="text" placeholder="必填项" />
+            </Field>
+            <Field label="校验错误" error="请输入有效内容">
+              <Input type="text" defaultValue="错误示例" aria-invalid />
+            </Field>
           </div>
         </section>
 
@@ -636,45 +799,25 @@ export function ControlsShowcase() {
             only-child 独立按钮应用透光材质；成组按钮只在容器组上处理，不逐个挂滤镜。
           </p>
           <div className="controls-topbar-stack">
-            <div className="secondary-topbar controls-topbar-demo">
-              <button className="icon-button" type="button" aria-label="返回">
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  arrow_back
-                </span>
-              </button>
-              <h2 className="secondary-title">独立按钮标题栏</h2>
-              <div className="secondary-actions">
-                <button className="icon-action-button" type="button" aria-label="收藏" title="收藏">
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    star
-                  </span>
-                </button>
-              </div>
+            <div className="controls-topbar-demo">
+              <SecondaryPageHeader
+                backHref="/dev/controls"
+                title="独立按钮标题栏"
+                secondaryActions={<IconButton icon="star" label="收藏" />}
+              />
             </div>
-            <div className="secondary-topbar controls-topbar-demo">
-              <button className="icon-button" type="button" aria-label="返回">
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  arrow_back
-                </span>
-              </button>
-              <h2 className="secondary-title">成组按钮标题栏（不逐个挂材质）</h2>
-              <div className="secondary-actions">
-                <button className="icon-action-button" type="button" aria-label="收藏">
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    star
-                  </span>
-                </button>
-                <button className="icon-action-button" type="button" aria-label="分享">
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    share
-                  </span>
-                </button>
-                <button className="icon-action-button" type="button" aria-label="更多">
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    more_vert
-                  </span>
-                </button>
-              </div>
+            <div className="controls-topbar-demo">
+              <SecondaryPageHeader
+                backHref="/dev/controls"
+                title="成组按钮标题栏（不逐个挂材质）"
+                secondaryActions={
+                  <>
+                    <IconButton icon="star" label="收藏" />
+                    <IconButton icon="share" label="分享" />
+                    <IconButton icon="more_vert" label="更多" />
+                  </>
+                }
+              />
             </div>
           </div>
         </section>
@@ -692,7 +835,7 @@ export function ControlsShowcase() {
               </span>
               <span>乘车码</span>
             </button>
-            <button className="pill-button" type="button" aria-busy>
+            <button className="pill-button" type="button" aria-busy disabled>
               <span className="material-symbols-outlined" aria-hidden="true">
                 progress_activity
               </span>
@@ -810,38 +953,32 @@ export function ControlsShowcase() {
 
         <section className="controls-card" id="controls-chips">
           <ControlsDocHeader sectionId="controls-chips" />
-          <p className="controls-note">
-            category-chip 语义色调（tone-*
-            与交通方式同名）、线路/区域芯片、选路特性徽章、在线状态与本机提醒徽章。
-          </p>
           <div className="controls-row">
-            <button className="category-chip tone-primary is-active" type="button">
+            <Chip tone="primary" active>
               全部
-            </button>
-            <button className="category-chip tone-metro" type="button">
+            </Chip>
+            <Chip tone="metro" icon="subway">
               地铁
-            </button>
-            <button className="category-chip tone-bus" type="button">
+            </Chip>
+            <Chip tone="bus" icon="directions_bus">
               公交
-            </button>
-            <button className="category-chip tone-tram" type="button">
+            </Chip>
+            <Chip tone="tram" icon="tram">
               有轨电车
-            </button>
-            <button className="category-chip tone-ferry" type="button">
+            </Chip>
+            <Chip tone="ferry" icon="directions_boat">
               轮渡
-            </button>
-            <button className="category-chip tone-coach" type="button">
+            </Chip>
+            <Chip tone="coach" icon="airport_shuttle">
               长途客车
-            </button>
-            <button className="category-chip tone-railway" type="button">
+            </Chip>
+            <Chip tone="railway" icon="train">
               铁路
-            </button>
-            <button className="category-chip tone-flight" type="button">
+            </Chip>
+            <Chip tone="flight" icon="flight">
               航空
-            </button>
-            <button className="category-chip tone-custom" type="button">
-              自定义
-            </button>
+            </Chip>
+            <Chip tone="custom">自定义</Chip>
           </div>
           <div className="controls-row">
             <span className="map-transfer-line-chip">1 号线</span>
@@ -1634,31 +1771,25 @@ export function ControlsShowcase() {
             >
               progress_activity
             </span>
-            <p className="form-error-text">该字段为必填项，请填写后再提交</p>
-            <p className="status-note">服务暂不可用，请稍后重试</p>
-            <p className="auth-status">登录状态已更新</p>
-            <span className="settings-inline-status">已保存到本机</span>
-            <span className="eyebrow">EYEBROW 小标题</span>
+            <FormErrorText>该字段为必填项，请填写后再提交</FormErrorText>
+            <StatusText>服务暂不可用，请稍后重试</StatusText>
+            <StatusText>登录状态已更新</StatusText>
+            <StatusText>已保存到本机</StatusText>
+            <Eyebrow>EYEBROW 小标题</Eyebrow>
             <span className="muted">muted 弱化说明文字</span>
           </div>
           <div className="controls-grid">
-            <div className="empty-state">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                inbox
-              </span>
+            <EmptyState icon="inbox">
               <p>暂无数据</p>
-            </div>
-            <div className="empty-state is-compact">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                event_upcoming
-              </span>
+            </EmptyState>
+            <EmptyState icon="event_upcoming" compact>
               <p>暂无提醒</p>
-            </div>
+            </EmptyState>
           </div>
-          <div className="admin-content-empty">
+          <EmptyState icon="dashboard_customize">
             <p>当前还没有模板，可直接新建模板草稿。</p>
-            <button type="button">新建模板</button>
-          </div>
+            <Button variant="secondary">新建模板</Button>
+          </EmptyState>
         </section>
 
         <section className="controls-card" id="controls-toast-dialog">

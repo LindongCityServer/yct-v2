@@ -41,6 +41,7 @@ import {
 import { describeMetroWayfindingElementContent } from '../lib/metro-wayfinding-content';
 import { renderMetroWayfindingSvg } from '../lib/metro-wayfinding-svg';
 import { EditorZoomControls } from './editor/editor-zoom-controls';
+import { Button } from './ui/button';
 
 /**
  * 导视牌还原画布。
@@ -863,9 +864,8 @@ export function MetroWayfindingCanvas({
       {assetError ? (
         <div className="metro-wayfinding-canvas-error" role="alert">
           <span>{assetError}</span>
-          <button
-            type="button"
-            className="secondary-action-button"
+          <Button
+            variant="secondary"
             onClick={() => {
               setAssetError('');
               setSvgReady(false);
@@ -877,7 +877,7 @@ export function MetroWayfindingCanvas({
             }}
           >
             重试
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -889,28 +889,17 @@ export function MetroWayfindingCanvas({
           <strong>{t('metroWayfindingEditor.empty.title')}</strong>
           <p>{t('metroWayfindingEditor.empty.description')}</p>
           <div>
-            <button
-              className="primary-action-button"
-              disabled={disabled}
-              type="button"
-              onClick={onAddElement}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                add
-              </span>
+            <Button variant="primary" icon="add" disabled={disabled} onClick={onAddElement}>
               {t('metroWayfindingEditor.action.addElement')}
-            </button>
-            <button
-              className="secondary-action-button"
+            </Button>
+            <Button
+              variant="secondary"
+              icon="dashboard_customize"
               disabled={disabled}
-              type="button"
               onClick={onOpenTemplateLibrary}
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                dashboard_customize
-              </span>
               {t('metroWayfindingEditor.action.openTemplateLibrary')}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

@@ -3,12 +3,14 @@
 import { requestConfirmation } from '../lib/client-dialog-events';
 
 import type { ApiItemResponse, TicketOrderListItem } from '@yct/contracts';
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
 import { useI18n } from '../lib/client-i18n';
+import { Button, ButtonLink } from './ui/button';
+import { StatusChip } from './ui/chip';
+import { EmptyState } from './ui/status';
 import {
   formatTicketHoldExpiresAt,
   formatTicketOrderStatus,
@@ -101,30 +103,22 @@ export function TicketOrderDetailPanel({
 
   if (!item) {
     return (
-      <section className="ticket-order-detail-panel empty-state" aria-live="polite">
-        <span className="material-symbols-outlined" aria-hidden="true">
-          receipt_long
-        </span>
+      <EmptyState
+        as="section"
+        className="ticket-order-detail-panel"
+        aria-live="polite"
+        icon="receipt_long"
+      >
         <h2>{statusText || t('ticketOrderDetail.unavailable')}</h2>
         <div className="settings-action-row">
-          <button
-            className="secondary-action-button"
-            type="button"
-            onClick={() => void refreshOrder()}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              refresh
-            </span>
-            <span>{t('ticketOrderDetail.retry')}</span>
-          </button>
-          <Link className="secondary-action-button" href={appPath('/account')}>
-            <span className="material-symbols-outlined" aria-hidden="true">
-              manage_accounts
-            </span>
-            <span>{t('ticketOrderDetail.backAccount')}</span>
-          </Link>
+          <Button variant="secondary" icon="refresh" onClick={() => void refreshOrder()}>
+            {t('ticketOrderDetail.retry')}
+          </Button>
+          <ButtonLink variant="secondary" href={appPath('/account')} icon="manage_accounts">
+            {t('ticketOrderDetail.backAccount')}
+          </ButtonLink>
         </div>
-      </section>
+      </EmptyState>
     );
   }
 
@@ -143,9 +137,7 @@ export function TicketOrderDetailPanel({
           </h2>
           <p>{t('ticketOrderDetail.description')}</p>
         </div>
-        <span className="ticket-order-status-badge">
-          {formatTicketOrderStatus(order.status, t)}
-        </span>
+        <StatusChip variant="ticket">{formatTicketOrderStatus(order.status, t)}</StatusChip>
       </div>
 
       <dl className="ticket-order-detail-grid">
@@ -227,41 +219,28 @@ export function TicketOrderDetailPanel({
       </section>
 
       <div className="settings-action-row">
-        <button
-          className="secondary-action-button"
-          type="button"
-          onClick={() => void refreshOrder()}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            refresh
-          </span>
-          <span>{t('ticketOrderDetail.refresh')}</span>
-        </button>
-        <button
-          className="secondary-action-button"
-          type="button"
+        <Button variant="secondary" icon="refresh" onClick={() => void refreshOrder()}>
+          {t('ticketOrderDetail.refresh')}
+        </Button>
+        <Button
+          variant="secondary"
+          icon="cancel"
+          loading={isCancelling}
           disabled={!canCancel || isCancelling}
           onClick={() => void cancelOrder()}
         >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            cancel
-          </span>
-          <span>
-            {isCancelling ? t('ticketOrderDraft.canceling') : t('ticketOrderDraft.cancelDraft')}
-          </span>
-        </button>
-        <Link className="secondary-action-button" href={appPath('/travel/schedules')}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            departure_board
-          </span>
-          <span>{t('travel.schedules.action')}</span>
-        </Link>
-        <Link className="secondary-action-button" href={appPath('/account')}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            manage_accounts
-          </span>
-          <span>{t('account.settings')}</span>
-        </Link>
+          {isCancelling ? t('ticketOrderDraft.canceling') : t('ticketOrderDraft.cancelDraft')}
+        </Button>
+        <ButtonLink
+          variant="secondary"
+          href={appPath('/travel/schedules')}
+          icon="departure_board"
+        >
+          {t('travel.schedules.action')}
+        </ButtonLink>
+        <ButtonLink variant="secondary" href={appPath('/account')} icon="manage_accounts">
+          {t('account.settings')}
+        </ButtonLink>
       </div>
 
       {statusText ? <p className="ticket-order-detail-status">{statusText}</p> : null}

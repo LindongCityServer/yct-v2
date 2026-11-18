@@ -6,9 +6,10 @@ import {
   detectEmbeddedContext,
   subscribeEmbeddedContextChanged,
 } from '../lib/client-embedded-context';
+import { Button, ButtonLink } from './ui/button';
 
 interface AccountLogoutEntryProps {
-  className: string;
+  variant?: 'secondary' | 'primary';
   label: string;
 }
 
@@ -20,7 +21,10 @@ interface AccountLogoutEntryProps {
  * 服务端就拿不到 sessionId，`deleteYctServerSession` 会静默失败，
  * 结果是「用户以为已登出、服务端会话其实还活着」。
  */
-export function AccountLogoutEntry({ className, label }: Readonly<AccountLogoutEntryProps>) {
+export function AccountLogoutEntry({
+  variant = 'secondary',
+  label,
+}: Readonly<AccountLogoutEntryProps>) {
   const [embedded, setEmbedded] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -32,19 +36,16 @@ export function AccountLogoutEntry({ className, label }: Readonly<AccountLogoutE
 
   if (!embedded) {
     return (
-      <a className={className} href={appPath('/api/auth/logout')}>
-        <span className="material-symbols-outlined" aria-hidden="true">
-          logout
-        </span>
-        <span>{label}</span>
-      </a>
+      <ButtonLink variant={variant} href={appPath('/api/auth/logout')} icon="logout">
+        {label}
+      </ButtonLink>
     );
   }
 
   return (
-    <button
-      className={className}
-      type="button"
+    <Button
+      variant={variant}
+      icon="logout"
       disabled={pending}
       onClick={() => {
         setPending(true);
@@ -57,10 +58,7 @@ export function AccountLogoutEntry({ className, label }: Readonly<AccountLogoutE
           .then(() => window.location.reload());
       }}
     >
-      <span className="material-symbols-outlined" aria-hidden="true">
-        logout
-      </span>
-      <span>{label}</span>
-    </button>
+      {label}
+    </Button>
   );
 }

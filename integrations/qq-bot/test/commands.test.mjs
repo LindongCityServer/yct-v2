@@ -1,0 +1,333 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { CommunityStore } from '../src/community.mjs';
+import { handleCommand } from '../src/commands.mjs';
+
+const config = {
+  weather: { city: '上海' },
+  yct: { providerId: 'deepseek', model: 'deepseek-v4-flash', apiKey: 'sk-test' },
+};
+
+const base = { config, logger: { warn() {} } };
+
+test('非斜杠消息交给问一问', async () => {
+  assert.deepEqual(await handleCommand({ ...base, text: '临东站附近有什么美食' }), {
+    handled: false,
+  });
+});
+
+test('算式指令', async () => {
+  const result = await handleCommand({ ...base, text: '/算 (1+2)*3' });
+  assert.equal(result.handled, true);
+  assert.equal(result.reply, '= 9');
+});
+
+test('随机数和骰子指令', async () => {
+  const random = await handleCommand({ ...base, text: '/随机 5 5' });
+  assert.equal(random.reply, '随机数：5（5-5）');
+
+  const dice = await handleCommand({ ...base, text: '/骰子 2d6+2' });
+  assert.match(dice.reply, /^2d6 \+ 2：\d+ \+ \d+ \+ 2 = \d+$/u);
+});
+
+test('中文电码与 GB2312 转换', async () => {
+  const ccc = await handleCommand({ ...base, text: '/电码 一' });
+  assert.match(ccc.reply, /一 0001/u);
+
+  const gb = await handleCommand({ ...base, text: '/gb2312 临' });
+  assert.match(gb.reply, /临 C1D9（33-57）/u);
+
+  const ascii = await handleCommand({ ...base, text: '/gb2312 A' });
+  assert.match(ascii.reply, /A 41/u);
+});
+
+test('天气指令使用配置中的城市', async () => {
+  let asked = '';
+  const result = await handleCommand({
+    ...base,
+    text: '/天气',
+    weather: async ({ city }) => {
+      asked = city;
+      return '上海天气：晴。';
+    },
+  });
+  assert.equal(asked, '上海');
+  assert.equal(result.reply, '上海天气：晴。');
+
+  const override = await handleCommand({
+    ...base,
+    text: '/天气 北京',
+    weather: async ({ city }) => `${city}天气：多云。`,
+  });
+  assert.equal(override.reply, '北京天气：多云。');
+});
+
+test('IP 属地与历史上的今天指令', async () => {
+  const ip = await handleCommand({
+    ...base,
+    text: '/ip 8.8.8.8',
+    ipLookup: async ({ ip: target }) => `${target}：美国 加利福尼亚`,
+  });
+  assert.equal(ip.reply, '8.8.8.8：美国 加利福尼亚');
+
+  const history = await handleCommand({
+    ...base,
+    text: '/历史',
+    history: async () => '历史上的今天（11月17日）：\n· 1939年 冬季战争爆发',
+  });
+  assert.match(history.reply, /冬季战争/);
+});
+
+test('对联指令把上联交给模型', async () => {
+  let received = '';
+  const result = await handleCommand({
+    ...base,
+    text: '/对联 春风拂柳',
+    couplet: async ({ upper }) => {
+      received = upper;
+      return '下联：细雨润花\n横批：春意盎然';
+    },
+  });
+  assert.equal(received, '春风拂柳');
+  assert.match(result.reply, /下联：细雨润花/);
+});
+
+test('未知指令给出帮助提示', async () => {
+  const result = await handleCommand({ ...base, text: '/不存在的指令' });
+  assert.equal(result.handled, true);
+  assert.match(result.reply, /没有 \/不存在的指令/u);
+});
+
+test('指令错误不会抛出，而是返回可读提示', async () => {
+  const result = await handleCommand({ ...base, text: '/算 1/0' });
+  assert.equal(result.handled, true);
+  assert.match(result.reply, /除数不能是 0/u);
+});
+
+test('自然触发词命中本地指令', async () => {
+  const calc = await handleCommand({ ...base, text: '计算 (1+2)*3' });
+  assert.equal(calc.reply, '= 9');
+
+  const random = await handleCommand({ ...base, text: '随机数 1-1' });
+  assert.equal(random.reply, '随机数：1（1-1）');
+
+  let askedCity = '';
+  const weather = async ({ city }) => {
+    askedCity = city;
+    return `${city}天气：晴。`;
+  };
+  const suffixWeather = await handleCommand({ ...base, text: '上海天气', weather });
+  assert.equal(askedCity, '上海');
+  assert.equal(suffixWeather.reply, '上海天气：晴。');
+
+  const prefixWeather = await handleCommand({ ...base, text: '天气 北京', weather });
+  assert.equal(prefixWeather.reply, '北京天气：晴。');
+
+  const defaultWeather = await handleCommand({ ...base, text: '天气怎么样', weather });
+  assert.equal(askedCity, '上海');
+  assert.match(defaultWeather.reply, /天气/);
+
+  let upper = '';
+  const couplet = await handleCommand({
+    ...base,
+    text: '对对联 春风拂柳',
+    couplet: async ({ upper: value }) => {
+      upper = value;
+      return '下联：细雨润花';
+    },
+  });
+  assert.equal(upper, '春风拂柳');
+  assert.match(couplet.reply, /下联/);
+
+  let ip = '';
+  const ipResult = await handleCommand({
+    ...base,
+    text: '查IP 8.8.8.8',
+    ipLookup: async ({ ip: value }) => {
+      ip = value;
+      return '8.8.8.8：美国';
+    },
+  });
+  assert.equal(ip, '8.8.8.8');
+  assert.match(ipResult.reply, /美国/);
+
+  const history = await handleCommand({
+    ...base,
+    text: '历史上的今天',
+    history: async () => '历史上的今天（11月17日）：\n· 示例事件',
+  });
+  assert.match(history.reply, /示例事件/);
+
+  const gb = await handleCommand({ ...base, text: '汉字编码 临' });
+  assert.match(gb.reply, /临 C1D9/);
+
+  const ccc = await handleCommand({ ...base, text: '电码 一' });
+  assert.match(ccc.reply, /一 0001/);
+
+  const menu = await handleCommand({ ...base, text: '菜单' });
+  assert.match(menu.reply, /快捷指令/);
+
+  const about = await handleCommand({ ...base, text: '关于机器人' });
+  assert.match(about.reply, /QQ 机器人/);
+});
+
+test('容易误触发的自然语句交回问一问', async () => {
+  for (const text of ['计算器怎么用', '随机数是多少', '电码是什么', '汉字编码是什么']) {
+    const result = await handleCommand({ ...base, text });
+    assert.equal(result.handled, false, text);
+  }
+});
+
+test('群签到、签到榜、发言统计和今日运势', async () => {
+  const community = new CommunityStore({ random: () => 50, logger: { warn() {} } });
+  const context = {
+    kind: 'group',
+    groupId: 'g1',
+    userId: 'u1',
+    userName: '小明',
+    date: '2026-11-17',
+  };
+
+  const sign = await handleCommand({ ...base, text: '签到', community, context });
+  assert.match(sign.reply, /签到成功/);
+  assert.equal(sign.card, undefined);
+
+  const again = await handleCommand({ ...base, text: '打卡', community, context });
+  assert.match(again.reply, /今天已经签到过了/);
+
+  const signBoard = await handleCommand({ ...base, text: '签到榜', community, context });
+  assert.match(signBoard.reply, /小明/);
+  assert.match(signBoard.reply, /1 次/);
+  assert.equal(signBoard.card?.type, 'signin-board');
+
+  community.recordMessage({
+    groupId: 'g1',
+    userId: 'u1',
+    name: '小明',
+    date: '2026-11-17',
+    source: 'all',
+  });
+  community.recordMessage({
+    groupId: 'g1',
+    userId: 'u2',
+    name: '小红',
+    date: '2026-11-17',
+    source: 'all',
+  });
+
+  const stats = await handleCommand({ ...base, text: '发言统计', community, context });
+  assert.match(stats.reply, /共 2 条/);
+  assert.match(stats.reply, /2 人参与/);
+  assert.match(stats.reply, /群消息/);
+  assert.equal(stats.card?.type, 'stats');
+  assert.equal(stats.card?.total, 2);
+
+  const board = await handleCommand({ ...base, text: '发言榜', community, context });
+  assert.match(board.reply, /发言榜/);
+  assert.match(board.reply, /小明/);
+  assert.equal(board.card?.type, 'board');
+
+  const fortune = await handleCommand({ ...base, text: '今日运势', community, context });
+  assert.match(fortune.reply, /今日运势：50\/100/);
+  assert.equal(fortune.card?.type, 'fortune');
+  assert.equal(fortune.card?.score, 50);
+  const fortuneAgain = await handleCommand({ ...base, text: '运势', community, context });
+  assert.equal(fortuneAgain.reply, fortune.reply);
+
+  const reset = await handleCommand({ ...base, text: '重置运势', community, context });
+  assert.match(reset.reply, /运势已重置：50\/100/);
+});
+
+test('签到类指令在单聊里给出提示', async () => {
+  const community = new CommunityStore({ logger: { warn() {} } });
+  const result = await handleCommand({
+    ...base,
+    text: '签到',
+    community,
+    context: { kind: 'c2c', userId: 'u1', userName: '小明', date: '2026-11-17' },
+  });
+  assert.match(result.reply, /群里使用/);
+});
+
+test('内容指令都带卡片数据', async () => {
+  const context = {
+    kind: 'group',
+    groupId: 'g1',
+    userId: 'u1',
+    userName: '小明',
+    date: '2026-11-17',
+  };
+  const samples = [
+    { text: '随机数 1-10', card: 'result' },
+    { text: '计算 1+2', card: 'result' },
+    { text: '电码 一', card: 'telegraph' },
+    { text: '汉字编码 临', card: 'gb2312' },
+  ];
+  for (const sample of samples) {
+    const result = await handleCommand({ ...base, text: sample.text, context });
+    assert.equal(result.card?.type, sample.card, sample.text);
+  }
+
+  const random = await handleCommand({ ...base, text: '随机数 1-10', context });
+  assert.match(random.card?.note ?? '', /范围 1-10/);
+  const calc = await handleCommand({ ...base, text: '计算 1+2', context });
+  assert.equal(calc.card?.result, '3');
+
+  const telegraph = await handleCommand({ ...base, text: '电码 一', context });
+  assert.deepEqual(telegraph.card?.entries, [{ char: '一', code: '0001' }]);
+
+  const gb = await handleCommand({ ...base, text: '汉字编码 临', context });
+  assert.deepEqual(gb.card?.entries, [{ char: '临', area: 33, position: 57 }]);
+
+  for (const text of ['菜单', '关于机器人']) {
+    const result = await handleCommand({ ...base, text, context });
+    assert.equal(result.card, undefined, text);
+  }
+
+  const weather = await handleCommand({
+    ...base,
+    text: '天气 上海',
+    context,
+    weather: async () => '上海市天气（11-17 20:00更新）：\n现在 15℃、晴。',
+  });
+  assert.equal(weather.card?.type, 'weather');
+  assert.equal(weather.card?.current.temp, '15');
+
+  const ip = await handleCommand({
+    ...base,
+    text: '查IP 8.8.8.8',
+    context,
+    ipLookup: async () => '8.8.8.8：美国',
+  });
+  assert.equal(ip.card?.type, 'result');
+  assert.equal(ip.card?.result, '美国');
+  assert.match(ip.card?.title ?? '', /8\.8\.8\.8/);
+
+  const history = await handleCommand({
+    ...base,
+    text: '历史上的今天',
+    context,
+    history: async () => '历史上的今天（11月17日）：\n· 示例事件',
+  });
+  assert.equal(history.card?.type, 'action');
+
+  const couplet = await handleCommand({
+    ...base,
+    text: '对对联 春风拂柳',
+    context,
+    couplet: async () => '下联：细雨润花',
+  });
+  assert.equal(couplet.card?.type, 'couplet');
+  assert.equal(couplet.card?.upper, '春风拂柳');
+  assert.equal(couplet.card?.lower, '细雨润花');
+});
+
+test('帮助里列出快捷指令', async () => {
+  const result = await handleCommand({ ...base, text: '/帮助' });
+  assert.match(result.reply, /快捷指令/);
+  assert.match(result.reply, /随机数/);
+  assert.match(result.reply, /电码/);
+  assert.match(result.reply, /查IP/);
+  assert.match(result.reply, /历史上的今天/);
+  assert.match(result.reply, /菜单/);
+});

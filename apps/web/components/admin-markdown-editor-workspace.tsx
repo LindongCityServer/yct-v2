@@ -3,6 +3,7 @@
 import type { ContentAsset } from '@yct/contracts';
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { appPath } from '../lib/app-paths';
+import { MOBILE_NAV_MEDIA_QUERY } from '../lib/breakpoints';
 import type { AdminContentRecord } from '../lib/content-workflow';
 import type { ContentEditorDraft } from '../lib/content-editor-draft';
 import { markdownAssetInsertSnippet, mergeAssetIds } from '../lib/content-assets-client';
@@ -38,6 +39,8 @@ import { MarkdownBlockInspector, MarkdownInlineBlockEditor } from './markdown-bl
 import { MarkdownDocumentInspector, MarkdownHeaderFields } from './markdown-document-inspector';
 import { ContentCoverColorPicker } from './content-cover-color-picker';
 import { SegmentedControl } from './segmented-control';
+import { Field, Input } from './ui/field';
+import { IconButton } from './ui/button';
 
 type MarkdownViewMode = 'preview' | 'split' | 'source';
 type MarkdownSelection = { kind: 'header' } | { kind: 'block'; blockIndex: number };
@@ -439,18 +442,17 @@ export function AdminMarkdownEditorWorkspace({
           id: 'view',
           ariaLabel: '画布视图',
           actions: isCompactViewport ? (
-            <div className="segmented-control markdown-view-switch">
-              <SegmentedControl
-                ariaLabel="画布视图"
-                className="transit-visual-segmented"
-                options={[
-                  { value: 'preview', label: '预览' },
-                  { value: 'source', label: '源码' },
-                ]}
-                value={viewMode === 'source' ? 'source' : 'preview'}
-                onChange={(value) => setViewMode(value)}
-              />
-            </div>
+            <SegmentedControl
+              ariaLabel="画布视图"
+              className="transit-visual-segmented"
+              options={[
+                { value: 'preview', label: '预览' },
+                { value: 'source', label: '源码' },
+              ]}
+              value={viewMode === 'source' ? 'source' : 'preview'}
+              onChange={(value) => setViewMode(value)}
+              wrapperClassName="markdown-view-switch"
+            />
           ) : (
             viewItems.map((item) => <EditorToolbarActionButton item={item} key={item.id} />)
           ),
@@ -573,17 +575,11 @@ export function AdminMarkdownEditorWorkspace({
                 <div className="markdown-inline-block-heading">
                   <strong>封面</strong>
                   <span>画布内编辑 · Esc 退出</span>
-                  <button
-                    aria-label="完成封面编辑"
-                    className="icon-action-button"
-                    title="完成封面编辑"
-                    type="button"
+                  <IconButton
+                    icon="check"
+                    label="完成封面编辑"
                     onClick={() => setEditingHeaderField(null)}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      check
-                    </span>
-                  </button>
+                  />
                 </div>
                 <ContentCoverColorPicker
                   value={draft.metadata.coverColor ?? ''}
@@ -591,9 +587,8 @@ export function AdminMarkdownEditorWorkspace({
                     updateHeaderMetadata({ coverColor: coverColor || undefined })
                   }
                 />
-                <label className="material-field">
-                  <span>封面图链接</span>
-                  <input
+                <Field label={<>封面图链接</>}>
+                  <Input
                     autoFocus
                     value={draft.metadata.coverImageUrl ?? ''}
                     onChange={(event) =>
@@ -602,7 +597,7 @@ export function AdminMarkdownEditorWorkspace({
                       })
                     }
                   />
-                </label>
+                </Field>
               </div>
             ) : null}
             <header className="markdown-visual-preview-heading">
@@ -755,19 +750,13 @@ export function AdminMarkdownEditorWorkspace({
             <span className="markdown-add-block-label">添加块</span>
             <div className="markdown-add-block-bar" role="group" aria-label="添加块">
               {addBlockOptions.map((option) => (
-                <button
-                  aria-label={`添加${option.label}`}
-                  className="icon-action-button"
-                  disabled={disabled}
+                <IconButton
                   key={option.value}
-                  title={`添加${option.label}`}
-                  type="button"
+                  icon={option.icon}
+                  label={`添加${option.label}`}
+                  disabled={disabled}
                   onClick={() => handleAddBlock(option.value)}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    {option.icon}
-                  </span>
-                </button>
+                />
               ))}
             </div>
           </div>
@@ -1100,7 +1089,7 @@ function useIsCompactViewport(): boolean {
   const [compact, setCompact] = useState(false);
 
   useEffect(() => {
-    const query = window.matchMedia('(max-width: 760px)');
+    const query = window.matchMedia(MOBILE_NAV_MEDIA_QUERY);
     const update = () => setCompact(query.matches);
     update();
     query.addEventListener('change', update);

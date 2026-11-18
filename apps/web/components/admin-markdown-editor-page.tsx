@@ -14,6 +14,7 @@ import {
 import { AdminMarkdownEditorWorkspace } from './admin-markdown-editor-workspace';
 import { EditorLoadingState } from './editor/editor-loading-state';
 import { VisualEditorShell } from './visual-editor-shell';
+import { Button } from './ui/button';
 
 export function AdminMarkdownEditorPage({
   initialContentId,
@@ -182,21 +183,15 @@ export function AdminMarkdownEditorPage({
   return (
     <VisualEditorShell
       actions={
-        <button
-          className="secondary-action-button is-primary"
-          type="button"
-          aria-busy={isBusy}
+        <Button
+          variant="primary"
+          icon="save"
+          loading={isBusy}
           disabled={isBusy || archived}
           onClick={() => void save()}
         >
-          <span
-            className={`material-symbols-outlined${isBusy ? ' busy-state-indicator' : ''}`}
-            aria-hidden="true"
-          >
-            {isBusy ? 'progress_activity' : 'save'}
-          </span>
-          <span>{isBusy ? '保存中' : '保存'}</span>
-        </button>
+          {isBusy ? '保存中' : '保存'}
+        </Button>
       }
       backHref={backHref}
       editorKind="markdown"

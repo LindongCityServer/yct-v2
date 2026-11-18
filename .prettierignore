@@ -6,5 +6,8 @@ dist/
 coverage/
 .yct-data/
 apps/web/public/legacy-assets/
+apps/web/public/card-templates/
+integrations/qq-bot/data/
+integrations/qq-bot/state/
 scripts/*.ps1
 *.tsbuildinfo

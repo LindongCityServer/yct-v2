@@ -6,6 +6,7 @@ import type { MapSpatialProfile } from '@yct/contracts';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { AdminRefreshButton } from './admin-refresh-button';
+import { Button } from './ui/button';
 
 interface MapSpatialProfileDraft {
   worldName: string;
@@ -422,12 +423,9 @@ export function AdminMapSettingsPanel() {
             </label>
           </div>
           <div className="admin-toolbar">
-            <button className="secondary-action-button is-primary" type="submit" disabled={busy}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                save
-              </span>
-              <span>保存地图设置</span>
-            </button>
+            <Button type="submit" variant="primary" icon="save" loading={busy}>
+              保存地图设置
+            </Button>
           </div>
         </form>
       ) : null}

@@ -25,6 +25,8 @@ import {
 import { deriveMetroWayfindingLineIdentity } from '../lib/metro-wayfinding-line-source';
 import { useI18n } from '../lib/client-i18n';
 import { SegmentedControl } from './segmented-control';
+import { Modal } from './ui/modal';
+import { Button, IconButton } from './ui/button';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
@@ -53,9 +55,12 @@ async function fetchDefaultTransitNetworkSample(
   const response = await fetch(appPath('/api/materials/transit-network-projects/sample'), {
     cache: 'no-store',
   });
-  const data = (await readJsonResponse<Partial<TransitNetworkSampleResponse> & {
-    message?: string;
-  }>(response)) ?? {};
+  const data =
+    (await readJsonResponse<
+      Partial<TransitNetworkSampleResponse> & {
+        message?: string;
+      }
+    >(response)) ?? {};
   if (
     !response.ok ||
     !data.fileName ||
@@ -197,9 +202,9 @@ export function TransitNetworkSourceControl({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fileName: file.name, snapshot: nextSnapshot }),
         });
-        const data = ((await readJsonResponse<
-          MaterialTransitNetworkProject & { message?: string }
-        >(response)) ?? {}) as Partial<MaterialTransitNetworkProject> & { message?: string };
+        const data = ((await readJsonResponse<MaterialTransitNetworkProject & { message?: string }>(
+          response,
+        )) ?? {}) as Partial<MaterialTransitNetworkProject> & { message?: string };
         if (response.status === 401) {
           setProjectId('');
           setErrorMessage(t('transitNetworkSource.error.notSignedIn'));
@@ -370,9 +375,9 @@ export function TransitNetworkSourceControl({
             body: JSON.stringify({ lineNames }),
           },
         );
-        const data = ((await readJsonResponse<
-          MaterialTransitNetworkProject & { message?: string }
-        >(response)) ?? {}) as Partial<MaterialTransitNetworkProject> & { message?: string };
+        const data = ((await readJsonResponse<MaterialTransitNetworkProject & { message?: string }>(
+          response,
+        )) ?? {}) as Partial<MaterialTransitNetworkProject> & { message?: string };
         if (publishLoginRequiredForResponse(response)) {
           return;
         }
@@ -449,9 +454,9 @@ export function TransitNetworkSourceControl({
             body: JSON.stringify({ stationNames }),
           },
         );
-        const data = ((await readJsonResponse<
-          MaterialTransitNetworkProject & { message?: string }
-        >(response)) ?? {}) as Partial<MaterialTransitNetworkProject> & { message?: string };
+        const data = ((await readJsonResponse<MaterialTransitNetworkProject & { message?: string }>(
+          response,
+        )) ?? {}) as Partial<MaterialTransitNetworkProject> & { message?: string };
         if (publishLoginRequiredForResponse(response)) return;
         if (!response.ok)
           throw new Error(data.message ?? t('transitNetworkSource.error.saveStationNamesFailed'));
@@ -614,32 +619,24 @@ export function TransitNetworkSourceControl({
               : t('transitNetworkSource.origin.server')}
           </span>
         </div>
-        <button
-          type="button"
-          className={
-            projectOrigin === 'sample'
-              ? 'secondary-action-button transit-network-heading-import-button'
-              : 'icon-button'
-          }
-          aria-label={
-            projectOrigin === 'sample'
-              ? t('transitNetworkSource.import.own')
-              : t('transitNetworkSource.import.default')
-          }
-          title={
-            projectOrigin === 'sample'
-              ? t('transitNetworkSource.import.own')
-              : t('transitNetworkSource.import.default')
-          }
-          onClick={() => inputRef.current?.click()}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            upload_file
-          </span>
-          {projectOrigin === 'sample' ? (
-            <span>{t('transitNetworkSource.import.short')}</span>
-          ) : null}
-        </button>
+        {projectOrigin === 'sample' ? (
+          <Button
+            variant="secondary"
+            className="transit-network-heading-import-button"
+            icon="upload_file"
+            aria-label={t('transitNetworkSource.import.own')}
+            title={t('transitNetworkSource.import.own')}
+            onClick={() => inputRef.current?.click()}
+          >
+            {t('transitNetworkSource.import.short')}
+          </Button>
+        ) : (
+          <IconButton
+            icon="upload_file"
+            label={t('transitNetworkSource.import.default')}
+            onClick={() => inputRef.current?.click()}
+          />
+        )}
         <input
           ref={inputRef}
           className="sr-only"
@@ -649,33 +646,28 @@ export function TransitNetworkSourceControl({
         />
       </div>
 
-      <div
-        className="segmented-control"
-        role="group"
-        aria-label={t('transitNetworkSource.sourceAria')}
-      >
-        <SegmentedControl
-          ariaLabel={t('transitNetworkSource.sourceAria')}
-          className="transit-visual-segmented"
-          value={source}
-          options={[
-            {
-              value: 'server',
-              label: t('transitNetworkSource.source.server'),
-            },
-            {
-              value: 'rmp',
-              label: isProjectLoading
-                ? t('transitNetworkSource.source.loading')
-                : projectOrigin === 'sample'
-                  ? t('transitNetworkSource.source.sample')
-                  : t('transitNetworkSource.source.imported'),
-              disabled: !snapshot,
-            },
-          ]}
-          onChange={(nextSource) => selectSource(nextSource)}
-        />
-      </div>
+      <SegmentedControl
+        wrapperClassName=""
+        ariaLabel={t('transitNetworkSource.sourceAria')}
+        className="transit-visual-segmented"
+        value={source}
+        options={[
+          {
+            value: 'server',
+            label: t('transitNetworkSource.source.server'),
+          },
+          {
+            value: 'rmp',
+            label: isProjectLoading
+              ? t('transitNetworkSource.source.loading')
+              : projectOrigin === 'sample'
+                ? t('transitNetworkSource.source.sample')
+                : t('transitNetworkSource.source.imported'),
+            disabled: !snapshot,
+          },
+        ]}
+        onChange={(nextSource) => selectSource(nextSource)}
+      />
 
       {snapshot ? (
         <div className="transit-network-import-summary">
@@ -751,44 +743,34 @@ export function TransitNetworkSourceControl({
                 </span>
               </button>
             ) : null}
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={t('transitNetworkSource.action.configureLineNames')}
+            <IconButton
+              variant="icon"
+              icon="edit"
+              label={t('transitNetworkSource.action.configureLineNames')}
               title={t('transitNetworkSource.action.configureLineNames')}
               onClick={openLineNameEditor}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                edit
-              </span>
-            </button>
+            />
             {projectOrigin === 'imported' ? (
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={t('transitNetworkSource.action.removeImported')}
+              <IconButton
+                variant="icon"
+                icon="close"
+                label={t('transitNetworkSource.action.removeImported')}
                 title={t('transitNetworkSource.action.removeImported')}
                 disabled={isPersisting}
                 onClick={() => void removeProject()}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
+              />
             ) : null}
           </div>
         </div>
       ) : (
-        <button
-          type="button"
-          className="secondary-action-button transit-network-import-button"
+        <Button
+          variant="secondary"
+          icon="upload_file"
+          className="transit-network-import-button"
           onClick={() => inputRef.current?.click()}
         >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            upload_file
-          </span>
           {t('transitNetworkSource.import.project')}
-        </button>
+        </Button>
       )}
 
       {errorMessage ? (
@@ -798,214 +780,190 @@ export function TransitNetworkSourceControl({
       ) : null}
 
       {isLineNameEditorOpen && snapshot ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={() => setIsLineNameEditorOpen(false)}
+        <Modal
+          className="transit-network-line-name-dialog"
+          as="form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveLineNames();
+          }}
+          onBackdropClick={() => setIsLineNameEditorOpen(false)}
         >
-          <form
-            className="modal-panel transit-network-line-name-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={`${studioId}-line-name-dialog-title`}
-            onMouseDown={(event) => event.stopPropagation()}
-            onSubmit={(event) => {
-              event.preventDefault();
-              void saveLineNames();
-            }}
-          >
-            <div className="section-heading">
-              <h2 id={`${studioId}-line-name-dialog-title`}>
-                {t('transitNetworkSource.lineName.title')}
-              </h2>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={t('transitNetworkSource.action.close')}
-                title={t('transitNetworkSource.action.close')}
-                onClick={() => setIsLineNameEditorOpen(false)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
+          <div className="section-heading">
+            <h2 id={`${studioId}-line-name-dialog-title`}>
+              {t('transitNetworkSource.lineName.title')}
+            </h2>
+            <IconButton
+              variant="icon"
+              icon="close"
+              label={t('transitNetworkSource.action.close')}
+              title={t('transitNetworkSource.action.close')}
+              onClick={() => setIsLineNameEditorOpen(false)}
+            />
+          </div>
+          <p className="transit-network-line-name-hint">
+            {t('transitNetworkSource.lineName.hintPart1')}
+            <code>sh2</code>
+            {t('transitNetworkSource.lineName.hintPart2')}
+            <code>bj1</code>
+            {t('transitNetworkSource.lineName.hintPart3')}
+            <code>sh2</code>
+            {t('transitNetworkSource.lineName.hintPart4')}
+          </p>
+          <div className="transit-network-line-name-list">
+            {projectLines.map((line, index) => (
+              <label key={line.id}>
+                <span>
+                  <i style={{ backgroundColor: line.color }} aria-hidden="true" />
+                  <strong>{line.lineKey}</strong>
                 </span>
-              </button>
-            </div>
-            <p className="transit-network-line-name-hint">
-              {t('transitNetworkSource.lineName.hintPart1')}
-              <code>sh2</code>
-              {t('transitNetworkSource.lineName.hintPart2')}
-              <code>bj1</code>
-              {t('transitNetworkSource.lineName.hintPart3')}
-              <code>sh2</code>
-              {t('transitNetworkSource.lineName.hintPart4')}
-            </p>
-            <div className="transit-network-line-name-list">
-              {projectLines.map((line, index) => (
-                <label key={line.id}>
-                  <span>
-                    <i style={{ backgroundColor: line.color }} aria-hidden="true" />
-                    <strong>{line.lineKey}</strong>
-                  </span>
+                <input
+                  autoFocus={index === 0}
+                  value={lineNameDraft[line.id]?.name ?? ''}
+                  maxLength={120}
+                  required={Boolean(lineNameDraft[line.id]?.secondaryName.trim())}
+                  aria-label={t('transitNetworkSource.lineName.primaryAria', {
+                    key: line.lineKey,
+                  })}
+                  placeholder={t('transitNetworkSource.lineName.primaryPlaceholder')}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    setLineNameDraft((current) => ({
+                      ...current,
+                      [line.id]: {
+                        name: value,
+                        secondaryName: current[line.id]?.secondaryName ?? '',
+                      },
+                    }));
+                  }}
+                />
+                <input
+                  value={lineNameDraft[line.id]?.secondaryName ?? ''}
+                  maxLength={120}
+                  aria-label={t('transitNetworkSource.lineName.secondaryAria', {
+                    key: line.lineKey,
+                  })}
+                  placeholder={t('transitNetworkSource.lineName.secondaryPlaceholder')}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    setLineNameDraft((current) => ({
+                      ...current,
+                      [line.id]: {
+                        name: current[line.id]?.name ?? '',
+                        secondaryName: value,
+                      },
+                    }));
+                  }}
+                />
+              </label>
+            ))}
+          </div>
+          <div className="material-action-row">
+            <button type="button" onClick={() => setIsLineNameEditorOpen(false)}>
+              {t('transitNetworkSource.action.cancel')}
+            </button>
+            <Button type="submit" loading={isPersisting}>
+              {isPersisting
+                ? t('transitNetworkSource.action.saving')
+                : t('transitNetworkSource.lineName.save')}
+            </Button>
+          </div>
+        </Modal>
+      ) : null}
+
+      {isStationNameEditorOpen && snapshot ? (
+        <Modal
+          className="transit-network-station-name-dialog"
+          as="form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveStationNames();
+          }}
+          onBackdropClick={() => setIsStationNameEditorOpen(false)}
+        >
+          <div className="section-heading">
+            <h2 id={`${studioId}-station-name-dialog-title`}>
+              {t('transitNetworkSource.stationName.title')}
+            </h2>
+            <IconButton
+              variant="icon"
+              icon="close"
+              label={t('transitNetworkSource.action.close')}
+              title={t('transitNetworkSource.action.close')}
+              onClick={() => setIsStationNameEditorOpen(false)}
+            />
+          </div>
+          <div className="transit-network-station-name-list">
+            {unnamedStations.map((station, index) => {
+              const nearbyStationNames = listMaterialTransitNetworkNearbyStationNames(
+                snapshot,
+                station.id,
+              );
+              return (
+                <div key={station.id} className="transit-network-station-name-row">
+                  <div>
+                    <strong>{station.id}</strong>
+                    <span>
+                      {nearbyStationNames.length
+                        ? t('transitNetworkSource.stationName.nearby', {
+                            names: nearbyStationNames.join(locale === 'en' ? ', ' : '、'),
+                          })
+                        : t('transitNetworkSource.stationName.nearbyUnavailable')}
+                    </span>
+                  </div>
                   <input
                     autoFocus={index === 0}
-                    value={lineNameDraft[line.id]?.name ?? ''}
-                    maxLength={120}
-                    required={Boolean(lineNameDraft[line.id]?.secondaryName.trim())}
-                    aria-label={t('transitNetworkSource.lineName.primaryAria', {
-                      key: line.lineKey,
+                    value={stationNameDraft[station.id]?.name ?? ''}
+                    maxLength={160}
+                    required={Boolean(stationNameDraft[station.id]?.secondaryName.trim())}
+                    aria-label={t('transitNetworkSource.stationName.primaryAria', {
+                      id: station.id,
                     })}
-                    placeholder={t('transitNetworkSource.lineName.primaryPlaceholder')}
+                    placeholder={t('transitNetworkSource.stationName.primaryPlaceholder')}
                     onChange={(event) => {
                       const value = event.currentTarget.value;
-                      setLineNameDraft((current) => ({
+                      setStationNameDraft((current) => ({
                         ...current,
-                        [line.id]: {
+                        [station.id]: {
                           name: value,
-                          secondaryName: current[line.id]?.secondaryName ?? '',
+                          secondaryName: current[station.id]?.secondaryName ?? '',
                         },
                       }));
                     }}
                   />
                   <input
-                    value={lineNameDraft[line.id]?.secondaryName ?? ''}
-                    maxLength={120}
-                    aria-label={t('transitNetworkSource.lineName.secondaryAria', {
-                      key: line.lineKey,
+                    value={stationNameDraft[station.id]?.secondaryName ?? ''}
+                    maxLength={160}
+                    aria-label={t('transitNetworkSource.stationName.secondaryAria', {
+                      id: station.id,
                     })}
-                    placeholder={t('transitNetworkSource.lineName.secondaryPlaceholder')}
+                    placeholder={t('transitNetworkSource.stationName.secondaryPlaceholder')}
                     onChange={(event) => {
                       const value = event.currentTarget.value;
-                      setLineNameDraft((current) => ({
+                      setStationNameDraft((current) => ({
                         ...current,
-                        [line.id]: {
-                          name: current[line.id]?.name ?? '',
+                        [station.id]: {
+                          name: current[station.id]?.name ?? '',
                           secondaryName: value,
                         },
                       }));
                     }}
                   />
-                </label>
-              ))}
-            </div>
-            <div className="material-action-row">
-              <button type="button" onClick={() => setIsLineNameEditorOpen(false)}>
-                {t('transitNetworkSource.action.cancel')}
-              </button>
-              <button type="submit" className="primary-action-button">
-                {isPersisting
-                  ? t('transitNetworkSource.action.saving')
-                  : t('transitNetworkSource.lineName.save')}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
-
-      {isStationNameEditorOpen && snapshot ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={() => setIsStationNameEditorOpen(false)}
-        >
-          <form
-            className="modal-panel transit-network-station-name-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={`${studioId}-station-name-dialog-title`}
-            onMouseDown={(event) => event.stopPropagation()}
-            onSubmit={(event) => {
-              event.preventDefault();
-              void saveStationNames();
-            }}
-          >
-            <div className="section-heading">
-              <h2 id={`${studioId}-station-name-dialog-title`}>
-                {t('transitNetworkSource.stationName.title')}
-              </h2>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={t('transitNetworkSource.action.close')}
-                title={t('transitNetworkSource.action.close')}
-                onClick={() => setIsStationNameEditorOpen(false)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            </div>
-            <div className="transit-network-station-name-list">
-              {unnamedStations.map((station, index) => {
-                const nearbyStationNames = listMaterialTransitNetworkNearbyStationNames(
-                  snapshot,
-                  station.id,
-                );
-                return (
-                  <div key={station.id} className="transit-network-station-name-row">
-                    <div>
-                      <strong>{station.id}</strong>
-                      <span>
-                        {nearbyStationNames.length
-                          ? t('transitNetworkSource.stationName.nearby', {
-                              names: nearbyStationNames.join(locale === 'en' ? ', ' : '、'),
-                            })
-                          : t('transitNetworkSource.stationName.nearbyUnavailable')}
-                      </span>
-                    </div>
-                    <input
-                      autoFocus={index === 0}
-                      value={stationNameDraft[station.id]?.name ?? ''}
-                      maxLength={160}
-                      required={Boolean(stationNameDraft[station.id]?.secondaryName.trim())}
-                      aria-label={t('transitNetworkSource.stationName.primaryAria', {
-                        id: station.id,
-                      })}
-                      placeholder={t('transitNetworkSource.stationName.primaryPlaceholder')}
-                      onChange={(event) => {
-                        const value = event.currentTarget.value;
-                        setStationNameDraft((current) => ({
-                          ...current,
-                          [station.id]: {
-                            name: value,
-                            secondaryName: current[station.id]?.secondaryName ?? '',
-                          },
-                        }));
-                      }}
-                    />
-                    <input
-                      value={stationNameDraft[station.id]?.secondaryName ?? ''}
-                      maxLength={160}
-                      aria-label={t('transitNetworkSource.stationName.secondaryAria', {
-                        id: station.id,
-                      })}
-                      placeholder={t('transitNetworkSource.stationName.secondaryPlaceholder')}
-                      onChange={(event) => {
-                        const value = event.currentTarget.value;
-                        setStationNameDraft((current) => ({
-                          ...current,
-                          [station.id]: {
-                            name: current[station.id]?.name ?? '',
-                            secondaryName: value,
-                          },
-                        }));
-                      }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-            <div className="material-action-row">
-              <button type="button" onClick={() => setIsStationNameEditorOpen(false)}>
-                {t('transitNetworkSource.action.cancel')}
-              </button>
-              <button type="submit" className="primary-action-button" disabled={isPersisting}>
-                {isPersisting
-                  ? t('transitNetworkSource.action.saving')
-                  : t('transitNetworkSource.stationName.save')}
-              </button>
-            </div>
-          </form>
-        </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="material-action-row">
+            <button type="button" onClick={() => setIsStationNameEditorOpen(false)}>
+              {t('transitNetworkSource.action.cancel')}
+            </button>
+            <Button type="submit" loading={isPersisting}>
+              {isPersisting
+                ? t('transitNetworkSource.action.saving')
+                : t('transitNetworkSource.stationName.save')}
+            </Button>
+          </div>
+        </Modal>
       ) : null}
     </section>
   );

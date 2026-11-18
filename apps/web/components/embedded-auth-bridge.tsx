@@ -16,6 +16,7 @@ import {
   detectEmbeddedContext,
   subscribeEmbeddedContextChanged,
 } from '../lib/client-embedded-context';
+import { Button } from './ui/button';
 
 /**
  * 嵌入模式下的登录浮层。
@@ -142,17 +143,13 @@ function EmbeddedAuthPrompt({ state }: Readonly<{ state: EmbeddedAuthState }>) {
       </div>
       <div className="embedded-auth-prompt-actions">
         {waiting ? (
-          <button
-            className="secondary-action-button"
-            type="button"
-            onClick={() => closeEmbeddedLoginPopup()}
-          >
-            <span>{labels.cancel}</span>
-          </button>
+          <Button variant="secondary" onClick={() => closeEmbeddedLoginPopup()}>
+            {labels.cancel}
+          </Button>
         ) : null}
-        <button className="primary-action-button" type="button" onClick={handleOpen}>
-          <span>{waiting ? labels.reopen : failed ? labels.retry : labels.action}</span>
-        </button>
+        <Button variant="primary" onClick={handleOpen}>
+          {waiting ? labels.reopen : failed ? labels.retry : labels.action}
+        </Button>
       </div>
     </div>
   );

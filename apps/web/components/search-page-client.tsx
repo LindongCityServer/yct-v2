@@ -30,6 +30,9 @@ import { faqAnswerText } from '../lib/faq-content';
 import { getLocalizedFaqContent } from '../lib/faq-translations';
 import { filterMapMarkers } from '../lib/map-marker-search';
 import { normalizeTitleForSearch, TitleWithBreaks } from './title-with-breaks';
+import { EmptyState, StatusText } from './ui/status';
+import { Chip, FilterStrip } from './ui/chip';
+import { SearchField } from './ui/field';
 
 type SearchCategory = 'all' | 'operations' | 'poi' | 'schedules' | 'services' | 'wiki';
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'unavailable';
@@ -272,31 +275,17 @@ export function SearchPageClient({
 
   return (
     <div className="search-page-stack">
-      <div className="search-box search-page-box">
-        <span className="material-symbols-outlined" aria-hidden="true">
-          search
-        </span>
-        <input
-          autoFocus
-          type="search"
-          aria-label={t('search.placeholder')}
-          value={query}
-          onChange={(event) => setQuery(event.currentTarget.value)}
-          placeholder={t('search.placeholder')}
-        />
-        {query ? (
-          <button
-            className="search-clear-button"
-            type="button"
-            aria-label={t('search.clear')}
-            onClick={() => setQuery('')}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              close
-            </span>
-          </button>
-        ) : null}
-      </div>
+      <SearchField
+        className="search-page-box"
+        autoFocus
+        type="search"
+        aria-label={t('search.placeholder')}
+        value={query}
+        onChange={(event) => setQuery(event.currentTarget.value)}
+        placeholder={t('search.placeholder')}
+        clearLabel={t('search.clear')}
+        onClear={() => setQuery('')}
+      />
 
       {trimmedQuery && assistantEnabled ? (
         <div className="search-ask-row">
@@ -329,32 +318,21 @@ export function SearchPageClient({
           <SearchEmpty icon="search" message={t('search.emptyPrompt')} />
         ) : totalResultCount > 0 ? (
           <>
-            <div
-              className="category-strip search-filter-strip"
-              aria-label={t('search.resultFilters')}
-            >
+            <FilterStrip className="category-strip" aria-label={t('search.resultFilters')}>
               {searchCategories.map((category) => (
-                <button
-                  className={
-                    activeCategory === category.key
-                      ? 'category-chip tone-primary is-active'
-                      : 'category-chip tone-primary'
-                  }
-                  type="button"
+                <Chip
+                  key={category.key}
+                  tone="primary"
+                  active={activeCategory === category.key}
+                  icon={category.icon}
                   disabled={resultCounts[category.key] === 0}
                   onClick={() => setActiveCategory(category.key)}
-                  key={category.key}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    {category.icon}
-                  </span>
-                  <span>
-                    {t(category.labelKey)}
-                    <small>{resultCounts[category.key]}</small>
-                  </span>
-                </button>
+                  {t(category.labelKey)}
+                  <small>{resultCounts[category.key]}</small>
+                </Chip>
               ))}
-            </div>
+            </FilterStrip>
 
             <div className="search-result-groups">
               {shouldShowOperations && operationResults.length > 0 ? (
@@ -621,7 +599,7 @@ export function SearchPageClient({
         )}
 
         {hasQuery && markerStatus === 'unavailable' && scheduleStatus === 'unavailable' ? (
-          <p className="status-note">{t('search.unavailable')}</p>
+          <StatusText>{t('search.unavailable')}</StatusText>
         ) : null}
       </section>
     </div>
@@ -639,12 +617,9 @@ const searchCategories: Array<{ key: SearchCategory; labelKey: CommonMessageKey;
 
 function SearchEmpty({ icon, message }: Readonly<{ icon: string; message: string }>) {
   return (
-    <div className="empty-state">
-      <span className="material-symbols-outlined" aria-hidden="true">
-        {icon}
-      </span>
+    <EmptyState icon={icon}>
       <p>{message}</p>
-    </div>
+    </EmptyState>
   );
 }
 

@@ -6,6 +6,7 @@ import {
   subscribeAdminDataChanged,
   type AdminDataResource,
 } from '../lib/client-admin-data-events';
+import { Button } from './ui/button';
 
 export function AdminRefreshButton({
   disabled = false,
@@ -75,9 +76,10 @@ export function AdminRefreshButton({
   }, [resource]);
 
   return (
-    <button
-      className="secondary-action-button"
-      type="button"
+    <Button
+      variant="secondary"
+      icon="refresh"
+      loading={isRefreshing}
       disabled={disabled || isRefreshing}
       onClick={() => {
         publishAdminDataChanged({
@@ -88,10 +90,7 @@ export function AdminRefreshButton({
         void refresh();
       }}
     >
-      <span className="material-symbols-outlined" aria-hidden="true">
-        refresh
-      </span>
-      <span>{isRefreshing ? '正在刷新' : label}</span>
-    </button>
+      {isRefreshing ? '正在刷新' : label}
+    </Button>
   );
 }

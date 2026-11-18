@@ -4,6 +4,7 @@ import type { ReleaseChangeCategory, ReleaseManifest } from '../lib/release-mani
 import { useEffect } from 'react';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { publishReleaseNotesViewed } from '../lib/client-release-events';
+import { EmptyState } from './ui/status';
 
 const categoryLabelKeys: Record<ReleaseChangeCategory, CommonMessageKey> = {
   feat: 'changelog.category.feat',
@@ -75,7 +76,9 @@ export function ChangelogPageContent({
           ))}
         </div>
       ) : (
-        <p className="empty-state changelog-empty">{t('changelog.empty')}</p>
+        <EmptyState as="p" className="changelog-empty">
+          {t('changelog.empty')}
+        </EmptyState>
       )}
     </section>
   );

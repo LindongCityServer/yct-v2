@@ -23,9 +23,7 @@ import { EditorInspectorEntry } from './editor/editor-inspector-entry';
 import { EditorPanelHeading } from './editor/editor-panel-heading';
 import { EditorRailBridge } from './editor/editor-rail-bridge';
 import { EditorToolbar } from './editor/editor-toolbar';
-import {
-  EditorToolbarCompactActions,
-} from './editor/editor-toolbar-actions';
+import { EditorToolbarCompactActions } from './editor/editor-toolbar-actions';
 import type { EditorToolbarOverflowItem } from './editor/editor-toolbar-overflow';
 import { EditorZoomControls } from './editor/editor-zoom-controls';
 import {
@@ -33,6 +31,7 @@ import {
   MaterialSaveDownloadDialog,
 } from './material-save-download-dialog';
 import { useMaterialStudioToolbarItems } from './use-material-studio-toolbar-items';
+import { Button } from './ui/button';
 
 export interface TransitMaterialFormFieldNode {
   key: string;
@@ -477,36 +476,37 @@ export function TransitMaterialFormWorkspace({
                 >
                   {regions.map((region) => {
                     const isInvalid =
-                      Boolean(region.fieldKey) && Boolean(invalidFieldKeys?.includes(region.fieldKey!));
+                      Boolean(region.fieldKey) &&
+                      Boolean(invalidFieldKeys?.includes(region.fieldKey!));
                     return (
-                    <rect
-                      key={region.id}
-                      className={`transit-material-region${
-                        isRegionSelected(region) ? ' is-selected' : ''
-                      }${isInvalid ? ' is-invalid' : ''}`}
-                      x={region.x}
-                      y={region.y}
-                      width={region.width}
-                      height={region.height}
-                      rx={1}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`${region.label}，双击编辑`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        selectRegion(region);
-                      }}
-                      onDoubleClick={(event) => {
-                        event.stopPropagation();
-                        beginRegionEdit(region);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
+                      <rect
+                        key={region.id}
+                        className={`transit-material-region${
+                          isRegionSelected(region) ? ' is-selected' : ''
+                        }${isInvalid ? ' is-invalid' : ''}`}
+                        x={region.x}
+                        y={region.y}
+                        width={region.width}
+                        height={region.height}
+                        rx={1}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${region.label}，双击编辑`}
+                        onClick={(event) => {
+                          event.stopPropagation();
                           selectRegion(region);
-                        }
-                      }}
-                    />
+                        }}
+                        onDoubleClick={(event) => {
+                          event.stopPropagation();
+                          beginRegionEdit(region);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            selectRegion(region);
+                          }
+                        }}
+                      />
                     );
                   })}
                 </svg>
@@ -776,17 +776,14 @@ export function TransitMaterialFormWorkspace({
               <div className="transit-material-source-form">
                 {onOpenApplyWizard ? (
                   <div className="transit-material-source-apply">
-                    <button
-                      className="primary-action-button"
-                      type="button"
+                    <Button
+                      variant="primary"
+                      icon="dashboard_customize"
                       disabled={disabled || !canApplySource}
                       onClick={onOpenApplyWizard}
                     >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        dashboard_customize
-                      </span>
                       模板库…
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
                 {sourceControls ?? <p className="poi-visual-panel-empty">暂无数据来源选项。</p>}

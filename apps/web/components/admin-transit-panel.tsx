@@ -2,6 +2,7 @@
 
 import { ScheduleStopTimeTable } from './schedule-stop-time-table';
 import { SegmentedControl } from './segmented-control';
+import { SegmentedTabs } from './ui/segmented-control';
 
 import { requestConfirmation } from '../lib/client-dialog-events';
 
@@ -47,6 +48,9 @@ import { getOperatingCalendarConflict } from '../lib/operating-calendar';
 import { LayeredMapTile } from './layered-map-tile';
 import { WorldCoordinatePicker } from './world-coordinate-picker';
 import { MaterialSymbol } from './material-symbol';
+import { StatusChip } from './ui/chip';
+import { CheckboxRow } from './ui/checkbox-row';
+import { Button } from './ui/button';
 import { TransitTripLabelPoolPanel } from './transit-trip-label-pool-panel';
 import { type TransitTripLabelDraftConfig } from './transit-line-trip-label-fields';
 import type { TransitStationDetailUpdateInput } from '@yct/schemas';
@@ -71,6 +75,7 @@ import {
   resolveTransitStationExitRoadSide,
   type TransitStationExitLocationCandidate,
 } from '../lib/transit-station-exits';
+import { Modal } from './ui/modal';
 
 type TransitStatusFilter = TransitItemApprovalStatus | 'all' | 'todo' | 'legacy';
 type ScheduleStatusFilter = TransitItemApprovalStatus | 'all' | 'todo' | 'legacy';
@@ -1642,43 +1647,18 @@ export function AdminTransitPanel({
           />
         </div>
       </div>
-      <fieldset className="segmented-control admin-page-segmented-control">
-        <legend>线路与班次后台系列</legend>
-        <div>
-          <button
-            className={activeSection === 'lines' ? 'is-active' : ''}
-            type="button"
-            aria-pressed={activeSection === 'lines'}
-            onClick={() => setActiveSection('lines')}
-          >
-            线路列表
-          </button>
-          <button
-            className={activeSection === 'trips' ? 'is-active' : ''}
-            type="button"
-            aria-pressed={activeSection === 'trips'}
-            onClick={() => setActiveSection('trips')}
-          >
-            班次列表
-          </button>
-          <button
-            className={activeSection === 'profiles' ? 'is-active' : ''}
-            type="button"
-            aria-pressed={activeSection === 'profiles'}
-            onClick={() => setActiveSection('profiles')}
-          >
-            服务配置
-          </button>
-          <button
-            className={activeSection === 'pools' ? 'is-active' : ''}
-            type="button"
-            aria-pressed={activeSection === 'pools'}
-            onClick={() => setActiveSection('pools')}
-          >
-            车队标签池
-          </button>
-        </div>
-      </fieldset>
+      <SegmentedTabs
+        label="线路与班次后台系列"
+        className="admin-page-segmented-control"
+        options={[
+          { value: 'lines' as const, label: '线路列表' },
+          { value: 'trips' as const, label: '班次列表' },
+          { value: 'profiles' as const, label: '服务配置' },
+          { value: 'pools' as const, label: '车队标签池' },
+        ]}
+        value={activeSection}
+        onChange={setActiveSection}
+      />
 
       {activeSection === 'lines' ? (
         <>
@@ -1704,17 +1684,9 @@ export function AdminTransitPanel({
           </div>
 
           <div className="admin-toolbar transit-admin-toolbar" aria-label="线路操作与筛选">
-            <button
-              className="secondary-action-button is-primary"
-              type="button"
-              disabled={isBusy}
-              onClick={importLatest}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                download
-              </span>
-              <span>从旧站导入最新线路</span>
-            </button>
+            <Button icon="download" disabled={isBusy} onClick={importLatest}>
+              从旧站导入最新线路
+            </Button>
             <label>
               <span>状态</span>
               <select
@@ -1817,17 +1789,13 @@ export function AdminTransitPanel({
             <TransitAdminMetric label="当前结果" value={scheduleTripRows.length} />
           </div>
           <div className="admin-toolbar transit-admin-toolbar" aria-label="班次操作与筛选">
-            <button
-              className="secondary-action-button is-primary"
-              type="button"
+            <Button
+              icon="inventory"
               disabled={scheduleRevisionBusy}
               onClick={importCurrentScheduleRevision}
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                inventory
-              </span>
-              <span>导入当前班次快照</span>
-            </button>
+              导入当前班次快照
+            </Button>
             <label>
               <span>状态</span>
               <select
@@ -1876,24 +1844,15 @@ export function AdminTransitPanel({
           </div>
           <div className="schedule-view-toolbar" aria-label="班次视图">
             <span className="muted">{scheduleViewMode === 'diagram' ? '运行图' : '列表'}</span>
-            <div className="segmented-control">
-              <button
-                type="button"
-                className={scheduleViewMode === 'diagram' ? 'is-active' : ''}
-                aria-pressed={scheduleViewMode === 'diagram'}
-                onClick={() => setScheduleViewMode('diagram')}
-              >
-                运行图
-              </button>
-              <button
-                type="button"
-                className={scheduleViewMode === 'list' ? 'is-active' : ''}
-                aria-pressed={scheduleViewMode === 'list'}
-                onClick={() => setScheduleViewMode('list')}
-              >
-                列表
-              </button>
-            </div>
+            <SegmentedTabs
+              as="div"
+              options={[
+                { value: 'diagram' as const, label: '运行图' },
+                { value: 'list' as const, label: '列表' },
+              ]}
+              value={scheduleViewMode}
+              onChange={setScheduleViewMode}
+            />
           </div>
           {scheduleViewMode === 'diagram' ? (
             <ScheduleRunChart
@@ -2067,14 +2026,13 @@ export function AdminTransitPanel({
             ))}
           </div>
           <div className="admin-toolbar">
-            <button
-              className="secondary-action-button is-primary"
-              type="button"
+            <Button
+              variant="primary"
               disabled={profileBusy || modeProfiles.length === 0}
               onClick={saveModeProfiles}
             >
               保存交通方式配置
-            </button>
+            </Button>
           </div>
         </section>
       ) : null}
@@ -2196,14 +2154,13 @@ export function AdminTransitPanel({
             ))}
           </div>
           <div className="admin-toolbar">
-            <button
-              className="secondary-action-button is-primary"
-              type="button"
+            <Button
+              variant="primary"
               disabled={serviceProfileBusy || serviceProfiles.length === 0}
               onClick={saveServiceProfiles}
             >
               保存可排班服务配置
-            </button>
+            </Button>
           </div>
         </section>
       ) : null}
@@ -2495,15 +2452,13 @@ function TransitLineEntityList({
         </div>
       </div>
       <div className="admin-content-bulk-bar transit-entity-bulk-bar" aria-label="线路批量操作">
-        <label className="checkbox-row admin-content-bulk-select">
-          <input
-            type="checkbox"
-            checked={isAllVisibleSelected}
-            disabled={rows.length === 0}
-            onChange={onToggleVisibleSelected}
-          />
-          <span>{`选择当前线路 ${selectedCount}/${rows.length}`}</span>
-        </label>
+        <CheckboxRow
+          className="admin-content-bulk-select"
+          checked={isAllVisibleSelected}
+          disabled={rows.length === 0}
+          onChange={onToggleVisibleSelected}
+          label={`选择当前线路 ${selectedCount}/${rows.length}`}
+        />
         <span className="muted">
           {`已选 ${selectedCount} 条线路，涉及 ${selectedBatchCount} 个导入批次`}
         </span>
@@ -2571,11 +2526,13 @@ function TransitLineEntityList({
               <div>
                 <div className="admin-poi-title-row">
                   <strong>{line.name}</strong>
-                  <span className={`admin-poi-status-chip is-${itemStatus}`}>
+                  <StatusChip variant="poi" tone={itemStatus}>
                     {transitItemApprovalStatusLabel(itemStatus)}
-                  </span>
+                  </StatusChip>
                   {isLegacy ? (
-                    <span className="admin-poi-status-chip is-legacy">旧有数据</span>
+                    <StatusChip variant="poi" tone="legacy">
+                      旧有数据
+                    </StatusChip>
                   ) : null}
                 </div>
                 <p className="muted">
@@ -2854,9 +2811,13 @@ function ScheduleRunChart({
           </span>
         </div>
         {conflicts.length > 0 ? (
-          <span className="admin-poi-status-chip is-warning">{conflicts.length} 个冲突提示</span>
+          <StatusChip variant="poi" tone="warning">
+            {conflicts.length} 个冲突提示
+          </StatusChip>
         ) : (
-          <span className="admin-poi-status-chip is-published">时刻无明显冲突</span>
+          <StatusChip variant="poi" tone="published">
+            时刻无明显冲突
+          </StatusChip>
         )}
       </div>
       {lockedLineName ? (
@@ -3088,15 +3049,13 @@ function ScheduleTripEntityList({
         </div>
       </div>
       <div className="admin-content-bulk-bar transit-entity-bulk-bar" aria-label="班次批量操作">
-        <label className="checkbox-row admin-content-bulk-select">
-          <input
-            type="checkbox"
-            checked={isAllVisibleSelected}
-            disabled={rows.length === 0}
-            onChange={onToggleVisibleSelected}
-          />
-          <span>{`选择当前班次 ${selectedCount}/${rows.length}`}</span>
-        </label>
+        <CheckboxRow
+          className="admin-content-bulk-select"
+          checked={isAllVisibleSelected}
+          disabled={rows.length === 0}
+          onChange={onToggleVisibleSelected}
+          label={`选择当前班次 ${selectedCount}/${rows.length}`}
+        />
         <span className="muted">
           {`已选 ${selectedCount} 个班次，涉及 ${selectedBatchCount} 个导入批次`}
         </span>
@@ -3170,11 +3129,13 @@ function ScheduleTripEntityList({
               <div>
                 <div className="admin-poi-title-row">
                   <strong>{formatTripDiffLabel(trip)}</strong>
-                  <span className={`admin-poi-status-chip is-${itemStatus}`}>
+                  <StatusChip variant="poi" tone={itemStatus}>
                     {transitItemApprovalStatusLabel(itemStatus)}
-                  </span>
+                  </StatusChip>
                   {isLegacy ? (
-                    <span className="admin-poi-status-chip is-legacy">旧有数据</span>
+                    <StatusChip variant="poi" tone="legacy">
+                      旧有数据
+                    </StatusChip>
                   ) : null}
                 </div>
                 <p className="muted">
@@ -3524,226 +3485,218 @@ function ScheduleTripEditDialog({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <form
-        className="modal-panel admin-transit-dialog schedule-trip-edit-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="schedule-trip-edit-title"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
-        <div className="section-heading">
-          <h2 id="schedule-trip-edit-title">{trip ? '编辑班次' : '新增班次'}</h2>
-          <span className="muted">
-            {revision.revisionId}
-            {trip ? ` · ${trip.tripInstanceId}` : ''}
-          </span>
-        </div>
-        <div className="schedule-trip-edit-grid">
-          <label>
-            <span>服务类型</span>
-            <select
-              value={serviceKind}
-              onChange={(event) => {
-                setServiceKind(event.currentTarget.value as TravelTripInstance['serviceKind']);
-                setTimingSource('manual');
-              }}
-            >
-              {(availableKinds.length > 0
-                ? availableKinds
-                : (['coach', 'ferry', 'flight', 'railway', 'custom'] as const)
-              ).map((kind) => (
-                <option value={kind} key={kind}>
-                  {formatScheduleServiceKind(kind)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>班次号</span>
-            <input value={tripCode} onChange={(event) => setTripCode(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>出发时间</span>
-            <input
-              value={departureTime}
-              onChange={(event) => updateDialogDepartureTime(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>到达时间</span>
-            <input
-              value={arrivalTime}
-              onChange={(event) => updateDialogArrivalTime(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>到达日偏移</span>
-            <input
-              type="number"
-              min={0}
-              value={arrivalDayOffset}
-              onChange={(event) => updateDialogArrivalDayOffset(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>线路名称</span>
-            <input
-              value={lineName}
-              onChange={(event) => {
-                setLineName(event.currentTarget.value);
-                setTimingSource('manual');
-              }}
-            />
-          </label>
-          <label>
-            <span>起点</span>
-            <input
-              value={originStationName}
-              onChange={(event) => setOriginStationName(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>终点</span>
-            <input
-              value={destinationStationName}
-              onChange={(event) => setDestinationStationName(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>票价</span>
-            <input value={fareText} onChange={(event) => setFareText(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>运营方</span>
-            <input value={operator} onChange={(event) => setOperator(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>订票链接</span>
-            <input
-              value={bookingUrl}
-              onChange={(event) => setBookingUrl(event.currentTarget.value)}
-              placeholder="https://..."
-            />
-          </label>
-          <label>
-            <span>运行说明</span>
-            <input
-              value={runtimeText}
-              onChange={(event) => setRuntimeText(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>检票口</span>
-            <input value={gateText} onChange={(event) => setGateText(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>车型</span>
-            <input
-              value={vehicleTypeText}
-              onChange={(event) => setVehicleTypeText(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>车辆型号</span>
-            <input
-              value={vehicleModelText}
-              onChange={(event) => setVehicleModelText(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>线路备注</span>
-            <input
-              value={routeNote}
-              onChange={(event) => setRouteNote(event.currentTarget.value)}
-            />
-          </label>
-          <div className="admin-segmented-field">
-            <span>可用性</span>
-            <SegmentedControl
-              ariaLabel="班次可用性"
-              className="material-mode-switch material-variant-switch"
-              value={availability}
-              onChange={(next) =>
-                setAvailability(next as TravelTripInstance['availability'])
-              }
-              options={[
-                { value: 'query_only', label: '仅查询' },
-                { value: 'booking_reference', label: '跳转订票' },
-                { value: 'ticketing_unavailable', label: '暂不可售' },
-                { value: 'not_connected', label: '未接入' },
-              ]}
-            />
-          </div>
-          <label>
-            <span>来源路径</span>
-            <input
-              value={sourcePath}
-              onChange={(event) => setSourcePath(event.currentTarget.value)}
-            />
-          </label>
-        </div>
+    <Modal
+      labelledBy="schedule-trip-edit-title"
+      className="admin-transit-dialog schedule-trip-edit-dialog"
+      as="form"
+      onSubmit={submit}
+      onBackdropClick={() => onClose}
+    >
+      <div className="section-heading">
+        <h2 id="schedule-trip-edit-title">{trip ? '编辑班次' : '新增班次'}</h2>
+        <span className="muted">
+          {revision.revisionId}
+          {trip ? ` · ${trip.tripInstanceId}` : ''}
+        </span>
+      </div>
+      <div className="schedule-trip-edit-grid">
         <label>
-          <span>站点列表</span>
-          <textarea
-            value={stationNamesText}
+          <span>服务类型</span>
+          <select
+            value={serviceKind}
             onChange={(event) => {
-              setStationNamesText(event.currentTarget.value);
+              setServiceKind(event.currentTarget.value as TravelTripInstance['serviceKind']);
               setTimingSource('manual');
             }}
-            placeholder="每行一个站点"
+          >
+            {(availableKinds.length > 0
+              ? availableKinds
+              : (['coach', 'ferry', 'flight', 'railway', 'custom'] as const)
+            ).map((kind) => (
+              <option value={kind} key={kind}>
+                {formatScheduleServiceKind(kind)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>班次号</span>
+          <input value={tripCode} onChange={(event) => setTripCode(event.currentTarget.value)} />
+        </label>
+        <label>
+          <span>出发时间</span>
+          <input
+            value={departureTime}
+            onChange={(event) => updateDialogDepartureTime(event.currentTarget.value)}
           />
         </label>
-        <fieldset className="schedule-stop-time-editor">
-          <legend>运行图停站时刻</legend>
-          <div className="schedule-run-editor-actions">
-            <button
-              type="button"
-              disabled={isBusy || !roadTiming.ok}
-              title={
-                roadTiming.ok ? '按线路各道路区间的运行分钟重新计算各站时刻' : roadTiming.message
-              }
-              onClick={applyDialogRoadTiming}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                route
-              </span>
-              <span>按道路用时排点</span>
-            </button>
-            <span className="muted">
-              {timingSource === 'road_segment' ? '当前时刻来自道路区间用时' : '当前时刻为人工维护'}
-            </span>
-          </div>
-          <ScheduleStopTimeTable
-            stopTimes={stopTimes}
-            onChange={(index, patch) =>
-              updateDialogStopTime(
-                index,
-                'dwellMinutes' in patch
-                  ? applyStopDwellMinutes(stopTimes[index], patch.dwellMinutes)
-                  : patch,
-              )
-            }
+        <label>
+          <span>到达时间</span>
+          <input
+            value={arrivalTime}
+            onChange={(event) => updateDialogArrivalTime(event.currentTarget.value)}
           />
-        </fieldset>
-        <AdminTripOperatingCalendarEditor
-          tripKey={trip?.tripKey}
-          tripKeyStatus={trip?.tripKeyStatus}
-          value={operatingCalendar}
-          onChange={setOperatingCalendar}
-        />
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
-          </button>
-          <button type="submit" disabled={isBusy}>
-            {trip ? '保存班次' : '创建班次'}
-          </button>
+        </label>
+        <label>
+          <span>到达日偏移</span>
+          <input
+            type="number"
+            min={0}
+            value={arrivalDayOffset}
+            onChange={(event) => updateDialogArrivalDayOffset(event.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span>线路名称</span>
+          <input
+            value={lineName}
+            onChange={(event) => {
+              setLineName(event.currentTarget.value);
+              setTimingSource('manual');
+            }}
+          />
+        </label>
+        <label>
+          <span>起点</span>
+          <input
+            value={originStationName}
+            onChange={(event) => setOriginStationName(event.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span>终点</span>
+          <input
+            value={destinationStationName}
+            onChange={(event) => setDestinationStationName(event.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span>票价</span>
+          <input value={fareText} onChange={(event) => setFareText(event.currentTarget.value)} />
+        </label>
+        <label>
+          <span>运营方</span>
+          <input value={operator} onChange={(event) => setOperator(event.currentTarget.value)} />
+        </label>
+        <label>
+          <span>订票链接</span>
+          <input
+            value={bookingUrl}
+            onChange={(event) => setBookingUrl(event.currentTarget.value)}
+            placeholder="https://..."
+          />
+        </label>
+        <label>
+          <span>运行说明</span>
+          <input
+            value={runtimeText}
+            onChange={(event) => setRuntimeText(event.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span>检票口</span>
+          <input value={gateText} onChange={(event) => setGateText(event.currentTarget.value)} />
+        </label>
+        <label>
+          <span>车型</span>
+          <input
+            value={vehicleTypeText}
+            onChange={(event) => setVehicleTypeText(event.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span>车辆型号</span>
+          <input
+            value={vehicleModelText}
+            onChange={(event) => setVehicleModelText(event.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span>线路备注</span>
+          <input value={routeNote} onChange={(event) => setRouteNote(event.currentTarget.value)} />
+        </label>
+        <div className="admin-segmented-field">
+          <span>可用性</span>
+          <SegmentedControl
+            ariaLabel="班次可用性"
+            className="material-mode-switch material-variant-switch"
+            value={availability}
+            onChange={(next) => setAvailability(next as TravelTripInstance['availability'])}
+            options={[
+              { value: 'query_only', label: '仅查询' },
+              { value: 'booking_reference', label: '跳转订票' },
+              { value: 'ticketing_unavailable', label: '暂不可售' },
+              { value: 'not_connected', label: '未接入' },
+            ]}
+          />
         </div>
-      </form>
-    </div>
+        <label>
+          <span>来源路径</span>
+          <input
+            value={sourcePath}
+            onChange={(event) => setSourcePath(event.currentTarget.value)}
+          />
+        </label>
+      </div>
+      <label>
+        <span>站点列表</span>
+        <textarea
+          value={stationNamesText}
+          onChange={(event) => {
+            setStationNamesText(event.currentTarget.value);
+            setTimingSource('manual');
+          }}
+          placeholder="每行一个站点"
+        />
+      </label>
+      <fieldset className="schedule-stop-time-editor">
+        <legend>运行图停站时刻</legend>
+        <div className="schedule-run-editor-actions">
+          <button
+            type="button"
+            disabled={isBusy || !roadTiming.ok}
+            title={
+              roadTiming.ok ? '按线路各道路区间的运行分钟重新计算各站时刻' : roadTiming.message
+            }
+            onClick={applyDialogRoadTiming}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              route
+            </span>
+            <span>按道路用时排点</span>
+          </button>
+          <span className="muted">
+            {timingSource === 'road_segment' ? '当前时刻来自道路区间用时' : '当前时刻为人工维护'}
+          </span>
+        </div>
+        <ScheduleStopTimeTable
+          stopTimes={stopTimes}
+          onChange={(index, patch) =>
+            updateDialogStopTime(
+              index,
+              'dwellMinutes' in patch
+                ? applyStopDwellMinutes(stopTimes[index], patch.dwellMinutes)
+                : patch,
+            )
+          }
+        />
+      </fieldset>
+      <AdminTripOperatingCalendarEditor
+        tripKey={trip?.tripKey}
+        tripKeyStatus={trip?.tripKeyStatus}
+        value={operatingCalendar}
+        onChange={setOperatingCalendar}
+      />
+      {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+      <div className="admin-content-actions">
+        <button type="button" onClick={onClose} disabled={isBusy}>
+          取消
+        </button>
+        <button type="submit" disabled={isBusy}>
+          {trip ? '保存班次' : '创建班次'}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -3915,216 +3868,206 @@ export function TransitStationCoordinateDialog({
   };
 
   return (
-    <div
-      className="modal-backdrop transit-station-coordinate-backdrop"
-      role="presentation"
-      onMouseDown={onClose}
+    <Modal
+      labelledBy="admin-transit-station-coordinate-title"
+      backdropClassName="transit-station-coordinate-backdrop"
+      className="admin-transit-dialog"
+      as="form"
+      onSubmit={submit}
+      onBackdropClick={() => onClose}
     >
-      <form
-        className="modal-panel admin-transit-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-transit-station-coordinate-title"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
+      <div className="section-heading">
+        <h2 id="admin-transit-station-coordinate-title">修正站点坐标</h2>
+        <span className="muted">
+          {revision.revisionId} · {station.name}
+        </span>
+      </div>
+      <p className="muted">
+        坐标使用 Minecraft 世界坐标 X/Z。保存后会重新校验相关线路，并记录事件审计。
+      </p>
+      <div className="transit-station-binding-card">
         <div className="section-heading">
-          <h2 id="admin-transit-station-coordinate-title">修正站点坐标</h2>
+          <h3>车站共享 POI / 出口</h3>
           <span className="muted">
-            {revision.revisionId} · {station.name}
+            {boundPoiRefs.length > 0 ? `已绑定 ${boundPoiRefs.length} 个 POI` : '未绑定'}
           </span>
         </div>
         <p className="muted">
-          坐标使用 Minecraft 世界坐标 X/Z。保存后会重新校验相关线路，并记录事件审计。
+          服务交通方式：
+          {stationModes.length > 0 ? stationModes.map(formatTransitMode).join('、') : '未接入线路'}
+          。 候选项仅显示对应交通方式的站点 POI。这里的绑定属于车站共享配置：未在“编辑线路 →
+          本线路停靠 POI”单独指定的线路，都会使用第一个绑定 POI。可重复选择绑定多个 POI 或出口。
         </p>
-        <div className="transit-station-binding-card">
-          <div className="section-heading">
-            <h3>车站共享 POI / 出口</h3>
-            <span className="muted">
-              {boundPoiRefs.length > 0 ? `已绑定 ${boundPoiRefs.length} 个 POI` : '未绑定'}
-            </span>
+        <div className="transit-station-binding-toolbar">
+          <label className="transit-admin-search">
+            <span>搜索 POI</span>
+            <input
+              value={poiSearchText}
+              onChange={(event) => {
+                setPoiSearchText(event.currentTarget.value);
+                setError('');
+              }}
+              placeholder="名称、分类、标记 ID"
+            />
+          </label>
+          <label>
+            <span>添加 POI 绑定</span>
+            <select
+              value={boundPoiMarkerId}
+              onChange={(event) => {
+                updateBinding(event.currentTarget.value);
+              }}
+            >
+              <option value="">不绑定 POI</option>
+              {filteredPoiOptions.map((option) => (
+                <option value={option.marker.id} key={option.marker.id}>
+                  {`${option.marker.label} · ${option.marker.categoryId ?? '未分类'} · ${roundCoordinateValue(
+                    option.coordinate[0],
+                  )}, ${roundCoordinateValue(option.coordinate[1])}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={!selectedBoundPoi}
+            onClick={() => applyPoiCoordinate(selectedBoundPoi)}
+          >
+            使用 POI 坐标
+          </button>
+          <button
+            type="button"
+            disabled={boundPoiRefs.length === 0}
+            onClick={() => {
+              setBoundPoiMarkerId('');
+              setBoundPoiRefs([]);
+              setError('');
+            }}
+          >
+            清空绑定
+          </button>
+        </div>
+        {boundPoiRefs.length > 0 ? (
+          <div className="transit-station-bound-poi-list" aria-label="已绑定 POI">
+            {boundPoiRefs.map((ref, index) => {
+              const option = boundPoiOptionsById.get(ref.markerId);
+              return (
+                <span className="transit-station-bound-poi-chip" key={ref.markerId}>
+                  <strong>{ref.label}</strong>
+                  <small>
+                    {index === 0 ? '默认 POI · ' : ''}
+                    {ref.categoryId ?? option?.marker.categoryId ?? '未分类'}
+                    {option ? ` · ${formatTransitCoordinatePair(option.coordinate)}` : ''}
+                  </small>
+                  {index > 0 ? (
+                    <button
+                      type="button"
+                      aria-label={`将 ${ref.label} 设为默认 POI`}
+                      onClick={() => setPrimaryBinding(ref.markerId)}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        star
+                      </span>
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={!option}
+                    aria-label={`使用 ${ref.label} 坐标`}
+                    onClick={() => applyPoiCoordinate(option ?? null)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      my_location
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`移除 ${ref.label} 绑定`}
+                    onClick={() => removeBinding(ref.markerId)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      close
+                    </span>
+                  </button>
+                </span>
+              );
+            })}
           </div>
+        ) : (
           <p className="muted">
-            服务交通方式：
-            {stationModes.length > 0
-              ? stationModes.map(formatTransitMode).join('、')
-              : '未接入线路'}
-            。 候选项仅显示对应交通方式的站点 POI。这里的绑定属于车站共享配置：未在“编辑线路 →
-            本线路停靠 POI”单独指定的线路，都会使用第一个绑定 POI。可重复选择绑定多个 POI 或出口。
+            绑定后可直接复用现有 POI 坐标，也方便后续回查站点与地图对象的对应关系。重复选择候选 POI
+            可继续追加绑定。
           </p>
-          <div className="transit-station-binding-toolbar">
-            <label className="transit-admin-search">
-              <span>搜索 POI</span>
-              <input
-                value={poiSearchText}
-                onChange={(event) => {
-                  setPoiSearchText(event.currentTarget.value);
-                  setError('');
-                }}
-                placeholder="名称、分类、标记 ID"
-              />
-            </label>
-            <label>
-              <span>添加 POI 绑定</span>
-              <select
-                value={boundPoiMarkerId}
-                onChange={(event) => {
-                  updateBinding(event.currentTarget.value);
-                }}
-              >
-                <option value="">不绑定 POI</option>
-                {filteredPoiOptions.map((option) => (
-                  <option value={option.marker.id} key={option.marker.id}>
-                    {`${option.marker.label} · ${option.marker.categoryId ?? '未分类'} · ${roundCoordinateValue(
-                      option.coordinate[0],
-                    )}, ${roundCoordinateValue(option.coordinate[1])}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              disabled={!selectedBoundPoi}
-              onClick={() => applyPoiCoordinate(selectedBoundPoi)}
-            >
-              使用 POI 坐标
-            </button>
-            <button
-              type="button"
-              disabled={boundPoiRefs.length === 0}
-              onClick={() => {
-                setBoundPoiMarkerId('');
-                setBoundPoiRefs([]);
-                setError('');
-              }}
-            >
-              清空绑定
-            </button>
-          </div>
-          {boundPoiRefs.length > 0 ? (
-            <div className="transit-station-bound-poi-list" aria-label="已绑定 POI">
-              {boundPoiRefs.map((ref, index) => {
-                const option = boundPoiOptionsById.get(ref.markerId);
-                return (
-                  <span className="transit-station-bound-poi-chip" key={ref.markerId}>
-                    <strong>{ref.label}</strong>
-                    <small>
-                      {index === 0 ? '默认 POI · ' : ''}
-                      {ref.categoryId ?? option?.marker.categoryId ?? '未分类'}
-                      {option ? ` · ${formatTransitCoordinatePair(option.coordinate)}` : ''}
-                    </small>
-                    {index > 0 ? (
-                      <button
-                        type="button"
-                        aria-label={`将 ${ref.label} 设为默认 POI`}
-                        onClick={() => setPrimaryBinding(ref.markerId)}
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          star
-                        </span>
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={!option}
-                      aria-label={`使用 ${ref.label} 坐标`}
-                      onClick={() => applyPoiCoordinate(option ?? null)}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        my_location
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`移除 ${ref.label} 绑定`}
-                      onClick={() => removeBinding(ref.markerId)}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        close
-                      </span>
-                    </button>
-                  </span>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="muted">
-              绑定后可直接复用现有 POI 坐标，也方便后续回查站点与地图对象的对应关系。重复选择候选
-              POI 可继续追加绑定。
-            </p>
-          )}
+        )}
+      </div>
+      <div className="transit-station-coordinate-form">
+        <div className="admin-segmented-field">
+          <span>开通状态</span>
+          <SegmentedControl
+            ariaLabel="站点开通状态"
+            className="material-mode-switch material-variant-switch"
+            value={operationStatus}
+            onChange={(next) =>
+              setOperationStatus(next as NonNullable<TransitRevisionStation['operationStatus']>)
+            }
+            options={[
+              { value: 'operating', label: '已开通' },
+              { value: 'planned', label: '未开通' },
+              { value: 'closed', label: '已关闭' },
+            ]}
+          />
         </div>
-        <div className="transit-station-coordinate-form">
-          <div className="admin-segmented-field">
-            <span>开通状态</span>
-            <SegmentedControl
-              ariaLabel="站点开通状态"
-              className="material-mode-switch material-variant-switch"
-              value={operationStatus}
-              onChange={(next) =>
-                setOperationStatus(
-                  next as NonNullable<TransitRevisionStation['operationStatus']>,
-                )
-              }
-              options={[
-                { value: 'operating', label: '已开通' },
-                { value: 'planned', label: '未开通' },
-                { value: 'closed', label: '已关闭' },
-              ]}
-            />
-          </div>
-        </div>
-        <WorldCoordinatePicker
-          ariaLabel="在地图预览中点选站点坐标"
-          emptyContent="当前没有可用于地图点选的基准坐标，请先绑定一个 POI 或手动输入坐标。"
-          value={{ x: xValue, y: yValue, z: zValue }}
-          onChange={(coordinate) => {
-            setXValue(coordinate.x);
-            setYValue(coordinate.y);
-            setZValue(coordinate.z);
-            setError('');
-          }}
-          markers={contextMarkers.map((marker) => ({
-            coordinate: marker.coordinate,
-            id: marker.marker.id,
-            label: marker.marker.label,
-            tone:
-              marker.relation === 'bound-poi'
-                ? 'bound'
-                : marker.relation === 'road'
-                  ? 'road'
-                  : marker.relation === 'station'
-                    ? 'station'
-                    : marker.relation === 'nearby'
-                      ? 'nearby'
-                      : 'default',
-          }))}
-          originalValue={originalCoordinate}
-          referenceValue={(selectedBoundPoi ?? selectedBoundPoiOptions[0])?.coordinate ?? null}
-          freshTileTemplate={tilePreviewFreshTemplate}
-          tileTemplate={tilePreviewTemplate}
-          yPlaceholder="留空继承地图默认高度 64"
-          actions={
-            <CurrentPlayerLocationButton
-              onUse={(coordinate) => {
-                setXValue(String(roundCoordinateValue(coordinate[0])));
-                setZValue(String(roundCoordinateValue(coordinate[1])));
-                setError('');
-              }}
-            />
-          }
-        />
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
-          </button>
-          <button type="submit" disabled={isBusy}>
-            保存坐标
-          </button>
-        </div>
-      </form>
-    </div>
+      </div>
+      <WorldCoordinatePicker
+        ariaLabel="在地图预览中点选站点坐标"
+        emptyContent="当前没有可用于地图点选的基准坐标，请先绑定一个 POI 或手动输入坐标。"
+        value={{ x: xValue, y: yValue, z: zValue }}
+        onChange={(coordinate) => {
+          setXValue(coordinate.x);
+          setYValue(coordinate.y);
+          setZValue(coordinate.z);
+          setError('');
+        }}
+        markers={contextMarkers.map((marker) => ({
+          coordinate: marker.coordinate,
+          id: marker.marker.id,
+          label: marker.marker.label,
+          tone:
+            marker.relation === 'bound-poi'
+              ? 'bound'
+              : marker.relation === 'road'
+                ? 'road'
+                : marker.relation === 'station'
+                  ? 'station'
+                  : marker.relation === 'nearby'
+                    ? 'nearby'
+                    : 'default',
+        }))}
+        originalValue={originalCoordinate}
+        referenceValue={(selectedBoundPoi ?? selectedBoundPoiOptions[0])?.coordinate ?? null}
+        freshTileTemplate={tilePreviewFreshTemplate}
+        tileTemplate={tilePreviewTemplate}
+        yPlaceholder="留空继承地图默认高度 64"
+        actions={
+          <CurrentPlayerLocationButton
+            onUse={(coordinate) => {
+              setXValue(String(roundCoordinateValue(coordinate[0])));
+              setZValue(String(roundCoordinateValue(coordinate[1])));
+              setError('');
+            }}
+          />
+        }
+      />
+      {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+      <div className="admin-content-actions">
+        <button type="button" onClick={onClose} disabled={isBusy}>
+          取消
+        </button>
+        <button type="submit" disabled={isBusy}>
+          保存坐标
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -4672,766 +4615,747 @@ export function TransitStationDetailDialog({
   };
 
   return (
-    <div
-      className="modal-backdrop transit-station-detail-backdrop"
-      role="presentation"
-      onMouseDown={onClose}
+    <Modal
+      labelledBy="admin-transit-station-detail-title"
+      backdropClassName="transit-station-detail-backdrop"
+      className="admin-transit-dialog transit-station-detail-editor"
+      as="form"
+      onSubmit={submit}
+      onBackdropClick={() => onClose}
     >
-      <form
-        className="modal-panel admin-transit-dialog transit-station-detail-editor"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-transit-station-detail-title"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
-        <div className="section-heading">
-          <h2 id="admin-transit-station-detail-title">编辑站内设施信息</h2>
-          <span className="muted">
-            {revision.revisionId} · {detail.lineName} · {detail.stationName}
-          </span>
-        </div>
-        <div className="transit-station-profile-toolbar">
-          <div className="transit-station-profile-direction" role="tablist" aria-label="行车方向">
-            {(['downwards', 'upwards'] as const).map((direction) => (
-              <button
-                className={activeDirection === direction ? 'is-active' : ''}
-                type="button"
-                role="tab"
-                aria-selected={activeDirection === direction}
-                key={direction}
-                onClick={() => {
-                  setActiveDirection(direction);
-                  setSelectedFacilityIndex(null);
-                }}
-              >
-                {direction === 'downwards' ? '下行' : '上行'}
-              </button>
-            ))}
-          </div>
-          {activeDirection === 'upwards' ? (
+      <div className="section-heading">
+        <h2 id="admin-transit-station-detail-title">编辑站内设施信息</h2>
+        <span className="muted">
+          {revision.revisionId} · {detail.lineName} · {detail.stationName}
+        </span>
+      </div>
+      <div className="transit-station-profile-toolbar">
+        <div className="transit-station-profile-direction" role="tablist" aria-label="行车方向">
+          {(['downwards', 'upwards'] as const).map((direction) => (
             <button
+              className={activeDirection === direction ? 'is-active' : ''}
               type="button"
-              disabled={isBusy}
+              role="tab"
+              aria-selected={activeDirection === direction}
+              key={direction}
               onClick={() => {
-                commitDraft({
-                  ...draft,
-                  facilitiesUpwards: draft.facilities.map((facility) => ({ ...facility })),
-                });
+                setActiveDirection(direction);
                 setSelectedFacilityIndex(null);
               }}
             >
-              <MaterialSymbol name="content_copy" aria-hidden="true" />
-              复制下行布局
+              {direction === 'downwards' ? '下行' : '上行'}
             </button>
-          ) : null}
-          <span className="muted">
-            {activeDirection === 'upwards' && draft.facilitiesUpwards === undefined
-              ? '沿用下行布局'
-              : `${activeFacilities.length} 项设施`}
-          </span>
+          ))}
         </div>
-        <div className="transit-station-profile-settings">
-          <div className="admin-segmented-field">
-            <span>站台开门侧</span>
-            <SegmentedControl
-              ariaLabel="站台开门侧"
-              className="material-mode-switch material-variant-switch"
-              value={draft.platformSide ?? 'none'}
-              onChange={(next) =>
-                commitDraft({
-                  ...draft,
-                  platformSide: next as TransitStationDetailSnapshot['platformSide'],
-                })
-              }
-              options={[
-                { value: 'left', label: '左侧' },
-                { value: 'right', label: '右侧' },
-                { value: 'both', label: '两侧' },
-                { value: 'none', label: '未设置' },
-              ]}
+        {activeDirection === 'upwards' ? (
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={() => {
+              commitDraft({
+                ...draft,
+                facilitiesUpwards: draft.facilities.map((facility) => ({ ...facility })),
+              });
+              setSelectedFacilityIndex(null);
+            }}
+          >
+            <MaterialSymbol name="content_copy" aria-hidden="true" />
+            复制下行布局
+          </button>
+        ) : null}
+        <span className="muted">
+          {activeDirection === 'upwards' && draft.facilitiesUpwards === undefined
+            ? '沿用下行布局'
+            : `${activeFacilities.length} 项设施`}
+        </span>
+      </div>
+      <div className="transit-station-profile-settings">
+        <div className="admin-segmented-field">
+          <span>站台开门侧</span>
+          <SegmentedControl
+            ariaLabel="站台开门侧"
+            className="material-mode-switch material-variant-switch"
+            value={draft.platformSide ?? 'none'}
+            onChange={(next) =>
+              commitDraft({
+                ...draft,
+                platformSide: next as TransitStationDetailSnapshot['platformSide'],
+              })
+            }
+            options={[
+              { value: 'left', label: '左侧' },
+              { value: 'right', label: '右侧' },
+              { value: 'both', label: '两侧' },
+              { value: 'none', label: '未设置' },
+            ]}
+          />
+        </div>
+        <label className="transit-station-detail-checkbox">
+          <input
+            type="checkbox"
+            checked={Boolean(draft.overGround)}
+            onChange={(event) => commitDraft({ ...draft, overGround: event.currentTarget.checked })}
+          />
+          <span>地面站</span>
+        </label>
+        <label className="transit-station-detail-checkbox">
+          <input
+            type="checkbox"
+            checked={Boolean(draft.flipTemplateForUpwards)}
+            onChange={(event) =>
+              commitDraft({ ...draft, flipTemplateForUpwards: event.currentTarget.checked })
+            }
+          />
+          <span>上行反转站台模板</span>
+        </label>
+      </div>
+      <div className="transit-station-profile-workspace">
+        <section className="transit-station-profile-canvas" aria-label="车站剖面">
+          <div className="transit-station-profile-add-row">
+            <input
+              aria-label="新楼层名称"
+              value={newLayerFloor}
+              onChange={(event) => setNewLayerFloor(event.currentTarget.value)}
+              placeholder="楼层名称"
             />
+            <select
+              aria-label="新楼层性质"
+              value={newLayerType}
+              onChange={(event) => setNewLayerType(event.currentTarget.value)}
+            >
+              {stationLayerTypeOptions.map(([value, label]) => (
+                <option value={value} key={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <button type="button" onClick={addLayer} disabled={isBusy || !newLayerFloor.trim()}>
+              <MaterialSymbol name="add" aria-hidden="true" />
+              新增楼层
+            </button>
           </div>
-          <label className="transit-station-detail-checkbox">
-            <input
-              type="checkbox"
-              checked={Boolean(draft.overGround)}
-              onChange={(event) =>
-                commitDraft({ ...draft, overGround: event.currentTarget.checked })
-              }
-            />
-            <span>地面站</span>
-          </label>
-          <label className="transit-station-detail-checkbox">
-            <input
-              type="checkbox"
-              checked={Boolean(draft.flipTemplateForUpwards)}
-              onChange={(event) =>
-                commitDraft({ ...draft, flipTemplateForUpwards: event.currentTarget.checked })
-              }
-            />
-            <span>上行反转站台模板</span>
-          </label>
-        </div>
-        <div className="transit-station-profile-workspace">
-          <section className="transit-station-profile-canvas" aria-label="车站剖面">
-            <div className="transit-station-profile-add-row">
-              <input
-                aria-label="新楼层名称"
-                value={newLayerFloor}
-                onChange={(event) => setNewLayerFloor(event.currentTarget.value)}
-                placeholder="楼层名称"
-              />
-              <select
-                aria-label="新楼层性质"
-                value={newLayerType}
-                onChange={(event) => setNewLayerType(event.currentTarget.value)}
-              >
-                {stationLayerTypeOptions.map(([value, label]) => (
-                  <option value={value} key={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <button type="button" onClick={addLayer} disabled={isBusy || !newLayerFloor.trim()}>
-                <MaterialSymbol name="add" aria-hidden="true" />
-                新增楼层
-              </button>
-            </div>
-            <div className="transit-station-profile-layers">
-              {draft.layers.map((layer, layerIndex) => {
-                const layerFacilities = activeFacilities
-                  .map((facility, index) => ({ facility, index }))
-                  .filter(
-                    ({ facility }) =>
-                      facility.floor === layer.floor ||
-                      (!facility.floor && layer.type === 'platform'),
-                  );
-                const exits = draft.exits.filter(
-                  (exit) =>
-                    resolveEditorExitFloor(draft, exit.floor, activeDirection) === layer.floor,
+          <div className="transit-station-profile-layers">
+            {draft.layers.map((layer, layerIndex) => {
+              const layerFacilities = activeFacilities
+                .map((facility, index) => ({ facility, index }))
+                .filter(
+                  ({ facility }) =>
+                    facility.floor === layer.floor ||
+                    (!facility.floor && layer.type === 'platform'),
                 );
-                const transfers = draft.transfers.filter(
-                  (transfer) => transfer.floor === layer.floor,
-                );
-                const isLayerReferenced =
-                  [...draft.facilities, ...(draft.facilitiesUpwards ?? [])].some(
-                    (facility) =>
-                      facility.floor === layer.floor || facility.endFloor === layer.floor,
-                  ) ||
-                  draft.exits.some((exit) => exit.floor === layer.floor) ||
-                  transfers.length > 0;
-                return (
-                  <article
-                    className={`transit-station-profile-layer${
-                      selectedFloor === layer.floor ? ' is-selected' : ''
-                    }${layer.type === 'platform' ? ' is-platform' : ''}`}
-                    key={`${layer.floor}-${layer.order ?? layerIndex}`}
-                    onClick={() => setSelectedFloor(layer.floor)}
-                  >
-                    <div className="transit-station-profile-layer-heading">
-                      <div>
-                        <input
-                          aria-label="楼层名称"
-                          value={layer.floor}
-                          onChange={(event) => {
-                            const previousFloor = layer.floor;
-                            const floor = event.currentTarget.value;
-                            commitDraft({
-                              ...draft,
-                              layers: draft.layers.map((item, index) =>
-                                index === layerIndex ? { ...item, floor } : item,
-                              ),
-                              facilities: draft.facilities.map((facility) => ({
-                                ...facility,
-                                floor: facility.floor === previousFloor ? floor : facility.floor,
-                                endFloor:
-                                  facility.endFloor === previousFloor ? floor : facility.endFloor,
-                              })),
-                              facilitiesUpwards: draft.facilitiesUpwards?.map((facility) => ({
-                                ...facility,
-                                floor: facility.floor === previousFloor ? floor : facility.floor,
-                                endFloor:
-                                  facility.endFloor === previousFloor ? floor : facility.endFloor,
-                              })),
-                              transfers: draft.transfers.map((transfer) => ({
-                                ...transfer,
-                                floor: transfer.floor === previousFloor ? floor : transfer.floor,
-                              })),
-                              exits: draft.exits.map((exit) => ({
-                                ...exit,
-                                floor: exit.floor === previousFloor ? floor : exit.floor,
-                              })),
-                            });
-                            if (selectedFloor === previousFloor) setSelectedFloor(floor);
-                          }}
-                        />
-                        <select
-                          aria-label="楼层性质"
-                          value={layer.type}
-                          onChange={(event) =>
-                            commitDraft({
-                              ...draft,
-                              layers: draft.layers.map((item, index) =>
-                                index === layerIndex
-                                  ? { ...item, type: event.currentTarget.value }
-                                  : item,
-                              ),
-                            })
+              const exits = draft.exits.filter(
+                (exit) =>
+                  resolveEditorExitFloor(draft, exit.floor, activeDirection) === layer.floor,
+              );
+              const transfers = draft.transfers.filter(
+                (transfer) => transfer.floor === layer.floor,
+              );
+              const isLayerReferenced =
+                [...draft.facilities, ...(draft.facilitiesUpwards ?? [])].some(
+                  (facility) => facility.floor === layer.floor || facility.endFloor === layer.floor,
+                ) ||
+                draft.exits.some((exit) => exit.floor === layer.floor) ||
+                transfers.length > 0;
+              return (
+                <article
+                  className={`transit-station-profile-layer${
+                    selectedFloor === layer.floor ? ' is-selected' : ''
+                  }${layer.type === 'platform' ? ' is-platform' : ''}`}
+                  key={`${layer.floor}-${layer.order ?? layerIndex}`}
+                  onClick={() => setSelectedFloor(layer.floor)}
+                >
+                  <div className="transit-station-profile-layer-heading">
+                    <div>
+                      <input
+                        aria-label="楼层名称"
+                        value={layer.floor}
+                        onChange={(event) => {
+                          const previousFloor = layer.floor;
+                          const floor = event.currentTarget.value;
+                          commitDraft({
+                            ...draft,
+                            layers: draft.layers.map((item, index) =>
+                              index === layerIndex ? { ...item, floor } : item,
+                            ),
+                            facilities: draft.facilities.map((facility) => ({
+                              ...facility,
+                              floor: facility.floor === previousFloor ? floor : facility.floor,
+                              endFloor:
+                                facility.endFloor === previousFloor ? floor : facility.endFloor,
+                            })),
+                            facilitiesUpwards: draft.facilitiesUpwards?.map((facility) => ({
+                              ...facility,
+                              floor: facility.floor === previousFloor ? floor : facility.floor,
+                              endFloor:
+                                facility.endFloor === previousFloor ? floor : facility.endFloor,
+                            })),
+                            transfers: draft.transfers.map((transfer) => ({
+                              ...transfer,
+                              floor: transfer.floor === previousFloor ? floor : transfer.floor,
+                            })),
+                            exits: draft.exits.map((exit) => ({
+                              ...exit,
+                              floor: exit.floor === previousFloor ? floor : exit.floor,
+                            })),
+                          });
+                          if (selectedFloor === previousFloor) setSelectedFloor(floor);
+                        }}
+                      />
+                      <select
+                        aria-label="楼层性质"
+                        value={layer.type}
+                        onChange={(event) =>
+                          commitDraft({
+                            ...draft,
+                            layers: draft.layers.map((item, index) =>
+                              index === layerIndex
+                                ? { ...item, type: event.currentTarget.value }
+                                : item,
+                            ),
+                          })
+                        }
+                      >
+                        {!stationLayerTypeOptions.some(([value]) => value === layer.type) ? (
+                          <option value={layer.type}>{layer.type}</option>
+                        ) : null}
+                        {stationLayerTypeOptions.map(([value, label]) => (
+                          <option value={value} key={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <span className="transit-station-profile-layer-actions">
+                      <button
+                        type="button"
+                        title="上移楼层"
+                        aria-label="上移楼层"
+                        disabled={layerIndex === 0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          moveLayer(layerIndex, -1);
+                        }}
+                      >
+                        <MaterialSymbol name="arrow_upward" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        title="下移楼层"
+                        aria-label="下移楼层"
+                        disabled={layerIndex === draft.layers.length - 1}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          moveLayer(layerIndex, 1);
+                        }}
+                      >
+                        <MaterialSymbol name="arrow_downward" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        title={isLayerReferenced ? '请先移动或删除该楼层关联的内容' : '删除楼层'}
+                        aria-label={isLayerReferenced ? '楼层仍有关联内容，暂不能删除' : '删除楼层'}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (isLayerReferenced) {
+                            setError(`请先移动或删除“${layer.floor}”中的设施、出口和换乘信息。`);
+                            return;
                           }
-                        >
-                          {!stationLayerTypeOptions.some(([value]) => value === layer.type) ? (
-                            <option value={layer.type}>{layer.type}</option>
-                          ) : null}
-                          {stationLayerTypeOptions.map(([value, label]) => (
-                            <option value={value} key={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <span className="transit-station-profile-layer-actions">
-                        <button
-                          type="button"
-                          title="上移楼层"
-                          aria-label="上移楼层"
-                          disabled={layerIndex === 0}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            moveLayer(layerIndex, -1);
-                          }}
-                        >
-                          <MaterialSymbol name="arrow_upward" aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          title="下移楼层"
-                          aria-label="下移楼层"
-                          disabled={layerIndex === draft.layers.length - 1}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            moveLayer(layerIndex, 1);
-                          }}
-                        >
-                          <MaterialSymbol name="arrow_downward" aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          title={isLayerReferenced ? '请先移动或删除该楼层关联的内容' : '删除楼层'}
-                          aria-label={
-                            isLayerReferenced ? '楼层仍有关联内容，暂不能删除' : '删除楼层'
-                          }
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (isLayerReferenced) {
-                              setError(`请先移动或删除“${layer.floor}”中的设施、出口和换乘信息。`);
-                              return;
-                            }
-                            commitDraft({
-                              ...draft,
-                              layers: draft.layers
-                                .filter((_, index) => index !== layerIndex)
-                                .map((item, order) => ({ ...item, order })),
-                            });
-                            if (selectedFloor === layer.floor) setSelectedFloor('');
-                          }}
-                        >
-                          <MaterialSymbol name="delete" aria-hidden="true" />
-                        </button>
+                          commitDraft({
+                            ...draft,
+                            layers: draft.layers
+                              .filter((_, index) => index !== layerIndex)
+                              .map((item, order) => ({ ...item, order })),
+                          });
+                          if (selectedFloor === layer.floor) setSelectedFloor('');
+                        }}
+                      >
+                        <MaterialSymbol name="delete" aria-hidden="true" />
+                      </button>
+                    </span>
+                  </div>
+                  {layer.type === 'platform' ? (
+                    <div className="transit-station-profile-directions">
+                      <span>
+                        ←{' '}
+                        {(isActiveLayoutFlipped ? lastStationName : firstStationName) ?? '线路起点'}
+                      </span>
+                      <span>
+                        {(isActiveLayoutFlipped ? firstStationName : lastStationName) ?? '线路终点'}{' '}
+                        →
                       </span>
                     </div>
+                  ) : null}
+                  <div className="transit-station-profile-track">
                     {layer.type === 'platform' ? (
-                      <div className="transit-station-profile-directions">
-                        <span>
-                          ←{' '}
-                          {(isActiveLayoutFlipped ? lastStationName : firstStationName) ??
-                            '线路起点'}
-                        </span>
-                        <span>
-                          {(isActiveLayoutFlipped ? firstStationName : lastStationName) ??
-                            '线路终点'}{' '}
-                          →
-                        </span>
+                      <div
+                        className={`transit-station-profile-carriages${
+                          isActiveLayoutFlipped ? ' is-flipped' : ''
+                        }`}
+                        style={
+                          {
+                            '--station-profile-car-count': Math.ceil(locationScale),
+                          } as CSSProperties
+                        }
+                        aria-hidden="true"
+                      >
+                        {Array.from({ length: Math.ceil(locationScale) }, (_, index) => (
+                          <span key={index}>{index + 1}</span>
+                        ))}
                       </div>
-                    ) : null}
-                    <div className="transit-station-profile-track">
-                      {layer.type === 'platform' ? (
-                        <div
-                          className={`transit-station-profile-carriages${
-                            isActiveLayoutFlipped ? ' is-flipped' : ''
-                          }`}
-                          style={
-                            {
-                              '--station-profile-car-count': Math.ceil(locationScale),
-                            } as CSSProperties
-                          }
+                    ) : (
+                      <span className="transit-station-profile-rail" aria-hidden="true" />
+                    )}
+                    {layerFacilities.map(({ facility, index }) => (
+                      <button
+                        className={`transit-station-profile-facility${
+                          selectedFacilityIndex === index ? ' is-selected' : ''
+                        }${facility.location === undefined ? ' is-unpositioned' : ''}`}
+                        type="button"
+                        key={`${facility.type}-${index}`}
+                        title={`${formatEditorFacilityLabel(facility.type)}${
+                          facility.location === undefined ? ' · 未定位' : ''
+                        }`}
+                        style={
+                          {
+                            '--station-profile-position': `${resolveEditorFacilityPosition(
+                              facility.location,
+                              locationScale,
+                              isActiveLayoutFlipped,
+                            )}%`,
+                          } as CSSProperties
+                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedFloor(layer.floor);
+                          setSelectedFacilityIndex(index);
+                        }}
+                        onPointerDown={(event) => {
+                          event.stopPropagation();
+                          event.currentTarget.setPointerCapture(event.pointerId);
+                          setSelectedFloor(layer.floor);
+                          setSelectedFacilityIndex(index);
+                        }}
+                        onPointerMove={(event) => {
+                          if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+                          const track = event.currentTarget.closest(
+                            '.transit-station-profile-track',
+                          );
+                          if (!(track instanceof HTMLElement)) return;
+                          const rect = track.getBoundingClientRect();
+                          const ratio = Math.max(
+                            0,
+                            Math.min(1, (event.clientX - rect.left) / rect.width),
+                          );
+                          const normalizedRatio = isActiveLayoutFlipped ? 1 - ratio : ratio;
+                          const location = Math.max(
+                            0,
+                            Math.min(
+                              locationScale,
+                              roundStationFacilityLocation(normalizedRatio * locationScale),
+                            ),
+                          );
+                          updateActiveFacilities(
+                            activeFacilities.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, location } : item,
+                            ),
+                          );
+                        }}
+                      >
+                        <MaterialSymbol
+                          name={getEditorFacilitySymbol(facility.type)}
                           aria-hidden="true"
-                        >
-                          {Array.from({ length: Math.ceil(locationScale) }, (_, index) => (
-                            <span key={index}>{index + 1}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="transit-station-profile-rail" aria-hidden="true" />
-                      )}
-                      {layerFacilities.map(({ facility, index }) => (
-                        <button
-                          className={`transit-station-profile-facility${
-                            selectedFacilityIndex === index ? ' is-selected' : ''
-                          }${facility.location === undefined ? ' is-unpositioned' : ''}`}
-                          type="button"
-                          key={`${facility.type}-${index}`}
-                          title={`${formatEditorFacilityLabel(facility.type)}${
-                            facility.location === undefined ? ' · 未定位' : ''
-                          }`}
-                          style={
-                            {
-                              '--station-profile-position': `${resolveEditorFacilityPosition(
-                                facility.location,
-                                locationScale,
-                                isActiveLayoutFlipped,
-                              )}%`,
-                            } as CSSProperties
-                          }
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedFloor(layer.floor);
-                            setSelectedFacilityIndex(index);
-                          }}
-                          onPointerDown={(event) => {
-                            event.stopPropagation();
-                            event.currentTarget.setPointerCapture(event.pointerId);
-                            setSelectedFloor(layer.floor);
-                            setSelectedFacilityIndex(index);
-                          }}
-                          onPointerMove={(event) => {
-                            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-                            const track = event.currentTarget.closest(
-                              '.transit-station-profile-track',
-                            );
-                            if (!(track instanceof HTMLElement)) return;
-                            const rect = track.getBoundingClientRect();
-                            const ratio = Math.max(
-                              0,
-                              Math.min(1, (event.clientX - rect.left) / rect.width),
-                            );
-                            const normalizedRatio = isActiveLayoutFlipped ? 1 - ratio : ratio;
-                            const location = Math.max(
-                              0,
-                              Math.min(
-                                locationScale,
-                                roundStationFacilityLocation(normalizedRatio * locationScale),
-                              ),
-                            );
-                            updateActiveFacilities(
-                              activeFacilities.map((item, itemIndex) =>
-                                itemIndex === index ? { ...item, location } : item,
-                              ),
-                            );
-                          }}
-                        >
-                          <MaterialSymbol
-                            name={getEditorFacilitySymbol(facility.type)}
-                            aria-hidden="true"
-                          />
-                          {facility.endFloor ? <small>{facility.endFloor}</small> : null}
-                        </button>
+                        />
+                        {facility.endFloor ? <small>{facility.endFloor}</small> : null}
+                      </button>
+                    ))}
+                  </div>
+                  {exits.length > 0 || transfers.length > 0 ? (
+                    <div className="transit-station-profile-markers">
+                      {exits.map((exit, index) => (
+                        <span key={`${exit.code}-${index}`}>
+                          <MaterialSymbol name="exit_to_app" aria-hidden="true" />
+                          {exit.code}
+                        </span>
+                      ))}
+                      {transfers.map((transfer, index) => (
+                        <span key={`${transfer.line}-${index}`}>
+                          <MaterialSymbol name="sync_alt" aria-hidden="true" />
+                          {transfer.line}
+                        </span>
                       ))}
                     </div>
-                    {exits.length > 0 || transfers.length > 0 ? (
-                      <div className="transit-station-profile-markers">
-                        {exits.map((exit, index) => (
-                          <span key={`${exit.code}-${index}`}>
-                            <MaterialSymbol name="exit_to_app" aria-hidden="true" />
-                            {exit.code}
-                          </span>
-                        ))}
-                        {transfers.map((transfer, index) => (
-                          <span key={`${transfer.line}-${index}`}>
-                            <MaterialSymbol name="sync_alt" aria-hidden="true" />
-                            {transfer.line}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </article>
-                );
-              })}
-              {draft.layers.length === 0 ? (
-                <div className="transit-station-profile-empty">暂无楼层</div>
-              ) : null}
-            </div>
-          </section>
-          <aside className="transit-station-profile-inspector">
-            <div className="transit-station-profile-facility-add">
-              <select
-                aria-label="新增设施类型"
-                value={newFacilityType}
-                onChange={(event) => setNewFacilityType(event.currentTarget.value)}
-              >
-                {stationFacilityOptions.map(([value, label]) => (
-                  <option value={value} key={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <button type="button" onClick={addFacility} disabled={isBusy || !selectedFloor}>
-                <MaterialSymbol name="add" aria-hidden="true" />
-                添加设施
-              </button>
-            </div>
-            {selectedFacility ? (
-              <div className="transit-station-profile-properties">
-                <div className="section-heading">
-                  <strong>{formatEditorFacilityLabel(selectedFacility.type)}</strong>
-                  <button
-                    type="button"
-                    title="删除设施"
-                    aria-label="删除设施"
-                    onClick={() => {
-                      updateActiveFacilities(
-                        activeFacilities.filter((_, index) => index !== selectedFacilityIndex),
-                      );
-                      setSelectedFacilityIndex(null);
-                    }}
-                  >
-                    <MaterialSymbol name="delete" aria-hidden="true" />
-                  </button>
-                </div>
-                <label>
-                  <span>设施类型</span>
-                  <select
-                    value={selectedFacility.type}
-                    onChange={(event) =>
-                      updateSelectedFacility({ type: event.currentTarget.value })
-                    }
-                  >
-                    {!stationFacilityOptions.some(([value]) => value === selectedFacility.type) ? (
-                      <option value={selectedFacility.type}>{selectedFacility.type}</option>
-                    ) : null}
-                    {stationFacilityOptions.map(([value, label]) => (
-                      <option value={value} key={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>所在楼层</span>
-                  <select
-                    value={selectedFacility.floor ?? ''}
-                    onChange={(event) => {
-                      const floor = event.currentTarget.value || undefined;
-                      updateSelectedFacility({ floor });
-                      if (floor) setSelectedFloor(floor);
-                    }}
-                  >
-                    <option value="">跟随站台层</option>
-                    {draft.layers.map((layer) => (
+                  ) : null}
+                </article>
+              );
+            })}
+            {draft.layers.length === 0 ? (
+              <div className="transit-station-profile-empty">暂无楼层</div>
+            ) : null}
+          </div>
+        </section>
+        <aside className="transit-station-profile-inspector">
+          <div className="transit-station-profile-facility-add">
+            <select
+              aria-label="新增设施类型"
+              value={newFacilityType}
+              onChange={(event) => setNewFacilityType(event.currentTarget.value)}
+            >
+              {stationFacilityOptions.map(([value, label]) => (
+                <option value={value} key={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <button type="button" onClick={addFacility} disabled={isBusy || !selectedFloor}>
+              <MaterialSymbol name="add" aria-hidden="true" />
+              添加设施
+            </button>
+          </div>
+          {selectedFacility ? (
+            <div className="transit-station-profile-properties">
+              <div className="section-heading">
+                <strong>{formatEditorFacilityLabel(selectedFacility.type)}</strong>
+                <button
+                  type="button"
+                  title="删除设施"
+                  aria-label="删除设施"
+                  onClick={() => {
+                    updateActiveFacilities(
+                      activeFacilities.filter((_, index) => index !== selectedFacilityIndex),
+                    );
+                    setSelectedFacilityIndex(null);
+                  }}
+                >
+                  <MaterialSymbol name="delete" aria-hidden="true" />
+                </button>
+              </div>
+              <label>
+                <span>设施类型</span>
+                <select
+                  value={selectedFacility.type}
+                  onChange={(event) => updateSelectedFacility({ type: event.currentTarget.value })}
+                >
+                  {!stationFacilityOptions.some(([value]) => value === selectedFacility.type) ? (
+                    <option value={selectedFacility.type}>{selectedFacility.type}</option>
+                  ) : null}
+                  {stationFacilityOptions.map(([value, label]) => (
+                    <option value={value} key={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>所在楼层</span>
+                <select
+                  value={selectedFacility.floor ?? ''}
+                  onChange={(event) => {
+                    const floor = event.currentTarget.value || undefined;
+                    updateSelectedFacility({ floor });
+                    if (floor) setSelectedFloor(floor);
+                  }}
+                >
+                  <option value="">跟随站台层</option>
+                  {draft.layers.map((layer) => (
+                    <option value={layer.floor} key={layer.floor}>
+                      {layer.floor}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>横向位置（0.25 车厢）</span>
+                <input
+                  type="number"
+                  min="0"
+                  max={locationScale}
+                  step="0.25"
+                  value={selectedFacility.location ?? ''}
+                  onChange={(event) => {
+                    const location = optionalStationDetailNumber(event.currentTarget.value);
+                    updateSelectedFacility({
+                      location:
+                        location === undefined ? undefined : roundStationFacilityLocation(location),
+                    });
+                  }}
+                />
+              </label>
+              <label>
+                <span>连接楼层</span>
+                <select
+                  value={selectedFacility.endFloor ?? ''}
+                  onChange={(event) =>
+                    updateSelectedFacility({ endFloor: event.currentTarget.value || undefined })
+                  }
+                >
+                  <option value="">不跨层</option>
+                  {draft.layers
+                    .filter((layer) => layer.floor !== selectedFacility.floor)
+                    .map((layer) => (
                       <option value={layer.floor} key={layer.floor}>
                         {layer.floor}
                       </option>
                     ))}
-                  </select>
-                </label>
-                <label>
-                  <span>横向位置（0.25 车厢）</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max={locationScale}
-                    step="0.25"
-                    value={selectedFacility.location ?? ''}
-                    onChange={(event) => {
-                      const location = optionalStationDetailNumber(event.currentTarget.value);
-                      updateSelectedFacility({
-                        location:
-                          location === undefined
-                            ? undefined
-                            : roundStationFacilityLocation(location),
-                      });
-                    }}
-                  />
-                </label>
-                <label>
-                  <span>连接楼层</span>
-                  <select
-                    value={selectedFacility.endFloor ?? ''}
-                    onChange={(event) =>
-                      updateSelectedFacility({ endFloor: event.currentTarget.value || undefined })
-                    }
-                  >
-                    <option value="">不跨层</option>
-                    {draft.layers
-                      .filter((layer) => layer.floor !== selectedFacility.floor)
-                      .map((layer) => (
-                        <option value={layer.floor} key={layer.floor}>
-                          {layer.floor}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label>
-                  <span>开口方向</span>
-                  <select
-                    value={selectedFacility.direction ?? ''}
-                    onChange={(event) =>
-                      updateSelectedFacility({ direction: event.currentTarget.value || undefined })
-                    }
-                  >
-                    {!['', 'up', 'down', 'upwards', 'downwards', 'here'].includes(
-                      selectedFacility.direction ?? '',
-                    ) ? (
-                      <option value={selectedFacility.direction}>
-                        {selectedFacility.direction}
-                      </option>
-                    ) : null}
-                    <option value="">未设置</option>
-                    <option value="up">向上</option>
-                    <option value="down">向下</option>
-                    <option value="upwards">上行侧</option>
-                    <option value="downwards">下行侧</option>
-                    <option value="here">本层</option>
-                  </select>
-                </label>
-                <label>
-                  <span>单向</span>
-                  <select
-                    value={selectedFacility.oneWay ?? ''}
-                    onChange={(event) =>
-                      updateSelectedFacility({ oneWay: event.currentTarget.value || undefined })
-                    }
-                  >
-                    {!['', 'up', 'down', 'none'].includes(selectedFacility.oneWay ?? '') ? (
-                      <option value={selectedFacility.oneWay}>{selectedFacility.oneWay}</option>
-                    ) : null}
-                    <option value="">未设置</option>
-                    <option value="none">双向</option>
-                    <option value="up">仅向上</option>
-                    <option value="down">仅向下</option>
-                  </select>
-                </label>
-                <label>
-                  <span>朝向</span>
-                  <input
-                    value={selectedFacility.orientation ?? ''}
-                    onChange={(event) =>
-                      updateSelectedFacility({
-                        orientation: event.currentTarget.value || undefined,
-                      })
-                    }
-                  />
-                </label>
-              </div>
-            ) : (
-              <div className="transit-station-profile-empty">未选择设施</div>
-            )}
-          </aside>
-        </div>
-        <section className="transit-station-exit-editor" aria-label="出口列表">
-          <div className="transit-station-exit-editor-heading">
-            <div>
-              <strong>出口列表</strong>
-              <span className="muted">出口数据与下方文本框保持同一套记录</span>
+                </select>
+              </label>
+              <label>
+                <span>开口方向</span>
+                <select
+                  value={selectedFacility.direction ?? ''}
+                  onChange={(event) =>
+                    updateSelectedFacility({ direction: event.currentTarget.value || undefined })
+                  }
+                >
+                  {!['', 'up', 'down', 'upwards', 'downwards', 'here'].includes(
+                    selectedFacility.direction ?? '',
+                  ) ? (
+                    <option value={selectedFacility.direction}>{selectedFacility.direction}</option>
+                  ) : null}
+                  <option value="">未设置</option>
+                  <option value="up">向上</option>
+                  <option value="down">向下</option>
+                  <option value="upwards">上行侧</option>
+                  <option value="downwards">下行侧</option>
+                  <option value="here">本层</option>
+                </select>
+              </label>
+              <label>
+                <span>单向</span>
+                <select
+                  value={selectedFacility.oneWay ?? ''}
+                  onChange={(event) =>
+                    updateSelectedFacility({ oneWay: event.currentTarget.value || undefined })
+                  }
+                >
+                  {!['', 'up', 'down', 'none'].includes(selectedFacility.oneWay ?? '') ? (
+                    <option value={selectedFacility.oneWay}>{selectedFacility.oneWay}</option>
+                  ) : null}
+                  <option value="">未设置</option>
+                  <option value="none">双向</option>
+                  <option value="up">仅向上</option>
+                  <option value="down">仅向下</option>
+                </select>
+              </label>
+              <label>
+                <span>朝向</span>
+                <input
+                  value={selectedFacility.orientation ?? ''}
+                  onChange={(event) =>
+                    updateSelectedFacility({
+                      orientation: event.currentTarget.value || undefined,
+                    })
+                  }
+                />
+              </label>
             </div>
-            <button type="button" onClick={addExit} disabled={isBusy}>
-              <MaterialSymbol name="add" aria-hidden="true" />
-              添加出口
-            </button>
-          </div>
-          {hasLegacyExitFacilities ? (
-            <p className="admin-poi-dialog-error">
-              设施轨道中存在旧式出口记录。请在设施属性中将其删除，并在这里建立标准出口记录。
-            </p>
-          ) : null}
-          {draft.exits.length === 0 ? (
-            <div className="transit-station-profile-empty">暂无出口记录</div>
           ) : (
-            <div className="transit-station-exit-list">
-              {draft.exits.map((exit, exitIndex) => {
-                const selectedMarkerIds = new Set([
-                  ...(exit.roadMarkerIds ?? []),
-                  ...(exit.placeMarkerId ? [exit.placeMarkerId] : []),
-                ]);
-                return (
-                  <article className="transit-station-exit-row" key={`${exit.code}-${exitIndex}`}>
-                    <div className="transit-station-exit-row-fields">
-                      <label>
-                        <span>编号</span>
-                        <input
-                          value={exit.code}
-                          onChange={(event) =>
-                            updateExit(exitIndex, { code: event.currentTarget.value })
-                          }
-                        />
-                      </label>
-                      <label>
-                        <span>开口楼层</span>
-                        <select
-                          value={exit.floor ?? ''}
-                          onChange={(event) =>
-                            updateExit(exitIndex, { floor: event.currentTarget.value || undefined })
-                          }
-                        >
-                          <option value="">未指定</option>
-                          {draft.layers.map((layer) => (
-                            <option value={layer.floor} key={layer.floor}>
-                              {layer.floor}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="admin-segmented-field">
-                        <span>站厅侧</span>
-                        <SegmentedControl
-                          ariaLabel="出入口站厅侧"
-                          className="material-mode-switch material-variant-switch"
-                          value={exit.direction ?? ''}
-                          onChange={(next) =>
-                            updateExit(exitIndex, {
-                              direction:
-                                next === 'upwards' || next === 'downwards' ? next : undefined,
-                            })
-                          }
-                          options={[
-                            { value: '', label: '未判断' },
-                            { value: 'upwards', label: '上行侧' },
-                            { value: 'downwards', label: '下行侧' },
-                          ]}
-                        />
-                      </div>
-                      <label>
-                        <span>出口朝向</span>
-                        <input
-                          value={exit.orientation ?? ''}
-                          onChange={(event) =>
-                            updateExit(exitIndex, {
-                              orientation: event.currentTarget.value || undefined,
-                            })
-                          }
-                          placeholder="如：西北"
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        className="transit-station-exit-auto-direction"
-                        onClick={() => inferExitDirection(exitIndex)}
-                        disabled={!station || !activeLine}
-                        title="根据出口地点与线路方向自动判断"
-                      >
-                        <MaterialSymbol name="auto_awesome" aria-hidden="true" />
-                        自动判断侧别
-                      </button>
-                      <button
-                        type="button"
-                        title="删除出口"
-                        aria-label={`删除${exit.code || '出口'}`}
-                        onClick={() =>
-                          commitDraft({
-                            ...draft,
-                            exits: draft.exits.filter((_, index) => index !== exitIndex),
-                          })
-                        }
-                      >
-                        <MaterialSymbol name="delete" aria-hidden="true" />
-                      </button>
-                    </div>
-                    <label className="transit-station-exit-description">
-                      <span>出口介绍</span>
+            <div className="transit-station-profile-empty">未选择设施</div>
+          )}
+        </aside>
+      </div>
+      <section className="transit-station-exit-editor" aria-label="出口列表">
+        <div className="transit-station-exit-editor-heading">
+          <div>
+            <strong>出口列表</strong>
+            <span className="muted">出口数据与下方文本框保持同一套记录</span>
+          </div>
+          <button type="button" onClick={addExit} disabled={isBusy}>
+            <MaterialSymbol name="add" aria-hidden="true" />
+            添加出口
+          </button>
+        </div>
+        {hasLegacyExitFacilities ? (
+          <p className="admin-poi-dialog-error">
+            设施轨道中存在旧式出口记录。请在设施属性中将其删除，并在这里建立标准出口记录。
+          </p>
+        ) : null}
+        {draft.exits.length === 0 ? (
+          <div className="transit-station-profile-empty">暂无出口记录</div>
+        ) : (
+          <div className="transit-station-exit-list">
+            {draft.exits.map((exit, exitIndex) => {
+              const selectedMarkerIds = new Set([
+                ...(exit.roadMarkerIds ?? []),
+                ...(exit.placeMarkerId ? [exit.placeMarkerId] : []),
+              ]);
+              return (
+                <article className="transit-station-exit-row" key={`${exit.code}-${exitIndex}`}>
+                  <div className="transit-station-exit-row-fields">
+                    <label>
+                      <span>编号</span>
                       <input
-                        value={exit.description ?? ''}
+                        value={exit.code}
                         onChange={(event) =>
-                          updateExit(exitIndex, {
-                            description: event.currentTarget.value || undefined,
-                          })
+                          updateExit(exitIndex, { code: event.currentTarget.value })
                         }
-                        placeholder="选择附近道路或地点自动生成，也可直接编辑"
                       />
                     </label>
-                    <div className="transit-station-exit-candidates">
-                      <span className="muted">附近道路/地点</span>
-                      {visibleExitLocationCandidates.map((candidate) => (
-                        <button
-                          type="button"
-                          className={selectedMarkerIds.has(candidate.id) ? 'is-selected' : ''}
-                          key={candidate.id}
-                          onClick={() => toggleExitLocationCandidate(exitIndex, candidate)}
-                          title={`${candidate.label} · 约 ${Math.round(candidate.distance)} 格`}
-                        >
-                          <small>{candidate.kind === 'road' ? '道路' : '地点'}</small>
-                          {candidate.label}
-                          {candidate.orientation ? ` ${candidate.orientation}` : ''}
-                        </button>
-                      ))}
-                      {exitLocationCandidates.length === 0 ? (
-                        <small className="muted">
-                          暂无可用地点；请确认车站有世界坐标并已加载地图地点。
-                        </small>
-                      ) : null}
+                    <label>
+                      <span>开口楼层</span>
+                      <select
+                        value={exit.floor ?? ''}
+                        onChange={(event) =>
+                          updateExit(exitIndex, { floor: event.currentTarget.value || undefined })
+                        }
+                      >
+                        <option value="">未指定</option>
+                        {draft.layers.map((layer) => (
+                          <option value={layer.floor} key={layer.floor}>
+                            {layer.floor}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="admin-segmented-field">
+                      <span>站厅侧</span>
+                      <SegmentedControl
+                        ariaLabel="出入口站厅侧"
+                        className="material-mode-switch material-variant-switch"
+                        value={exit.direction ?? ''}
+                        onChange={(next) =>
+                          updateExit(exitIndex, {
+                            direction:
+                              next === 'upwards' || next === 'downwards' ? next : undefined,
+                          })
+                        }
+                        options={[
+                          { value: '', label: '未判断' },
+                          { value: 'upwards', label: '上行侧' },
+                          { value: 'downwards', label: '下行侧' },
+                        ]}
+                      />
                     </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
-        <details className="transit-station-profile-advanced">
-          <summary>高级文本编辑</summary>
-          <div className="transit-station-detail-editor-grid">
-            <StationDetailEditorTextarea
-              label="楼层（每行：楼层 | 性质）"
-              value={layersText}
-              onChange={setLayersText}
-            />
-            <StationDetailEditorTextarea
-              label="下行设施（类型 | 位置，0.25车厢 | 所在层 | 终点层 | 方向 | 单向 | 朝向）"
-              value={facilitiesText}
-              onChange={setFacilitiesText}
-            />
-            <StationDetailEditorTextarea
-              label="上行设施（格式同上，留空表示沿用下行）"
-              value={facilitiesUpwardsText}
-              onChange={setFacilitiesUpwardsText}
-            />
-            <StationDetailEditorTextarea
-              label="换乘（线路 | 楼层 | 方向 | 位置 | 行车方向）"
-              value={transfersText}
-              onChange={setTransfersText}
-            />
-            <StationDetailEditorTextarea
-              label="出口（编号 | 说明 | 楼层 | 行车方向 | 朝向）"
-              value={exitsText}
-              onChange={setExitsText}
-            />
-            <StationDetailEditorTextarea
-              label="周边站名（每行一个）"
-              value={surroundingText}
-              onChange={setSurroundingText}
-            />
-            <label className="transit-station-detail-editor-field">
-              <span>出口楼层互换（两项逗号分隔）</span>
-              <input
-                value={swapExitLayersText}
-                onChange={(event) => setSwapExitLayersText(event.currentTarget.value)}
-                placeholder="B1, B2"
-              />
-            </label>
+                    <label>
+                      <span>出口朝向</span>
+                      <input
+                        value={exit.orientation ?? ''}
+                        onChange={(event) =>
+                          updateExit(exitIndex, {
+                            orientation: event.currentTarget.value || undefined,
+                          })
+                        }
+                        placeholder="如：西北"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="transit-station-exit-auto-direction"
+                      onClick={() => inferExitDirection(exitIndex)}
+                      disabled={!station || !activeLine}
+                      title="根据出口地点与线路方向自动判断"
+                    >
+                      <MaterialSymbol name="auto_awesome" aria-hidden="true" />
+                      自动判断侧别
+                    </button>
+                    <button
+                      type="button"
+                      title="删除出口"
+                      aria-label={`删除${exit.code || '出口'}`}
+                      onClick={() =>
+                        commitDraft({
+                          ...draft,
+                          exits: draft.exits.filter((_, index) => index !== exitIndex),
+                        })
+                      }
+                    >
+                      <MaterialSymbol name="delete" aria-hidden="true" />
+                    </button>
+                  </div>
+                  <label className="transit-station-exit-description">
+                    <span>出口介绍</span>
+                    <input
+                      value={exit.description ?? ''}
+                      onChange={(event) =>
+                        updateExit(exitIndex, {
+                          description: event.currentTarget.value || undefined,
+                        })
+                      }
+                      placeholder="选择附近道路或地点自动生成，也可直接编辑"
+                    />
+                  </label>
+                  <div className="transit-station-exit-candidates">
+                    <span className="muted">附近道路/地点</span>
+                    {visibleExitLocationCandidates.map((candidate) => (
+                      <button
+                        type="button"
+                        className={selectedMarkerIds.has(candidate.id) ? 'is-selected' : ''}
+                        key={candidate.id}
+                        onClick={() => toggleExitLocationCandidate(exitIndex, candidate)}
+                        title={`${candidate.label} · 约 ${Math.round(candidate.distance)} 格`}
+                      >
+                        <small>{candidate.kind === 'road' ? '道路' : '地点'}</small>
+                        {candidate.label}
+                        {candidate.orientation ? ` ${candidate.orientation}` : ''}
+                      </button>
+                    ))}
+                    {exitLocationCandidates.length === 0 ? (
+                      <small className="muted">
+                        暂无可用地点；请确认车站有世界坐标并已加载地图地点。
+                      </small>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
           </div>
-          <button type="button" onClick={applyAdvancedText}>
-            应用文本修改
-          </button>
-        </details>
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
-          </button>
-          <button type="submit" disabled={isBusy}>
-            保存站内信息
-          </button>
+        )}
+      </section>
+      <details className="transit-station-profile-advanced">
+        <summary>高级文本编辑</summary>
+        <div className="transit-station-detail-editor-grid">
+          <StationDetailEditorTextarea
+            label="楼层（每行：楼层 | 性质）"
+            value={layersText}
+            onChange={setLayersText}
+          />
+          <StationDetailEditorTextarea
+            label="下行设施（类型 | 位置，0.25车厢 | 所在层 | 终点层 | 方向 | 单向 | 朝向）"
+            value={facilitiesText}
+            onChange={setFacilitiesText}
+          />
+          <StationDetailEditorTextarea
+            label="上行设施（格式同上，留空表示沿用下行）"
+            value={facilitiesUpwardsText}
+            onChange={setFacilitiesUpwardsText}
+          />
+          <StationDetailEditorTextarea
+            label="换乘（线路 | 楼层 | 方向 | 位置 | 行车方向）"
+            value={transfersText}
+            onChange={setTransfersText}
+          />
+          <StationDetailEditorTextarea
+            label="出口（编号 | 说明 | 楼层 | 行车方向 | 朝向）"
+            value={exitsText}
+            onChange={setExitsText}
+          />
+          <StationDetailEditorTextarea
+            label="周边站名（每行一个）"
+            value={surroundingText}
+            onChange={setSurroundingText}
+          />
+          <label className="transit-station-detail-editor-field">
+            <span>出口楼层互换（两项逗号分隔）</span>
+            <input
+              value={swapExitLayersText}
+              onChange={(event) => setSwapExitLayersText(event.currentTarget.value)}
+              placeholder="B1, B2"
+            />
+          </label>
         </div>
-      </form>
-    </div>
+        <button type="button" onClick={applyAdvancedText}>
+          应用文本修改
+        </button>
+      </details>
+      {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+      <div className="admin-content-actions">
+        <button type="button" onClick={onClose} disabled={isBusy}>
+          取消
+        </button>
+        <button type="submit" disabled={isBusy}>
+          保存站内信息
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -5834,586 +5758,556 @@ function TransitLineEditorDialog({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <form
-        className="modal-panel admin-transit-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-transit-line-order-title"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
-        <div className="section-heading">
-          <h2 id="admin-transit-line-order-title">{line ? '编辑线路' : '新增线路'}</h2>
-          <span className="muted">
-            {revision.revisionId}
-            {line ? ` · ${line.name}` : ''}
-          </span>
-        </div>
-        <fieldset className="segmented-control transit-line-editor-tabs">
-          <legend>线路编辑区域</legend>
-          <div>
-            {(
-              [
-                ['basic', '基本信息'],
-                ['route', '路线'],
-                ['schedule', '运营配置'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                className={activeTab === value ? 'is-active' : ''}
-                type="button"
-                aria-pressed={activeTab === value}
-                key={value}
-                onClick={() => setActiveTab(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+    <Modal
+      labelledBy="admin-transit-line-order-title"
+      className="admin-transit-dialog"
+      as="form"
+      onSubmit={submit}
+      onBackdropClick={() => onClose}
+    >
+      <div className="section-heading">
+        <h2 id="admin-transit-line-order-title">{line ? '编辑线路' : '新增线路'}</h2>
+        <span className="muted">
+          {revision.revisionId}
+          {line ? ` · ${line.name}` : ''}
+        </span>
+      </div>
+      <SegmentedTabs
+        label="线路编辑区域"
+        className="transit-line-editor-tabs"
+        options={[
+          { value: 'basic' as const, label: '基本信息' },
+          { value: 'route' as const, label: '路线' },
+          { value: 'schedule' as const, label: '运营配置' },
+        ]}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
 
-        {activeTab === 'basic' ? (
-          <div className="transit-line-editor-page">
-            <div className="schedule-trip-edit-grid">
-              <label>
-                <span>线路名称</span>
-                <input value={name} onChange={(event) => setName(event.currentTarget.value)} />
-              </label>
-              <label>
-                <span>交通方式</span>
-                <select
-                  value={mode}
-                  onChange={(event) => {
-                    const nextMode = event.currentTarget.value as TransitRevisionLine['mode'];
-                    setMode(nextMode);
-                    if (!routeModeManuallySet) {
-                      setRouteMode(defaultRouteModeForTransitMode(nextMode));
-                    }
-                  }}
-                >
-                  {modeOptions.map((profile) => (
-                    <option value={profile.mode} key={profile.mode}>
-                      {profile.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="admin-segmented-field">
-                <span>开通状态</span>
-                <SegmentedControl
-                  ariaLabel="线路开通状态"
-                  className="material-mode-switch material-variant-switch"
-                  value={operationStatus}
-                  onChange={(next) =>
-                    setOperationStatus(
-                      next as NonNullable<TransitRevisionLine['operationStatus']>,
-                    )
+      {activeTab === 'basic' ? (
+        <div className="transit-line-editor-page">
+          <div className="schedule-trip-edit-grid">
+            <label>
+              <span>线路名称</span>
+              <input value={name} onChange={(event) => setName(event.currentTarget.value)} />
+            </label>
+            <label>
+              <span>交通方式</span>
+              <select
+                value={mode}
+                onChange={(event) => {
+                  const nextMode = event.currentTarget.value as TransitRevisionLine['mode'];
+                  setMode(nextMode);
+                  if (!routeModeManuallySet) {
+                    setRouteMode(defaultRouteModeForTransitMode(nextMode));
                   }
-                  options={[
-                    { value: 'operating', label: '已开通' },
-                    { value: 'planned', label: '未开通' },
-                    { value: 'closed', label: '已关闭' },
-                  ]}
-                />
-              </div>
-              <label>
-                <span>标识色</span>
-                <span className="transit-line-color-field">
-                  <input
-                    value={color}
-                    onChange={(event) => setColor(event.currentTarget.value)}
-                    placeholder="#2677e8"
-                  />
-                  <span
-                    aria-hidden="true"
-                    style={{ backgroundColor: color.trim() || line?.color || '#2f9e85' }}
-                  />
-                </span>
-              </label>
-              <label>
-                <span>最大车厢数</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={64}
-                  value={maxCarCount}
-                  onChange={(event) => setMaxCarCount(event.currentTarget.value)}
-                  placeholder="地铁/有轨可填写"
-                />
-              </label>
-              <label>
-                <span>运营方</span>
-                <input
-                  value={operator}
-                  onChange={(event) => setOperator(event.currentTarget.value)}
-                />
-              </label>
-              <label>
-                <span>公司外链（可选）</span>
-                <input
-                  type="url"
-                  maxLength={2000}
-                  value={operatorUrl}
-                  onChange={(event) => setOperatorUrl(event.currentTarget.value)}
-                  placeholder="https://..."
-                />
-              </label>
-              <label>
-                <span>票价</span>
-                <input value={fare} onChange={(event) => setFare(event.currentTarget.value)} />
-              </label>
-              <label>
-                <span>订票链接</span>
-                <input
-                  value={bookingUrl}
-                  onChange={(event) => setBookingUrl(event.currentTarget.value)}
-                  placeholder="https://..."
-                />
-              </label>
-            </div>
-          </div>
-        ) : null}
-
-        {activeTab === 'route' ? (
-          <div className="transit-line-editor-page">
-            <div className="transit-line-order-preview is-featured" aria-label="站点序列预览">
-              <TransitLineOrderMapPreview
-                color={color.trim() || line?.color}
-                segmentPaths={parsedRoute.segmentPaths}
-                stationById={stationById}
-                stationCoordinates={stationPreviewCoordinates}
-                stationSourceIds={parsedStationSourceIds}
-                tilePreviewFreshTemplate={tilePreviewFreshTemplate}
-                tilePreviewTemplate={tilePreviewTemplate}
+                }}
+              >
+                {modeOptions.map((profile) => (
+                  <option value={profile.mode} key={profile.mode}>
+                    {profile.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="admin-segmented-field">
+              <span>开通状态</span>
+              <SegmentedControl
+                ariaLabel="线路开通状态"
+                className="material-mode-switch material-variant-switch"
+                value={operationStatus}
+                onChange={(next) =>
+                  setOperationStatus(next as NonNullable<TransitRevisionLine['operationStatus']>)
+                }
+                options={[
+                  { value: 'operating', label: '已开通' },
+                  { value: 'planned', label: '未开通' },
+                  { value: 'closed', label: '已关闭' },
+                ]}
               />
             </div>
-            <div className="transit-line-route-toolbar" aria-label="线路路线操作">
-              <span>线路运行方式</span>
-              {line ? (
-                <Link
-                  className="transit-line-visual-editor-link"
-                  href={appPath(
-                    `/admin/transit/lines/${encodeURIComponent(revision.revisionId)}/${encodeURIComponent(line.sourceId)}/edit`,
-                  )}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    map
-                  </span>
-                  <span>地图编辑</span>
-                </Link>
-              ) : (
-                <button
-                  className="transit-line-visual-editor-link"
-                  type="button"
-                  disabled={isBusy}
-                  onClick={() => void saveLine('map-editor')}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    add_location_alt
-                  </span>
-                  <span>创建并地图编辑</span>
-                </button>
-              )}
-              <div className="segmented-control transit-line-path-mode-control">
-                <div>
-                  <button
-                    className={routeMode === 'straight' ? 'is-active' : ''}
-                    type="button"
-                    onClick={() => {
-                      setRouteMode('straight');
-                      setRouteModeManuallySet(true);
-                    }}
-                  >
-                    折线
-                  </button>
-                  <button
-                    className={routeMode === 'road' ? 'is-active' : ''}
-                    type="button"
-                    onClick={() => {
-                      setRouteMode('road');
-                      setRouteModeManuallySet(true);
-                    }}
-                  >
-                    沿路
-                  </button>
-                </div>
-              </div>
-              <button type="button" onClick={appendStationSourceId}>
+            <label>
+              <span>标识色</span>
+              <span className="transit-line-color-field">
+                <input
+                  value={color}
+                  onChange={(event) => setColor(event.currentTarget.value)}
+                  placeholder="#2677e8"
+                />
+                <span
+                  aria-hidden="true"
+                  style={{ backgroundColor: color.trim() || line?.color || '#2f9e85' }}
+                />
+              </span>
+            </label>
+            <label>
+              <span>最大车厢数</span>
+              <input
+                type="number"
+                min={1}
+                max={64}
+                value={maxCarCount}
+                onChange={(event) => setMaxCarCount(event.currentTarget.value)}
+                placeholder="地铁/有轨可填写"
+              />
+            </label>
+            <label>
+              <span>运营方</span>
+              <input
+                value={operator}
+                onChange={(event) => setOperator(event.currentTarget.value)}
+              />
+            </label>
+            <label>
+              <span>公司外链（可选）</span>
+              <input
+                type="url"
+                maxLength={2000}
+                value={operatorUrl}
+                onChange={(event) => setOperatorUrl(event.currentTarget.value)}
+                placeholder="https://..."
+              />
+            </label>
+            <label>
+              <span>票价</span>
+              <input value={fare} onChange={(event) => setFare(event.currentTarget.value)} />
+            </label>
+            <label>
+              <span>订票链接</span>
+              <input
+                value={bookingUrl}
+                onChange={(event) => setBookingUrl(event.currentTarget.value)}
+                placeholder="https://..."
+              />
+            </label>
+          </div>
+        </div>
+      ) : null}
+
+      {activeTab === 'route' ? (
+        <div className="transit-line-editor-page">
+          <div className="transit-line-order-preview is-featured" aria-label="站点序列预览">
+            <TransitLineOrderMapPreview
+              color={color.trim() || line?.color}
+              segmentPaths={parsedRoute.segmentPaths}
+              stationById={stationById}
+              stationCoordinates={stationPreviewCoordinates}
+              stationSourceIds={parsedStationSourceIds}
+              tilePreviewFreshTemplate={tilePreviewFreshTemplate}
+              tilePreviewTemplate={tilePreviewTemplate}
+            />
+          </div>
+          <div className="transit-line-route-toolbar" aria-label="线路路线操作">
+            <span>线路运行方式</span>
+            {line ? (
+              <Link
+                className="transit-line-visual-editor-link"
+                href={appPath(
+                  `/admin/transit/lines/${encodeURIComponent(revision.revisionId)}/${encodeURIComponent(line.sourceId)}/edit`,
+                )}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  map
+                </span>
+                <span>地图编辑</span>
+              </Link>
+            ) : (
+              <button
+                className="transit-line-visual-editor-link"
+                type="button"
+                disabled={isBusy}
+                onClick={() => void saveLine('map-editor')}
+              >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   add_location_alt
                 </span>
-                <span>添加站点</span>
+                <span>创建并地图编辑</span>
               </button>
-              <button type="button" onClick={appendWaypoint}>
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  add_road
-                </span>
-                <span>添加途径点</span>
-              </button>
-            </div>
-            <div className="transit-line-editor-route-grid">
-              <div className="transit-line-editor-stations" aria-label="线路站点">
-                <datalist id="transit-line-station-options">
-                  {revision.stations.map((station) => (
-                    <option value={station.sourceId} key={station.sourceId}>
-                      {station.name}
-                    </option>
-                  ))}
-                </datalist>
-                {routeNodeDrafts.map((node, index) => {
-                  const station =
-                    node.kind === 'station'
-                      ? stationById.get(node.stationSourceId.trim())
-                      : undefined;
-                  const stationDetail = station
-                    ? findTransitStationDetail(revision.stationDetails, line?.name, station.name)
+            )}
+            <SegmentedTabs
+              as="div"
+              className="transit-line-path-mode-control"
+              options={[
+                { value: 'straight' as const, label: '折线' },
+                { value: 'road' as const, label: '沿路' },
+              ]}
+              value={routeMode}
+              onChange={(next) => {
+                setRouteMode(next);
+                setRouteModeManuallySet(true);
+              }}
+            />
+            <button type="button" onClick={appendStationSourceId}>
+              <span className="material-symbols-outlined" aria-hidden="true">
+                add_location_alt
+              </span>
+              <span>添加站点</span>
+            </button>
+            <button type="button" onClick={appendWaypoint}>
+              <span className="material-symbols-outlined" aria-hidden="true">
+                add_road
+              </span>
+              <span>添加途径点</span>
+            </button>
+          </div>
+          <div className="transit-line-editor-route-grid">
+            <div className="transit-line-editor-stations" aria-label="线路站点">
+              <datalist id="transit-line-station-options">
+                {revision.stations.map((station) => (
+                  <option value={station.sourceId} key={station.sourceId}>
+                    {station.name}
+                  </option>
+                ))}
+              </datalist>
+              {routeNodeDrafts.map((node, index) => {
+                const station =
+                  node.kind === 'station'
+                    ? stationById.get(node.stationSourceId.trim())
                     : undefined;
-                  const stationBoundPoiRefs = station ? getTransitStationBoundPoiRefs(station) : [];
-                  const stationBoundMarkerIds = new Set(
-                    stationBoundPoiRefs.map((ref) => ref.markerId),
-                  );
-                  const stopLocationOptions = station
-                    ? getPreferredTransitStopLocationOptions(
-                        bindableStopLocationOptions,
-                        station.name,
-                        node.stopLocationRefs,
-                        stationBoundMarkerIds,
-                      )
-                    : [];
-                  const stationDefaultPoiLabel = stationBoundPoiRefs[0]?.label;
-                  return (
-                    <div
-                      className={
-                        node.kind === 'station'
-                          ? 'transit-line-editor-station-row'
-                          : 'transit-line-editor-station-row is-waypoint'
-                      }
-                      key={node.id}
-                    >
-                      {node.kind === 'station' ? (
-                        <>
-                          <label>
-                            <span>{station?.name ?? '站点'}</span>
-                            <input
-                              list="transit-line-station-options"
-                              value={node.stationSourceId}
-                              onChange={(event) =>
-                                updateRouteNode(index, {
-                                  stationSourceId: event.currentTarget.value,
-                                })
-                              }
-                              placeholder="选择或输入站点 sourceId"
-                            />
-                          </label>
-                          <button
-                            className="transit-line-station-coordinate-button"
-                            type="button"
-                            disabled={!station}
-                            onClick={() => {
-                              if (station) {
-                                onEditStation(station);
-                              }
-                            }}
-                          >
-                            <span className="material-symbols-outlined" aria-hidden="true">
-                              location_on
-                            </span>
-                            <span>
-                              {station
-                                ? `车站共享 · ${formatTransitStationBindingSummary(station)}`
-                                : '车站坐标 / 共享 POI'}
-                            </span>
-                          </button>
-                          <button
-                            className="transit-line-station-detail-button"
-                            type="button"
-                            disabled={!station || !line}
-                            onClick={() => {
-                              if (station && line) {
-                                onEditStationDetail(
-                                  stationDetail ?? createTransitStationDetailDraft(line, station),
-                                  line,
-                                  station,
-                                );
-                              }
-                            }}
-                          >
-                            <span className="material-symbols-outlined" aria-hidden="true">
-                              tune
-                            </span>
-                            <span>{stationDetail ? '站内设施' : '新增站内信息'}</span>
-                          </button>
-                        </>
-                      ) : (
-                        <div className="transit-line-waypoint-coordinate-fields">
-                          <label>
-                            <span>X 坐标</span>
-                            <input
-                              inputMode="decimal"
-                              value={node.xText}
-                              onChange={(event) =>
-                                updateRouteNode(index, { xText: event.currentTarget.value })
-                              }
-                              placeholder="X 坐标"
-                            />
-                          </label>
-                          <label>
-                            <span>Z 坐标</span>
-                            <input
-                              inputMode="decimal"
-                              value={node.zText}
-                              onChange={(event) =>
-                                updateRouteNode(index, { zText: event.currentTarget.value })
-                              }
-                              placeholder="Z 坐标"
-                            />
-                          </label>
-                        </div>
-                      )}
-                      <label>
-                        <span>方向</span>
+                const stationDetail = station
+                  ? findTransitStationDetail(revision.stationDetails, line?.name, station.name)
+                  : undefined;
+                const stationBoundPoiRefs = station ? getTransitStationBoundPoiRefs(station) : [];
+                const stationBoundMarkerIds = new Set(
+                  stationBoundPoiRefs.map((ref) => ref.markerId),
+                );
+                const stopLocationOptions = station
+                  ? getPreferredTransitStopLocationOptions(
+                      bindableStopLocationOptions,
+                      station.name,
+                      node.stopLocationRefs,
+                      stationBoundMarkerIds,
+                    )
+                  : [];
+                const stationDefaultPoiLabel = stationBoundPoiRefs[0]?.label;
+                return (
+                  <div
+                    className={
+                      node.kind === 'station'
+                        ? 'transit-line-editor-station-row'
+                        : 'transit-line-editor-station-row is-waypoint'
+                    }
+                    key={node.id}
+                  >
+                    {node.kind === 'station' ? (
+                      <>
+                        <label>
+                          <span>{station?.name ?? '站点'}</span>
+                          <input
+                            list="transit-line-station-options"
+                            value={node.stationSourceId}
+                            onChange={(event) =>
+                              updateRouteNode(index, {
+                                stationSourceId: event.currentTarget.value,
+                              })
+                            }
+                            placeholder="选择或输入站点 sourceId"
+                          />
+                        </label>
+                        <button
+                          className="transit-line-station-coordinate-button"
+                          type="button"
+                          disabled={!station}
+                          onClick={() => {
+                            if (station) {
+                              onEditStation(station);
+                            }
+                          }}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            location_on
+                          </span>
+                          <span>
+                            {station
+                              ? `车站共享 · ${formatTransitStationBindingSummary(station)}`
+                              : '车站坐标 / 共享 POI'}
+                          </span>
+                        </button>
+                        <button
+                          className="transit-line-station-detail-button"
+                          type="button"
+                          disabled={!station || !line}
+                          onClick={() => {
+                            if (station && line) {
+                              onEditStationDetail(
+                                stationDetail ?? createTransitStationDetailDraft(line, station),
+                                line,
+                                station,
+                              );
+                            }
+                          }}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            tune
+                          </span>
+                          <span>{stationDetail ? '站内设施' : '新增站内信息'}</span>
+                        </button>
+                      </>
+                    ) : (
+                      <div className="transit-line-waypoint-coordinate-fields">
+                        <label>
+                          <span>X 坐标</span>
+                          <input
+                            inputMode="decimal"
+                            value={node.xText}
+                            onChange={(event) =>
+                              updateRouteNode(index, { xText: event.currentTarget.value })
+                            }
+                            placeholder="X 坐标"
+                          />
+                        </label>
+                        <label>
+                          <span>Z 坐标</span>
+                          <input
+                            inputMode="decimal"
+                            value={node.zText}
+                            onChange={(event) =>
+                              updateRouteNode(index, { zText: event.currentTarget.value })
+                            }
+                            placeholder="Z 坐标"
+                          />
+                        </label>
+                      </div>
+                    )}
+                    <label>
+                      <span>方向</span>
+                      <select
+                        value={node.direction}
+                        onChange={(event) =>
+                          updateRouteNode(index, {
+                            direction: event.currentTarget
+                              .value as TransitLineRouteNodeDraft['direction'],
+                          })
+                        }
+                      >
+                        <option value="both">双向</option>
+                        <option value="down">仅正向（按站序）</option>
+                        <option value="up">仅反向（逆站序）</option>
+                      </select>
+                    </label>
+                    {node.kind === 'station' ? (
+                      <label className="transit-line-stop-location-primary">
+                        <span>本线路停靠 POI</span>
                         <select
-                          value={node.direction}
+                          value={
+                            node.stopLocationRefs?.find((ref) => ref.scope === 'both')?.markerId ??
+                            ''
+                          }
+                          disabled={!station}
                           onChange={(event) =>
-                            updateRouteNode(index, {
-                              direction: event.currentTarget
-                                .value as TransitLineRouteNodeDraft['direction'],
-                            })
+                            updateStopLocation(index, 'both', event.currentTarget.value)
                           }
                         >
-                          <option value="both">双向</option>
-                          <option value="down">仅正向（按站序）</option>
-                          <option value="up">仅反向（逆站序）</option>
+                          <option value="">
+                            {stationDefaultPoiLabel
+                              ? `跟随车站默认（${stationDefaultPoiLabel}）`
+                              : '跟随车站默认位置'}
+                          </option>
+                          {stopLocationOptions.map((option) => (
+                            <option value={option.marker.id} key={option.marker.id}>
+                              {`${option.marker.label} · ${formatTransitCoordinatePair(option.coordinate)}`}
+                            </option>
+                          ))}
                         </select>
                       </label>
-                      {node.kind === 'station' ? (
-                        <label className="transit-line-stop-location-primary">
-                          <span>本线路停靠 POI</span>
-                          <select
-                            value={
-                              node.stopLocationRefs?.find((ref) => ref.scope === 'both')
-                                ?.markerId ?? ''
-                            }
-                            disabled={!station}
-                            onChange={(event) =>
-                              updateStopLocation(index, 'both', event.currentTarget.value)
-                            }
-                          >
-                            <option value="">
-                              {stationDefaultPoiLabel
-                                ? `跟随车站默认（${stationDefaultPoiLabel}）`
-                                : '跟随车站默认位置'}
-                            </option>
-                            {stopLocationOptions.map((option) => (
-                              <option value={option.marker.id} key={option.marker.id}>
-                                {`${option.marker.label} · ${formatTransitCoordinatePair(option.coordinate)}`}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : null}
-                      {node.kind === 'station' ? (
-                        <details className="transit-line-stop-location-editor">
-                          <summary>
-                            <span className="material-symbols-outlined" aria-hidden="true">
-                              pin_drop
-                            </span>
-                            <span>
-                              分方向覆盖
-                              {node.stopLocationRefs?.some((ref) => ref.scope !== 'both')
-                                ? ` · ${formatTransitStopLocationSelectionSummary(
-                                    node.stopLocationRefs.filter((ref) => ref.scope !== 'both'),
-                                  )}`
-                                : ' · 本轮方向跟随本线路停靠 POI'}
-                            </span>
-                          </summary>
-                          <div>
-                            {(
-                              [
-                                ['down', `正向 · 去 ${forwardTerminalName}`],
-                                ['up', `反向 · 去 ${reverseTerminalName}`],
-                              ] as const
-                            ).map(([scope, label]) => (
-                              <label key={scope}>
-                                <span>{label}</span>
-                                <select
-                                  value={
-                                    node.stopLocationRefs?.find((ref) => ref.scope === scope)
-                                      ?.markerId ?? ''
-                                  }
-                                  disabled={!station}
-                                  onChange={(event) =>
-                                    updateStopLocation(index, scope, event.currentTarget.value)
-                                  }
-                                >
-                                  <option value="">跟随本线路停靠 POI</option>
-                                  {stopLocationOptions.map((option) => (
-                                    <option value={option.marker.id} key={option.marker.id}>
-                                      {`${option.marker.label} · ${formatTransitCoordinatePair(option.coordinate)}`}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                            ))}
-                          </div>
-                          <p className="muted">
-                            分方向设置优先于本线路停靠 POI；都未设置时使用车站共享的默认
-                            POI。同一车站绑定多个 POI 或出口时，可分别给不同线路指定各自的停靠位置。
-                          </p>
-                        </details>
-                      ) : null}
-                      <div className="transit-line-editor-row-actions">
-                        <button
-                          type="button"
-                          aria-label={node.kind === 'station' ? '上移站点' : '上移途径点'}
-                          disabled={index === 0}
-                          onClick={() => moveRouteNode(index, -1)}
-                        >
+                    ) : null}
+                    {node.kind === 'station' ? (
+                      <details className="transit-line-stop-location-editor">
+                        <summary>
                           <span className="material-symbols-outlined" aria-hidden="true">
-                            arrow_upward
+                            pin_drop
                           </span>
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={node.kind === 'station' ? '下移站点' : '下移途径点'}
-                          disabled={index >= routeNodeDrafts.length - 1}
-                          onClick={() => moveRouteNode(index, 1)}
-                        >
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            arrow_downward
+                          <span>
+                            分方向覆盖
+                            {node.stopLocationRefs?.some((ref) => ref.scope !== 'both')
+                              ? ` · ${formatTransitStopLocationSelectionSummary(
+                                  node.stopLocationRefs.filter((ref) => ref.scope !== 'both'),
+                                )}`
+                              : ' · 本轮方向跟随本线路停靠 POI'}
                           </span>
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={node.kind === 'station' ? '删除站点' : '删除途径点'}
-                          onClick={() => removeRouteNode(index)}
-                        >
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            close
-                          </span>
-                        </button>
-                      </div>
+                        </summary>
+                        <div>
+                          {(
+                            [
+                              ['down', `正向 · 去 ${forwardTerminalName}`],
+                              ['up', `反向 · 去 ${reverseTerminalName}`],
+                            ] as const
+                          ).map(([scope, label]) => (
+                            <label key={scope}>
+                              <span>{label}</span>
+                              <select
+                                value={
+                                  node.stopLocationRefs?.find((ref) => ref.scope === scope)
+                                    ?.markerId ?? ''
+                                }
+                                disabled={!station}
+                                onChange={(event) =>
+                                  updateStopLocation(index, scope, event.currentTarget.value)
+                                }
+                              >
+                                <option value="">跟随本线路停靠 POI</option>
+                                {stopLocationOptions.map((option) => (
+                                  <option value={option.marker.id} key={option.marker.id}>
+                                    {`${option.marker.label} · ${formatTransitCoordinatePair(option.coordinate)}`}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ))}
+                        </div>
+                        <p className="muted">
+                          分方向设置优先于本线路停靠 POI；都未设置时使用车站共享的默认
+                          POI。同一车站绑定多个 POI 或出口时，可分别给不同线路指定各自的停靠位置。
+                        </p>
+                      </details>
+                    ) : null}
+                    <div className="transit-line-editor-row-actions">
+                      <button
+                        type="button"
+                        aria-label={node.kind === 'station' ? '上移站点' : '上移途径点'}
+                        disabled={index === 0}
+                        onClick={() => moveRouteNode(index, -1)}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          arrow_upward
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={node.kind === 'station' ? '下移站点' : '下移途径点'}
+                        disabled={index >= routeNodeDrafts.length - 1}
+                        onClick={() => moveRouteNode(index, 1)}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          arrow_downward
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={node.kind === 'station' ? '删除站点' : '删除途径点'}
+                        onClick={() => removeRouteNode(index)}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          close
+                        </span>
+                      </button>
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          {parsedStationSourceIds.length > 1 && routeMode === 'road' ? (
+            <fieldset className="transit-line-segment-time-editor">
+              <legend>道路区间运行时间</legend>
+              <p className="muted">
+                客运班次优先采用这里的区间分钟；留空时按地图道路、后台客运速度与路口延误估算。
+              </p>
+              <div className="transit-line-segment-time-grid">
+                {parsedStationSourceIds.slice(0, -1).map((fromStationSourceId, index) => {
+                  const toStationSourceId = parsedStationSourceIds[index + 1] ?? '';
+                  const key = getTransitSegmentPathKey(fromStationSourceId, toStationSourceId);
+                  const fromName =
+                    stationById.get(fromStationSourceId)?.name ?? fromStationSourceId;
+                  const toName = stationById.get(toStationSourceId)?.name ?? toStationSourceId;
+                  return (
+                    <label key={key}>
+                      <span>{`${fromName} → ${toName}`}</span>
+                      <span className="transit-line-segment-time-input">
+                        <input
+                          type="number"
+                          min={0.01}
+                          max={1440}
+                          step={0.01}
+                          value={segmentTravelMinutes[key] ?? ''}
+                          onChange={(event) => {
+                            const value = event.currentTarget.value;
+                            setSegmentTravelMinutes((current) => ({ ...current, [key]: value }));
+                            setError('');
+                          }}
+                          placeholder="分钟"
+                        />
+                        <span>分钟</span>
+                      </span>
+                    </label>
                   );
                 })}
               </div>
-            </div>
-            {parsedStationSourceIds.length > 1 && routeMode === 'road' ? (
-              <fieldset className="transit-line-segment-time-editor">
-                <legend>道路区间运行时间</legend>
-                <p className="muted">
-                  客运班次优先采用这里的区间分钟；留空时按地图道路、后台客运速度与路口延误估算。
-                </p>
-                <div className="transit-line-segment-time-grid">
-                  {parsedStationSourceIds.slice(0, -1).map((fromStationSourceId, index) => {
-                    const toStationSourceId = parsedStationSourceIds[index + 1] ?? '';
-                    const key = getTransitSegmentPathKey(fromStationSourceId, toStationSourceId);
-                    const fromName =
-                      stationById.get(fromStationSourceId)?.name ?? fromStationSourceId;
-                    const toName = stationById.get(toStationSourceId)?.name ?? toStationSourceId;
-                    return (
-                      <label key={key}>
-                        <span>{`${fromName} → ${toName}`}</span>
-                        <span className="transit-line-segment-time-input">
-                          <input
-                            type="number"
-                            min={0.01}
-                            max={1440}
-                            step={0.01}
-                            value={segmentTravelMinutes[key] ?? ''}
-                            onChange={(event) => {
-                              const value = event.currentTarget.value;
-                              setSegmentTravelMinutes((current) => ({ ...current, [key]: value }));
-                              setError('');
-                            }}
-                            placeholder="分钟"
-                          />
-                          <span>分钟</span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </fieldset>
-            ) : null}
-          </div>
-        ) : null}
-
-        {activeTab === 'schedule' ? (
-          <div className="transit-line-editor-page">
-            <div className="schedule-trip-edit-grid">
-              <label>
-                <span>首班车</span>
-                <input
-                  value={firstBus}
-                  onChange={(event) => setFirstBus(event.currentTarget.value)}
-                />
-              </label>
-              <label>
-                <span>末班车</span>
-                <input
-                  value={lastBus}
-                  onChange={(event) => setLastBus(event.currentTarget.value)}
-                />
-              </label>
-            </div>
-            <label>
-              <span>运营日期规则（旧版文本，已停用）</span>
-              <input
-                value={operatingDateRule}
-                readOnly
-                aria-disabled="true"
-                placeholder="历史文本，仅保留展示"
-              />
-              <span className="muted">
-                班次级规则改为在「班次工作台」的运营日历中维护；此处文本不再参与判定。
-              </span>
-            </label>
-            {line ? (
-              <section
-                className="transit-line-schedule-chart-entry"
-                aria-label="运营配置中的班次工作台入口"
-              >
-                <div className="section-heading">
-                  <div>
-                    <h3>班次工作台</h3>
-                    <p className="muted">
-                      本页签配置线路的首末班与运营日规则；发车时刻、班次标签、停站方向与运行图已合并为独立工作台，在折线运行图上直接调整每个班次的停站时刻。
-                    </p>
-                  </div>
-                  <Link
-                    className="transit-line-schedule-workbench-link"
-                    href={appPath(
-                      `/admin/transit/lines/${encodeURIComponent(revision.revisionId)}/${encodeURIComponent(line.sourceId)}/schedule`,
-                    )}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      timeline
-                    </span>
-                    <span>打开班次工作台</span>
-                  </Link>
-                </div>
-                <p className="muted">
-                  工作台按发车时刻对齐保留已手工调整的班次；新增时刻会生成新班次，停站与通过状态逐班次保存。
-                </p>
-              </section>
-            ) : (
-              <p className="muted">新线路保存后，才能进入班次工作台。</p>
-            )}
-          </div>
-        ) : null}
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
-          </button>
-          <button type="submit" disabled={isBusy}>
-            {line ? '保存线路' : '创建线路'}
-          </button>
+            </fieldset>
+          ) : null}
         </div>
-      </form>
-    </div>
+      ) : null}
+
+      {activeTab === 'schedule' ? (
+        <div className="transit-line-editor-page">
+          <div className="schedule-trip-edit-grid">
+            <label>
+              <span>首班车</span>
+              <input
+                value={firstBus}
+                onChange={(event) => setFirstBus(event.currentTarget.value)}
+              />
+            </label>
+            <label>
+              <span>末班车</span>
+              <input value={lastBus} onChange={(event) => setLastBus(event.currentTarget.value)} />
+            </label>
+          </div>
+          <label>
+            <span>运营日期规则（旧版文本，已停用）</span>
+            <input
+              value={operatingDateRule}
+              readOnly
+              aria-disabled="true"
+              placeholder="历史文本，仅保留展示"
+            />
+            <span className="muted">
+              班次级规则改为在「班次工作台」的运营日历中维护；此处文本不再参与判定。
+            </span>
+          </label>
+          {line ? (
+            <section
+              className="transit-line-schedule-chart-entry"
+              aria-label="运营配置中的班次工作台入口"
+            >
+              <div className="section-heading">
+                <div>
+                  <h3>班次工作台</h3>
+                  <p className="muted">
+                    本页签配置线路的首末班与运营日规则；发车时刻、班次标签、停站方向与运行图已合并为独立工作台，在折线运行图上直接调整每个班次的停站时刻。
+                  </p>
+                </div>
+                <Link
+                  className="transit-line-schedule-workbench-link"
+                  href={appPath(
+                    `/admin/transit/lines/${encodeURIComponent(revision.revisionId)}/${encodeURIComponent(line.sourceId)}/schedule`,
+                  )}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    timeline
+                  </span>
+                  <span>打开班次工作台</span>
+                </Link>
+              </div>
+              <p className="muted">
+                工作台按发车时刻对齐保留已手工调整的班次；新增时刻会生成新班次，停站与通过状态逐班次保存。
+              </p>
+            </section>
+          ) : (
+            <p className="muted">新线路保存后，才能进入班次工作台。</p>
+          )}
+        </div>
+      ) : null}
+      {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+      <div className="admin-content-actions">
+        <button type="button" onClick={onClose} disabled={isBusy}>
+          取消
+        </button>
+        <button type="submit" disabled={isBusy}>
+          {line ? '保存线路' : '创建线路'}
+        </button>
+      </div>
+    </Modal>
   );
 }
 

@@ -41,6 +41,7 @@ import { MaterialSymbol } from './material-symbol';
 import { PoiFacilityEditor, PoiFacilityRow } from './poi-facility-editor';
 import { ProgressiveImage } from './progressive-image';
 import { SegmentedControl } from './segmented-control';
+import { SegmentedTabs } from './ui/segmented-control';
 import type { SegmentedControlOption } from './segmented-control';
 import { VisualEditorShell } from './visual-editor-shell';
 import { EditorToolbar } from './editor/editor-toolbar';
@@ -65,6 +66,11 @@ import { useEditorPanels } from '../lib/editor/use-editor-panels';
 import type { EditorTool } from '../lib/editor/types';
 import { useEditorShortcuts } from '../lib/editor/use-editor-shortcuts';
 import { useListKeyboardNavigation } from './use-list-keyboard-navigation';
+import { StatusChip } from './ui/chip';
+import { CheckboxRow } from './ui/checkbox-row';
+import { Field, Input, Select, Textarea } from './ui/field';
+import { Button, ButtonLink, IconButton } from './ui/button';
+import { Modal } from './ui/modal';
 
 type StatusFilter = PoiSubmissionStatus | 'all' | 'todo' | 'blocked' | 'legacy';
 type PoiAdminSection = 'submissions' | 'categories';
@@ -1629,22 +1635,13 @@ export function AdminPoiPanel({
           />
         </div>
       </div>
-      <fieldset className="segmented-control admin-page-segmented-control">
-        <legend>工作区</legend>
-        <div>
-          {poiAdminSectionOptions.map((option) => (
-            <button
-              className={activeSection === option.value ? 'is-active' : ''}
-              type="button"
-              aria-pressed={activeSection === option.value}
-              key={option.value}
-              onClick={() => setActiveSection(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </fieldset>
+      <SegmentedTabs
+        label="工作区"
+        className="admin-page-segmented-control"
+        options={poiAdminSectionOptions}
+        value={activeSection}
+        onChange={setActiveSection}
+      />
 
       {activeSection === 'submissions' ? (
         <>
@@ -1722,17 +1719,15 @@ export function AdminPoiPanel({
           </div>
 
           <div className="admin-content-bulk-bar" aria-label="POI 投稿批量操作">
-            <label className="checkbox-row admin-content-bulk-select">
-              <input
-                type="checkbox"
-                checked={isAllVisiblePoiItemsSelected}
-                disabled={visiblePoiRecordCount === 0}
-                onChange={toggleVisiblePoiSelection}
-              />
-              <span>{`选择当前列表 ${
+            <CheckboxRow
+              className="admin-content-bulk-select"
+              checked={isAllVisiblePoiItemsSelected}
+              disabled={visiblePoiRecordCount === 0}
+              onChange={toggleVisiblePoiSelection}
+              label={`选择当前列表 ${
                 selectedVisibleSubmissions.length + selectedVisibleLegacyMarkers.length
-              }/${visiblePoiRecordCount}`}</span>
-            </label>
+              }/${visiblePoiRecordCount}`}
+            />
             <span className="muted">
               {`已选 ${selectedPoiRecordCount} 条，其中投稿 ${selectedSubmissions.length} 条、旧标记点 ${selectedLegacyMarkers.length} 个；可通过 ${selectedPendingReviewSubmissions.length} 条，可发布 ${selectedPublishReadySubmissions.length} 条`}
               {selectedBlockedPublishSubmissions.length > 0
@@ -2100,7 +2095,9 @@ function LegacyPoiMarkerItem({
       <div>
         <div className="admin-poi-title-row">
           <strong>{marker.label}</strong>
-          <span className="admin-poi-status-chip is-legacy">旧有数据</span>
+          <StatusChip variant="poi" tone="legacy">
+            旧有数据
+          </StatusChip>
         </div>
         <p className="muted">
           {marker.categoryId ? formatCategoryName(marker.categoryId, category) : '未分类'} ·{' '}
@@ -2186,12 +2183,9 @@ function PoiTranslationSection({
       {translation?.roadSignPinyin ? (
         <p className="muted">{`路牌拼音：${translation.roadSignPinyin}`}</p>
       ) : null}
-      <a className="secondary-action-button" href={appPath('/admin/translations')}>
-        <span className="material-symbols-outlined" aria-hidden="true">
-          translate
-        </span>
-        <span>打开名称翻译后台</span>
-      </a>
+      <ButtonLink variant="secondary" href={appPath('/admin/translations')} icon="translate">
+        打开名称翻译后台
+      </ButtonLink>
     </PoiEditorSection>
   );
 }
@@ -2275,29 +2269,24 @@ function PoiStationBindingsSection({
                 <p className="muted">该车站尚未维护站内信息。</p>
               )}
               {binding.lines[0] ? (
-                <a
-                  className="secondary-action-button"
+                <ButtonLink
+                  variant="secondary"
                   href={appPath(
                     `/admin/transit?section=lines&lineId=${encodeURIComponent(binding.lines[0].id)}`,
                   )}
+                  icon="directions_transit"
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    directions_transit
-                  </span>
-                  <span>打开线路与班次后台</span>
-                </a>
+                  打开线路与班次后台
+                </ButtonLink>
               ) : null}
             </div>
           ))}
         </div>
       )}
       {!bindings?.length ? (
-        <a className="secondary-action-button" href={appPath('/admin/transit')}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            directions_transit
-          </span>
-          <span>打开线路与班次后台</span>
-        </a>
+        <ButtonLink variant="secondary" href={appPath('/admin/transit')} icon="directions_transit">
+          打开线路与班次后台
+        </ButtonLink>
       ) : null}
     </PoiEditorSection>
   );
@@ -2680,8 +2669,7 @@ function PoiSpatialMetadataEditor({
               className="material-mode-switch material-variant-switch"
               value={normalizedValue?.networkKind ?? ''}
               onChange={(next) => {
-                const networkKind =
-                  (next as MapMarkerSpatialMetadata['networkKind']) || undefined;
+                const networkKind = (next as MapMarkerSpatialMetadata['networkKind']) || undefined;
                 update({
                   networkKind,
                   allowedModes:
@@ -3206,21 +3194,15 @@ function EditLegacyPoiMarkerDialog({
       return (
         <VisualEditorShell
           actions={
-            <button
-              className="secondary-action-button is-primary"
-              type="button"
-              aria-busy={isBusy}
+            <Button
+              variant="primary"
+              icon="save"
+              loading={isBusy}
               disabled={isBusy}
               onClick={() => void save()}
             >
-              <span
-                className={`material-symbols-outlined${isBusy ? ' busy-state-indicator' : ''}`}
-                aria-hidden="true"
-              >
-                {isBusy ? 'progress_activity' : 'save'}
-              </span>
-              <span>{isBusy ? '保存中' : '保存简介'}</span>
-            </button>
+              {isBusy ? '保存中' : '保存简介'}
+            </Button>
           }
           backHref={pageBackHref}
           editorKind="poi"
@@ -3249,21 +3231,15 @@ function EditLegacyPoiMarkerDialog({
     return (
       <VisualEditorShell
         actions={
-          <button
-            className="secondary-action-button is-primary"
-            type="button"
-            aria-busy={isBusy}
+          <Button
+            variant="primary"
+            icon="save"
+            loading={isBusy}
             disabled={isBusy}
             onClick={() => void save()}
           >
-            <span
-              className={`material-symbols-outlined${isBusy ? ' busy-state-indicator' : ''}`}
-              aria-hidden="true"
-            >
-              {isBusy ? 'progress_activity' : 'save'}
-            </span>
-            <span>{isBusy ? '保存中' : '保存几何'}</span>
-          </button>
+            {isBusy ? '保存中' : '保存几何'}
+          </Button>
         }
         backHref={pageBackHref}
         editorKind="poi"
@@ -3298,16 +3274,14 @@ function EditLegacyPoiMarkerDialog({
   const geometryEditorElement = (
     <PoiEditorSection summary={geometryLabelFromDraft(geometryDraft)} title="几何">
       <p className="muted">{`中点 ${geometryMetrics.center} · ${geometryMetrics.detail}`}</p>
-      <a
-        className="secondary-action-button"
+      <ButtonLink
+        variant="secondary"
         href={appPath(`/admin/map-poi/editor?markerId=${encodeURIComponent(marker.id)}`)}
         onClick={(event) => void openPoiWorkspaceWithConfirm(event, isDirty)}
+        icon="edit_location_alt"
       >
-        <span className="material-symbols-outlined" aria-hidden="true">
-          edit_location_alt
-        </span>
-        <span>打开几何工作台</span>
-      </a>
+        打开几何工作台
+      </ButtonLink>
     </PoiEditorSection>
   );
 
@@ -3322,27 +3296,24 @@ function EditLegacyPoiMarkerDialog({
           .filter(Boolean)
           .join(' · ')}
       </p>
-      <a
-        className="secondary-action-button"
+      <ButtonLink
+        variant="secondary"
         href={appPath(`/admin/map-poi/intro-editor?markerId=${encodeURIComponent(marker.id)}`)}
         onClick={(event) => void openPoiWorkspaceWithConfirm(event, isDirty)}
+        icon="article"
       >
-        <span className="material-symbols-outlined" aria-hidden="true">
-          article
-        </span>
-        <span>打开简介工作台</span>
-      </a>
+        打开简介工作台
+      </ButtonLink>
     </PoiEditorSection>
   );
 
   const formElement = (
-    <form
-      className="modal-panel admin-poi-edit-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="admin-legacy-poi-edit-title"
-      onMouseDown={(event) => event.stopPropagation()}
+    <Modal
+      as="form"
+      className="admin-poi-edit-dialog"
+      labelledBy="admin-legacy-poi-edit-title"
       onSubmit={submit}
+      onBackdropClick={onClose}
     >
       <div className="section-heading">
         <h2 id="admin-legacy-poi-edit-title">编辑旧有 POI</h2>
@@ -3465,14 +3436,10 @@ function EditLegacyPoiMarkerDialog({
           保存修改
         </button>
       </div>
-    </form>
+    </Modal>
   );
 
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      {formElement}
-    </div>
-  );
+  return formElement;
 }
 
 function PoiCategoryBoard({
@@ -3540,17 +3507,9 @@ function PoiCategoryBoard({
         <button type="button" onClick={onResetFilters}>
           重置筛选
         </button>
-        <button
-          className="secondary-action-button is-primary"
-          type="button"
-          disabled={isBusy}
-          onClick={onEdit}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            tune
-          </span>
-          <span>编辑分类与图标</span>
-        </button>
+        <Button variant="primary" icon="tune" disabled={isBusy} onClick={onEdit}>
+          编辑分类与图标
+        </Button>
       </div>
       <div className="admin-content-list" aria-label="POI 分类记录">
         {categories.map((category) => (
@@ -3565,18 +3524,17 @@ function PoiCategoryBoard({
                     {category.iconMapping.defaultIconFileName || '未设置'}
                   </p>
                 </div>
-                <span
-                  className={`admin-poi-status-chip is-${
-                    category.acceptsPublicSubmissions ? 'approved' : 'rejected'
-                  }`}
+                <StatusChip
+                  variant="poi"
+                  tone={category.acceptsPublicSubmissions ? 'approved' : 'rejected'}
                 >
                   {category.acceptsPublicSubmissions ? '允许公开投稿' : '不允许公开投稿'}
-                </span>
+                </StatusChip>
               </div>
               <div className="operation-tag-list">
-                <span className="operation-tag">{`图标 ${category.iconMapping.iconFileNames.length}`}</span>
+                <StatusChip>{`图标 ${category.iconMapping.iconFileNames.length}`}</StatusChip>
                 {category.iconMapping.iconFileNames.length > 1 ? (
-                  <span className="operation-tag is-accent">多图标配置</span>
+                  <StatusChip tone="accent">多图标配置</StatusChip>
                 ) : null}
               </div>
               <div
@@ -3603,7 +3561,7 @@ function PoiCategoryBoard({
                   </span>
                 ))}
                 {category.iconMapping.iconFileNames.length > 3 ? (
-                  <span className="operation-tag">{`其余 ${category.iconMapping.iconFileNames.length - 3} 个`}</span>
+                  <StatusChip>{`其余 ${category.iconMapping.iconFileNames.length - 3} 个`}</StatusChip>
                 ) : null}
               </div>
             </div>
@@ -3736,30 +3694,30 @@ function PoiSubmissionReviewItem({
               {statusLabel(submission.status)} · {geometryLabel(submission.geometry)}
             </p>
           </div>
-          <span className={`admin-poi-status-chip is-${submission.status}`}>
+          <StatusChip variant="poi" tone={submission.status}>
             {statusLabel(submission.status)}
-          </span>
+          </StatusChip>
         </div>
         <div className="operation-tag-list">
-          <span className="operation-tag">{geometryLabel(submission.geometry)}</span>
+          <StatusChip>{geometryLabel(submission.geometry)}</StatusChip>
           {hasConflicts ? (
-            <span className="operation-tag is-warning">{`冲突 ${conflictSummary}`}</span>
+            <StatusChip tone="warning">{`冲突 ${conflictSummary}`}</StatusChip>
           ) : null}
-          {rejectedImage ? <span className="operation-tag is-warning">图片不合格</span> : null}
-          {unreviewedImage ? <span className="operation-tag">图片待审</span> : null}
-          {hierarchyHint ? <span className="operation-tag">疑似父子地点</span> : null}
-          {submission.parentMarkerId ? <span className="operation-tag">已绑定父地点</span> : null}
+          {rejectedImage ? <StatusChip tone="warning">图片不合格</StatusChip> : null}
+          {unreviewedImage ? <StatusChip>图片待审</StatusChip> : null}
+          {hierarchyHint ? <StatusChip>疑似父子地点</StatusChip> : null}
+          {submission.parentMarkerId ? <StatusChip>已绑定父地点</StatusChip> : null}
           {submission.boundRegionMarkerIds?.length ? (
-            <span className="operation-tag">{`绑定区域 ${submission.boundRegionMarkerIds.length}`}</span>
+            <StatusChip>{`绑定区域 ${submission.boundRegionMarkerIds.length}`}</StatusChip>
           ) : null}
-          {submission.description ? <span className="operation-tag">已填写简介</span> : null}
-          {submission.openingHours ? <span className="operation-tag">已填写营业时间</span> : null}
-          {submission.address ? <span className="operation-tag">已填写地址</span> : null}
+          {submission.description ? <StatusChip>已填写简介</StatusChip> : null}
+          {submission.openingHours ? <StatusChip>已填写营业时间</StatusChip> : null}
+          {submission.address ? <StatusChip>已填写地址</StatusChip> : null}
           {submission.floorLabel ? (
-            <span className="operation-tag">{`楼层 ${submission.floorLabel}`}</span>
+            <StatusChip>{`楼层 ${submission.floorLabel}`}</StatusChip>
           ) : null}
           {submission.facilities?.length ? (
-            <span className="operation-tag">{`设施 ${submission.facilities.length}`}</span>
+            <StatusChip>{`设施 ${submission.facilities.length}`}</StatusChip>
           ) : null}
         </div>
         {representativeCoordinate ? (
@@ -3993,121 +3951,117 @@ function PoiSubmissionDetailDialog({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <section
-        className="modal-panel admin-poi-detail-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-poi-detail-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2 id="admin-poi-detail-title">POI 投稿详情</h2>
-          <span className="muted">{submission.title}</span>
-        </div>
-        <div className="admin-toolbar admin-poi-toolbar">
-          <button
-            type="button"
-            onClick={onEdit}
-            disabled={isBusy || !canEditPoiSubmission(submission.status)}
-          >
-            修正资料
-          </button>
-          <button
-            type="button"
-            disabled={isBusy || !canDeletePoiSubmission(submission.status)}
-            onClick={onDelete}
-          >
-            删除
-          </button>
-          <button
-            type="button"
-            disabled={isBusy || submission.status !== 'pending_review'}
-            onClick={() => void onRunAction(submission.id, 'approve')}
-          >
-            通过
-          </button>
-          <button
-            type="button"
-            disabled={isBusy || submission.status !== 'pending_review'}
-            onClick={onReject}
-          >
-            驳回
-          </button>
-          <button
-            type="button"
-            disabled={isBusy || submission.status !== 'approved'}
-            onClick={onPublish}
-          >
-            发布
-          </button>
-          <button
-            type="button"
-            disabled={isBusy || submission.status !== 'approved'}
-            onClick={() => requestPageWindow(mapHref, '地图查看')}
-          >
-            地图查看
-          </button>
-          <button
-            type="button"
-            disabled={!representativeCoordinate}
-            onClick={() =>
-              representativeCoordinate
-                ? void copyText(
-                    formatCoordinatePair(representativeCoordinate),
-                    `已复制 ${submission.title} 的代表坐标。`,
-                  )
-                : undefined
-            }
-          >
-            复制坐标
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              void copyText(
-                JSON.stringify(submission.geometry, null, 2),
-                `已复制 ${submission.title} 的几何 JSON。`,
-              )
-            }
-          >
-            复制几何
-          </button>
-        </div>
-        {conflictHints.length > 0 ? (
-          <PoiConflictHintList
-            conflictDecisionByKey={conflictDecisionByKey}
-            hints={conflictHints}
-            isBusy={isBusy}
-            onDecision={onConflictDecision}
-            submission={submission}
-          />
-        ) : null}
-        {getPoiImageUrls(submission).length > 0 ? (
-          <PoiSubmissionImagePreview
-            imageReviews={imageReviews}
-            isBusy={isBusy}
-            onReview={onImageReview}
-            submission={submission}
-          />
-        ) : null}
-        <PoiSubmissionDetail
-          category={category}
-          contextMarkers={contextMarkers}
-          formatActor={formatActor}
-          formatRoadMarker={formatRoadMarker}
-          hierarchyHint={hierarchyHint}
-          representativeCoordinate={representativeCoordinate}
+    <Modal
+      labelledBy="admin-poi-detail-title"
+      className="admin-poi-detail-dialog"
+      onBackdropClick={onClose}
+    >
+      <div className="section-heading">
+        <h2 id="admin-poi-detail-title">POI 投稿详情</h2>
+        <span className="muted">{submission.title}</span>
+      </div>
+      <div className="admin-toolbar admin-poi-toolbar">
+        <button
+          type="button"
+          onClick={onEdit}
+          disabled={isBusy || !canEditPoiSubmission(submission.status)}
+        >
+          修正资料
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || !canDeletePoiSubmission(submission.status)}
+          onClick={onDelete}
+        >
+          删除
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || submission.status !== 'pending_review'}
+          onClick={() => void onRunAction(submission.id, 'approve')}
+        >
+          通过
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || submission.status !== 'pending_review'}
+          onClick={onReject}
+        >
+          驳回
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || submission.status !== 'approved'}
+          onClick={onPublish}
+        >
+          发布
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || submission.status !== 'approved'}
+          onClick={() => requestPageWindow(mapHref, '地图查看')}
+        >
+          地图查看
+        </button>
+        <button
+          type="button"
+          disabled={!representativeCoordinate}
+          onClick={() =>
+            representativeCoordinate
+              ? void copyText(
+                  formatCoordinatePair(representativeCoordinate),
+                  `已复制 ${submission.title} 的代表坐标。`,
+                )
+              : undefined
+          }
+        >
+          复制坐标
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            void copyText(
+              JSON.stringify(submission.geometry, null, 2),
+              `已复制 ${submission.title} 的几何 JSON。`,
+            )
+          }
+        >
+          复制几何
+        </button>
+      </div>
+      {conflictHints.length > 0 ? (
+        <PoiConflictHintList
+          conflictDecisionByKey={conflictDecisionByKey}
+          hints={conflictHints}
+          isBusy={isBusy}
+          onDecision={onConflictDecision}
           submission={submission}
-          tilePreviewConfig={tilePreviewConfig}
         />
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose}>
-            关闭
-          </button>
-        </div>
-      </section>
-    </div>
+      ) : null}
+      {getPoiImageUrls(submission).length > 0 ? (
+        <PoiSubmissionImagePreview
+          imageReviews={imageReviews}
+          isBusy={isBusy}
+          onReview={onImageReview}
+          submission={submission}
+        />
+      ) : null}
+      <PoiSubmissionDetail
+        category={category}
+        contextMarkers={contextMarkers}
+        formatActor={formatActor}
+        formatRoadMarker={formatRoadMarker}
+        hierarchyHint={hierarchyHint}
+        representativeCoordinate={representativeCoordinate}
+        submission={submission}
+        tilePreviewConfig={tilePreviewConfig}
+      />
+      <div className="admin-content-actions">
+        <button type="button" onClick={onClose}>
+          关闭
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -4439,89 +4393,86 @@ function PublishPoiDialog({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <form
-        className="modal-panel admin-poi-publish-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-poi-publish-title"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
-        <div className="section-heading">
-          <h2 id="admin-poi-publish-title">发布到公开地图</h2>
-          <span className="muted">{submission.title}</span>
-        </div>
-        <p className="admin-poi-publish-warning">
-          发布后该 POI
-          会对所有用户可见，并参与地图搜索、附近地点和路线规划候选。请先确认坐标、分类、图片来源和重复提示。
+    <Modal
+      labelledBy="admin-poi-publish-title"
+      className="admin-poi-publish-dialog"
+      as="form"
+      onSubmit={submit}
+      onBackdropClick={() => onClose}
+    >
+      <div className="section-heading">
+        <h2 id="admin-poi-publish-title">发布到公开地图</h2>
+        <span className="muted">{submission.title}</span>
+      </div>
+      <p className="admin-poi-publish-warning">
+        发布后该 POI
+        会对所有用户可见，并参与地图搜索、附近地点和路线规划候选。请先确认坐标、分类、图片来源和重复提示。
+      </p>
+      {hasRejectedImage ? (
+        <p className="admin-poi-publish-blocker">
+          投稿图片已被标记为不合格。请先更换图片，或重置图片审核状态后再发布。
         </p>
-        {hasRejectedImage ? (
-          <p className="admin-poi-publish-blocker">
-            投稿图片已被标记为不合格。请先更换图片，或重置图片审核状态后再发布。
-          </p>
-        ) : null}
-        {hasDuplicateDecision ? (
-          <p className="admin-poi-publish-blocker">
-            仍有 {duplicateDecisionCount}{' '}
-            条冲突提示被标记为待合并。请先完成合并、重置判断或改为忽略后再发布。
-          </p>
-        ) : null}
-        <dl className="admin-poi-publish-summary">
-          <div>
-            <dt>分类</dt>
-            <dd>{formatCategoryName(submission.categoryId, category)}</dd>
-          </div>
-          <div>
-            <dt>几何</dt>
-            <dd>{geometryLabel(submission.geometry)}</dd>
-          </div>
-          <div>
-            <dt>代表坐标</dt>
-            <dd>
-              {representativeCoordinate ? formatCoordinatePair(representativeCoordinate) : '暂无'}
-            </dd>
-          </div>
-          <div>
-            <dt>投稿图片</dt>
-            <dd>
-              {imageUrls.length > 0
-                ? `${imageUrls.length} 张 · ${imageReviews.length} 张已审核`
-                : '未提交图片'}
-            </dd>
-          </div>
-          <div>
-            <dt>重复提示</dt>
-            <dd>
-              {conflictHints.length
-                ? duplicateDecisionCount
-                  ? `发现 ${conflictHints.length} 条可能冲突提示，其中 ${duplicateDecisionCount} 条待合并`
-                  : `发现 ${conflictHints.length} 条可能冲突提示`
-                : '未发现明显冲突提示'}
-            </dd>
-          </div>
-        </dl>
-        <label className="admin-poi-publish-confirm">
-          <input
-            type="checkbox"
-            checked={isConfirmed}
-            onChange={(event) => setIsConfirmed(event.currentTarget.checked)}
-          />
-          <span>我已核对该 POI 的公开展示信息，确认可以发布。</span>
-        </label>
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
-          </button>
-          <button
-            type="submit"
-            disabled={isBusy || !isConfirmed || hasRejectedImage || hasDuplicateDecision}
-          >
-            确认发布
-          </button>
+      ) : null}
+      {hasDuplicateDecision ? (
+        <p className="admin-poi-publish-blocker">
+          仍有 {duplicateDecisionCount}{' '}
+          条冲突提示被标记为待合并。请先完成合并、重置判断或改为忽略后再发布。
+        </p>
+      ) : null}
+      <dl className="admin-poi-publish-summary">
+        <div>
+          <dt>分类</dt>
+          <dd>{formatCategoryName(submission.categoryId, category)}</dd>
         </div>
-      </form>
-    </div>
+        <div>
+          <dt>几何</dt>
+          <dd>{geometryLabel(submission.geometry)}</dd>
+        </div>
+        <div>
+          <dt>代表坐标</dt>
+          <dd>
+            {representativeCoordinate ? formatCoordinatePair(representativeCoordinate) : '暂无'}
+          </dd>
+        </div>
+        <div>
+          <dt>投稿图片</dt>
+          <dd>
+            {imageUrls.length > 0
+              ? `${imageUrls.length} 张 · ${imageReviews.length} 张已审核`
+              : '未提交图片'}
+          </dd>
+        </div>
+        <div>
+          <dt>重复提示</dt>
+          <dd>
+            {conflictHints.length
+              ? duplicateDecisionCount
+                ? `发现 ${conflictHints.length} 条可能冲突提示，其中 ${duplicateDecisionCount} 条待合并`
+                : `发现 ${conflictHints.length} 条可能冲突提示`
+              : '未发现明显冲突提示'}
+          </dd>
+        </div>
+      </dl>
+      <label className="admin-poi-publish-confirm">
+        <input
+          type="checkbox"
+          checked={isConfirmed}
+          onChange={(event) => setIsConfirmed(event.currentTarget.checked)}
+        />
+        <span>我已核对该 POI 的公开展示信息，确认可以发布。</span>
+      </label>
+      <div className="admin-content-actions">
+        <button type="button" onClick={onClose} disabled={isBusy}>
+          取消
+        </button>
+        <button
+          type="submit"
+          disabled={isBusy || !isConfirmed || hasRejectedImage || hasDuplicateDecision}
+        >
+          确认发布
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -4550,56 +4501,53 @@ function RejectPoiDialog({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <form
-        className="modal-panel admin-poi-reject-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-poi-reject-title"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
-        <div className="section-heading">
-          <h2 id="admin-poi-reject-title">驳回 POI 投稿</h2>
-          <span className="muted">{submission.title}</span>
-        </div>
-        <label>
-          <span>驳回理由</span>
-          <textarea
-            value={reason}
-            onChange={(event) => {
-              setReason(event.currentTarget.value);
+    <Modal
+      labelledBy="admin-poi-reject-title"
+      className="admin-poi-reject-dialog"
+      as="form"
+      onSubmit={submit}
+      onBackdropClick={() => onClose}
+    >
+      <div className="section-heading">
+        <h2 id="admin-poi-reject-title">驳回 POI 投稿</h2>
+        <span className="muted">{submission.title}</span>
+      </div>
+      <label>
+        <span>驳回理由</span>
+        <textarea
+          value={reason}
+          onChange={(event) => {
+            setReason(event.currentTarget.value);
+            setError('');
+          }}
+          placeholder="例如：坐标偏离实际地点、分类不正确、图片无法确认来源……"
+          maxLength={500}
+        />
+      </label>
+      <div className="admin-poi-reject-presets" aria-label="常用驳回原因">
+        {poiRejectReasonPresets.map((preset) => (
+          <button
+            type="button"
+            key={preset}
+            onClick={() => {
+              setReason(preset);
               setError('');
             }}
-            placeholder="例如：坐标偏离实际地点、分类不正确、图片无法确认来源……"
-            maxLength={500}
-          />
-        </label>
-        <div className="admin-poi-reject-presets" aria-label="常用驳回原因">
-          {poiRejectReasonPresets.map((preset) => (
-            <button
-              type="button"
-              key={preset}
-              onClick={() => {
-                setReason(preset);
-                setError('');
-              }}
-            >
-              {preset}
-            </button>
-          ))}
-        </div>
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
+          >
+            {preset}
           </button>
-          <button type="submit" disabled={isBusy}>
-            确认驳回
-          </button>
-        </div>
-      </form>
-    </div>
+        ))}
+      </div>
+      {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+      <div className="admin-content-actions">
+        <button type="button" onClick={onClose} disabled={isBusy}>
+          取消
+        </button>
+        <button type="submit" disabled={isBusy}>
+          确认驳回
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -4629,69 +4577,64 @@ function BulkRejectPoiDialog({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <form
-        className="modal-panel admin-poi-reject-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-poi-bulk-reject-title"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
-        <div className="section-heading">
-          <h2 id="admin-poi-bulk-reject-title">批量驳回 POI 投稿</h2>
-          <span className="muted">{`${submissions.length} 条待审核记录`}</span>
-        </div>
-        <p className="muted">
-          本次会对所选待审核投稿写入同一条驳回理由，适合坐标偏移、分类不准、图片问题这类统一退回场景。
-        </p>
-        <div className="admin-content-publish-assets" aria-label="批量驳回对象">
-          {submissions.slice(0, 10).map((submission) => (
-            <span className="operation-tag" key={submission.id}>
-              {submission.title}
-            </span>
-          ))}
-          {submissions.length > 10 ? (
-            <span className="operation-tag">{`其余 ${submissions.length - 10} 条`}</span>
-          ) : null}
-        </div>
-        <label>
-          <span>统一驳回理由</span>
-          <textarea
-            value={reason}
-            onChange={(event) => {
-              setReason(event.currentTarget.value);
+    <Modal
+      labelledBy="admin-poi-bulk-reject-title"
+      className="admin-poi-reject-dialog"
+      as="form"
+      onSubmit={submit}
+      onBackdropClick={() => onClose}
+    >
+      <div className="section-heading">
+        <h2 id="admin-poi-bulk-reject-title">批量驳回 POI 投稿</h2>
+        <span className="muted">{`${submissions.length} 条待审核记录`}</span>
+      </div>
+      <p className="muted">
+        本次会对所选待审核投稿写入同一条驳回理由，适合坐标偏移、分类不准、图片问题这类统一退回场景。
+      </p>
+      <div className="admin-content-publish-assets" aria-label="批量驳回对象">
+        {submissions.slice(0, 10).map((submission) => (
+          <StatusChip key={submission.id}>{submission.title}</StatusChip>
+        ))}
+        {submissions.length > 10 ? (
+          <StatusChip>{`其余 ${submissions.length - 10} 条`}</StatusChip>
+        ) : null}
+      </div>
+      <label>
+        <span>统一驳回理由</span>
+        <textarea
+          value={reason}
+          onChange={(event) => {
+            setReason(event.currentTarget.value);
+            setError('');
+          }}
+          placeholder="例如：坐标位置普遍偏移，需要重新选点后再次提交。"
+          maxLength={500}
+        />
+      </label>
+      <div className="admin-poi-reject-presets" aria-label="常用驳回原因">
+        {poiRejectReasonPresets.map((preset) => (
+          <button
+            type="button"
+            key={preset}
+            onClick={() => {
+              setReason(preset);
               setError('');
             }}
-            placeholder="例如：坐标位置普遍偏移，需要重新选点后再次提交。"
-            maxLength={500}
-          />
-        </label>
-        <div className="admin-poi-reject-presets" aria-label="常用驳回原因">
-          {poiRejectReasonPresets.map((preset) => (
-            <button
-              type="button"
-              key={preset}
-              onClick={() => {
-                setReason(preset);
-                setError('');
-              }}
-            >
-              {preset}
-            </button>
-          ))}
-        </div>
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
+          >
+            {preset}
           </button>
-          <button type="submit" disabled={isBusy}>
-            确认批量驳回
-          </button>
-        </div>
-      </form>
-    </div>
+        ))}
+      </div>
+      {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+      <div className="admin-content-actions">
+        <button type="button" onClick={onClose} disabled={isBusy}>
+          取消
+        </button>
+        <button type="submit" disabled={isBusy}>
+          确认批量驳回
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -4728,110 +4671,101 @@ function BulkPublishPoiDialog({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <form
-        className="modal-panel admin-poi-publish-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-poi-bulk-publish-title"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
-        <div className="section-heading">
-          <h2 id="admin-poi-bulk-publish-title">批量发布到公开地图</h2>
-          <span className="muted">{`${submissions.length} 条待发布记录`}</span>
-        </div>
-        <p className="admin-poi-publish-warning">
-          批量发布会让所选 POI
-          立即进入公开地图。请先确认坐标、分类、图片来源和冲突提示已经逐条核对。
+    <Modal
+      labelledBy="admin-poi-bulk-publish-title"
+      className="admin-poi-publish-dialog"
+      as="form"
+      onSubmit={submit}
+      onBackdropClick={() => onClose}
+    >
+      <div className="section-heading">
+        <h2 id="admin-poi-bulk-publish-title">批量发布到公开地图</h2>
+        <span className="muted">{`${submissions.length} 条待发布记录`}</span>
+      </div>
+      <p className="admin-poi-publish-warning">
+        批量发布会让所选 POI 立即进入公开地图。请先确认坐标、分类、图片来源和冲突提示已经逐条核对。
+      </p>
+      {blockedTargets.length > 0 ? (
+        <p className="admin-poi-publish-blocker">
+          当前所选记录里仍有 {blockedTargets.length}{' '}
+          条阻塞发布。请先处理图片不合格或待合并冲突后再执行批量发布。
         </p>
-        {blockedTargets.length > 0 ? (
-          <p className="admin-poi-publish-blocker">
-            当前所选记录里仍有 {blockedTargets.length}{' '}
-            条阻塞发布。请先处理图片不合格或待合并冲突后再执行批量发布。
-          </p>
-        ) : null}
-        <dl className="admin-poi-publish-summary">
-          <div>
-            <dt>所选记录</dt>
-            <dd>{submissions.length}</dd>
-          </div>
-          <div>
-            <dt>可发布</dt>
-            <dd>{publishReadyTargets.length}</dd>
-          </div>
-          <div>
-            <dt>阻塞发布</dt>
-            <dd>{blockedTargets.length}</dd>
-          </div>
-          <div>
-            <dt>含图片</dt>
-            <dd>
-              {submissions.filter((submission) => getPoiImageUrls(submission).length > 0).length}
-            </dd>
-          </div>
-          <div>
-            <dt>冲突待合并</dt>
-            <dd>
-              {
-                submissions.filter((submission) =>
-                  conflictDecisions.some(
-                    (decision) =>
-                      decision.submissionId === submission.id && decision.decision === 'duplicate',
-                  ),
-                ).length
-              }
-            </dd>
-          </div>
-        </dl>
-        <div className="admin-content-publish-assets" aria-label="批量发布对象">
-          {publishReadyTargets.slice(0, 10).map((submission) => (
-            <span className="operation-tag" key={submission.id}>
-              {submission.title}
-            </span>
-          ))}
-          {publishReadyTargets.length > 10 ? (
-            <span className="operation-tag">{`其余 ${publishReadyTargets.length - 10} 条`}</span>
-          ) : null}
+      ) : null}
+      <dl className="admin-poi-publish-summary">
+        <div>
+          <dt>所选记录</dt>
+          <dd>{submissions.length}</dd>
         </div>
-        {blockedTargets.length > 0 ? (
-          <div className="admin-content-publish-blockers" aria-label="批量发布阻塞对象">
-            {blockedTargets.slice(0, 5).map((submission) => (
-              <p key={submission.id}>
-                {submission.title}
-                {hasRejectedPoiImage(submission, imageReviewByKey)
-                  ? '：图片不合格'
-                  : '：存在待合并冲突'}
-              </p>
-            ))}
-          </div>
-        ) : null}
-        <label className="admin-poi-publish-confirm">
-          <input
-            type="checkbox"
-            checked={isConfirmed}
-            onChange={(event) => setIsConfirmed(event.currentTarget.checked)}
-          />
-          <span>我已核对所选 POI 的公开展示信息，确认可以批量发布。</span>
-        </label>
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
-          </button>
-          <button
-            type="submit"
-            disabled={
-              isBusy ||
-              !isConfirmed ||
-              publishReadyTargets.length === 0 ||
-              blockedTargets.length > 0
+        <div>
+          <dt>可发布</dt>
+          <dd>{publishReadyTargets.length}</dd>
+        </div>
+        <div>
+          <dt>阻塞发布</dt>
+          <dd>{blockedTargets.length}</dd>
+        </div>
+        <div>
+          <dt>含图片</dt>
+          <dd>
+            {submissions.filter((submission) => getPoiImageUrls(submission).length > 0).length}
+          </dd>
+        </div>
+        <div>
+          <dt>冲突待合并</dt>
+          <dd>
+            {
+              submissions.filter((submission) =>
+                conflictDecisions.some(
+                  (decision) =>
+                    decision.submissionId === submission.id && decision.decision === 'duplicate',
+                ),
+              ).length
             }
-          >
-            确认批量发布
-          </button>
+          </dd>
         </div>
-      </form>
-    </div>
+      </dl>
+      <div className="admin-content-publish-assets" aria-label="批量发布对象">
+        {publishReadyTargets.slice(0, 10).map((submission) => (
+          <StatusChip key={submission.id}>{submission.title}</StatusChip>
+        ))}
+        {publishReadyTargets.length > 10 ? (
+          <StatusChip>{`其余 ${publishReadyTargets.length - 10} 条`}</StatusChip>
+        ) : null}
+      </div>
+      {blockedTargets.length > 0 ? (
+        <div className="admin-content-publish-blockers" aria-label="批量发布阻塞对象">
+          {blockedTargets.slice(0, 5).map((submission) => (
+            <p key={submission.id}>
+              {submission.title}
+              {hasRejectedPoiImage(submission, imageReviewByKey)
+                ? '：图片不合格'
+                : '：存在待合并冲突'}
+            </p>
+          ))}
+        </div>
+      ) : null}
+      <label className="admin-poi-publish-confirm">
+        <input
+          type="checkbox"
+          checked={isConfirmed}
+          onChange={(event) => setIsConfirmed(event.currentTarget.checked)}
+        />
+        <span>我已核对所选 POI 的公开展示信息，确认可以批量发布。</span>
+      </label>
+      <div className="admin-content-actions">
+        <button type="button" onClick={onClose} disabled={isBusy}>
+          取消
+        </button>
+        <button
+          type="submit"
+          disabled={
+            isBusy || !isConfirmed || publishReadyTargets.length === 0 || blockedTargets.length > 0
+          }
+        >
+          确认批量发布
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -5200,21 +5134,15 @@ function EditPoiSubmissionDialog({
       return (
         <VisualEditorShell
           actions={
-            <button
-              className="secondary-action-button is-primary"
-              type="button"
-              aria-busy={isBusy}
+            <Button
+              variant="primary"
+              icon="save"
+              loading={isBusy}
               disabled={isBusy}
               onClick={() => void save()}
             >
-              <span
-                className={`material-symbols-outlined${isBusy ? ' busy-state-indicator' : ''}`}
-                aria-hidden="true"
-              >
-                {isBusy ? 'progress_activity' : 'save'}
-              </span>
-              <span>{isBusy ? '保存中' : '保存简介'}</span>
-            </button>
+              {isBusy ? '保存中' : '保存简介'}
+            </Button>
           }
           backHref={pageBackHref}
           editorKind="poi"
@@ -5243,21 +5171,15 @@ function EditPoiSubmissionDialog({
     return (
       <VisualEditorShell
         actions={
-          <button
-            className="secondary-action-button is-primary"
-            type="button"
-            aria-busy={isBusy}
+          <Button
+            variant="primary"
+            icon="save"
+            loading={isBusy}
             disabled={isBusy}
             onClick={() => void save()}
           >
-            <span
-              className={`material-symbols-outlined${isBusy ? ' busy-state-indicator' : ''}`}
-              aria-hidden="true"
-            >
-              {isBusy ? 'progress_activity' : 'save'}
-            </span>
-            <span>{isBusy ? '保存中' : '保存几何'}</span>
-          </button>
+            {isBusy ? '保存中' : '保存几何'}
+          </Button>
         }
         backHref={pageBackHref}
         editorKind="poi"
@@ -5294,16 +5216,14 @@ function EditPoiSubmissionDialog({
       <PoiEditorSection summary={geometryLabelFromDraft(geometryDraft)} title="几何">
         <p className="muted">{`中点 ${geometryMetrics.center} · ${geometryMetrics.detail}`}</p>
         {effectivePoiId ? (
-          <a
-            className="secondary-action-button"
+          <ButtonLink
+            variant="secondary"
             href={appPath(`/admin/map-poi/editor?markerId=${encodeURIComponent(effectivePoiId)}`)}
             onClick={(event) => void openPoiWorkspaceWithConfirm(event, isDirty)}
+            icon="edit_location_alt"
           >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              edit_location_alt
-            </span>
-            <span>打开几何工作台</span>
-          </a>
+            打开几何工作台
+          </ButtonLink>
         ) : (
           <p className="muted">
             填写名称后会自动保存草稿，随后即可进入几何工作台选择类型并增删坐标。
@@ -5407,18 +5327,16 @@ function EditPoiSubmissionDialog({
           .join(' · ')}
       </p>
       {effectivePoiId ? (
-        <a
-          className="secondary-action-button"
+        <ButtonLink
+          variant="secondary"
           href={appPath(
             `/admin/map-poi/intro-editor?markerId=${encodeURIComponent(effectivePoiId)}`,
           )}
           onClick={(event) => void openPoiWorkspaceWithConfirm(event, isDirty)}
+          icon="article"
         >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            article
-          </span>
-          <span>打开简介工作台</span>
-        </a>
+          打开简介工作台
+        </ButtonLink>
       ) : (
         <p className="muted">
           填写名称后会自动保存草稿，随后即可进入简介工作台编辑图片与营业信息。
@@ -5428,13 +5346,12 @@ function EditPoiSubmissionDialog({
   );
 
   const formElement = (
-    <form
-      className="modal-panel admin-poi-edit-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="admin-poi-edit-title"
-      onMouseDown={(event) => event.stopPropagation()}
+    <Modal
+      as="form"
+      className="admin-poi-edit-dialog"
+      labelledBy="admin-poi-edit-title"
       onSubmit={submit}
+      onBackdropClick={onClose}
     >
       <div className="section-heading">
         <h2 id="admin-poi-edit-title">{submission ? '修正 POI 投稿' : '新增 POI'}</h2>
@@ -5588,14 +5505,10 @@ function EditPoiSubmissionDialog({
               : '创建并提交审核'}
         </button>
       </div>
-    </form>
+    </Modal>
   );
 
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      {formElement}
-    </div>
-  );
+  return formElement;
 }
 
 type PoiIntroChapterId =
@@ -6034,21 +5947,19 @@ function PoiIntroWorkspace({
       : null;
 
   const nameField = (
-    <label className="material-field">
-      <span>POI 名称</span>
-      <input
+    <Field label={<>POI 名称</>}>
+      <Input
         disabled={disabled}
         maxLength={200}
         value={form.title}
         onChange={(event) => onChange({ title: event.currentTarget.value })}
       />
-    </label>
+    </Field>
   );
 
   const categoryField = (
-    <label className="material-field">
-      <span>分类</span>
-      <select
+    <Field label={<>分类</>}>
+      <Select
         disabled={disabled}
         value={form.categoryId}
         onChange={(event) => onChange({ categoryId: event.currentTarget.value })}
@@ -6062,8 +5973,8 @@ function PoiIntroWorkspace({
             {formatCategoryName(category.id, category)}
           </option>
         ))}
-      </select>
-    </label>
+      </Select>
+    </Field>
   );
 
   const iconField = (
@@ -6089,50 +6000,46 @@ function PoiIntroWorkspace({
   const renderDetailField = (field: string) => {
     if (field === 'openingHours') {
       return (
-        <label className="material-field">
-          <span>营业时间</span>
-          <input
+        <Field label={<>营业时间</>}>
+          <Input
             disabled={disabled}
             maxLength={500}
             placeholder="例如：周一至周五 09:00-18:00"
             value={form.openingHours}
             onChange={(event) => onChange({ openingHours: event.currentTarget.value })}
           />
-        </label>
+        </Field>
       );
     }
     if (field === 'address') {
       return (
-        <label className="material-field">
-          <span>文字地址</span>
-          <input
+        <Field label={<>文字地址</>}>
+          <Input
             disabled={disabled}
             maxLength={300}
             placeholder="例如：青年大街 18 号"
             value={form.address}
             onChange={(event) => onChange({ address: event.currentTarget.value })}
           />
-        </label>
+        </Field>
       );
     }
     if (field === 'floorLabel') {
       return (
-        <label className="material-field">
-          <span>楼层</span>
-          <input
+        <Field label={<>楼层</>}>
+          <Input
             disabled={disabled}
             maxLength={40}
             placeholder="例如：B1、3F、站厅层"
             value={form.floorLabel}
             onChange={(event) => onChange({ floorLabel: event.currentTarget.value })}
           />
-        </label>
+        </Field>
       );
     }
     return (
-      <label className="material-field">
-        <span>地址道路</span>
-        <select
+      <Field label={<>地址道路</>}>
+        <Select
           disabled={disabled || !form.address.trim()}
           value={form.addressRoadMarkerId}
           onChange={(event) => onChange({ addressRoadMarkerId: event.currentTarget.value })}
@@ -6147,8 +6054,8 @@ function PoiIntroWorkspace({
               {marker.label}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
     );
   };
 
@@ -6156,27 +6063,24 @@ function PoiIntroWorkspace({
     const value = form.imageUrls[index] ?? '';
     return (
       <>
-        <label className="material-field">
-          <span>{`图片 ${index + 1} 链接`}</span>
-          <input
+        <Field label={<>{`图片 ${index + 1} 链接`}</>}>
+          <Input
             disabled={disabled}
             placeholder="https://... 或 /api/map/poi-submission-images/..."
             value={value}
             onChange={(event) => updateImageAt(index, event.currentTarget.value)}
           />
-        </label>
+        </Field>
         {value.trim() ? (
-          <a
-            className="secondary-action-button"
+          <ButtonLink
+            variant="secondary"
             href={resolvePoiSubmissionImageUrl(value)}
             rel="noreferrer"
             target="_blank"
+            icon="open_in_new"
           >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              open_in_new
-            </span>
-            <span>预览图片</span>
-          </a>
+            预览图片
+          </ButtonLink>
         ) : null}
         <div className="poi-visual-inspector-actions">
           <button disabled={index === 0} type="button" onClick={() => moveImage(index, -1)}>
@@ -6199,30 +6103,28 @@ function PoiIntroWorkspace({
 
   const descriptionField = (
     <>
-      <label className="material-field">
-        <span>简介</span>
-        <textarea
+      <Field label={<>简介</>}>
+        <Textarea
           disabled={disabled}
           maxLength={1000}
           placeholder="填写地点简介，保存后展示在公开端详情卡。"
           value={form.description}
           onChange={(event) => onChange({ description: event.currentTarget.value })}
         />
-      </label>
+      </Field>
       <p className="muted">{`${descriptionLength} 字，最多 1000 字。`}</p>
     </>
   );
 
   const linkField = (
-    <label className="material-field">
-      <span>链接</span>
-      <input
+    <Field label={<>链接</>}>
+      <Input
         disabled={disabled}
         placeholder="https://..."
         value={form.href}
         onChange={(event) => onChange({ href: event.currentTarget.value })}
       />
-    </label>
+    </Field>
   );
 
   const renderFacilityField = (index: number) => {
@@ -6275,12 +6177,9 @@ function PoiIntroWorkspace({
       ) : (
         <p className="poi-visual-panel-empty">暂无子地点；新增子地点请回 POI 主列表。</p>
       )}
-      <a className="secondary-action-button" href={appPath('/admin/map-poi')}>
-        <span className="material-symbols-outlined" aria-hidden="true">
-          list
-        </span>
-        <span>回主列表新增子地点</span>
-      </a>
+      <ButtonLink variant="secondary" href={appPath('/admin/map-poi')} icon="list">
+        回主列表新增子地点
+      </ButtonLink>
     </>
   );
 
@@ -6627,16 +6526,13 @@ function PoiIntroWorkspace({
                   </div>
                 ) : null}
                 {form.href.trim() ? (
-                  <button
-                    className="secondary-action-button"
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    icon="link"
                     onClick={() => setSelection({ chapter: 'link', field: 'href' })}
                   >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      link
-                    </span>
-                    <span>编辑链接</span>
-                  </button>
+                    编辑链接
+                  </Button>
                 ) : null}
               </>
             ) : (
@@ -7215,9 +7111,8 @@ function AdminPoiImageEditor({
       <p className="muted">图片（最多 12 张，顺序即地图展示顺序）</p>
       {values.map((value, index) => (
         <div className="admin-poi-image-url-row" key={index}>
-          <label className="material-field">
-            <span>{`图片 ${index + 1}`}</span>
-            <input
+          <Field label={`图片 ${index + 1}`}>
+            <Input
               value={value}
               disabled={disabled || isUploading}
               onChange={(event) =>
@@ -7230,72 +7125,54 @@ function AdminPoiImageEditor({
               placeholder="https://... 或 /api/map/poi-submission-images/..."
               aria-label={`第 ${index + 1} 张图片链接`}
             />
-          </label>
+          </Field>
           {value.trim() ? (
-            <a
-              className="secondary-action-button"
+            <ButtonLink
+              variant="secondary"
               href={resolvePoiSubmissionImageUrl(value)}
               rel="noreferrer"
               target="_blank"
+              icon="open_in_new"
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                open_in_new
-              </span>
-              <span>预览</span>
-            </a>
+              预览
+            </ButtonLink>
           ) : null}
-          <button
-            className="icon-action-button"
-            type="button"
+          <IconButton
+            icon="arrow_back"
+            label="向前移动图片"
             title="向前移动"
-            aria-label="向前移动图片"
             disabled={disabled || isUploading || index === 0}
             onClick={() => onChange(moveListItem(values, index, index - 1))}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              arrow_back
-            </span>
-          </button>
-          <button
-            className="icon-action-button"
-            type="button"
+          />
+          <IconButton
+            icon="arrow_forward"
+            label="向后移动图片"
             title="向后移动"
-            aria-label="向后移动图片"
             disabled={disabled || isUploading || index === values.length - 1}
             onClick={() => onChange(moveListItem(values, index, index + 1))}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              arrow_forward
-            </span>
-          </button>
-          <button
-            className="icon-action-button"
-            type="button"
-            title="删除图片"
-            aria-label="删除图片"
+          />
+          <IconButton
+            icon="delete"
+            label="删除图片"
             disabled={disabled || isUploading}
             onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              delete
-            </span>
-          </button>
+          />
         </div>
       ))}
-      <button
-        className="secondary-action-button"
-        type="button"
+      <Button
+        variant="secondary"
+        icon="add"
         disabled={disabled || isUploading || values.length >= 12}
         onClick={() => onChange([...values, ''])}
       >
-        <span className="material-symbols-outlined" aria-hidden="true">
-          add
-        </span>
-        <span>添加图片链接</span>
-      </button>
-      <label className="material-field admin-poi-image-upload">
-        <span>上传图片</span>
-        <input
+        添加图片链接
+      </Button>
+      <Field
+        label="上传图片"
+        className="admin-poi-image-upload"
+        hint={<span className="muted">支持多选，最多 12 张</span>}
+      >
+        <Input
           key={inputKey}
           type="file"
           multiple
@@ -7303,8 +7180,7 @@ function AdminPoiImageEditor({
           disabled={disabled || isUploading}
           onChange={(event) => void upload(Array.from(event.currentTarget.files ?? []))}
         />
-        <small className="muted">支持多选，最多 12 张</small>
-      </label>
+      </Field>
       {status ? (
         <p className="muted" role="status">
           {status}
@@ -7503,23 +7379,23 @@ function PoiRegionBindingsFieldset({
             </label>
             <div className="poi-editor-checkbox-list">
               {visibleMarkers.map((marker) => (
-                <label className="checkbox-row" key={marker.id}>
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(marker.id)}
-                    onChange={(event) =>
-                      onChange(
-                        event.currentTarget.checked
-                          ? Array.from(new Set([...selectedIds, marker.id]))
-                          : selectedIds.filter((id) => id !== marker.id),
-                      )
-                    }
-                  />
-                  <span>
-                    <strong>{marker.label}</strong>
-                    <small>{marker.id}</small>
-                  </span>
-                </label>
+                <CheckboxRow
+                  key={marker.id}
+                  checked={selectedIds.includes(marker.id)}
+                  onChange={(event) =>
+                    onChange(
+                      event.currentTarget.checked
+                        ? Array.from(new Set([...selectedIds, marker.id]))
+                        : selectedIds.filter((id) => id !== marker.id),
+                    )
+                  }
+                  label={
+                    <>
+                      <strong>{marker.label}</strong>
+                      <small>{marker.id}</small>
+                    </>
+                  }
+                />
               ))}
             </div>
             {visibleMarkers.length === 0 ? <p className="muted">没有匹配的区域。</p> : null}
@@ -9173,9 +9049,8 @@ function PoiStandaloneGeometryWorkspace({
             </button>
           </EditorPanelHeading>
           <div className="poi-visual-coordinate-panel-body">
-            <label className="material-field">
-              <span>POI 形式</span>
-              <select
+            <Field label={<>POI 形式</>}>
+              <Select
                 value={draft.type}
                 onChange={(event) =>
                   onChange(
@@ -9201,24 +9076,22 @@ function PoiStandaloneGeometryWorkspace({
                     {option.label}
                   </option>
                 ))}
-              </select>
-            </label>
+              </Select>
+            </Field>
             {draft.type === 'MultiRectangle' && draft.rectangles.length > 1 ? (
-              <label className="material-field">
-                <span>当前矩形</span>
-                <select
+              <Field label={<>当前矩形</>}>
+                <Select
                   value={String(clamp(rectangleIndex, 0, draft.rectangles.length - 1))}
                   onChange={(event) => setRectangleIndex(Number(event.currentTarget.value))}
                 >
                   {draft.rectangles.map((_, index) => (
                     <option value={index} key={index}>{`矩形 ${index + 1}`}</option>
                   ))}
-                </select>
-              </label>
+                </Select>
+              </Field>
             ) : ringOptions.length > 1 ? (
-              <label className="material-field">
-                <span>{draft.type === 'MultiPolygon' ? '当前多边形 / 环' : '当前边界'}</span>
-                <select
+              <Field label={<>{draft.type === 'MultiPolygon' ? '当前多边形 / 环' : '当前边界'}</>}>
+                <Select
                   value={effectiveRingTargetValue}
                   onChange={(event) => setRingTargetValue(event.currentTarget.value)}
                 >
@@ -9227,14 +9100,13 @@ function PoiStandaloneGeometryWorkspace({
                       {option.label}
                     </option>
                   ))}
-                </select>
-              </label>
+                </Select>
+              </Field>
             ) : null}
             {draft.type === 'Point' ? (
               <div className="poi-visual-point-fields">
-                <label className="material-field">
-                  <span>X</span>
-                  <input
+                <Field label={<>X</>}>
+                  <Input
                     inputMode="decimal"
                     value={draft.coordinate.x}
                     onChange={(event) =>
@@ -9244,19 +9116,17 @@ function PoiStandaloneGeometryWorkspace({
                       })
                     }
                   />
-                </label>
-                <label className="material-field">
-                  <span>Y</span>
-                  <input
+                </Field>
+                <Field label={<>Y</>}>
+                  <Input
                     inputMode="decimal"
                     value={pointYText}
                     placeholder="继承默认"
                     onChange={(event) => onPointYChange(event.currentTarget.value)}
                   />
-                </label>
-                <label className="material-field">
-                  <span>Z</span>
-                  <input
+                </Field>
+                <Field label={<>Z</>}>
+                  <Input
                     inputMode="decimal"
                     value={draft.coordinate.z}
                     onChange={(event) =>
@@ -9266,7 +9136,7 @@ function PoiStandaloneGeometryWorkspace({
                       })
                     }
                   />
-                </label>
+                </Field>
               </div>
             ) : selectedPoint && selectedPointIndex !== null && selectedLayerGroup ? (
               <>
@@ -9286,34 +9156,31 @@ function PoiStandaloneGeometryWorkspace({
                       : { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }
                   }
                 >
-                  <label className="material-field">
-                    <span>X</span>
-                    <input
+                  <Field label={<>X</>}>
+                    <Input
                       inputMode="decimal"
                       value={selectedPoint.x}
                       onChange={(event) => updateSelectedPoint({ x: event.currentTarget.value })}
                     />
-                  </label>
-                  <label className="material-field">
-                    <span>Z</span>
-                    <input
+                  </Field>
+                  <Field label={<>Z</>}>
+                    <Input
                       inputMode="decimal"
                       value={selectedPoint.z}
                       onChange={(event) => updateSelectedPoint({ z: event.currentTarget.value })}
                     />
-                  </label>
+                  </Field>
                   {showCoordinateY &&
                   draft.type !== 'Rectangle' &&
                   draft.type !== 'MultiRectangle' ? (
-                    <label className="material-field">
-                      <span>高度 Y</span>
-                      <input
+                    <Field label={<>高度 Y</>}>
+                      <Input
                         inputMode="decimal"
                         placeholder="继承默认"
                         value={selectedPoint.y ?? ''}
                         onChange={(event) => updateSelectedPoint({ y: event.currentTarget.value })}
                       />
-                    </label>
+                    </Field>
                   ) : null}
                 </div>
               </>
@@ -10193,225 +10060,217 @@ function PoiCategoryProfileDialog({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <section
-        className="modal-panel admin-poi-category-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-poi-category-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2 id="admin-poi-category-title">
-            {selectedCategoryDraft ? `${selectedCategoryDraft.name} 分类配置` : '分类与图标配置'}
-          </h2>
-          <span className="muted">
-            {selectedCategoryDraft
-              ? '当前只显示所选分类的名称、图标、排序和公开投稿配置。'
-              : '管理分类名称、默认图标、图标文件列表、排序和是否开放公开投稿。'}
-          </span>
-          {!selectedCategoryId && !drafts.some((draft) => draft.id === 'water') ? (
-            <button
-              type="button"
-              disabled={isSaving || isBusy}
-              onClick={() =>
-                setDrafts((current) => [
-                  ...current,
-                  {
-                    id: 'water',
-                    name: '水域',
-                    acceptsPublicSubmissions: true,
-                    sortOrder: 20,
-                    defaultIconFileName: '',
-                    iconFileNamesText: '',
-                    color: '',
-                  },
-                ])
-              }
-            >
-              新增水域分类
-            </button>
-          ) : null}
-        </div>
-        <div className="admin-poi-category-grid">
-          {visibleDrafts.map((draft) => (
-            <article className="admin-poi-category-row" key={draft.id}>
-              <PoiCategoryIcon category={categoryDraftToPreview(draft)} iconBaseUrl={iconBaseUrl} />
-              <label>
-                <span>分类 ID</span>
-                <input value={draft.id} disabled />
-              </label>
-              <label>
-                <span>名称</span>
-                <input
-                  value={draft.name}
-                  onChange={(event) => updateDraft(draft.id, { name: event.currentTarget.value })}
-                />
-              </label>
-              <label>
-                <span>排序</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="100000"
-                  value={draft.sortOrder}
-                  onChange={(event) =>
-                    updateDraft(draft.id, { sortOrder: Number(event.currentTarget.value) })
-                  }
-                />
-              </label>
-              <label className="admin-poi-category-color">
-                <span>地图色</span>
-                <span className="admin-poi-category-color-field">
-                  <input
-                    value={draft.color}
-                    placeholder="#3f8f5b"
-                    onChange={(event) =>
-                      updateDraft(draft.id, { color: event.currentTarget.value })
-                    }
-                  />
-                  <span
-                    aria-hidden="true"
-                    style={{ backgroundColor: draft.color.trim() || '#9aa8a4' }}
-                  />
-                </span>
-              </label>
-              <label>
-                <span>默认图标</span>
-                <input
-                  value={draft.defaultIconFileName}
-                  onChange={(event) =>
-                    updateDraft(draft.id, { defaultIconFileName: event.currentTarget.value })
-                  }
-                />
-              </label>
-              <label className="admin-poi-category-icons">
-                <span>图标文件列表</span>
-                <textarea
-                  value={draft.iconFileNamesText}
-                  onChange={(event) =>
-                    updateDraft(draft.id, { iconFileNamesText: event.currentTarget.value })
-                  }
-                />
-              </label>
-              <div className="admin-poi-category-icon-list" aria-label={`${draft.name} 图标预览`}>
-                {splitIconFileNames(draft.iconFileNamesText).map((iconValue) => {
-                  const uploadedFileName = extractUploadedPoiIconFileName(iconValue);
-                  const iconKey = getPoiCategoryIconMetadataKey(iconValue);
-                  const isDefault = draft.defaultIconFileName.trim() === iconValue;
-                  const deleteKey = `${draft.id}:${iconValue}`;
-                  return (
-                    <span
-                      className={`admin-poi-category-icon-chip${isDefault ? ' is-default' : ''}`}
-                      key={iconValue}
-                    >
-                      <span className="admin-poi-category-icon-swatch-group" aria-hidden="true">
-                        {['light', 'dark', 'map'].map((tone) => (
-                          <span
-                            className={`admin-poi-category-icon-swatch is-${tone}`}
-                            key={tone}
-                            title={iconPreviewToneLabel(tone)}
-                          >
-                            <img
-                              src={toMarkerIconUrl(iconValue, iconBaseUrl)}
-                              alt=""
-                              draggable={false}
-                            />
-                          </span>
-                        ))}
-                      </span>
-                      <span className="admin-poi-category-icon-identity">
-                        <input
-                          aria-label={`${iconValue} 的显示名称`}
-                          value={
-                            (iconKey ? iconDisplayNames[iconKey] : undefined) ??
-                            getDefaultPoiCategoryIconDisplayName(iconValue)
-                          }
-                          maxLength={80}
-                          onChange={(event) => {
-                            if (!iconKey) {
-                              return;
-                            }
-                            const displayName = event.currentTarget.value;
-                            setIconDisplayNames((current) => ({
-                              ...current,
-                              [iconKey]: displayName,
-                            }));
-                          }}
-                        />
-                        <code title={iconValue}>{iconValue}</code>
-                      </span>
-                      {isDefault ? <small>默认</small> : null}
-                      <button
-                        type="button"
-                        disabled={!iconKey || renamingIconKey === iconKey}
-                        onClick={() => void renameCategoryIcon(iconValue)}
-                      >
-                        {renamingIconKey === iconKey ? '保存中' : '保存名称'}
-                      </button>
-                      {uploadedFileName ? (
-                        <button
-                          type="button"
-                          disabled={deletingIconKey === deleteKey}
-                          onClick={() => void deleteCategoryIcon(draft.id, iconValue)}
-                        >
-                          删除
-                        </button>
-                      ) : null}
-                    </span>
-                  );
-                })}
-              </div>
-              <label className="admin-poi-category-upload">
-                <span>上传图标</span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
-                  disabled={uploadingCategoryId === draft.id}
-                  onChange={(event) => {
-                    const file = event.currentTarget.files?.[0];
-                    void uploadCategoryIcon(draft.id, file);
-                    event.currentTarget.value = '';
-                  }}
-                />
-              </label>
-              <label className="checkbox-row admin-poi-category-checkbox">
-                <input
-                  type="checkbox"
-                  checked={draft.acceptsPublicSubmissions}
-                  onChange={(event) =>
-                    updateDraft(draft.id, {
-                      acceptsPublicSubmissions: event.currentTarget.checked,
-                    })
-                  }
-                />
-                <span>允许公开投稿</span>
-              </label>
-            </article>
-          ))}
-        </div>
-        <div className="admin-content-actions">
+    <Modal
+      labelledBy="admin-poi-category-title"
+      className="admin-poi-category-dialog"
+      onBackdropClick={onClose}
+    >
+      <div className="section-heading">
+        <h2 id="admin-poi-category-title">
+          {selectedCategoryDraft ? `${selectedCategoryDraft.name} 分类配置` : '分类与图标配置'}
+        </h2>
+        <span className="muted">
+          {selectedCategoryDraft
+            ? '当前只显示所选分类的名称、图标、排序和公开投稿配置。'
+            : '管理分类名称、默认图标、图标文件列表、排序和是否开放公开投稿。'}
+        </span>
+        {!selectedCategoryId && !drafts.some((draft) => draft.id === 'water') ? (
           <button
             type="button"
             disabled={isSaving || isBusy}
-            onClick={() => setDrafts(createCategoryDrafts(categories))}
+            onClick={() =>
+              setDrafts((current) => [
+                ...current,
+                {
+                  id: 'water',
+                  name: '水域',
+                  acceptsPublicSubmissions: true,
+                  sortOrder: 20,
+                  defaultIconFileName: '',
+                  iconFileNamesText: '',
+                  color: '',
+                },
+              ])
+            }
           >
-            {selectedCategoryDraft ? '重置当前分类' : '重置当前配置'}
+            新增水域分类
           </button>
-          <button type="button" onClick={onClose} disabled={isSaving || isBusy}>
-            关闭
-          </button>
-          <button
-            type="button"
-            disabled={isSaving || visibleDrafts.length === 0 || isBusy}
-            onClick={saveCategories}
-          >
-            保存分类配置
-          </button>
-        </div>
-        {localStatus ? <p className="muted">{localStatus}</p> : null}
-      </section>
-    </div>
+        ) : null}
+      </div>
+      <div className="admin-poi-category-grid">
+        {visibleDrafts.map((draft) => (
+          <article className="admin-poi-category-row" key={draft.id}>
+            <PoiCategoryIcon category={categoryDraftToPreview(draft)} iconBaseUrl={iconBaseUrl} />
+            <label>
+              <span>分类 ID</span>
+              <input value={draft.id} disabled />
+            </label>
+            <label>
+              <span>名称</span>
+              <input
+                value={draft.name}
+                onChange={(event) => updateDraft(draft.id, { name: event.currentTarget.value })}
+              />
+            </label>
+            <label>
+              <span>排序</span>
+              <input
+                type="number"
+                min="0"
+                max="100000"
+                value={draft.sortOrder}
+                onChange={(event) =>
+                  updateDraft(draft.id, { sortOrder: Number(event.currentTarget.value) })
+                }
+              />
+            </label>
+            <label className="admin-poi-category-color">
+              <span>地图色</span>
+              <span className="admin-poi-category-color-field">
+                <input
+                  value={draft.color}
+                  placeholder="#3f8f5b"
+                  onChange={(event) => updateDraft(draft.id, { color: event.currentTarget.value })}
+                />
+                <span
+                  aria-hidden="true"
+                  style={{ backgroundColor: draft.color.trim() || '#9aa8a4' }}
+                />
+              </span>
+            </label>
+            <label>
+              <span>默认图标</span>
+              <input
+                value={draft.defaultIconFileName}
+                onChange={(event) =>
+                  updateDraft(draft.id, { defaultIconFileName: event.currentTarget.value })
+                }
+              />
+            </label>
+            <label className="admin-poi-category-icons">
+              <span>图标文件列表</span>
+              <textarea
+                value={draft.iconFileNamesText}
+                onChange={(event) =>
+                  updateDraft(draft.id, { iconFileNamesText: event.currentTarget.value })
+                }
+              />
+            </label>
+            <div className="admin-poi-category-icon-list" aria-label={`${draft.name} 图标预览`}>
+              {splitIconFileNames(draft.iconFileNamesText).map((iconValue) => {
+                const uploadedFileName = extractUploadedPoiIconFileName(iconValue);
+                const iconKey = getPoiCategoryIconMetadataKey(iconValue);
+                const isDefault = draft.defaultIconFileName.trim() === iconValue;
+                const deleteKey = `${draft.id}:${iconValue}`;
+                return (
+                  <span
+                    className={`admin-poi-category-icon-chip${isDefault ? ' is-default' : ''}`}
+                    key={iconValue}
+                  >
+                    <span className="admin-poi-category-icon-swatch-group" aria-hidden="true">
+                      {['light', 'dark', 'map'].map((tone) => (
+                        <span
+                          className={`admin-poi-category-icon-swatch is-${tone}`}
+                          key={tone}
+                          title={iconPreviewToneLabel(tone)}
+                        >
+                          <img
+                            src={toMarkerIconUrl(iconValue, iconBaseUrl)}
+                            alt=""
+                            draggable={false}
+                          />
+                        </span>
+                      ))}
+                    </span>
+                    <span className="admin-poi-category-icon-identity">
+                      <input
+                        aria-label={`${iconValue} 的显示名称`}
+                        value={
+                          (iconKey ? iconDisplayNames[iconKey] : undefined) ??
+                          getDefaultPoiCategoryIconDisplayName(iconValue)
+                        }
+                        maxLength={80}
+                        onChange={(event) => {
+                          if (!iconKey) {
+                            return;
+                          }
+                          const displayName = event.currentTarget.value;
+                          setIconDisplayNames((current) => ({
+                            ...current,
+                            [iconKey]: displayName,
+                          }));
+                        }}
+                      />
+                      <code title={iconValue}>{iconValue}</code>
+                    </span>
+                    {isDefault ? <small>默认</small> : null}
+                    <button
+                      type="button"
+                      disabled={!iconKey || renamingIconKey === iconKey}
+                      onClick={() => void renameCategoryIcon(iconValue)}
+                    >
+                      {renamingIconKey === iconKey ? '保存中' : '保存名称'}
+                    </button>
+                    {uploadedFileName ? (
+                      <button
+                        type="button"
+                        disabled={deletingIconKey === deleteKey}
+                        onClick={() => void deleteCategoryIcon(draft.id, iconValue)}
+                      >
+                        删除
+                      </button>
+                    ) : null}
+                  </span>
+                );
+              })}
+            </div>
+            <label className="admin-poi-category-upload">
+              <span>上传图标</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
+                disabled={uploadingCategoryId === draft.id}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  void uploadCategoryIcon(draft.id, file);
+                  event.currentTarget.value = '';
+                }}
+              />
+            </label>
+            <CheckboxRow
+              className="admin-poi-category-checkbox"
+              checked={draft.acceptsPublicSubmissions}
+              onChange={(event) =>
+                updateDraft(draft.id, {
+                  acceptsPublicSubmissions: event.currentTarget.checked,
+                })
+              }
+              label="允许公开投稿"
+            />
+          </article>
+        ))}
+      </div>
+      <div className="admin-content-actions">
+        <button
+          type="button"
+          disabled={isSaving || isBusy}
+          onClick={() => setDrafts(createCategoryDrafts(categories))}
+        >
+          {selectedCategoryDraft ? '重置当前分类' : '重置当前配置'}
+        </button>
+        <button type="button" onClick={onClose} disabled={isSaving || isBusy}>
+          关闭
+        </button>
+        <button
+          type="button"
+          disabled={isSaving || visibleDrafts.length === 0 || isBusy}
+          onClick={saveCategories}
+        >
+          保存分类配置
+        </button>
+      </div>
+      {localStatus ? <p className="muted">{localStatus}</p> : null}
+    </Modal>
   );
 }
 

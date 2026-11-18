@@ -12,6 +12,8 @@ import {
   uploadContentAsset,
   type AdminContentAssetRecord,
 } from '../lib/content-assets-client';
+import { Field, Input } from './ui/field';
+import { Button, IconButton } from './ui/button';
 
 const assetAccept =
   'image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/avif,application/pdf,text/plain,text/markdown,.md';
@@ -116,55 +118,42 @@ export function MarkdownAssetSection({
         <p className="markdown-inspector-section-title">素材</p>
         <div className="markdown-asset-heading-actions">
           <span>{`${assets.length} 条 · 已关联 ${assetIds.length}`}</span>
-          <button
-            aria-label="刷新素材"
-            className="icon-action-button"
+          <IconButton
+            icon="refresh"
+            label="刷新素材"
             disabled={loadState === 'loading'}
-            title="刷新素材"
-            type="button"
             onClick={() => void loadAssets()}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              refresh
-            </span>
-          </button>
+          />
         </div>
       </div>
 
-      <label className="material-field">
-        <span>搜索素材</span>
-        <input
+      <Field label={<>搜索素材</>}>
+        <Input
           placeholder="文件名 / 素材 ID"
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
-      </label>
+      </Field>
 
       <div className="markdown-asset-upload">
-        <label className="material-field">
-          <span>上传素材</span>
-          <input
+        <Field label={<>上传素材</>}>
+          <Input
             ref={fileInputRef}
             accept={assetAccept}
             disabled={disabled || uploading}
             type="file"
             onChange={(event) => setSelectedFile(event.currentTarget.files?.[0] ?? null)}
           />
-        </label>
-        <button
-          className="secondary-action-button"
+        </Field>
+        <Button
+          variant="secondary"
+          icon="upload"
+          loading={uploading}
           disabled={disabled || uploading || !selectedFile}
-          type="button"
           onClick={() => void upload()}
         >
-          <span
-            className={`material-symbols-outlined${uploading ? ' busy-state-indicator' : ''}`}
-            aria-hidden="true"
-          >
-            {uploading ? 'progress_activity' : 'upload'}
-          </span>
-          <span>{uploading ? '上传中' : '上传'}</span>
-        </button>
+          {uploading ? '上传中' : '上传'}
+        </Button>
       </div>
 
       {loadState === 'loading' ? (
@@ -207,29 +196,17 @@ export function MarkdownAssetSection({
                   </small>
                 </span>
                 <span className="markdown-asset-actions">
-                  <button
-                    aria-label={record.asset.kind === 'image' ? '插入图片' : '插入链接'}
-                    className="icon-action-button"
+                  <IconButton
+                    icon={record.asset.kind === 'image' ? 'add_photo_alternate' : 'link'}
+                    label={record.asset.kind === 'image' ? '插入图片' : '插入链接'}
                     disabled={disabled}
-                    title={record.asset.kind === 'image' ? '插入图片' : '插入链接'}
-                    type="button"
                     onClick={() => onInsert(record.asset)}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      {record.asset.kind === 'image' ? 'add_photo_alternate' : 'link'}
-                    </span>
-                  </button>
-                  <button
-                    aria-label="复制链接"
-                    className="icon-action-button"
-                    title="复制链接"
-                    type="button"
+                  />
+                  <IconButton
+                    icon="content_copy"
+                    label="复制链接"
                     onClick={() => void copyUrl(record.asset)}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      content_copy
-                    </span>
-                  </button>
+                  />
                 </span>
               </li>
             );

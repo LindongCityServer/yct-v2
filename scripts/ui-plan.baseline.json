@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-17",
+  "note": "由 scripts/ui-plan.mjs --update 生成；债务只降不升，覆盖只升不降。不要手改数字。",
+  "ratchet": {
+    "rawStandardClassUsage": 24,
+    "rawStandardClassFiles": 15,
+    "perFile": {
+      "apps/web/components/app-shell.tsx": 6,
+      "apps/web/components/client-dialog-bridge.tsx": 1,
+      "apps/web/components/global-search-panel.tsx": 1,
+      "apps/web/components/map-layer-toggle.tsx": 1,
+      "apps/web/components/map-stage-loader.tsx": 1,
+      "apps/web/components/map-stage.tsx": 2,
+      "apps/web/components/material-studio-panel.tsx": 1,
+      "apps/web/components/material-studio-topbar-actions.tsx": 1,
+      "apps/web/components/metro-wayfinding-editor.tsx": 1,
+      "apps/web/components/poi-facility-editor.tsx": 1,
+      "apps/web/components/range-input.tsx": 1,
+      "apps/web/components/schedule-stop-time-table.tsx": 4,
+      "apps/web/components/toast-viewport.tsx": 1,
+      "apps/web/components/transit-network-health-panel.tsx": 1,
+      "apps/web/components/world-coordinate-picker.tsx": 1
+    }
+  },
+  "registry": {
+    "phantomClasses": 0,
+    "aliasConflicts": 0,
+    "unusedClasses": 0,
+    "issues": 0,
+    "staleColorFallbacks": 0,
+    "undefinedColorTokens": 0,
+    "unregisteredBreakpoints": 0
+  },
+  "coverage": {
+    "sections": 24,
+    "sectionsWithPreview": 8,
+    "sharedPreviews": 20,
+    "sharedComponents": 56
+  },
+  "primitives": {
+    "files": 9,
+    "tests": 10,
+    "previewed": 13
+  },
+  "typography": {
+    "fontSizeDeclarations": 1041,
+    "fontSizeTokenized": 908
+  },
+  "controlTokenUses": 81,
+  "targets": {
+    "rawStandardClassUsage": 30,
+    "registryPhantomClasses": 0,
+    "registryAliasConflicts": 0,
+    "staleColorFallbacks": 0,
+    "undefinedColorTokens": 0,
+    "sharedPreviews": 20,
+    "sectionsWithPreview": 12,
+    "primitiveFiles": 9,
+    "fontSizeTokenSharePct": 60,
+    "controlTokenUses": 40
+  }
+}

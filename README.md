@@ -12,6 +12,7 @@
 - 物料导出与审计：服务器线网、导入的 RMP 项目数据和未修改文本的地铁导视不需要物料审核，登录并验证服务器账号后可直接下载无水印图片；手动输入的自定义物料仍需提交审核。每次预览和下载都会写入审计记录，后台可按用户、模板、内容摘要、IP 属地或图片 ID 检索。
 - 多语言：固定界面（含地图、出行、后台、运营详情和物料工作台）与常见问题支持简体中文、繁體中文和 English；业务实体译名继续由正式数据维护。
 - 嵌入与集成：支持在 FluentOS、KJ OS 等网页桌面中作为应用打开，登录、提示消息和返回导航可由宿主承接；另提供 LiteLoader 乘车网关集成。
+- QQ 机器人：问一问可接入 QQ 官方机器人，群聊 @ 或单聊提问时按聊天语境返回简短回答；另支持随机数、算式、中文电码、GB2312、天气、IP 属地、历史上的今天、签到与发言统计、今日运势等快捷指令，除签到/帮助/关于/新对话外的本地指令会附一张地图分享卡风格的图片卡片。部署方式见 [QQ 机器人接入](docs/QQ_BOT.md)，指令说明见 [快捷指令](docs/QQ_BOT_COMMANDS.md)。
 - 电报体验：电报纸填写、中文电码转换、资费计算、拍发与收报流程，以及发报纸、收报纸和音频等素材下载。
 
 RMP 在线应用的正式名称为“地铁线路图绘制器 / 地鐵線路圖繪製器 / Rail Map Painter”。导入后的项目作为只读线网快照使用，不支持在雨城通内修改文件固有的站点、站序、站名或拓扑；需要调整时，应回到 RMP 编辑并重新导入。
@@ -30,7 +31,7 @@ RMP 在线应用的正式名称为“地铁线路图绘制器 / 地鐵線路圖�
 apps/web/           Web 应用、API 路由与运行时仓储
 apps/portal/        临东市服务器静态门户（无需 Node.js 服务）
 packages/           契约、Schema、领域规则、事件总线、适配器与设计令牌
-integrations/       FluentOS / KJ OS 嵌入应用与 LiteLoader 乘车网关
+integrations/       FluentOS / KJ OS 嵌入应用、LiteLoader 乘车网关与 QQ 机器人
 deploy/             反向代理等部署配置
 docs/               需求、目标、设计、部署和专项说明
 scripts/            构建、部署、发布与运维脚本
@@ -71,6 +72,9 @@ pnpm typecheck
 - [部署说明](docs/DEPLOYMENT.md)
 - [数据迁移](docs/DATA_MIGRATION.md)
 - [AI 接入基线](docs/AI_ACCESS.md)
+- [QQ 机器人接入](docs/QQ_BOT.md)
+- [QQ 机器人快捷指令](docs/QQ_BOT_COMMANDS.md)
+- [问一问信息覆盖缺口](docs/ASK_COVERAGE_GAPS.md)
 - [门户部署与旧链接兼容](apps/portal/README.md)
 
 ## 提交前检查

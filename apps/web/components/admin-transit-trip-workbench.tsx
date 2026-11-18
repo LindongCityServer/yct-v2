@@ -39,6 +39,7 @@ import type { EditorToolbarOverflowItem } from './editor/editor-toolbar-overflow
 import { EditorZoomControls } from './editor/editor-zoom-controls';
 import { useMobileActionRail } from './mobile-action-rail';
 import { SegmentedControl } from './segmented-control';
+import { SegmentedTabs } from './ui/segmented-control';
 import { VisualEditorShell } from './visual-editor-shell';
 import {
   buildStationRows,
@@ -69,6 +70,8 @@ import {
   TransitTripRunChart,
   type ChartTrip,
 } from './transit-trip-run-chart';
+import { Modal } from './ui/modal';
+import { Field, Input } from './ui/field';
 
 const tripColors = [
   '#2563eb',
@@ -2314,21 +2317,20 @@ export function AdminTransitTripWorkbench({
                 // 与线路走向共用同一个紧凑分段控件，方向切换不再单独占一行。
                 <div className="transit-visual-layer-heading-actions">
                   <span>方向</span>
-                  <div className="segmented-control">
-                    <SegmentedControl
-                      ariaLabel="方向"
-                      className="transit-visual-segmented"
-                      onChange={(value) => {
-                        setDirection(value);
-                        clearSelection();
-                      }}
-                      options={[
-                        { value: 'down' as const, label: '正向', title: '正向（下行）' },
-                        { value: 'up' as const, label: '反向', title: '反向（上行）' },
-                      ]}
-                      value={direction}
-                    />
-                  </div>
+                  <SegmentedControl
+                    ariaLabel="方向"
+                    className="transit-visual-segmented"
+                    onChange={(value) => {
+                      setDirection(value);
+                      clearSelection();
+                    }}
+                    options={[
+                      { value: 'down' as const, label: '正向', title: '正向（下行）' },
+                      { value: 'up' as const, label: '反向', title: '反向（上行）' },
+                    ]}
+                    value={direction}
+                    wrapperClassName=""
+                  />
                 </div>
               }
               withInspectorEntry
@@ -2586,9 +2588,8 @@ export function AdminTransitTripWorkbench({
                     <strong>{selectedStop.stationName}</strong>
                     <span>{selectedStop.isStop ? '停靠站' : '通过站'}</span>
                   </div>
-                  <label className="material-field">
-                    <span>到站时刻</span>
-                    <input
+                  <Field label={<>到站时刻</>}>
+                    <Input
                       disabled={!selectedStop.isStop}
                       type="time"
                       value={toClockTime(selectedStop.arrivalMinutes) ?? ''}
@@ -2607,10 +2608,9 @@ export function AdminTransitTripWorkbench({
                         );
                       }}
                     />
-                  </label>
-                  <label className="material-field">
-                    <span>发车时刻</span>
-                    <input
+                  </Field>
+                  <Field label={<>发车时刻</>}>
+                    <Input
                       disabled={!selectedStop.isStop}
                       type="time"
                       value={toClockTime(selectedStop.departureMinutes) ?? ''}
@@ -2629,11 +2629,10 @@ export function AdminTransitTripWorkbench({
                         );
                       }}
                     />
-                  </label>
+                  </Field>
                   <div className="poi-visual-point-fields">
-                    <label className="material-field">
-                      <span>停站用时</span>
-                      <input
+                    <Field label={<>停站用时</>}>
+                      <Input
                         disabled={!selectedStop.isStop}
                         inputMode="numeric"
                         min={0}
@@ -2659,10 +2658,9 @@ export function AdminTransitTripWorkbench({
                           );
                         }}
                       />
-                    </label>
-                    <label className="material-field">
-                      <span>区间用时</span>
-                      <input
+                    </Field>
+                    <Field label={<>区间用时</>}>
+                      <Input
                         disabled={!selectedStop.isStop}
                         inputMode="numeric"
                         min={0}
@@ -2690,7 +2688,7 @@ export function AdminTransitTripWorkbench({
                           );
                         }}
                       />
-                    </label>
+                    </Field>
                   </div>
                   <dl className="poi-visual-global-summary">
                     <div>
@@ -2763,9 +2761,8 @@ export function AdminTransitTripWorkbench({
                     </strong>
                     <span>{selectedEntry.label || '未分配标签'}</span>
                   </div>
-                  <label className="material-field">
-                    <span>班次标签</span>
-                    <input
+                  <Field label={<>班次标签</>}>
+                    <Input
                       maxLength={40}
                       placeholder="标签"
                       type="text"
@@ -2785,10 +2782,9 @@ export function AdminTransitTripWorkbench({
                         );
                       }}
                     />
-                  </label>
-                  <label className="material-field">
-                    <span>首站发车时间</span>
-                    <input
+                  </Field>
+                  <Field label={<>首站发车时间</>}>
+                    <Input
                       type="time"
                       value={toClockTime(firstDepartureOrUndefined(selectedEntry.stops)) ?? ''}
                       onFocus={pushHistory}
@@ -2796,7 +2792,7 @@ export function AdminTransitTripWorkbench({
                         updateDeparture(selectedEntry, event.currentTarget.value)
                       }
                     />
-                  </label>
+                  </Field>
                   <dl className="poi-visual-global-summary">
                     <div>
                       <dt>末站到达时间</dt>
@@ -2839,9 +2835,8 @@ export function AdminTransitTripWorkbench({
                       <dd>{selectedTripDirection === 'up' ? '反向' : '正向'}</dd>
                     </div>
                   </dl>
-                  <label className="material-field">
-                    <span>班次性质</span>
-                    <input
+                  <Field label={<>班次性质</>}>
+                    <Input
                       maxLength={20}
                       placeholder="如快速 / 直达"
                       type="text"
@@ -2860,10 +2855,9 @@ export function AdminTransitTripWorkbench({
                         );
                       }}
                     />
-                  </label>
-                  <label className="material-field">
-                    <span>班次备注</span>
-                    <input
+                  </Field>
+                  <Field label={<>班次备注</>}>
+                    <Input
                       maxLength={200}
                       placeholder="如并入说明"
                       type="text"
@@ -2882,7 +2876,7 @@ export function AdminTransitTripWorkbench({
                         );
                       }}
                     />
-                  </label>
+                  </Field>
                   <div className="poi-visual-inspector-actions">
                     <button type="button" onClick={handleRestoreAutoTiming}>
                       恢复自动时刻
@@ -3099,88 +3093,85 @@ function TripRuleDialog({
   onSubmit: () => void;
 }>) {
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <div
-        aria-label="班次规则"
-        aria-modal="true"
-        className="modal-panel admin-transit-dialog transit-trip-pool-dialog"
-        role="dialog"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2>{`班次规则 · ${direction === 'down' ? '正向' : '反向'}`}</h2>
-          <span className="muted">{`${rules.length} 条规则`}</span>
-        </div>
-        <p className="muted">
-          支持单点 <code>06:30</code> 或批量 <code>06:30 + 00:05 * 5</code>，可多行或逗号分隔。
-          编辑已有规则会按新规则重算时刻。
-        </p>
-        {editingRuleId ? <span className="transit-trip-rule-badge">编辑规则</span> : null}
-        <textarea
-          className="transit-trip-rule-input"
-          placeholder="例如：06:30 或 06:30 + 00:05 * 5"
-          rows={3}
-          value={ruleText}
-          onChange={(event) => onChangeText(event.currentTarget.value)}
-        />
-        <div className="admin-content-actions">
-          {editingRuleId ? (
-            <button type="button" onClick={onCancelEdit}>
-              取消编辑
-            </button>
-          ) : null}
-          <button type="button" onClick={onSubmit}>
-            {editingRuleId ? '保存规则' : '确认追加'}
-          </button>
-        </div>
-        {error ? <p className="admin-poi-dialog-error">{error}</p> : null}
-        {rules.length > 0 ? (
-          <div className="transit-trip-rules" aria-label="已添加的批量规则">
-            {rules.map((rule) => (
-              <div
-                className={
-                  editingRuleId === rule.id
-                    ? 'transit-trip-rule-row is-editing'
-                    : 'transit-trip-rule-row'
-                }
-                key={rule.id}
-              >
-                <code>{rule.sourceText}</code>
-                <span className="muted">{`${ownedCountOf(rule.id)} 个班次`}</span>
-                <button
-                  aria-label="编辑规则"
-                  title="编辑规则（会按新规则重算时刻）"
-                  type="button"
-                  onClick={() => onEditRule(rule)}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    edit
-                  </span>
-                </button>
-                <button
-                  aria-label="删除规则"
-                  className="is-danger"
-                  title="删除规则及其生成的班次"
-                  type="button"
-                  onClick={() => onDeleteRule(rule)}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    delete
-                  </span>
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="poi-visual-panel-empty">还没有批量规则。</p>
-        )}
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose}>
-            关闭
-          </button>
-        </div>
+    <Modal
+      ariaLabel="班次规则"
+      className="admin-transit-dialog transit-trip-pool-dialog"
+      as="div"
+      onBackdropClick={() => onClose}
+    >
+      <div className="section-heading">
+        <h2>{`班次规则 · ${direction === 'down' ? '正向' : '反向'}`}</h2>
+        <span className="muted">{`${rules.length} 条规则`}</span>
       </div>
-    </div>
+      <p className="muted">
+        支持单点 <code>06:30</code> 或批量 <code>06:30 + 00:05 * 5</code>，可多行或逗号分隔。
+        编辑已有规则会按新规则重算时刻。
+      </p>
+      {editingRuleId ? <span className="transit-trip-rule-badge">编辑规则</span> : null}
+      <textarea
+        className="transit-trip-rule-input"
+        placeholder="例如：06:30 或 06:30 + 00:05 * 5"
+        rows={3}
+        value={ruleText}
+        onChange={(event) => onChangeText(event.currentTarget.value)}
+      />
+      <div className="admin-content-actions">
+        {editingRuleId ? (
+          <button type="button" onClick={onCancelEdit}>
+            取消编辑
+          </button>
+        ) : null}
+        <button type="button" onClick={onSubmit}>
+          {editingRuleId ? '保存规则' : '确认追加'}
+        </button>
+      </div>
+      {error ? <p className="admin-poi-dialog-error">{error}</p> : null}
+      {rules.length > 0 ? (
+        <div className="transit-trip-rules" aria-label="已添加的批量规则">
+          {rules.map((rule) => (
+            <div
+              className={
+                editingRuleId === rule.id
+                  ? 'transit-trip-rule-row is-editing'
+                  : 'transit-trip-rule-row'
+              }
+              key={rule.id}
+            >
+              <code>{rule.sourceText}</code>
+              <span className="muted">{`${ownedCountOf(rule.id)} 个班次`}</span>
+              <button
+                aria-label="编辑规则"
+                title="编辑规则（会按新规则重算时刻）"
+                type="button"
+                onClick={() => onEditRule(rule)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  edit
+                </span>
+              </button>
+              <button
+                aria-label="删除规则"
+                className="is-danger"
+                title="删除规则及其生成的班次"
+                type="button"
+                onClick={() => onDeleteRule(rule)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  delete
+                </span>
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="poi-visual-panel-empty">还没有批量规则。</p>
+      )}
+      <div className="admin-content-actions">
+        <button type="button" onClick={onClose}>
+          关闭
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -3198,57 +3189,42 @@ function DirectionSyncDialog({
   const [mode, setMode] = useState<'replace' | 'fill'>('replace');
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onCancel}>
-      <div
-        className="modal-panel admin-transit-dialog transit-trip-confirm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="同步正向发车时刻到反向"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2>同步正向时刻到反向</h2>
-          <span className="muted">{`正向 ${downCount} 个 · 反向 ${upCount} 个`}</span>
-        </div>
-        <p className="muted">
-          会复制首站发车时刻、班次性质和短交路经停站；不复制班次标签和备注。反向规则会按所选方式处理。
-        </p>
-        <fieldset className="segmented-control">
-          <legend>同步方式</legend>
-          <div>
-            {(
-              [
-                ['replace', '覆盖反向'],
-                ['fill', '仅补齐缺失'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                className={mode === value ? 'is-active' : ''}
-                type="button"
-                aria-pressed={mode === value}
-                key={value}
-                onClick={() => setMode(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-        <p className="muted">
-          {mode === 'replace'
-            ? `将清空反向现有的 ${upCount} 个班次和全部反向规则，再写入正向的 ${downCount} 个时刻。`
-            : `保留反向现有 ${upCount} 个班次，只追加正向有而反向没有的时刻。`}
-        </p>
-        <div className="admin-content-actions">
-          <button type="button" onClick={onCancel}>
-            取消
-          </button>
-          <button type="button" disabled={downCount === 0} onClick={() => onConfirm(mode)}>
-            确认同步
-          </button>
-        </div>
+    <Modal
+      ariaLabel="同步正向发车时刻到反向"
+      className="admin-transit-dialog transit-trip-confirm-dialog"
+      as="div"
+      onBackdropClick={() => onCancel}
+    >
+      <div className="section-heading">
+        <h2>同步正向时刻到反向</h2>
+        <span className="muted">{`正向 ${downCount} 个 · 反向 ${upCount} 个`}</span>
       </div>
-    </div>
+      <p className="muted">
+        会复制首站发车时刻、班次性质和短交路经停站；不复制班次标签和备注。反向规则会按所选方式处理。
+      </p>
+      <SegmentedTabs
+        label="同步方式"
+        options={[
+          { value: 'replace' as const, label: '覆盖反向' },
+          { value: 'fill' as const, label: '仅补齐缺失' },
+        ]}
+        value={mode}
+        onChange={setMode}
+      />
+      <p className="muted">
+        {mode === 'replace'
+          ? `将清空反向现有的 ${upCount} 个班次和全部反向规则，再写入正向的 ${downCount} 个时刻。`
+          : `保留反向现有 ${upCount} 个班次，只追加正向有而反向没有的时刻。`}
+      </p>
+      <div className="admin-content-actions">
+        <button type="button" onClick={onCancel}>
+          取消
+        </button>
+        <button type="button" disabled={downCount === 0} onClick={() => onConfirm(mode)}>
+          确认同步
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -3264,33 +3240,30 @@ function RuleDeleteDialog({
   onConfirm: () => void;
 }>) {
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onCancel}>
-      <div
-        className="modal-panel admin-transit-dialog transit-trip-confirm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="删除批量规则"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2>删除批量规则</h2>
-          <span className="muted">{rule.sourceText}</span>
-        </div>
-        <p>
-          {ownedCount > 0
-            ? `将同时删除该规则生成的 ${ownedCount} 个班次；已手工改过发车时刻而脱离规则的班次会保留。`
-            : '该规则当前没有生效班次，只会删除规则记录。'}
-        </p>
-        <div className="admin-content-actions">
-          <button type="button" onClick={onCancel}>
-            取消
-          </button>
-          <button type="button" onClick={onConfirm}>
-            删除规则
-          </button>
-        </div>
+    <Modal
+      ariaLabel="删除批量规则"
+      className="admin-transit-dialog transit-trip-confirm-dialog"
+      as="div"
+      onBackdropClick={() => onCancel}
+    >
+      <div className="section-heading">
+        <h2>删除批量规则</h2>
+        <span className="muted">{rule.sourceText}</span>
       </div>
-    </div>
+      <p>
+        {ownedCount > 0
+          ? `将同时删除该规则生成的 ${ownedCount} 个班次；已手工改过发车时刻而脱离规则的班次会保留。`
+          : '该规则当前没有生效班次，只会删除规则记录。'}
+      </p>
+      <div className="admin-content-actions">
+        <button type="button" onClick={onCancel}>
+          取消
+        </button>
+        <button type="button" onClick={onConfirm}>
+          删除规则
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -3308,82 +3281,67 @@ function PoolPickerDialog({
   const [draft, setDraft] = useState<PoolConfig>(config);
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onCancel}>
-      <div
-        className="modal-panel admin-transit-dialog transit-trip-pool-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="选择班次标签池"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2>选择班次标签池</h2>
-          <span className="muted">{`已选 ${draft.poolIds.length} 个`}</span>
-        </div>
-        <p className="muted">
-          多个池会合并后统一抽取。手动填写的班次标签优先级更高，不参与自动抽取。
-        </p>
-        <div className="transit-trip-pool-options">
-          {pools.length === 0 ? (
-            <p className="muted">还没有标签池，请先到标签池后台创建。</p>
-          ) : (
-            pools.map((pool) => (
-              <label key={pool.id}>
-                <input
-                  type="checkbox"
-                  checked={draft.poolIds.includes(pool.id)}
-                  onChange={(event) => {
-                    const checked = event.currentTarget.checked;
-                    setDraft((current) => ({
-                      ...current,
-                      poolIds: checked
-                        ? [...current.poolIds, pool.id]
-                        : current.poolIds.filter((id) => id !== pool.id),
-                    }));
-                  }}
-                />
-                <span>{pool.name}</span>
-                <small className="muted">{`${pool.labels.length} 个标签`}</small>
-              </label>
-            ))
-          )}
-        </div>
-        <fieldset className="segmented-control">
-          <legend>抽取方式</legend>
-          <div>
-            {(
-              [
-                ['sequential', '顺序'],
-                ['random', '随机'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                className={draft.mode === value ? 'is-active' : ''}
-                type="button"
-                aria-pressed={draft.mode === value}
-                key={value}
-                onClick={() => setDraft((current) => ({ ...current, mode: value }))}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-        <div className="admin-content-actions">
-          <button type="button" onClick={onCancel}>
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              onConfirm({ mode: draft.mode, poolIds: Array.from(new Set(draft.poolIds)) })
-            }
-          >
-            确定
-          </button>
-        </div>
+    <Modal
+      ariaLabel="选择班次标签池"
+      className="admin-transit-dialog transit-trip-pool-dialog"
+      as="div"
+      onBackdropClick={() => onCancel}
+    >
+      <div className="section-heading">
+        <h2>选择班次标签池</h2>
+        <span className="muted">{`已选 ${draft.poolIds.length} 个`}</span>
       </div>
-    </div>
+      <p className="muted">
+        多个池会合并后统一抽取。手动填写的班次标签优先级更高，不参与自动抽取。
+      </p>
+      <div className="transit-trip-pool-options">
+        {pools.length === 0 ? (
+          <p className="muted">还没有标签池，请先到标签池后台创建。</p>
+        ) : (
+          pools.map((pool) => (
+            <label key={pool.id}>
+              <input
+                type="checkbox"
+                checked={draft.poolIds.includes(pool.id)}
+                onChange={(event) => {
+                  const checked = event.currentTarget.checked;
+                  setDraft((current) => ({
+                    ...current,
+                    poolIds: checked
+                      ? [...current.poolIds, pool.id]
+                      : current.poolIds.filter((id) => id !== pool.id),
+                  }));
+                }}
+              />
+              <span>{pool.name}</span>
+              <small className="muted">{`${pool.labels.length} 个标签`}</small>
+            </label>
+          ))
+        )}
+      </div>
+      <SegmentedTabs
+        label="抽取方式"
+        options={[
+          { value: 'sequential' as const, label: '顺序' },
+          { value: 'random' as const, label: '随机' },
+        ]}
+        value={draft.mode}
+        onChange={(next) => setDraft((current) => ({ ...current, mode: next }))}
+      />
+      <div className="admin-content-actions">
+        <button type="button" onClick={onCancel}>
+          取消
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onConfirm({ mode: draft.mode, poolIds: Array.from(new Set(draft.poolIds)) })
+          }
+        >
+          确定
+        </button>
+      </div>
+    </Modal>
   );
 }
 

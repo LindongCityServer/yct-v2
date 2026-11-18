@@ -2,6 +2,9 @@
 
 import type { ReactNode } from 'react';
 import { EditorDialogPortal } from './editor/editor-dialog-portal';
+import { Button, IconButton } from './ui/button';
+import { Field, Input } from './ui/field';
+import { Modal } from './ui/modal';
 
 /**
  * 「保存与下载」弹窗：两种工作台共用。
@@ -56,43 +59,18 @@ export function MaterialSaveDownloadDialog({
   };
   return (
     <EditorDialogPortal>
-      <div
-        className="modal-backdrop editor-dialog-backdrop"
-        role="presentation"
-        onMouseDown={(event) => {
-          if (event.currentTarget === event.target) {
-            onClose();
-          }
-        }}
-      >
-        <section
-          className="modal-panel transit-wayfinding-export-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="material-save-download-title"
-        >
+      <Modal labelledBy="material-save-download-title" backdropClassName="editor-dialog-backdrop" className="transit-wayfinding-export-dialog" onBackdropClick={() => onClose()}>
           <header>
             <div>
               <span>保存与下载</span>
               <h2 id="material-save-download-title">保存、审核与下载</h2>
             </div>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="关闭"
-              title="关闭"
-              onClick={onClose}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                close
-              </span>
-            </button>
+            <IconButton variant="icon" icon="close" label="关闭" onClick={onClose} />
           </header>
           {canvas && onCanvasSizeChange ? (
             <div className="transit-wayfinding-export-canvas">
-              <label className="material-field">
-                <span>画布宽度（米）</span>
-                <input
+              <Field label="画布宽度（米）">
+                <Input
                   type="number"
                   inputMode="decimal"
                   min={0.25}
@@ -102,10 +80,9 @@ export function MaterialSaveDownloadDialog({
                   disabled={busy || canvasLocks?.width}
                   onChange={(event) => updateCanvasSide('widthM', event.currentTarget.value)}
                 />
-              </label>
-              <label className="material-field">
-                <span>画布高度（米）</span>
-                <input
+              </Field>
+              <Field label="画布高度（米）">
+                <Input
                   type="number"
                   inputMode="decimal"
                   min={0.25}
@@ -115,13 +92,21 @@ export function MaterialSaveDownloadDialog({
                   disabled={busy || canvasLocks?.height}
                   onChange={(event) => updateCanvasSide('heightM', event.currentTarget.value)}
                 />
-              </label>
+              </Field>
             </div>
           ) : null}
           {showPxPerMeter && pxPerMeter !== undefined && onPxPerMeterChange ? (
-            <label className="material-field transit-wayfinding-export-density">
-              <span>每格像素数</span>
-              <input
+            <Field
+              label="每格像素数"
+              className="transit-wayfinding-export-density"
+              hint={
+                <>
+                  输出尺寸：{outputWidthPx ?? '—'} × {outputHeightPx ?? '—'} px
+                  {maxPxPerMeter ? ` · 上限 ${maxPxPerMeter} px/米` : ''}
+                </>
+              }
+            >
+              <Input
                 type="number"
                 inputMode="numeric"
                 min={16}
@@ -136,54 +121,25 @@ export function MaterialSaveDownloadDialog({
                   }
                 }}
               />
-              <small>
-                输出尺寸：{outputWidthPx ?? '—'} × {outputHeightPx ?? '—'} px
-                {maxPxPerMeter ? ` · 上限 ${maxPxPerMeter} px/米` : ''}
-              </small>
-            </label>
+            </Field>
           ) : null}
           <p className="transit-wayfinding-export-note">{downloadNote}</p>
           <div className="transit-wayfinding-export-actions">
             {canExportProject && onExportProject ? (
-              <button
-                type="button"
-                className="secondary-action-button"
-                disabled={busy}
-                onClick={onExportProject}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  save
-                </span>
+              <Button variant="secondary" icon="save" disabled={busy} onClick={onExportProject}>
                 导出工程
-              </button>
+              </Button>
             ) : null}
             {onSubmitReview ? (
-              <button
-                type="button"
-                className="secondary-action-button"
-                disabled={busy}
-                onClick={onSubmitReview}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  publish
-                </span>
+              <Button variant="secondary" icon="publish" disabled={busy} onClick={onSubmitReview}>
                 提交审核
-              </button>
+              </Button>
             ) : null}
-            <button
-              type="button"
-              className="primary-action-button"
-              disabled={busy}
-              onClick={onDownload}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                download
-              </span>
+            <Button icon="download" disabled={busy} onClick={onDownload}>
               下载图片
-            </button>
+            </Button>
           </div>
-        </section>
-      </div>
+        </Modal>
     </EditorDialogPortal>
   );
 }

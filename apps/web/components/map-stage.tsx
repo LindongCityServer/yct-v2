@@ -39,6 +39,7 @@ import { getFontEmbedCSS, toBlob } from 'html-to-image';
 import LZString from 'lz-string';
 import QRCode from 'qrcode';
 import { appPath } from '../lib/app-paths';
+import { MOBILE_NAV_MEDIA_QUERY, SINGLE_COLUMN_MEDIA_QUERY } from '../lib/breakpoints';
 import { buildMapShareDescription, buildShareImagePreviewSrc } from '../lib/map-share-card';
 import {
   buildMapHistoryShareUrl,
@@ -209,6 +210,11 @@ import {
   type TransitRouteStop,
   type TransitSegmentRouteResolution,
 } from '../lib/map-route-plan';
+import { Modal } from './ui/modal';
+import { Button, ButtonLink, IconButton } from './ui/button';
+import { EmptyState } from './ui/status';
+import { SearchField } from './ui/field';
+import { MapHudChip, MapPresenceChip, RouteOptionBadge, TransferLineChip } from './ui/chip';
 
 interface MarkerResponse {
   meta: ApiMeta;
@@ -1086,7 +1092,7 @@ export function MapStage() {
 
   // 移动端默认收起结果列表：展开态会切换为覆盖全屏的浮层布局，首屏保持地图与底部导航可见。
   useEffect(() => {
-    if (window.matchMedia('(max-width: 760px)').matches) {
+    if (window.matchMedia(MOBILE_NAV_MEDIA_QUERY).matches) {
       setMarkerListExpanded(false);
     }
   }, []);
@@ -1428,7 +1434,7 @@ export function MapStage() {
         window.getComputedStyle(viewport).getPropertyValue('--yct-map-control-inset'),
       );
       const inset = Number.isFinite(insetValue) ? insetValue : 16;
-      const isMobile = window.matchMedia('(max-width: 720px)').matches;
+      const isMobile = window.matchMedia(SINGLE_COLUMN_MEDIA_QUERY).matches;
       const nextRect = normalizeMapVisibleRect(
         {
           left: isMobile
@@ -5031,47 +5037,36 @@ export function MapStage() {
         ) : null}
         {!routePlanDraft && !focusedMarker ? (
           <div className="map-panel-section">
-            <div className="search-box map-search-box">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                search
-              </span>
-              <input
-                ref={searchInputRef}
-                type="search"
-                aria-label={t('map.search.aria')}
-                value={markerQuery}
-                onChange={(event) => updateMarkerQuery(event.currentTarget.value)}
-                placeholder={t('map.search.placeholder')}
-              />
-              {markerQuery ? (
-                <button
-                  className="search-clear-button"
-                  type="button"
-                  aria-label={t('map.search.clear')}
-                  onClick={() => updateMarkerQuery('')}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    close
-                  </span>
-                </button>
-              ) : (
-                <button
-                  className={
-                    explorePending ? 'search-random-button is-loading' : 'search-random-button'
-                  }
-                  type="button"
-                  aria-label={t('map.explore.action')}
-                  title={t('map.explore.action')}
-                  aria-busy={explorePending || undefined}
-                  disabled={explorePending}
-                  onClick={triggerRandomExplore}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    casino
-                  </span>
-                </button>
-              )}
-            </div>
+            <SearchField
+              className="map-search-box"
+              ref={searchInputRef}
+              type="search"
+              aria-label={t('map.search.aria')}
+              value={markerQuery}
+              onChange={(event) => updateMarkerQuery(event.currentTarget.value)}
+              placeholder={t('map.search.placeholder')}
+              clearLabel={t('map.search.clear')}
+              onClear={() => updateMarkerQuery('')}
+              trailing={
+                markerQuery ? null : (
+                  <button
+                    className={
+                      explorePending ? 'search-random-button is-loading' : 'search-random-button'
+                    }
+                    type="button"
+                    aria-label={t('map.explore.action')}
+                    title={t('map.explore.action')}
+                    aria-busy={explorePending || undefined}
+                    disabled={explorePending}
+                    onClick={triggerRandomExplore}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      casino
+                    </span>
+                  </button>
+                )
+              }
+            />
             {routePlanDraft || (focusedMarker && isCenterableMarker(focusedMarker)) ? null : (
               <div
                 className={markerListExpanded ? 'map-marker-list' : 'map-marker-list is-collapsed'}
@@ -5261,16 +5256,16 @@ export function MapStage() {
                             <span>{formatMarkerDisplayName(marker.label)}</span>
                             <span className="map-marker-list-detail">
                               {playerPresence ? (
-                                <span className={`map-player-list-presence is-${playerPresence}`}>
-                                  <span className="material-symbols-outlined" aria-hidden="true">
-                                    {playerPresence === 'online' ? 'wifi' : 'wifi_off'}
-                                  </span>
+                                <MapPresenceChip
+                                  status={playerPresence}
+                                  icon={playerPresence === 'online' ? 'wifi' : 'wifi_off'}
+                                >
                                   {t(
                                     playerPresence === 'online'
                                       ? 'map.player.status.online'
                                       : 'map.player.status.offline',
                                   )}
-                                </span>
+                                </MapPresenceChip>
                               ) : null}
                               <span className="muted">{distanceDetail}</span>
                             </span>
@@ -5368,39 +5363,25 @@ export function MapStage() {
                 />
               ) : null}
               {focusedTransitLine ? (
-                <button
-                  className="icon-action-button map-line-info-button"
-                  type="button"
-                  aria-label={t('map.lineInfo.openAria', { name: focusedTransitLine.name })}
+                <IconButton
+                  className="map-line-info-button"
+                  icon="info"
+                  label={t('map.lineInfo.openAria', { name: focusedTransitLine.name })}
                   onClick={() => setLineInfoDialogOpen(true)}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    info
-                  </span>
-                </button>
+                />
               ) : null}
-              <button
-                className="icon-action-button"
-                type="button"
-                aria-label={poiDetailCollapsed ? t('map.poi.expand') : t('map.poi.collapse')}
+              <IconButton
+                icon={poiDetailCollapsed ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}
+                label={poiDetailCollapsed ? t('map.poi.expand') : t('map.poi.collapse')}
                 aria-expanded={!poiDetailCollapsed}
                 onClick={() => setPoiDetailCollapsed((current) => !current)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {poiDetailCollapsed ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}
-                </span>
-              </button>
-              <button
-                className="icon-action-button"
-                type="button"
-                aria-label={t('map.poi.close')}
+              />
+              <IconButton
+                icon="close"
+                label={t('map.poi.close')}
                 aria-keyshortcuts="Escape"
                 onClick={closePoiDetails}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
+              />
             </div>
             {!poiDetailCollapsed ? (
               <>
@@ -5537,14 +5518,13 @@ export function MapStage() {
                             <dd>
                               <span className="map-transfer-line-list">
                                 {focusedBoundRegions.map((region) => (
-                                  <button
-                                    className="map-transfer-line-chip map-poi-region-chip"
-                                    type="button"
+                                  <TransferLineChip
+                                    region
                                     key={region.id}
                                     onClick={() => focusMapMarker(region)}
                                   >
                                     {formatMarkerDisplayName(region.label)}
-                                  </button>
+                                  </TransferLineChip>
                                 ))}
                               </span>
                             </dd>
@@ -5557,20 +5537,14 @@ export function MapStage() {
                               {focusedMarkerConnections.length > 0 ? (
                                 <span className="map-transfer-line-list">
                                   {focusedMarkerConnections.map((connection) => (
-                                    <button
-                                      className="map-transfer-line-chip"
-                                      type="button"
+                                    <TransferLineChip
+                                      color={connection.color}
                                       key={connection.id}
                                       onClick={() => focusTransitLineById(connection.id)}
-                                      style={
-                                        {
-                                          '--transfer-line-color': connection.color,
-                                        } as CSSProperties
-                                      }
                                       title={`${connection.modeLabel} · ${connection.name}`}
                                     >
                                       {connection.name}
-                                    </button>
+                                    </TransferLineChip>
                                   ))}
                                 </span>
                               ) : (
@@ -5581,12 +5555,13 @@ export function MapStage() {
                         ) : null}
                       </dl>
                       {focusedMarker.href ? (
-                        <a className="secondary-action-button" href={focusedMarker.href}>
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            open_in_new
-                          </span>
-                          <span>{t('map.poi.openDetail')}</span>
-                        </a>
+                        <ButtonLink
+                          variant="secondary"
+                          href={focusedMarker.href}
+                          icon="open_in_new"
+                        >
+                          {t('map.poi.openDetail')}
+                        </ButtonLink>
                       ) : null}
                     </>
                   ) : null}
@@ -5947,40 +5922,36 @@ export function MapStage() {
             <span>{scaleBarInfo.label}</span>
           </div>
           <div className="map-hud-chips">
-            <div className="map-source-chip" title={dataSourceText}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {loadStatus === 'loading'
+            <MapHudChip
+              variant="source"
+              title={dataSourceText}
+              icon={
+                loadStatus === 'loading'
                   ? 'progress_activity'
                   : loadStatus === 'ready'
                     ? 'map'
-                    : 'warning'}
-              </span>
-              <span>
-                {loadStatus === 'loading'
-                  ? t('map.source.loading')
-                  : loadStatus === 'ready'
-                    ? t('map.source.objectCount', {
-                        count:
-                          pointMarkers.length +
-                          endpointGroupMarkers.length +
-                          shapeMarkers.length +
-                          transitLineMarkers.length,
-                      })
-                    : t('map.source.unavailable')}
-              </span>
-            </div>
-            <div className="map-coordinate-chip">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {nearbySearchCenter ? 'gps_fixed' : 'near_me'}
-              </span>
-              <span>
-                {nearbySearchCenter
-                  ? `X ${formatMapCoordinate(nearbySearchCenter.coordinates[0])} / Z ${formatMapCoordinate(nearbySearchCenter.coordinates[1])}`
-                  : cursorWorld
-                    ? `X ${formatMapCoordinate(cursorWorld.x)} / Z ${formatMapCoordinate(cursorWorld.z)}`
-                    : t('map.hud.cursor')}
-              </span>
-            </div>
+                    : 'warning'
+              }
+            >
+              {loadStatus === 'loading'
+                ? t('map.source.loading')
+                : loadStatus === 'ready'
+                  ? t('map.source.objectCount', {
+                      count:
+                        pointMarkers.length +
+                        endpointGroupMarkers.length +
+                        shapeMarkers.length +
+                        transitLineMarkers.length,
+                    })
+                  : t('map.source.unavailable')}
+            </MapHudChip>
+            <MapHudChip variant="coordinate" icon={nearbySearchCenter ? 'gps_fixed' : 'near_me'}>
+              {nearbySearchCenter
+                ? `X ${formatMapCoordinate(nearbySearchCenter.coordinates[0])} / Z ${formatMapCoordinate(nearbySearchCenter.coordinates[1])}`
+                : cursorWorld
+                  ? `X ${formatMapCoordinate(cursorWorld.x)} / Z ${formatMapCoordinate(cursorWorld.z)}`
+                  : t('map.hud.cursor')}
+            </MapHudChip>
           </div>
         </div>
 
@@ -6494,12 +6465,9 @@ export function MapStage() {
             ))}
           </div>
         ) : (
-          <div className="empty-state map-empty">
-            <span className="material-symbols-outlined" aria-hidden="true">
-              map
-            </span>
+          <EmptyState icon="map" className="map-empty">
             <p>{loadStatus === 'loading' ? t('map.empty.loading') : t('map.empty.unavailable')}</p>
-          </div>
+          </EmptyState>
         )}
       </div>
 
@@ -6540,30 +6508,24 @@ export function MapStage() {
       ) : null}
 
       <div className="map-toolbar">
-        <button
-          className="icon-button"
-          type="button"
-          aria-label={t('map.toolbar.zoomIn')}
+        <IconButton
+          variant="icon"
+          icon="add"
+          label={t('map.toolbar.zoomIn')}
           onClick={() => zoomBy(0.5)}
-        >
-          <span className="material-symbols-outlined">add</span>
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          aria-label={t('map.toolbar.zoomOut')}
+        />
+        <IconButton
+          variant="icon"
+          icon="remove"
+          label={t('map.toolbar.zoomOut')}
           onClick={() => zoomBy(-0.5)}
-        >
-          <span className="material-symbols-outlined">remove</span>
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          aria-label={t('map.toolbar.reset')}
+        />
+        <IconButton
+          variant="icon"
+          icon="my_location"
+          label={t('map.toolbar.reset')}
           onClick={resetView}
-        >
-          <span className="material-symbols-outlined">my_location</span>
-        </button>
+        />
         <button
           ref={measureButtonRef}
           className={measureMode ? 'icon-button is-active' : 'icon-button'}
@@ -6670,9 +6632,8 @@ export function MapStage() {
                 </select>
 
                 <div className="map-history-switch">
-                  <button
-                    className="secondary-action-button"
-                    type="button"
+                  <Button
+                    variant="secondary"
                     disabled={!previousHistoryVersion}
                     aria-keyshortcuts="Alt+ArrowLeft"
                     onClick={() =>
@@ -6680,7 +6641,7 @@ export function MapStage() {
                     }
                   >
                     {t('map.history.previous')}
-                  </button>
+                  </Button>
                   <span className="map-history-position">
                     {activeHistoryVersion
                       ? historyPosition >= 0
@@ -6691,9 +6652,8 @@ export function MapStage() {
                         : t('map.history.unknownPosition')
                       : t('map.history.currentCaption')}
                   </span>
-                  <button
-                    className="secondary-action-button"
-                    type="button"
+                  <Button
+                    variant="secondary"
                     disabled={!nextHistoryVersion}
                     aria-keyshortcuts="Alt+ArrowRight"
                     onClick={() =>
@@ -6701,7 +6661,7 @@ export function MapStage() {
                     }
                   >
                     {t('map.history.next')}
-                  </button>
+                  </Button>
                 </div>
 
                 {activeHistoryVersion ? (
@@ -6727,20 +6687,12 @@ export function MapStage() {
                       <p className="map-history-warning">{t('map.history.currentDataBadge')}</p>
                     ) : null}
                     <div className="map-history-actions">
-                      <button
-                        className="secondary-action-button"
-                        type="button"
-                        onClick={() => void shareHistoryView()}
-                      >
+                      <Button variant="secondary" onClick={() => void shareHistoryView()}>
                         {t('map.history.share')}
-                      </button>
-                      <button
-                        className="secondary-action-button"
-                        type="button"
-                        onClick={returnToCurrentMap}
-                      >
+                      </Button>
+                      <Button variant="secondary" onClick={returnToCurrentMap}>
                         {t('map.history.returnCurrent')}
-                      </button>
+                      </Button>
                     </div>
                     {historyShareStatus ? (
                       <p className="map-history-note" role="status">
@@ -6810,286 +6762,244 @@ export function MapStage() {
               onChange={setLinearFeaturesVisible}
             />
           </div>
-          <button
-            className="secondary-action-button is-primary"
-            type="button"
+          <Button
+            variant="primary"
+            icon="add_location_alt"
             disabled={publicPoiCategories.length === 0}
             onClick={() => setPoiSubmitDialogOpen(true)}
           >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              add_location_alt
-            </span>
-            <span>{t('map.layer.submitPoi')}</span>
-          </button>
+            {t('map.layer.submitPoi')}
+          </Button>
           {poiSubmitStatus ? <p className="map-source-note">{poiSubmitStatus}</p> : null}
         </aside>
       ) : null}
       {lineInfoDialogOpen && focusedTransitLine ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={() => setLineInfoDialogOpen(false)}
+        <Modal
+          labelledBy="map-line-info-title"
+          className="map-line-info-modal"
+          onBackdropClick={() => setLineInfoDialogOpen(false)}
         >
-          <section
-            className="modal-panel map-line-info-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="map-line-info-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="section-heading">
-              <h2 id="map-line-info-title">
-                {t('map.lineInfo.title', { name: focusedTransitLine.name })}
-              </h2>
-              <button
-                className="icon-action-button"
-                type="button"
-                aria-label={t('map.poi.close')}
-                onClick={() => setLineInfoDialogOpen(false)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
+          <div className="section-heading">
+            <h2 id="map-line-info-title">
+              {t('map.lineInfo.title', { name: focusedTransitLine.name })}
+            </h2>
+            <IconButton
+              icon="close"
+              label={t('map.poi.close')}
+              onClick={() => setLineInfoDialogOpen(false)}
+            />
+          </div>
+          <dl className="line-attribute-list">
+            <div>
+              <dt>{t('lineDetail.firstLast')}</dt>
+              <dd>{formatTransitLineTime(focusedTransitLine, t)}</dd>
             </div>
-            <dl className="line-attribute-list">
-              <div>
-                <dt>{t('lineDetail.firstLast')}</dt>
-                <dd>{formatTransitLineTime(focusedTransitLine, t)}</dd>
-              </div>
-              <div>
-                <dt>{t('lineDetail.operator')}</dt>
-                <dd>
-                  <TransitOperatorName
-                    name={focusedTransitLine.operator}
-                    url={focusedTransitLine.operatorUrl}
-                    fallback={t('lineDetail.toBeAdded')}
-                  />
-                </dd>
-              </div>
-              <div>
-                <dt>{t('map.lineDetail.fare')}</dt>
-                <dd>
-                  {formatFareTextWithoutCurrencyUnit(focusedTransitLine.fare) ??
-                    t('lineDetail.toBeAdded')}
-                </dd>
-              </div>
-              <div>
-                <dt>{t('map.lineDetail.stations')}</dt>
-                <dd>
-                  {focusedTransitLine.displayFirstStationName &&
-                  focusedTransitLine.displayLastStationName
-                    ? `${focusedTransitLine.displayFirstStationName} → ${focusedTransitLine.displayLastStationName}`
-                    : focusedTransitLine.firstStationName && focusedTransitLine.lastStationName
-                      ? `${focusedTransitLine.firstStationName} → ${focusedTransitLine.lastStationName}`
-                      : t('lineDetail.extra.stations', {
-                          count:
-                            focusedTransitLine.stationStops?.length ??
-                            focusedTransitLine.stationNames.length,
-                        })}
-                </dd>
-              </div>
-            </dl>
-          </section>
-        </div>
+            <div>
+              <dt>{t('lineDetail.operator')}</dt>
+              <dd>
+                <TransitOperatorName
+                  name={focusedTransitLine.operator}
+                  url={focusedTransitLine.operatorUrl}
+                  fallback={t('lineDetail.toBeAdded')}
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>{t('map.lineDetail.fare')}</dt>
+              <dd>
+                {formatFareTextWithoutCurrencyUnit(focusedTransitLine.fare) ??
+                  t('lineDetail.toBeAdded')}
+              </dd>
+            </div>
+            <div>
+              <dt>{t('map.lineDetail.stations')}</dt>
+              <dd>
+                {focusedTransitLine.displayFirstStationName &&
+                focusedTransitLine.displayLastStationName
+                  ? `${focusedTransitLine.displayFirstStationName} → ${focusedTransitLine.displayLastStationName}`
+                  : focusedTransitLine.firstStationName && focusedTransitLine.lastStationName
+                    ? `${focusedTransitLine.firstStationName} → ${focusedTransitLine.lastStationName}`
+                    : t('lineDetail.extra.stations', {
+                        count:
+                          focusedTransitLine.stationStops?.length ??
+                          focusedTransitLine.stationNames.length,
+                      })}
+              </dd>
+            </div>
+          </dl>
+        </Modal>
       ) : null}
       {poiSubmitDialogOpen ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={() => setPoiSubmitDialogOpen(false)}
+        <Modal
+          labelledBy="map-poi-submit-title"
+          className="map-poi-submit-modal"
+          onBackdropClick={() => setPoiSubmitDialogOpen(false)}
         >
-          <section
-            className="modal-panel map-poi-submit-modal"
-            aria-labelledby="map-poi-submit-title"
-            role="dialog"
-            aria-modal="true"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="section-heading">
-              <h2 id="map-poi-submit-title">{t('map.poiSubmit.title')}</h2>
-              <button
-                className="icon-action-button"
-                type="button"
-                onClick={() => setPoiSubmitDialogOpen(false)}
-                aria-label={t('map.poiSubmit.close')}
+          <div className="section-heading">
+            <h2 id="map-poi-submit-title">{t('map.poiSubmit.title')}</h2>
+            <IconButton
+              icon="close"
+              label={t('map.poiSubmit.close')}
+              onClick={() => setPoiSubmitDialogOpen(false)}
+            />
+          </div>
+          <form className="map-poi-submit-form" id={poiSubmitFormId} onSubmit={submitPoi}>
+            <label>
+              <span>{t('map.poiSubmit.name')}</span>
+              <input
+                autoFocus
+                value={poiTitle}
+                onChange={(event) => setPoiTitle(event.currentTarget.value)}
+                placeholder={t('map.poiSubmit.namePlaceholder')}
+                aria-label={t('map.poiSubmit.name')}
+              />
+            </label>
+            <label>
+              <span>{t('map.poiSubmit.category')}</span>
+              <select
+                value={poiCategoryId}
+                onChange={(event) => setPoiCategoryId(event.currentTarget.value)}
+                aria-label={t('map.poiSubmit.category')}
               >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            </div>
-            <form className="map-poi-submit-form" id={poiSubmitFormId} onSubmit={submitPoi}>
-              <label>
-                <span>{t('map.poiSubmit.name')}</span>
-                <input
-                  autoFocus
-                  value={poiTitle}
-                  onChange={(event) => setPoiTitle(event.currentTarget.value)}
-                  placeholder={t('map.poiSubmit.namePlaceholder')}
-                  aria-label={t('map.poiSubmit.name')}
-                />
-              </label>
-              <label>
-                <span>{t('map.poiSubmit.category')}</span>
-                <select
-                  value={poiCategoryId}
-                  onChange={(event) => setPoiCategoryId(event.currentTarget.value)}
-                  aria-label={t('map.poiSubmit.category')}
-                >
-                  {publicPoiCategories.map((category) => (
-                    <option value={category.id} key={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>{t('map.poiSubmit.description')}</span>
-                <textarea
-                  value={poiDescription}
-                  onChange={(event) => setPoiDescription(event.currentTarget.value)}
-                  placeholder={t('map.poiSubmit.descriptionPlaceholder')}
-                  aria-label={t('map.poiSubmit.description')}
-                  maxLength={1000}
-                />
-              </label>
-              <label>
-                <span>{t('map.poiSubmit.openingHours')}</span>
-                <input
-                  value={poiOpeningHours}
-                  onChange={(event) => setPoiOpeningHours(event.currentTarget.value)}
-                  placeholder={t('map.poiSubmit.openingHoursPlaceholder')}
-                  aria-label={t('map.poiSubmit.openingHours')}
-                  maxLength={500}
-                />
-              </label>
-              <label>
-                <span>{t('map.poiSubmit.address')}</span>
-                <input
-                  value={poiAddress}
-                  onChange={(event) => updatePoiAddress(event.currentTarget.value)}
-                  placeholder={t('map.poiSubmit.addressPlaceholder')}
-                  aria-label={t('map.poiSubmit.address')}
-                  maxLength={300}
-                />
-              </label>
-              <label>
-                <span>{t('map.poiSubmit.floor')}</span>
-                <input
-                  value={poiFloorLabel}
-                  onChange={(event) => setPoiFloorLabel(event.currentTarget.value)}
-                  placeholder={t('map.poiSubmit.floorPlaceholder')}
-                  aria-label={t('map.poiSubmit.floor')}
-                  maxLength={40}
-                />
-              </label>
-              <label>
-                <span>{t('map.poiSubmit.addressRoad')}</span>
-                <select
-                  value={poiAddressRoadMarkerId}
-                  disabled={!poiAddress.trim()}
-                  onChange={(event) => setPoiAddressRoadMarkerId(event.currentTarget.value)}
-                  aria-label={t('map.poiSubmit.addressRoad')}
-                >
-                  <option value="">{t('map.poiSubmit.noAddressRoad')}</option>
-                  {poiAddressRoadOptions.map((marker) => (
-                    <option value={marker.id} key={marker.id}>
-                      {marker.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <PoiFacilityEditor facilities={poiFacilities} onChange={setPoiFacilities} />
-              <label>
-                <span>{t('map.poiSubmit.href')}</span>
-                <input
-                  type="url"
-                  value={poiHref}
-                  onChange={(event) => setPoiHref(event.currentTarget.value)}
-                  placeholder={t('map.poiSubmit.hrefPlaceholder')}
-                  aria-label={t('map.poiSubmit.href')}
-                />
-              </label>
-              <label>
-                <span>{t('map.poiSubmit.imageFile')}</span>
-                <input
-                  key={poiImageFileInputKey}
-                  type="file"
-                  multiple
-                  accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
-                  onChange={(event) =>
-                    setPoiImageFiles(Array.from(event.currentTarget.files ?? []).slice(0, 12))
-                  }
-                  aria-label={t('map.poiSubmit.imageFile')}
-                />
-                {poiImageFiles.length > 0 ? (
-                  <small>
-                    {t('map.poiSubmit.imageFileCount', { count: poiImageFiles.length })}
-                  </small>
-                ) : null}
-              </label>
-              <label>
-                <span>{t('map.poiSubmit.imageUrl')}</span>
-                <input
-                  type="url"
-                  value={poiImageUrl}
-                  onChange={(event) => setPoiImageUrl(event.currentTarget.value)}
-                  placeholder={t('map.poiSubmit.imageUrlPlaceholder')}
-                  aria-label={t('map.poiSubmit.imageUrl')}
-                />
-              </label>
-              <div className="map-poi-coordinate-row">
-                <label>
-                  <span>{t('map.poiSubmit.x')}</span>
-                  <input
-                    type="number"
-                    value={poiX}
-                    onChange={(event) => setPoiX(event.currentTarget.value)}
-                    placeholder="X"
-                    aria-label={t('map.poiSubmit.x')}
-                  />
-                </label>
-                <label>
-                  <span>{t('map.poiSubmit.z')}</span>
-                  <input
-                    type="number"
-                    value={poiZ}
-                    onChange={(event) => setPoiZ(event.currentTarget.value)}
-                    placeholder="Z"
-                    aria-label={t('map.poiSubmit.z')}
-                  />
-                </label>
-                <button
-                  className="secondary-action-button"
-                  type="button"
-                  onClick={beginPoiCoordinatePick}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    add_location_alt
-                  </span>
-                  <span>{t('map.poiSubmit.pickOnMap')}</span>
-                </button>
-              </div>
-            </form>
-            {poiSubmitStatus ? <p className="map-source-note">{poiSubmitStatus}</p> : null}
-            <div className="admin-content-actions">
-              <button
-                className="secondary-action-button is-primary"
-                type="submit"
-                form={poiSubmitFormId}
-                disabled={poiSubmitBusy || publicPoiCategories.length === 0}
+                {publicPoiCategories.map((category) => (
+                  <option value={category.id} key={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>{t('map.poiSubmit.description')}</span>
+              <textarea
+                value={poiDescription}
+                onChange={(event) => setPoiDescription(event.currentTarget.value)}
+                placeholder={t('map.poiSubmit.descriptionPlaceholder')}
+                aria-label={t('map.poiSubmit.description')}
+                maxLength={1000}
+              />
+            </label>
+            <label>
+              <span>{t('map.poiSubmit.openingHours')}</span>
+              <input
+                value={poiOpeningHours}
+                onChange={(event) => setPoiOpeningHours(event.currentTarget.value)}
+                placeholder={t('map.poiSubmit.openingHoursPlaceholder')}
+                aria-label={t('map.poiSubmit.openingHours')}
+                maxLength={500}
+              />
+            </label>
+            <label>
+              <span>{t('map.poiSubmit.address')}</span>
+              <input
+                value={poiAddress}
+                onChange={(event) => updatePoiAddress(event.currentTarget.value)}
+                placeholder={t('map.poiSubmit.addressPlaceholder')}
+                aria-label={t('map.poiSubmit.address')}
+                maxLength={300}
+              />
+            </label>
+            <label>
+              <span>{t('map.poiSubmit.floor')}</span>
+              <input
+                value={poiFloorLabel}
+                onChange={(event) => setPoiFloorLabel(event.currentTarget.value)}
+                placeholder={t('map.poiSubmit.floorPlaceholder')}
+                aria-label={t('map.poiSubmit.floor')}
+                maxLength={40}
+              />
+            </label>
+            <label>
+              <span>{t('map.poiSubmit.addressRoad')}</span>
+              <select
+                value={poiAddressRoadMarkerId}
+                disabled={!poiAddress.trim()}
+                onChange={(event) => setPoiAddressRoadMarkerId(event.currentTarget.value)}
+                aria-label={t('map.poiSubmit.addressRoad')}
               >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  upload
-                </span>
-                <span>
-                  {poiSubmitBusy ? t('map.poiSubmit.submitting') : t('map.poiSubmit.submit')}
-                </span>
-              </button>
+                <option value="">{t('map.poiSubmit.noAddressRoad')}</option>
+                {poiAddressRoadOptions.map((marker) => (
+                  <option value={marker.id} key={marker.id}>
+                    {marker.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <PoiFacilityEditor facilities={poiFacilities} onChange={setPoiFacilities} />
+            <label>
+              <span>{t('map.poiSubmit.href')}</span>
+              <input
+                type="url"
+                value={poiHref}
+                onChange={(event) => setPoiHref(event.currentTarget.value)}
+                placeholder={t('map.poiSubmit.hrefPlaceholder')}
+                aria-label={t('map.poiSubmit.href')}
+              />
+            </label>
+            <label>
+              <span>{t('map.poiSubmit.imageFile')}</span>
+              <input
+                key={poiImageFileInputKey}
+                type="file"
+                multiple
+                accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
+                onChange={(event) =>
+                  setPoiImageFiles(Array.from(event.currentTarget.files ?? []).slice(0, 12))
+                }
+                aria-label={t('map.poiSubmit.imageFile')}
+              />
+              {poiImageFiles.length > 0 ? (
+                <small>{t('map.poiSubmit.imageFileCount', { count: poiImageFiles.length })}</small>
+              ) : null}
+            </label>
+            <label>
+              <span>{t('map.poiSubmit.imageUrl')}</span>
+              <input
+                type="url"
+                value={poiImageUrl}
+                onChange={(event) => setPoiImageUrl(event.currentTarget.value)}
+                placeholder={t('map.poiSubmit.imageUrlPlaceholder')}
+                aria-label={t('map.poiSubmit.imageUrl')}
+              />
+            </label>
+            <div className="map-poi-coordinate-row">
+              <label>
+                <span>{t('map.poiSubmit.x')}</span>
+                <input
+                  type="number"
+                  value={poiX}
+                  onChange={(event) => setPoiX(event.currentTarget.value)}
+                  placeholder="X"
+                  aria-label={t('map.poiSubmit.x')}
+                />
+              </label>
+              <label>
+                <span>{t('map.poiSubmit.z')}</span>
+                <input
+                  type="number"
+                  value={poiZ}
+                  onChange={(event) => setPoiZ(event.currentTarget.value)}
+                  placeholder="Z"
+                  aria-label={t('map.poiSubmit.z')}
+                />
+              </label>
+              <Button variant="secondary" icon="add_location_alt" onClick={beginPoiCoordinatePick}>
+                {t('map.poiSubmit.pickOnMap')}
+              </Button>
             </div>
-          </section>
-        </div>
+          </form>
+          {poiSubmitStatus ? <p className="map-source-note">{poiSubmitStatus}</p> : null}
+          <div className="admin-content-actions">
+            <Button
+              type="submit"
+              form={poiSubmitFormId}
+              loading={poiSubmitBusy}
+              icon="upload"
+              disabled={poiSubmitBusy || publicPoiCategories.length === 0}
+            >
+              {poiSubmitBusy ? t('map.poiSubmit.submitting') : t('map.poiSubmit.submit')}
+            </Button>
+          </div>
+        </Modal>
       ) : null}
       {routePlanRequirementDialogOpen && routePlanDraft ? (
         <RouteRequirementDialog
@@ -7286,233 +7196,199 @@ function MapShareDialog({
   };
 
   return (
-    <div className="modal-backdrop map-share-backdrop" role="presentation" onMouseDown={onClose}>
-      <section
-        className="modal-panel map-share-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="map-share-title"
-        onMouseDown={(event) => event.stopPropagation()}
+    <Modal
+      labelledBy="map-share-title"
+      backdropClassName="map-share-backdrop"
+      className="map-share-dialog"
+      onBackdropClick={() => onClose}
+    >
+      <div className="section-heading">
+        <h2 id="map-share-title">{t('map.share.title')}</h2>
+        <IconButton icon="close" label={t('map.share.close')} onClick={onClose} />
+      </div>
+      <article
+        className="map-share-preview"
+        ref={previewRef}
+        style={{ '--map-share-color': payload.color } as CSSProperties}
       >
-        <div className="section-heading">
-          <h2 id="map-share-title">{t('map.share.title')}</h2>
-          <button
-            className="icon-action-button"
-            type="button"
-            onClick={onClose}
-            aria-label={t('map.share.close')}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              close
-            </span>
-          </button>
-        </div>
-        <article
-          className="map-share-preview"
-          ref={previewRef}
-          style={{ '--map-share-color': payload.color } as CSSProperties}
-        >
-          {shareImageSrc && !shareImageFailed ? (
-            <figure className="map-share-preview-media">
+        {shareImageSrc && !shareImageFailed ? (
+          <figure className="map-share-preview-media">
+            <img
+              alt=""
+              decoding="async"
+              loading="eager"
+              onError={() => setShareImageFailed(true)}
+              src={shareImageSrc}
+            />
+          </figure>
+        ) : null}
+        <div className="map-share-preview-heading">
+          {payload.iconUrl && !shareIconFailed ? (
+            <span className="map-share-preview-icon is-image">
               <img
                 alt=""
                 decoding="async"
+                draggable={false}
                 loading="eager"
-                onError={() => setShareImageFailed(true)}
-                src={shareImageSrc}
+                onError={() => setShareIconFailed(true)}
+                src={payload.iconUrl}
               />
-            </figure>
-          ) : null}
-          <div className="map-share-preview-heading">
-            {payload.iconUrl && !shareIconFailed ? (
-              <span className="map-share-preview-icon is-image">
-                <img
-                  alt=""
-                  decoding="async"
-                  draggable={false}
-                  loading="eager"
-                  onError={() => setShareIconFailed(true)}
-                  src={payload.iconUrl}
-                />
-              </span>
-            ) : (
-              <span className="material-symbols-outlined map-share-preview-icon" aria-hidden="true">
-                {payload.icon}
-              </span>
-            )}
-            <span>
-              <strong>{payload.title}</strong>
-              <small>{payload.eyebrow}</small>
             </span>
+          ) : (
+            <span className="material-symbols-outlined map-share-preview-icon" aria-hidden="true">
+              {payload.icon}
+            </span>
+          )}
+          <span>
+            <strong>{payload.title}</strong>
+            <small>{payload.eyebrow}</small>
+          </span>
+        </div>
+        {payload.meta.length > 0 ? (
+          <div className="map-share-preview-meta">
+            {payload.meta.map((item, index) => (
+              <span key={`${item}-${index}`}>{item}</span>
+            ))}
           </div>
-          {payload.meta.length > 0 ? (
-            <div className="map-share-preview-meta">
-              {payload.meta.map((item, index) => (
-                <span key={`${item}-${index}`}>{item}</span>
-              ))}
-            </div>
-          ) : null}
-          {payload.description ? (
-            <p className="map-share-preview-description">{payload.description}</p>
-          ) : null}
-          {payload.steps.length > 0 ? (
-            <ol className="map-route-step-timeline map-share-preview-steps">
-              {payload.steps.map((step, index) => {
-                const markerIcon = getRouteShareStepMarkerIcon(step);
+        ) : null}
+        {payload.description ? (
+          <p className="map-share-preview-description">{payload.description}</p>
+        ) : null}
+        {payload.steps.length > 0 ? (
+          <ol className="map-route-step-timeline map-share-preview-steps">
+            {payload.steps.map((step, index) => {
+              const markerIcon = getRouteShareStepMarkerIcon(step);
 
-                return (
-                  <li
-                    className={`is-${step.kind}${step.role ? ` is-${step.role}` : ''}`}
-                    key={`${step.kind}-${step.label}-${index}`}
-                    style={{ '--route-step-color': step.color ?? payload.color } as CSSProperties}
-                  >
-                    <span className="map-route-step-marker" aria-hidden="true">
-                      {markerIcon ? (
-                        <span className="material-symbols-outlined">{markerIcon}</span>
-                      ) : (
-                        getRouteStepMarkerText(step, t)
-                      )}
+              return (
+                <li
+                  className={`is-${step.kind}${step.role ? ` is-${step.role}` : ''}`}
+                  key={`${step.kind}-${step.label}-${index}`}
+                  style={{ '--route-step-color': step.color ?? payload.color } as CSSProperties}
+                >
+                  <span className="map-route-step-marker" aria-hidden="true">
+                    {markerIcon ? (
+                      <span className="material-symbols-outlined">{markerIcon}</span>
+                    ) : (
+                      getRouteStepMarkerText(step, t)
+                    )}
+                  </span>
+                  <span className="map-route-step-content">
+                    <span className="map-route-step-main">
+                      <span className="map-route-step-label">{step.label}</span>
                     </span>
-                    <span className="map-route-step-content">
-                      <span className="map-route-step-main">
-                        <span className="map-route-step-label">{step.label}</span>
-                      </span>
-                      {step.kind === 'walk' && step.details?.length ? (
-                        <ul className="map-route-step-detail-list">
-                          {step.details.map((detail, detailIndex) => (
-                            <li key={`${step.kind}-${step.label}-detail-${detailIndex}`}>
-                              <span
-                                className="material-symbols-outlined map-share-detail-symbol"
-                                aria-hidden="true"
-                              >
-                                {detail.icon}
-                              </span>
-                              <span
-                                className={
-                                  detail.kind
-                                    ? `map-route-step-detail-label is-${detail.kind}`
-                                    : 'map-route-step-detail-label'
-                                }
-                              >
-                                {formatShareRouteDetailLabel(detail, t)}
-                              </span>
-                              {detail.meta ? <small>{detail.meta}</small> : null}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
-          ) : null}
-          <footer className="map-share-preview-footer">
-            <div className="map-share-preview-footer-copy">
-              <span>{t('map.share.footerPrefix')}</span>
-              {useWordmarkLogo ? (
-                <BrandWordmark />
-              ) : (
-                <span className="map-share-preview-footer-brand">
-                  <BrandSymbol />
-                  <strong>Yuchengtong</strong>
-                </span>
-              )}
-              <small>{t('map.share.footerDisclaimer')}</small>
-            </div>
-            {qrCodeDataUrl ? (
-              <img
-                className="map-share-preview-qr"
-                src={qrCodeDataUrl}
-                alt={t('map.share.qrCode')}
-              />
+                    {step.kind === 'walk' && step.details?.length ? (
+                      <ul className="map-route-step-detail-list">
+                        {step.details.map((detail, detailIndex) => (
+                          <li key={`${step.kind}-${step.label}-detail-${detailIndex}`}>
+                            <span
+                              className="material-symbols-outlined map-share-detail-symbol"
+                              aria-hidden="true"
+                            >
+                              {detail.icon}
+                            </span>
+                            <span
+                              className={
+                                detail.kind
+                                  ? `map-route-step-detail-label is-${detail.kind}`
+                                  : 'map-route-step-detail-label'
+                              }
+                            >
+                              {formatShareRouteDetailLabel(detail, t)}
+                            </span>
+                            {detail.meta ? <small>{detail.meta}</small> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        ) : null}
+        <footer className="map-share-preview-footer">
+          <div className="map-share-preview-footer-copy">
+            <span>{t('map.share.footerPrefix')}</span>
+            {useWordmarkLogo ? (
+              <BrandWordmark />
             ) : (
-              <span className="map-share-preview-qr-placeholder" aria-hidden="true" />
+              <span className="map-share-preview-footer-brand">
+                <BrandSymbol />
+                <strong>Yuchengtong</strong>
+              </span>
             )}
-          </footer>
-          <p className="map-share-preview-url">{payload.url}</p>
-        </article>
-        <div className="map-share-actions" aria-label={t('map.share.actions')}>
-          {copyOptions.length > 0 ? (
-            <div className="map-share-copy-control">
-              <label className="map-share-copy-select">
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  content_copy
-                </span>
-                <span>
-                  <strong>{t('map.share.copyKind')}</strong>
-                  <select
-                    value={selectedCopyKind ?? ''}
-                    onChange={(event) => setCopyKind(event.currentTarget.value as MapShareCopyKind)}
-                    disabled={busyMode !== null || busyCopy !== null}
-                    aria-label={t('map.share.copyKind')}
-                  >
-                    {copyOptions.map((kind) => (
-                      <option value={kind} key={kind}>
-                        {t(mapShareCopyLabelKeys[kind])}
-                      </option>
-                    ))}
-                  </select>
-                </span>
-              </label>
-              <button
-                className="secondary-action-button"
-                type="button"
-                aria-busy={
-                  busyCopy !== null || (selectedCopyKind === 'link' && shortShareLinkLoading)
-                }
-                disabled={
-                  busyMode !== null ||
-                  busyCopy !== null ||
-                  !selectedCopyKind ||
-                  (selectedCopyKind === 'link' && shortShareLinkLoading)
-                }
-                onClick={() => void performCopy()}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {busyCopy || (selectedCopyKind === 'link' && shortShareLinkLoading)
-                    ? 'progress_activity'
-                    : 'content_copy'}
-                </span>
-                <span>
-                  {busyCopy || (selectedCopyKind === 'link' && shortShareLinkLoading)
-                    ? t('map.share.processing')
-                    : t('map.share.copy')}
-                </span>
-              </button>
-            </div>
-          ) : null}
-          {mapShareModes.map((mode) => (
-            <button
-              className={
-                mode === 'image' ? 'secondary-action-button is-primary' : 'secondary-action-button'
-              }
-              type="button"
-              key={mode}
-              aria-busy={busyMode === mode || (mode === 'link' && shortShareLinkLoading)}
+            <small>{t('map.share.footerDisclaimer')}</small>
+          </div>
+          {qrCodeDataUrl ? (
+            <img className="map-share-preview-qr" src={qrCodeDataUrl} alt={t('map.share.qrCode')} />
+          ) : (
+            <span className="map-share-preview-qr-placeholder" aria-hidden="true" />
+          )}
+        </footer>
+        <p className="map-share-preview-url">{payload.url}</p>
+      </article>
+      <div className="map-share-actions" aria-label={t('map.share.actions')}>
+        {copyOptions.length > 0 ? (
+          <div className="map-share-copy-control">
+            <label className="map-share-copy-select">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                content_copy
+              </span>
+              <span>
+                <strong>{t('map.share.copyKind')}</strong>
+                <select
+                  value={selectedCopyKind ?? ''}
+                  onChange={(event) => setCopyKind(event.currentTarget.value as MapShareCopyKind)}
+                  disabled={busyMode !== null || busyCopy !== null}
+                  aria-label={t('map.share.copyKind')}
+                >
+                  {copyOptions.map((kind) => (
+                    <option value={kind} key={kind}>
+                      {t(mapShareCopyLabelKeys[kind])}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            </label>
+            <Button
+              variant="secondary"
+              icon="content_copy"
+              loading={busyCopy !== null || (selectedCopyKind === 'link' && shortShareLinkLoading)}
               disabled={
                 busyMode !== null ||
                 busyCopy !== null ||
-                (mode === 'image' && !qrCodeDataUrl) ||
-                (mode === 'link' && shortShareLinkLoading)
+                !selectedCopyKind ||
+                (selectedCopyKind === 'link' && shortShareLinkLoading)
               }
-              onClick={() => void performShare(mode)}
+              onClick={() => void performCopy()}
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {mode === 'link' && shortShareLinkLoading
-                  ? 'progress_activity'
-                  : mapShareModeIcons[mode]}
-              </span>
-              <span>
-                {busyMode === mode || (mode === 'link' && shortShareLinkLoading)
-                  ? t('map.share.processing')
-                  : t(mapShareModeLabelKeys[mode])}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-    </div>
+              {busyCopy !== null || (selectedCopyKind === 'link' && shortShareLinkLoading)
+                ? t('map.share.processing')
+                : t('map.share.copy')}
+            </Button>
+          </div>
+        ) : null}
+        {mapShareModes.map((mode) => (
+          <Button
+            variant={mode === 'image' ? 'primary' : 'secondary'}
+            key={mode}
+            icon={mapShareModeIcons[mode]}
+            loading={busyMode === mode || (mode === 'link' && shortShareLinkLoading)}
+            disabled={
+              busyMode !== null ||
+              busyCopy !== null ||
+              (mode === 'image' && !qrCodeDataUrl) ||
+              (mode === 'link' && shortShareLinkLoading)
+            }
+            onClick={() => void performShare(mode)}
+          >
+            {busyMode === mode || (mode === 'link' && shortShareLinkLoading)
+              ? t('map.share.processing')
+              : t(mapShareModeLabelKeys[mode])}
+          </Button>
+        ))}
+      </div>
+    </Modal>
   );
 }
 
@@ -8270,167 +8146,141 @@ function TransitLineRealtimeSection({
       )}
       {allTripsOpen && typeof document !== 'undefined'
         ? createPortal(
-            <div
-              className="modal-backdrop"
-              role="presentation"
-              onMouseDown={() => setAllTripsOpen(false)}
+            <Modal
+              labelledBy="map-line-day-board-title"
+              className="map-line-day-board-modal"
+              panelStyle={{ '--map-line-detail-color': accentColor } as CSSProperties}
+              onBackdropClick={() => setAllTripsOpen(false)}
             >
-              <section
-                className="modal-panel map-line-day-board-modal"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="map-line-day-board-title"
-                style={{ '--map-line-detail-color': accentColor } as CSSProperties}
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                <div className="section-heading">
-                  <h2 id="map-line-day-board-title">{t('map.lineRealtime.allTrips')}</h2>
-                  <button
-                    className="icon-action-button"
-                    type="button"
-                    aria-label={t('map.poi.close')}
-                    onClick={() => setAllTripsOpen(false)}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      close
-                    </span>
-                  </button>
-                </div>
-                <p className="map-line-realtime-summary">{selectedStationLabel}</p>
-                <ol className="map-line-realtime-list map-line-day-board-list">
-                  {dayBoardByOrdinal.map((entry) => (
-                    <li key={entry.id}>
-                      <button
-                        className="map-line-day-board-item"
-                        type="button"
-                        onClick={() => {
-                          setAllTripsOpen(false);
-                          setDetailEntry(entry);
-                        }}
-                      >
-                        <span className="map-line-day-board-trip">
-                          {[
-                            tripLabels[entry.departureTime],
-                            entry.serviceNature,
-                            t('map.lineRealtime.tripTitlePosition', {
-                              current: entry.ordinal,
-                              total: tripCount,
-                            }),
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </span>
-                        <strong className={`is-${entry.status}`}>
-                          {getStationBoardStatusText(entry, t)}
-                        </strong>
-                        <small>{getStationBoardTimeText(entry, t)}</small>
-                      </button>
-                    </li>
-                  ))}
-                </ol>
-              </section>
-            </div>,
+              <div className="section-heading">
+                <h2 id="map-line-day-board-title">{t('map.lineRealtime.allTrips')}</h2>
+                <IconButton
+                  icon="close"
+                  label={t('map.poi.close')}
+                  onClick={() => setAllTripsOpen(false)}
+                />
+              </div>
+              <p className="map-line-realtime-summary">{selectedStationLabel}</p>
+              <ol className="map-line-realtime-list map-line-day-board-list">
+                {dayBoardByOrdinal.map((entry) => (
+                  <li key={entry.id}>
+                    <button
+                      className="map-line-day-board-item"
+                      type="button"
+                      onClick={() => {
+                        setAllTripsOpen(false);
+                        setDetailEntry(entry);
+                      }}
+                    >
+                      <span className="map-line-day-board-trip">
+                        {[
+                          tripLabels[entry.departureTime],
+                          entry.serviceNature,
+                          t('map.lineRealtime.tripTitlePosition', {
+                            current: entry.ordinal,
+                            total: tripCount,
+                          }),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                      <strong className={`is-${entry.status}`}>
+                        {getStationBoardStatusText(entry, t)}
+                      </strong>
+                      <small>{getStationBoardTimeText(entry, t)}</small>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </Modal>,
             document.body,
           )
         : null}
       {detailEntry && typeof document !== 'undefined'
         ? createPortal(
-            <div
-              className="modal-backdrop"
-              role="presentation"
-              onMouseDown={() => setDetailEntry(null)}
+            <Modal
+              labelledBy="map-line-trip-title"
+              className="map-line-trip-modal"
+              onBackdropClick={() => setDetailEntry(null)}
             >
-              <section
-                className="modal-panel map-line-trip-modal"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="map-line-trip-title"
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                <div className="section-heading">
-                  <h2 id="map-line-trip-title">
-                    {detailEntry
-                      ? [
-                          tripLabels[detailEntry.departureTime],
-                          detailEntry.serviceNature,
-                          t('map.lineRealtime.tripTitlePosition', {
-                            current: detailEntry.ordinal,
-                            total: tripCount,
-                          }),
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')
-                      : null}
-                  </h2>
-                  <button
-                    className="icon-action-button"
-                    type="button"
-                    aria-label={t('map.poi.close')}
-                    onClick={() => setDetailEntry(null)}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      close
-                    </span>
-                  </button>
+              <div className="section-heading">
+                <h2 id="map-line-trip-title">
+                  {detailEntry
+                    ? [
+                        tripLabels[detailEntry.departureTime],
+                        detailEntry.serviceNature,
+                        t('map.lineRealtime.tripTitlePosition', {
+                          current: detailEntry.ordinal,
+                          total: tripCount,
+                        }),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                    : null}
+                </h2>
+                <IconButton
+                  icon="close"
+                  label={t('map.poi.close')}
+                  onClick={() => setDetailEntry(null)}
+                />
+              </div>
+              <dl className="line-attribute-list">
+                <div>
+                  <dt>{t('map.lineRealtime.detailDeparture')}</dt>
+                  <dd>{detailEntry.departureTime}</dd>
                 </div>
-                <dl className="line-attribute-list">
+                <div>
+                  <dt>{t('map.lineRealtime.detailPosition')}</dt>
+                  <dd>
+                    {activeVehicle
+                      ? activeVehicle.status === 'at_station'
+                        ? t('map.lineRealtime.atStation', {
+                            station: activeVehicle.stationName ?? '',
+                          })
+                        : t('map.lineRealtime.inSegment', {
+                            from: activeVehicle.fromStationName ?? '',
+                            to: activeVehicle.toStationName ?? '',
+                          })
+                      : detailEntry.status === 'passed'
+                        ? t('map.lineRealtime.stationPassed')
+                        : t('map.lineRealtime.detailWaiting')}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('map.lineRealtime.detailSelectedStation')}</dt>
+                  <dd>{selectedStationLabel ?? ''}</dd>
+                </div>
+                <div>
+                  <dt>{t('map.lineRealtime.detailArrival')}</dt>
+                  <dd>{formatTransitClockMinutes(detailEntry.arrivalMinutes)}</dd>
+                </div>
+                <div>
+                  <dt>{t('map.lineRealtime.detailDepartureAtStation')}</dt>
+                  <dd>{formatTransitClockMinutes(detailEntry.departureMinutes)}</dd>
+                </div>
+                <div>
+                  <dt>{t('map.lineRealtime.detailStatus')}</dt>
+                  <dd>{getStationBoardStatusText(detailEntry, t)}</dd>
+                </div>
+                {detailEntry.routeNote ? (
                   <div>
-                    <dt>{t('map.lineRealtime.detailDeparture')}</dt>
-                    <dd>{detailEntry.departureTime}</dd>
+                    <dt>{t('map.lineRealtime.detailNote')}</dt>
+                    <dd>{detailEntry.routeNote}</dd>
                   </div>
+                ) : null}
+                {detailEntry.servedStopCount < detailEntry.totalStopCount ? (
                   <div>
-                    <dt>{t('map.lineRealtime.detailPosition')}</dt>
+                    <dt>{t('map.lineRealtime.detailStops')}</dt>
                     <dd>
-                      {activeVehicle
-                        ? activeVehicle.status === 'at_station'
-                          ? t('map.lineRealtime.atStation', {
-                              station: activeVehicle.stationName ?? '',
-                            })
-                          : t('map.lineRealtime.inSegment', {
-                              from: activeVehicle.fromStationName ?? '',
-                              to: activeVehicle.toStationName ?? '',
-                            })
-                        : detailEntry.status === 'passed'
-                          ? t('map.lineRealtime.stationPassed')
-                          : t('map.lineRealtime.detailWaiting')}
+                      {t('map.lineRealtime.detailStopsValue', {
+                        served: detailEntry.servedStopCount,
+                        total: detailEntry.totalStopCount,
+                      })}
                     </dd>
                   </div>
-                  <div>
-                    <dt>{t('map.lineRealtime.detailSelectedStation')}</dt>
-                    <dd>{selectedStationLabel ?? ''}</dd>
-                  </div>
-                  <div>
-                    <dt>{t('map.lineRealtime.detailArrival')}</dt>
-                    <dd>{formatTransitClockMinutes(detailEntry.arrivalMinutes)}</dd>
-                  </div>
-                  <div>
-                    <dt>{t('map.lineRealtime.detailDepartureAtStation')}</dt>
-                    <dd>{formatTransitClockMinutes(detailEntry.departureMinutes)}</dd>
-                  </div>
-                  <div>
-                    <dt>{t('map.lineRealtime.detailStatus')}</dt>
-                    <dd>{getStationBoardStatusText(detailEntry, t)}</dd>
-                  </div>
-                  {detailEntry.routeNote ? (
-                    <div>
-                      <dt>{t('map.lineRealtime.detailNote')}</dt>
-                      <dd>{detailEntry.routeNote}</dd>
-                    </div>
-                  ) : null}
-                  {detailEntry.servedStopCount < detailEntry.totalStopCount ? (
-                    <div>
-                      <dt>{t('map.lineRealtime.detailStops')}</dt>
-                      <dd>
-                        {t('map.lineRealtime.detailStopsValue', {
-                          served: detailEntry.servedStopCount,
-                          total: detailEntry.totalStopCount,
-                        })}
-                      </dd>
-                    </div>
-                  ) : null}
-                </dl>
-              </section>
-            </div>,
+                ) : null}
+              </dl>
+            </Modal>,
             document.body,
           )
         : null}
@@ -8556,12 +8406,9 @@ function RoadMapDetail({ marker, t }: Readonly<{ marker: EndpointGroupMarker; t:
         </div>
       </dl>
       {marker.href ? (
-        <a className="secondary-action-button" href={marker.href}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            open_in_new
-          </span>
-          <span>{t('map.poi.openDetail')}</span>
-        </a>
+        <ButtonLink variant="secondary" href={marker.href} icon="open_in_new">
+          {t('map.poi.openDetail')}
+        </ButtonLink>
       ) : null}
     </div>
   );
@@ -8866,9 +8713,7 @@ function RoutePlanDraftCard({
               {selectedOptionBadges.length > 0 ? (
                 <span className="map-route-option-badges" aria-label={t('map.route.featuresAria')}>
                   {selectedOptionBadges.map((badge) => (
-                    <span className="map-route-option-badge" key={badge}>
-                      {badge}
-                    </span>
+                    <RouteOptionBadge key={badge}>{badge}</RouteOptionBadge>
                   ))}
                 </span>
               ) : null}
@@ -9047,9 +8892,7 @@ function RoutePlanDraftCard({
                                 aria-label={t('map.route.featuresAria')}
                               >
                                 {optionBadges.map((badge) => (
-                                  <span className="map-route-option-badge" key={badge}>
-                                    {badge}
-                                  </span>
+                                  <RouteOptionBadge key={badge}>{badge}</RouteOptionBadge>
                                 ))}
                               </span>
                             ) : null}
@@ -9251,115 +9094,101 @@ function RouteRequirementDialog({
     : draftModeLabels.join('、') || t('map.route.requirements.none');
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onCancel}>
-      <section
-        className="modal-panel map-route-requirement-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="map-route-requirement-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2 id="map-route-requirement-title">{t('map.route.requirements.title')}</h2>
-          <button
-            className="icon-action-button"
-            type="button"
-            aria-label={t('map.route.requirements.close')}
-            onClick={onCancel}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              close
-            </span>
-          </button>
-        </div>
-        <section className="map-route-requirement-section">
-          <h3>{t('map.route.requirements.modes')}</h3>
-          <RouteModeToggleList
-            options={routeTransportModeOptions.map((mode) => ({
-              mode: mode.mode,
-              icon: mode.icon,
-              color: mode.color,
-              label: getRouteTransportModeLabel(mode.mode, t),
-              taxi: mode.mode === 'taxi',
-            }))}
-            enabledModes={draftModes}
-            allModesEnabled={allModesEnabled}
-            onToggle={(mode) =>
-              setDraftModes((current) => ({
-                ...current,
-                [mode]: !current[mode as RouteTransportMode],
-              }))
-            }
-            onSetAll={(enabled) =>
-              setDraftModes(
-                Object.fromEntries(
-                  routeTransportModeOptions.map((mode) => [mode.mode, enabled]),
-                ) as EnabledRouteTransportModes,
-              )
-            }
-            labels={{
-              groupAria: t('map.route.modeAria'),
-              all: t('map.route.mode.all'),
-              more: (count) => t('map.route.mode.more', { count }),
-              collapse: t('map.route.mode.collapse'),
+    <Modal
+      labelledBy="map-route-requirement-title"
+      className="map-route-requirement-modal"
+      onBackdropClick={onCancel}
+    >
+      <div className="section-heading">
+        <h2 id="map-route-requirement-title">{t('map.route.requirements.title')}</h2>
+        <IconButton icon="close" label={t('map.route.requirements.close')} onClick={onCancel} />
+      </div>
+      <section className="map-route-requirement-section">
+        <h3>{t('map.route.requirements.modes')}</h3>
+        <RouteModeToggleList
+          options={routeTransportModeOptions.map((mode) => ({
+            mode: mode.mode,
+            icon: mode.icon,
+            color: mode.color,
+            label: getRouteTransportModeLabel(mode.mode, t),
+            taxi: mode.mode === 'taxi',
+          }))}
+          enabledModes={draftModes}
+          allModesEnabled={allModesEnabled}
+          onToggle={(mode) =>
+            setDraftModes((current) => ({
+              ...current,
+              [mode]: !current[mode as RouteTransportMode],
+            }))
+          }
+          onSetAll={(enabled) =>
+            setDraftModes(
+              Object.fromEntries(
+                routeTransportModeOptions.map((mode) => [mode.mode, enabled]),
+              ) as EnabledRouteTransportModes,
+            )
+          }
+          labels={{
+            groupAria: t('map.route.modeAria'),
+            all: t('map.route.mode.all'),
+            more: (count) => t('map.route.mode.more', { count }),
+            collapse: t('map.route.mode.collapse'),
+          }}
+        />
+        <p className="map-route-requirement-hint">{modeSummary}</p>
+      </section>
+      <section className="map-route-requirement-section">
+        <h3>{t('map.route.requirements.time')}</h3>
+        <div className="map-route-time-bar">
+          <SegmentedControl
+            className="map-route-time-mode"
+            ariaLabel={t('map.route.time.aria')}
+            value={draftTimeMode}
+            onChange={(mode) => {
+              setDraftTimeMode(mode);
+              // 切换口径时按该口径的默认值回填：出发=现在，到达=一小时后。
+              setDraftTimeValue(getDefaultRoutePlanTimeValue(mode));
             }}
+            options={[
+              { value: 'departure', label: t('map.route.time.departMode') },
+              { value: 'arrival', label: t('map.route.time.arriveMode') },
+            ]}
           />
-          <p className="map-route-requirement-hint">{modeSummary}</p>
-        </section>
-        <section className="map-route-requirement-section">
-          <h3>{t('map.route.requirements.time')}</h3>
-          <div className="map-route-time-bar">
-            <SegmentedControl
-              className="map-route-time-mode"
-              ariaLabel={t('map.route.time.aria')}
-              value={draftTimeMode}
-              onChange={(mode) => {
-                setDraftTimeMode(mode);
-                // 切换口径时按该口径的默认值回填：出发=现在，到达=一小时后。
-                setDraftTimeValue(getDefaultRoutePlanTimeValue(mode));
-              }}
-              options={[
-                { value: 'departure', label: t('map.route.time.departMode') },
-                { value: 'arrival', label: t('map.route.time.arriveMode') },
-              ]}
-            />
-            <input
-              type="time"
-              value={draftTimeValue}
-              aria-label={t('map.route.time.aria')}
-              onChange={(event) => setDraftTimeValue(event.currentTarget.value)}
-            />
-            {draftTimeMode === 'departure' ? (
-              <button
-                type="button"
-                className="map-route-time-now"
-                onClick={() => setDraftTimeValue(getDefaultRoutePlanTimeValue('departure'))}
-              >
-                {t('map.route.time.now')}
-              </button>
-            ) : null}
-          </div>
-        </section>
-        <div className="admin-content-actions">
-          <button className="secondary-action-button" type="button" onClick={onCancel}>
-            {t('map.route.requirements.cancel')}
-          </button>
-          <button
-            className="secondary-action-button is-primary"
-            type="button"
-            onClick={() =>
-              onConfirm({
-                enabledModes: draftModes,
-                timeMode: draftTimeMode,
-                timeValue: draftTimeValue,
-              })
-            }
-          >
-            {t('map.route.requirements.confirm')}
-          </button>
+          <input
+            type="time"
+            value={draftTimeValue}
+            aria-label={t('map.route.time.aria')}
+            onChange={(event) => setDraftTimeValue(event.currentTarget.value)}
+          />
+          {draftTimeMode === 'departure' ? (
+            <button
+              type="button"
+              className="map-route-time-now"
+              onClick={() => setDraftTimeValue(getDefaultRoutePlanTimeValue('departure'))}
+            >
+              {t('map.route.time.now')}
+            </button>
+          ) : null}
         </div>
       </section>
-    </div>
+      <div className="admin-content-actions">
+        <Button variant="secondary" onClick={onCancel}>
+          {t('map.route.requirements.cancel')}
+        </Button>
+        <Button
+          variant="primary"
+          onClick={() =>
+            onConfirm({
+              enabledModes: draftModes,
+              timeMode: draftTimeMode,
+              timeValue: draftTimeValue,
+            })
+          }
+        >
+          {t('map.route.requirements.confirm')}
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
@@ -10223,48 +10052,31 @@ function PoiActionBar({
   return (
     <>
       <div className="map-poi-action-bar" aria-label={t('map.poi.actions')}>
-        <button className="secondary-action-button is-primary" type="button" onClick={onPlanRoute}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            directions
-          </span>
-          <span>{t('map.poi.route')}</span>
-        </button>
-        <button
-          className="icon-action-button"
-          type="button"
-          aria-label={t(
+        <Button variant="primary" icon="directions" onClick={onPlanRoute}>
+          {t('map.poi.route')}
+        </Button>
+        <IconButton
+          icon="travel_explore"
+          label={t(
             isLinearDetailMarker(marker) ? 'map.poi.nearbyAlongAria' : 'map.poi.nearbyAria',
             { name: marker.label },
           )}
           onClick={onSearchNearby}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            travel_explore
-          </span>
-        </button>
-        <button
-          className={`icon-action-button${isFavorite ? ' is-active' : ''}`}
-          type="button"
+        />
+        <IconButton
+          className={isFavorite ? 'is-active' : undefined}
+          icon="bookmark"
           aria-pressed={isFavorite}
-          aria-label={t(isFavorite ? 'map.poi.unfavoriteAria' : 'map.poi.favoriteAria', {
+          label={t(isFavorite ? 'map.poi.unfavoriteAria' : 'map.poi.favoriteAria', {
             name: marker.label,
           })}
           onClick={onToggleFavorite}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            bookmark
-          </span>
-        </button>
-        <button
-          className="icon-action-button"
-          type="button"
-          aria-label={t('map.poi.shareAria', { name: marker.label })}
+        />
+        <IconButton
+          icon="share"
+          label={t('map.poi.shareAria', { name: marker.label })}
           onClick={onShare}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            share
-          </span>
-        </button>
+        />
       </div>
       {status ? <p className="map-poi-action-status">{status}</p> : null}
     </>

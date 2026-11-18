@@ -36,9 +36,7 @@ import { EditorLayerRowActions } from './editor/editor-layer-row-actions';
 import { EditorPanelHeading } from './editor/editor-panel-heading';
 import { EditorRailBridge } from './editor/editor-rail-bridge';
 import { EditorToolbar } from './editor/editor-toolbar';
-import {
-  EditorToolbarCompactActions,
-} from './editor/editor-toolbar-actions';
+import { EditorToolbarCompactActions } from './editor/editor-toolbar-actions';
 import type { EditorToolbarOverflowItem } from './editor/editor-toolbar-overflow';
 import {
   ColorControl,
@@ -55,6 +53,10 @@ import { MetroWayfindingCanvas } from './metro-wayfinding-canvas';
 import { MaterialSaveDownloadDialog } from './material-save-download-dialog';
 import { SegmentedControl } from './segmented-control';
 import { useMaterialStudioToolbarItems } from './use-material-studio-toolbar-items';
+import { Modal } from './ui/modal';
+import { FieldGroup } from './ui/field';
+import { CheckboxRow } from './ui/checkbox-row';
+import { IconButton } from './ui/button';
 
 const layoutModeLabels: Record<MetroWayfindingLayoutMode, string> = {
   single: '单行',
@@ -662,25 +664,23 @@ export function TransitWayfindingWorkspace({
                   </section>
                   <section className="transit-visual-inspector-section">
                     <h3 className="transit-visual-inspector-section-title">牌面样式</h3>
-                    <div className="material-field">
-                      <span>版式</span>
-                      <div className="segmented-control">
-                        <SegmentedControl
-                          ariaLabel="牌面版式"
-                          className="transit-visual-segmented"
-                          value={layout.mode}
-                          disabled={disabled}
-                          onChange={(mode) =>
-                            dispatchWorkspaceCommand({ type: 'set-layout-mode', mode })
-                          }
-                          options={[
-                            { value: 'single', label: '单行' },
-                            { value: 'double', label: '双行' },
-                            { value: 'vertical', label: '竖向' },
-                          ]}
-                        />
-                      </div>
-                    </div>
+                    <FieldGroup label="版式">
+                      <SegmentedControl
+                        ariaLabel="牌面版式"
+                        className="transit-visual-segmented"
+                        value={layout.mode}
+                        disabled={disabled}
+                        onChange={(mode) =>
+                          dispatchWorkspaceCommand({ type: 'set-layout-mode', mode })
+                        }
+                        options={[
+                          { value: 'single', label: '单行' },
+                          { value: 'double', label: '双行' },
+                          { value: 'vertical', label: '竖向' },
+                        ]}
+                        wrapperClassName=""
+                      />
+                    </FieldGroup>
                     <ColorControl
                       label={t('metroWayfindingEditor.field.backgroundColor')}
                       value={layout.backgroundColor}
@@ -696,17 +696,15 @@ export function TransitWayfindingWorkspace({
                       onChange={(foregroundColor) => replaceLayout({ foregroundColor })}
                     />
                     {layout.mode === 'double' ? (
-                      <label className="material-checkbox-row">
-                        <input
-                          type="checkbox"
-                          checked={layout.dividerBetweenRows}
-                          disabled={disabled}
-                          onChange={(event) =>
-                            replaceLayout({ dividerBetweenRows: event.currentTarget.checked })
-                          }
-                        />
-                        <span>{t('metroWayfindingEditor.field.rowDivider')}</span>
-                      </label>
+                      <CheckboxRow
+                        variant="material"
+                        checked={layout.dividerBetweenRows}
+                        disabled={disabled}
+                        label={t('metroWayfindingEditor.field.rowDivider')}
+                        onChange={(event) =>
+                          replaceLayout({ dividerBetweenRows: event.currentTarget.checked })
+                        }
+                      />
                     ) : null}
                   </section>
                   {canvasSettings ? (
@@ -771,45 +769,30 @@ export function TransitWayfindingWorkspace({
 
       {dataSourceDialogOpen ? (
         <EditorDialogPortal>
-          <div
-            className="modal-backdrop editor-dialog-backdrop"
-            role="presentation"
-            onMouseDown={(event) => {
-              if (event.currentTarget === event.target) {
-                setDataSourceDialogOpen(false);
-              }
-            }}
+          <Modal
+            labelledBy="transit-wayfinding-data-source-title"
+            backdropClassName="editor-dialog-backdrop"
+            className="transit-wayfinding-data-source-dialog"
+            onBackdropClick={() => setDataSourceDialogOpen(false)}
           >
-            <section
-              className="modal-panel transit-wayfinding-data-source-dialog"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="transit-wayfinding-data-source-title"
-            >
-              <header>
-                <div>
-                  <span>数据来源</span>
-                  <h2 id="transit-wayfinding-data-source-title">公共交通网络</h2>
-                </div>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="关闭"
-                  title="关闭"
-                  onClick={() => setDataSourceDialogOpen(false)}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    close
-                  </span>
-                </button>
-              </header>
-              <div className="transit-wayfinding-data-source-body">
-                {dataSourceControls ?? (
-                  <p className="poi-visual-panel-empty">当前模板没有可配置的公共交通网络。</p>
-                )}
+            <header>
+              <div>
+                <span>数据来源</span>
+                <h2 id="transit-wayfinding-data-source-title">公共交通网络</h2>
               </div>
-            </section>
-          </div>
+              <IconButton
+                variant="icon"
+                icon="close"
+                label="关闭"
+                onClick={() => setDataSourceDialogOpen(false)}
+              />
+            </header>
+            <div className="transit-wayfinding-data-source-body">
+              {dataSourceControls ?? (
+                <p className="poi-visual-panel-empty">当前模板没有可配置的公共交通网络。</p>
+              )}
+            </div>
+          </Modal>
         </EditorDialogPortal>
       ) : null}
     </div>

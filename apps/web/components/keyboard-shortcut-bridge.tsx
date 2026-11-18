@@ -11,6 +11,7 @@ import {
   subscribeMapShortcutContextChanged,
 } from '../lib/client-map-ui-events';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import { IconButton } from './ui/button';
 import {
   AREA_EDITOR_SHORTCUT_IDS,
   EDITOR_SHORTCUT_CATALOG,
@@ -22,6 +23,7 @@ import {
   POI_INTRO_SHORTCUT_IDS,
   TRIP_WORKBENCH_SHORTCUT_IDS,
 } from '../lib/editor/shortcuts';
+import { Modal } from './ui/modal';
 
 const controlHoldDurationMs = 600;
 /** 双击斜杠触发「手气不错」的时间窗与单击聚焦搜索的延迟。 */
@@ -329,566 +331,555 @@ export function KeyboardShortcutBridge() {
   );
 
   return (
-    <div className="modal-backdrop shortcut-backdrop" role="presentation" onMouseDown={closeDialog}>
-      <div
-        className="modal-panel shortcut-dialog"
-        role="dialog"
-        aria-modal="false"
-        aria-labelledby="keyboard-shortcuts-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header className="shortcut-dialog-header">
-          <h2 id="keyboard-shortcuts-title">{t('shortcut.title')}</h2>
-          <button
-            className="icon-action-button"
-            type="button"
-            aria-label={t('shortcut.close')}
-            title={t('shortcut.close')}
-            onClick={closeDialog}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              close
-            </span>
-          </button>
-        </header>
+    <Modal
+      labelledBy="keyboard-shortcuts-title"
+      ariaModal={false}
+      backdropClassName="shortcut-backdrop"
+      className="shortcut-dialog"
+      as="div"
+      onBackdropClick={() => closeDialog}
+    >
+      <header className="shortcut-dialog-header">
+        <h2 id="keyboard-shortcuts-title">{t('shortcut.title')}</h2>
+        <IconButton icon="close" label={t('shortcut.close')} onClick={closeDialog} />
+      </header>
 
-        <div className="shortcut-columns">
-          {showGlobalSearchShortcut ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-global-title">
-              <h3 id="shortcut-global-title">{t('shortcut.global')}</h3>
-              <dl className="shortcut-list">
-                <div>
-                  <dt>{t('shortcut.globalSearch')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={[t('shortcut.doubleShift')]} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.searchResults')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['↑', '↓']} />
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          ) : null}
-
-          {availableNavigationShortcuts.length > 0 ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-navigation-title">
-              <h3 id="shortcut-navigation-title">{t('nav.label')}</h3>
-              <dl className="shortcut-list">
-                <div>
-                  <dt>{t('shortcut.focusMapSearch')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['/']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.doubleSlashExplore')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['/ /']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.resetMapView')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['0']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.toggleNavigation')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Alt', '\\']} />
-                  </dd>
-                </div>
-                {availableNavigationShortcuts.map((shortcut) => (
-                  <div key={shortcut.digit}>
-                    <dt>{t(shortcut.labelKey)}</dt>
-                    <dd>
-                      <KeyboardKeys keys={['Alt', shortcut.digit]} />
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          ) : null}
-
-          {isMapPage ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-map-title">
-              <h3 id="shortcut-map-title">{t('shortcut.map')}</h3>
-              <dl className="shortcut-list">
-                <div>
-                  <dt>{t('map.toolbar.zoomIn')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['=']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('map.toolbar.zoomOut')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['-']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.panMap')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['WASD / ↑↓←→']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.toggleLayers')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['L']} />
-                  </dd>
-                </div>
-                {mapShortcutContext.canPlanFocusedMarker ? (
-                  <>
-                    <div>
-                      <dt>{t('shortcut.toggleFavorite')}</dt>
-                      <dd>
-                        <KeyboardKeys keys={['F']} />
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{t('shortcut.searchNearby')}</dt>
-                      <dd>
-                        <KeyboardKeys keys={['N']} />
-                      </dd>
-                    </div>
-                  </>
-                ) : null}
-                <div>
-                  <dt>{t('shortcut.dismissLayers')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Esc']} />
-                  </dd>
-                </div>
-                {mapShortcutContext.canSwapRouteEndpoints ? (
-                  <div>
-                    <dt>{t('shortcut.swapRouteEndpoints')}</dt>
-                    <dd>
-                      <KeyboardKeys keys={['Shift', 'Enter']} />
-                    </dd>
-                  </div>
-                ) : null}
-                {mapShortcutContext.canPlanFocusedMarker ? (
-                  <div>
-                    <dt>{t('shortcut.planFocusedMarker')}</dt>
-                    <dd>
-                      <KeyboardKeys keys={['Enter']} />
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
-            </section>
-          ) : null}
-
-          {isLineEditorPage
-            ? EDITOR_SHORTCUT_GROUPS.map((group) => {
-                const shortcuts = LINE_EDITOR_SHORTCUT_IDS.map(
-                  (key) => EDITOR_SHORTCUT_CATALOG[key],
-                ).filter((shortcut) => shortcut.group === group.id);
-                if (shortcuts.length === 0) {
-                  return null;
-                }
-                return (
-                  <section
-                    className="shortcut-section"
-                    key={group.id}
-                    aria-labelledby={`shortcut-line-editor-${group.id}`}
-                  >
-                    <h3 id={`shortcut-line-editor-${group.id}`}>
-                      {`${t('shortcut.lineEditor')} · ${group.label}`}
-                    </h3>
-                    <dl className="shortcut-list">
-                      {shortcuts.map((shortcut) => (
-                        <div key={shortcut.id}>
-                          <dt>{shortcut.label}</dt>
-                          <dd>
-                            <KeyboardKeys keys={[...shortcut.displayKeys]} />
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </section>
-                );
-              })
-            : null}
-
-          {isTransitWayfindingPage
-            ? EDITOR_SHORTCUT_GROUPS.map((group) => {
-                const shortcuts = METRO_WAYFINDING_SHORTCUT_IDS.map(
-                  (key) => EDITOR_SHORTCUT_CATALOG[key],
-                ).filter((shortcut) => shortcut.group === group.id);
-                if (shortcuts.length === 0) {
-                  return null;
-                }
-                return (
-                  <section
-                    className="shortcut-section"
-                    key={group.id}
-                    aria-labelledby={`shortcut-transit-wayfinding-${group.id}`}
-                  >
-                    <h3 id={`shortcut-transit-wayfinding-${group.id}`}>
-                      {`公共交通导视工作台 · ${group.label}`}
-                    </h3>
-                    <dl className="shortcut-list">
-                      {shortcuts.map((shortcut) => (
-                        <div key={shortcut.id}>
-                          <dt>{shortcut.label}</dt>
-                          <dd>
-                            <KeyboardKeys keys={[...shortcut.displayKeys]} />
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </section>
-                );
-              })
-            : null}
-
-          {isWayfindingPage ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-wayfinding-title">
-              <h3 id="shortcut-wayfinding-title">{t('shortcut.wayfinding')}</h3>
-              <dl className="shortcut-list">
-                <div>
-                  <dt>{t('shortcut.undo')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl', 'Z']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.redo')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl + Shift + Z / Ctrl + Y']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.deleteSelected')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Delete']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.acceptSuggestion')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Tab']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.duplicateElement')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Alt', 'C']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.moveElement')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Alt', '↑↓←→']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.reverseElements')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Alt', 'R']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.switchRow')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl', '↑ / ↓']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.openTemplateLibrary')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Alt', 'O']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.previewMaterial')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl', 'Enter']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.exportProject')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl', 'Shift', 'E']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.switchTemplate')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['[ / ]']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.switchDataSource')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Alt', 'M']} />
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          ) : null}
-
-          {isTravelPage ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-travel-title">
-              <h3 id="shortcut-travel-title">{t('shortcut.travel')}</h3>
-              <dl className="shortcut-list">
-                <div>
-                  <dt>{t('shortcut.focusScheduleSearch')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['/']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.resetFilters')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Esc']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.planJourney')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl', 'Enter']} />
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          ) : null}
-
-          {isDocumentTocPage ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-operation-detail-title">
-              <h3 id="shortcut-operation-detail-title">{t('shortcut.documentToc')}</h3>
-              <dl className="shortcut-list">
-                <div>
-                  <dt>{t('shortcut.sections')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['J', 'K']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.firstLastSection')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['G / Shift+G']} />
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          ) : null}
-
-          {isVisualEditorPage ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-editor-title">
-              <h3 id="shortcut-editor-title">{t('shortcut.editor')}</h3>
-              <dl className="shortcut-list">
-                <div>
-                  <dt>{t('shortcut.save')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl', 'S']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.saveAndBack')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl', 'Enter']} />
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          ) : null}
-
-          {isGeometryEditorPage ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-geometry-editor-title">
-              <h3 id="shortcut-geometry-editor-title">几何编辑</h3>
-              <dl className="shortcut-list">
-                {POI_GEOMETRY_SHORTCUT_IDS.map((key) => {
-                  const shortcut = EDITOR_SHORTCUT_CATALOG[key];
-                  return (
-                    <div key={shortcut.id}>
-                      <dt>{shortcut.label}</dt>
-                      <dd>
-                        <KeyboardKeys keys={[...shortcut.displayKeys]} />
-                      </dd>
-                    </div>
-                  );
-                })}
-              </dl>
-            </section>
-          ) : null}
-
-          {isPoiIntroEditorPage ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-poi-intro-editor-title">
-              <h3 id="shortcut-poi-intro-editor-title">POI 简介工作台</h3>
-              <dl className="shortcut-list">
-                {POI_INTRO_SHORTCUT_IDS.map((key) => {
-                  const shortcut = EDITOR_SHORTCUT_CATALOG[key];
-                  return (
-                    <div key={shortcut.id}>
-                      <dt>{shortcut.label}</dt>
-                      <dd>
-                        <KeyboardKeys keys={[...shortcut.displayKeys]} />
-                      </dd>
-                    </div>
-                  );
-                })}
-              </dl>
-            </section>
-          ) : null}
-
-          {isMarkdownEditorPage
-            ? EDITOR_SHORTCUT_GROUPS.map((group) => {
-                const shortcuts = MARKDOWN_EDITOR_SHORTCUT_IDS.map(
-                  (key) => EDITOR_SHORTCUT_CATALOG[key],
-                ).filter((shortcut) => shortcut.group === group.id);
-                if (shortcuts.length === 0) {
-                  return null;
-                }
-                return (
-                  <section
-                    className="shortcut-section"
-                    key={group.id}
-                    aria-labelledby={`shortcut-markdown-editor-${group.id}`}
-                  >
-                    <h3 id={`shortcut-markdown-editor-${group.id}`}>
-                      {`运营消息工作台 · ${group.label}`}
-                    </h3>
-                    <dl className="shortcut-list">
-                      {shortcuts.map((shortcut) => (
-                        <div key={shortcut.id}>
-                          <dt>{shortcut.label}</dt>
-                          <dd>
-                            <KeyboardKeys keys={[...shortcut.displayKeys]} />
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </section>
-                );
-              })
-            : null}
-
-          {isAreaEditorPage ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-area-editor-title">
-              <h3 id="shortcut-area-editor-title">区划工作台</h3>
-              <dl className="shortcut-list">
-                {AREA_EDITOR_SHORTCUT_IDS.map((key) => {
-                  const shortcut = EDITOR_SHORTCUT_CATALOG[key];
-                  return (
-                    <div key={shortcut.id}>
-                      <dt>{shortcut.label}</dt>
-                      <dd>
-                        <KeyboardKeys keys={[...shortcut.displayKeys]} />
-                      </dd>
-                    </div>
-                  );
-                })}
-              </dl>
-            </section>
-          ) : null}
-
-          {isAdminReviewPage ? (
-            <section className="shortcut-section" aria-labelledby="shortcut-admin-review-title">
-              <h3 id="shortcut-admin-review-title">{t('shortcut.adminReview')}</h3>
-              <dl className="shortcut-list">
-                <div>
-                  <dt>{t('shortcut.listNavigate')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['J', 'K']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.listOpen')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Enter']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.listSelect')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Shift', 'Space']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.insertPrepend')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['[']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.insertAppend')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={[']']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.insertNearest')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['\\']} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('shortcut.listBulk')}</dt>
-                  <dd>
-                    <KeyboardKeys keys={['Ctrl', 'Enter']} />
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          ) : null}
-
-          {isTripWorkbenchPage
-            ? EDITOR_SHORTCUT_GROUPS.map((group) => {
-                const shortcuts = TRIP_WORKBENCH_SHORTCUT_IDS.map(
-                  (key) => EDITOR_SHORTCUT_CATALOG[key],
-                ).filter((shortcut) => shortcut.group === group.id);
-                if (shortcuts.length === 0) {
-                  return null;
-                }
-                return (
-                  <section
-                    className="shortcut-section"
-                    key={group.id}
-                    aria-labelledby={`shortcut-trip-workbench-${group.id}`}
-                  >
-                    <h3 id={`shortcut-trip-workbench-${group.id}`}>
-                      {`${t('shortcut.tripWorkbench')} · ${group.label}`}
-                    </h3>
-                    <dl className="shortcut-list">
-                      {shortcuts.map((shortcut) => (
-                        <div key={shortcut.id}>
-                          <dt>{shortcut.label}</dt>
-                          <dd>
-                            <KeyboardKeys keys={[...shortcut.displayKeys]} />
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </section>
-                );
-              })
-            : null}
-
-          <section className="shortcut-section" aria-labelledby="shortcut-general-title">
-            <h3 id="shortcut-general-title">{t('shortcut.general')}</h3>
+      <div className="shortcut-columns">
+        {showGlobalSearchShortcut ? (
+          <section className="shortcut-section" aria-labelledby="shortcut-global-title">
+            <h3 id="shortcut-global-title">{t('shortcut.global')}</h3>
             <dl className="shortcut-list">
               <div>
-                <dt>{t('shortcut.dismissPopover')}</dt>
+                <dt>{t('shortcut.globalSearch')}</dt>
                 <dd>
-                  <KeyboardKeys keys={['Esc']} />
+                  <KeyboardKeys keys={[t('shortcut.doubleShift')]} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.searchResults')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['↑', '↓']} />
                 </dd>
               </div>
             </dl>
           </section>
-        </div>
+        ) : null}
 
-        <div className="shortcut-help-row">
-          <span>{t('shortcut.openMenu')}</span>
-          <KeyboardKeys keys={[t('shortcut.holdCtrl')]} />
-        </div>
+        {availableNavigationShortcuts.length > 0 ? (
+          <section className="shortcut-section" aria-labelledby="shortcut-navigation-title">
+            <h3 id="shortcut-navigation-title">{t('nav.label')}</h3>
+            <dl className="shortcut-list">
+              <div>
+                <dt>{t('shortcut.focusMapSearch')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['/']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.doubleSlashExplore')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['/ /']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.resetMapView')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['0']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.toggleNavigation')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Alt', '\\']} />
+                </dd>
+              </div>
+              {availableNavigationShortcuts.map((shortcut) => (
+                <div key={shortcut.digit}>
+                  <dt>{t(shortcut.labelKey)}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['Alt', shortcut.digit]} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ) : null}
+
+        {isMapPage ? (
+          <section className="shortcut-section" aria-labelledby="shortcut-map-title">
+            <h3 id="shortcut-map-title">{t('shortcut.map')}</h3>
+            <dl className="shortcut-list">
+              <div>
+                <dt>{t('map.toolbar.zoomIn')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['=']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('map.toolbar.zoomOut')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['-']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.panMap')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['WASD / ↑↓←→']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.toggleLayers')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['L']} />
+                </dd>
+              </div>
+              {mapShortcutContext.canPlanFocusedMarker ? (
+                <>
+                  <div>
+                    <dt>{t('shortcut.toggleFavorite')}</dt>
+                    <dd>
+                      <KeyboardKeys keys={['F']} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{t('shortcut.searchNearby')}</dt>
+                    <dd>
+                      <KeyboardKeys keys={['N']} />
+                    </dd>
+                  </div>
+                </>
+              ) : null}
+              <div>
+                <dt>{t('shortcut.dismissLayers')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Esc']} />
+                </dd>
+              </div>
+              {mapShortcutContext.canSwapRouteEndpoints ? (
+                <div>
+                  <dt>{t('shortcut.swapRouteEndpoints')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['Shift', 'Enter']} />
+                  </dd>
+                </div>
+              ) : null}
+              {mapShortcutContext.canPlanFocusedMarker ? (
+                <div>
+                  <dt>{t('shortcut.planFocusedMarker')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['Enter']} />
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          </section>
+        ) : null}
+
+        {isLineEditorPage
+          ? EDITOR_SHORTCUT_GROUPS.map((group) => {
+              const shortcuts = LINE_EDITOR_SHORTCUT_IDS.map(
+                (key) => EDITOR_SHORTCUT_CATALOG[key],
+              ).filter((shortcut) => shortcut.group === group.id);
+              if (shortcuts.length === 0) {
+                return null;
+              }
+              return (
+                <section
+                  className="shortcut-section"
+                  key={group.id}
+                  aria-labelledby={`shortcut-line-editor-${group.id}`}
+                >
+                  <h3 id={`shortcut-line-editor-${group.id}`}>
+                    {`${t('shortcut.lineEditor')} · ${group.label}`}
+                  </h3>
+                  <dl className="shortcut-list">
+                    {shortcuts.map((shortcut) => (
+                      <div key={shortcut.id}>
+                        <dt>{shortcut.label}</dt>
+                        <dd>
+                          <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              );
+            })
+          : null}
+
+        {isTransitWayfindingPage
+          ? EDITOR_SHORTCUT_GROUPS.map((group) => {
+              const shortcuts = METRO_WAYFINDING_SHORTCUT_IDS.map(
+                (key) => EDITOR_SHORTCUT_CATALOG[key],
+              ).filter((shortcut) => shortcut.group === group.id);
+              if (shortcuts.length === 0) {
+                return null;
+              }
+              return (
+                <section
+                  className="shortcut-section"
+                  key={group.id}
+                  aria-labelledby={`shortcut-transit-wayfinding-${group.id}`}
+                >
+                  <h3 id={`shortcut-transit-wayfinding-${group.id}`}>
+                    {`公共交通导视工作台 · ${group.label}`}
+                  </h3>
+                  <dl className="shortcut-list">
+                    {shortcuts.map((shortcut) => (
+                      <div key={shortcut.id}>
+                        <dt>{shortcut.label}</dt>
+                        <dd>
+                          <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              );
+            })
+          : null}
+
+        {isWayfindingPage ? (
+          <section className="shortcut-section" aria-labelledby="shortcut-wayfinding-title">
+            <h3 id="shortcut-wayfinding-title">{t('shortcut.wayfinding')}</h3>
+            <dl className="shortcut-list">
+              <div>
+                <dt>{t('shortcut.undo')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Ctrl', 'Z']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.redo')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Ctrl + Shift + Z / Ctrl + Y']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.deleteSelected')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Delete']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.acceptSuggestion')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Tab']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.duplicateElement')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Alt', 'C']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.moveElement')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Alt', '↑↓←→']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.reverseElements')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Alt', 'R']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.switchRow')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Ctrl', '↑ / ↓']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.openTemplateLibrary')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Alt', 'O']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.previewMaterial')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Ctrl', 'Enter']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.exportProject')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Ctrl', 'Shift', 'E']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.switchTemplate')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['[ / ]']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.switchDataSource')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Alt', 'M']} />
+                </dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
+
+        {isTravelPage ? (
+          <section className="shortcut-section" aria-labelledby="shortcut-travel-title">
+            <h3 id="shortcut-travel-title">{t('shortcut.travel')}</h3>
+            <dl className="shortcut-list">
+              <div>
+                <dt>{t('shortcut.focusScheduleSearch')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['/']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.resetFilters')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Esc']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.planJourney')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Ctrl', 'Enter']} />
+                </dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
+
+        {isDocumentTocPage ? (
+          <section className="shortcut-section" aria-labelledby="shortcut-operation-detail-title">
+            <h3 id="shortcut-operation-detail-title">{t('shortcut.documentToc')}</h3>
+            <dl className="shortcut-list">
+              <div>
+                <dt>{t('shortcut.sections')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['J', 'K']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.firstLastSection')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['G / Shift+G']} />
+                </dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
+
+        {isVisualEditorPage ? (
+          <section className="shortcut-section" aria-labelledby="shortcut-editor-title">
+            <h3 id="shortcut-editor-title">{t('shortcut.editor')}</h3>
+            <dl className="shortcut-list">
+              <div>
+                <dt>{t('shortcut.save')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Ctrl', 'S']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.saveAndBack')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Ctrl', 'Enter']} />
+                </dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
+
+        {isGeometryEditorPage ? (
+          <section className="shortcut-section" aria-labelledby="shortcut-geometry-editor-title">
+            <h3 id="shortcut-geometry-editor-title">几何编辑</h3>
+            <dl className="shortcut-list">
+              {POI_GEOMETRY_SHORTCUT_IDS.map((key) => {
+                const shortcut = EDITOR_SHORTCUT_CATALOG[key];
+                return (
+                  <div key={shortcut.id}>
+                    <dt>{shortcut.label}</dt>
+                    <dd>
+                      <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </section>
+        ) : null}
+
+        {isPoiIntroEditorPage ? (
+          <section className="shortcut-section" aria-labelledby="shortcut-poi-intro-editor-title">
+            <h3 id="shortcut-poi-intro-editor-title">POI 简介工作台</h3>
+            <dl className="shortcut-list">
+              {POI_INTRO_SHORTCUT_IDS.map((key) => {
+                const shortcut = EDITOR_SHORTCUT_CATALOG[key];
+                return (
+                  <div key={shortcut.id}>
+                    <dt>{shortcut.label}</dt>
+                    <dd>
+                      <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </section>
+        ) : null}
+
+        {isMarkdownEditorPage
+          ? EDITOR_SHORTCUT_GROUPS.map((group) => {
+              const shortcuts = MARKDOWN_EDITOR_SHORTCUT_IDS.map(
+                (key) => EDITOR_SHORTCUT_CATALOG[key],
+              ).filter((shortcut) => shortcut.group === group.id);
+              if (shortcuts.length === 0) {
+                return null;
+              }
+              return (
+                <section
+                  className="shortcut-section"
+                  key={group.id}
+                  aria-labelledby={`shortcut-markdown-editor-${group.id}`}
+                >
+                  <h3 id={`shortcut-markdown-editor-${group.id}`}>
+                    {`运营消息工作台 · ${group.label}`}
+                  </h3>
+                  <dl className="shortcut-list">
+                    {shortcuts.map((shortcut) => (
+                      <div key={shortcut.id}>
+                        <dt>{shortcut.label}</dt>
+                        <dd>
+                          <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              );
+            })
+          : null}
+
+        {isAreaEditorPage ? (
+          <section className="shortcut-section" aria-labelledby="shortcut-area-editor-title">
+            <h3 id="shortcut-area-editor-title">区划工作台</h3>
+            <dl className="shortcut-list">
+              {AREA_EDITOR_SHORTCUT_IDS.map((key) => {
+                const shortcut = EDITOR_SHORTCUT_CATALOG[key];
+                return (
+                  <div key={shortcut.id}>
+                    <dt>{shortcut.label}</dt>
+                    <dd>
+                      <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </section>
+        ) : null}
+
+        {isAdminReviewPage ? (
+          <section className="shortcut-section" aria-labelledby="shortcut-admin-review-title">
+            <h3 id="shortcut-admin-review-title">{t('shortcut.adminReview')}</h3>
+            <dl className="shortcut-list">
+              <div>
+                <dt>{t('shortcut.listNavigate')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['J', 'K']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.listOpen')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Enter']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.listSelect')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Shift', 'Space']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.insertPrepend')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['[']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.insertAppend')}</dt>
+                <dd>
+                  <KeyboardKeys keys={[']']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.insertNearest')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['\\']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.listBulk')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Ctrl', 'Enter']} />
+                </dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
+
+        {isTripWorkbenchPage
+          ? EDITOR_SHORTCUT_GROUPS.map((group) => {
+              const shortcuts = TRIP_WORKBENCH_SHORTCUT_IDS.map(
+                (key) => EDITOR_SHORTCUT_CATALOG[key],
+              ).filter((shortcut) => shortcut.group === group.id);
+              if (shortcuts.length === 0) {
+                return null;
+              }
+              return (
+                <section
+                  className="shortcut-section"
+                  key={group.id}
+                  aria-labelledby={`shortcut-trip-workbench-${group.id}`}
+                >
+                  <h3 id={`shortcut-trip-workbench-${group.id}`}>
+                    {`${t('shortcut.tripWorkbench')} · ${group.label}`}
+                  </h3>
+                  <dl className="shortcut-list">
+                    {shortcuts.map((shortcut) => (
+                      <div key={shortcut.id}>
+                        <dt>{shortcut.label}</dt>
+                        <dd>
+                          <KeyboardKeys keys={[...shortcut.displayKeys]} />
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              );
+            })
+          : null}
+
+        <section className="shortcut-section" aria-labelledby="shortcut-general-title">
+          <h3 id="shortcut-general-title">{t('shortcut.general')}</h3>
+          <dl className="shortcut-list">
+            <div>
+              <dt>{t('shortcut.dismissPopover')}</dt>
+              <dd>
+                <KeyboardKeys keys={['Esc']} />
+              </dd>
+            </div>
+          </dl>
+        </section>
       </div>
-    </div>
+
+      <div className="shortcut-help-row">
+        <span>{t('shortcut.openMenu')}</span>
+        <KeyboardKeys keys={[t('shortcut.holdCtrl')]} />
+      </div>
+    </Modal>
   );
 }
 

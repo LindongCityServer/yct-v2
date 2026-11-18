@@ -35,7 +35,12 @@ import { AdminRefreshButton } from './admin-refresh-button';
 import { ContentCoverColorPicker } from './content-cover-color-picker';
 import { ContentPoiBindingEditor } from './content-poi-binding-editor';
 import { SegmentedControl } from './segmented-control';
+import { SegmentedTabs } from './ui/segmented-control';
+import { StatusChip } from './ui/chip';
+import { CheckboxRow } from './ui/checkbox-row';
+import { Button, ButtonLink, IconButton } from './ui/button';
 import { useListKeyboardNavigation } from './use-list-keyboard-navigation';
+import { Modal } from './ui/modal';
 
 interface AdminContentMetadata {
   excerpt?: string;
@@ -1583,226 +1588,182 @@ export function AdminOperationsPanel({
           />
         </div>
       </div>
-      <fieldset className="segmented-control admin-page-segmented-control">
-        <legend>内容后台系列</legend>
-        <div>
-          <button
-            className={activeSection === 'contents' ? 'is-active' : ''}
-            type="button"
-            aria-pressed={activeSection === 'contents'}
-            onClick={() => setActiveSection('contents')}
-          >
-            内容记录
-          </button>
-          <button
-            className={activeSection === 'reminders' ? 'is-active' : ''}
-            type="button"
-            aria-pressed={activeSection === 'reminders'}
-            onClick={() => setActiveSection('reminders')}
-          >
-            首页强提醒
-          </button>
-          <button
-            className={activeSection === 'assets' ? 'is-active' : ''}
-            type="button"
-            aria-pressed={activeSection === 'assets'}
-            onClick={() => setActiveSection('assets')}
-          >
-            素材与迁移
-          </button>
-        </div>
-      </fieldset>
+      <SegmentedTabs
+        label="内容后台系列"
+        className="admin-page-segmented-control"
+        options={[
+          { value: 'contents' as const, label: '内容记录' },
+          { value: 'reminders' as const, label: '首页强提醒' },
+          { value: 'assets' as const, label: '素材与迁移' },
+        ]}
+        value={activeSection}
+        onChange={setActiveSection}
+      />
 
       {isContentEditorOpen ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={resetEditor}>
-          <section
-            className="modal-panel admin-content-editor-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="admin-content-editor-title"
-            onChangeCapture={markContentEditorDirty}
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="section-heading">
-              <h2 id="admin-content-editor-title">
-                {editingContentId ? '编辑内容草稿' : '创建内容草稿'}
-              </h2>
-              <button
-                className="icon-action-button"
-                type="button"
-                onClick={resetEditor}
-                aria-label="关闭内容编辑器"
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            </div>
-            {editingContentId ? (
-              <p className="muted">{`当前正在编辑 ${editingContentId.slice(-8).toUpperCase()} 内容`}</p>
-            ) : null}
-            <label>
-              <span>标题</span>
-              <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
-            </label>
-            <label>
-              <span>分类</span>
-              <select
-                value={categoryId}
-                onChange={(event) => setCategoryId(event.currentTarget.value)}
-              >
-                {categories.map((category) => (
-                  <option value={category} key={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>摘要</span>
-              <input value={excerpt} onChange={(event) => setExcerpt(event.currentTarget.value)} />
-            </label>
-            <ContentCoverColorPicker
-              value={coverColor}
-              onChange={(value) => {
-                setCoverColor(value);
-                markContentEditorDirty();
-              }}
+        <Modal
+          labelledBy="admin-content-editor-title"
+          className="admin-content-editor-dialog"
+          onChangeCapture={markContentEditorDirty}
+          onBackdropClick={() => resetEditor}
+        >
+          <div className="section-heading">
+            <h2 id="admin-content-editor-title">
+              {editingContentId ? '编辑内容草稿' : '创建内容草稿'}
+            </h2>
+            <IconButton icon="close" label="关闭内容编辑器" onClick={resetEditor} />
+          </div>
+          {editingContentId ? (
+            <p className="muted">{`当前正在编辑 ${editingContentId.slice(-8).toUpperCase()} 内容`}</p>
+          ) : null}
+          <label>
+            <span>标题</span>
+            <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
+          </label>
+          <label>
+            <span>分类</span>
+            <select
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.currentTarget.value)}
+            >
+              {categories.map((category) => (
+                <option value={category} key={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>摘要</span>
+            <input value={excerpt} onChange={(event) => setExcerpt(event.currentTarget.value)} />
+          </label>
+          <ContentCoverColorPicker
+            value={coverColor}
+            onChange={(value) => {
+              setCoverColor(value);
+              markContentEditorDirty();
+            }}
+          />
+          <label>
+            <span>封面图链接</span>
+            <input
+              value={coverImageUrl}
+              onChange={(event) => setCoverImageUrl(event.currentTarget.value)}
+              placeholder="/content-assets/cover.png 或 https://..."
             />
+          </label>
+          <label>
+            <span>
+              有效期
+              {currentEditingContentRecord?.revision.status === 'published'
+                ? '（已发布内容不可修改）'
+                : ''}
+            </span>
+            <input
+              type="datetime-local"
+              value={expiresAtValue}
+              disabled={currentEditingContentRecord?.revision.status === 'published'}
+              onChange={(event) => setExpiresAtValue(event.currentTarget.value)}
+            />
+          </label>
+          {editingPublishedScheduledContent ? (
             <label>
-              <span>封面图链接</span>
-              <input
-                value={coverImageUrl}
-                onChange={(event) => setCoverImageUrl(event.currentTarget.value)}
-                placeholder="/content-assets/cover.png 或 https://..."
-              />
-            </label>
-            <label>
-              <span>
-                有效期
-                {currentEditingContentRecord?.revision.status === 'published'
-                  ? '（已发布内容不可修改）'
-                  : ''}
-              </span>
+              <span>定时发布时间</span>
               <input
                 type="datetime-local"
-                value={expiresAtValue}
-                disabled={currentEditingContentRecord?.revision.status === 'published'}
-                onChange={(event) => setExpiresAtValue(event.currentTarget.value)}
+                value={scheduledAtValue}
+                required
+                onChange={(event) => setScheduledAtValue(event.currentTarget.value)}
               />
+              <small className="muted">修改后会同步调整这篇已发布内容的生效时间。</small>
             </label>
-            {editingPublishedScheduledContent ? (
-              <label>
-                <span>定时发布时间</span>
-                <input
-                  type="datetime-local"
-                  value={scheduledAtValue}
-                  required
-                  onChange={(event) => setScheduledAtValue(event.currentTarget.value)}
-                />
-                <small className="muted">修改后会同步调整这篇已发布内容的生效时间。</small>
-              </label>
-            ) : null}
-            <section className="admin-markdown-launch-card" aria-label="Markdown 正文">
-              <div>
-                <strong>Markdown 正文</strong>
-                {editingContentId ? (
-                  <span className="muted">{`${markdown.length} 字符 · ${markdown.split('\n').length} 行`}</span>
-                ) : (
-                  <span className="muted">创建后编写</span>
-                )}
-              </div>
+          ) : null}
+          <section className="admin-markdown-launch-card" aria-label="Markdown 正文">
+            <div>
+              <strong>Markdown 正文</strong>
               {editingContentId ? (
-                <>
-                  <p>{markdown.trim().split('\n').find(Boolean) ?? '正文为空'}</p>
-                  {isBusy || isContentEditorDirty ? (
-                    <button className="secondary-action-button" type="button" disabled>
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        edit_note
-                      </span>
-                      <span>打开 Markdown 编辑器</span>
-                    </button>
-                  ) : (
-                    <a
-                      className="secondary-action-button"
-                      href={appPath(
-                        `/admin/operations/editor?contentId=${encodeURIComponent(editingContentId)}`,
-                      )}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        edit_note
-                      </span>
-                      <span>打开 Markdown 编辑器</span>
-                    </a>
-                  )}
-                  {isContentEditorDirty ? (
-                    <small className="muted">
-                      请先保存当前元数据修改，再进入 Markdown 编辑器。
-                    </small>
-                  ) : null}
-                </>
+                <span className="muted">{`${markdown.length} 字符 · ${markdown.split('\n').length} 行`}</span>
               ) : (
-                <p className="muted">创建草稿后将自动进入独立 Markdown 编辑器。</p>
+                <span className="muted">创建后编写</span>
               )}
-            </section>
-            <label>
-              <span>素材 ID</span>
-              <input
-                value={assetIdsText}
-                onChange={(event) => setAssetIdsText(event.currentTarget.value)}
-              />
-            </label>
-            <ContentPoiBindingEditor
-              selectedIds={relatedPoiMarkerIds}
-              onChange={(markerIds) => {
-                setRelatedPoiMarkerIds(markerIds);
-                markContentEditorDirty();
-              }}
-            />
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={showInBanner}
-                onChange={(event) => setShowInBanner(event.currentTarget.checked)}
-              />
-              <span>作为首页重点资讯候选</span>
-            </label>
-            <label>
-              <span>重点排序</span>
-              <input
-                type="number"
-                step="1"
-                value={bannerSortOrderValue}
-                onChange={(event) => setBannerSortOrderValue(event.currentTarget.value)}
-                placeholder="数值越小越靠前"
-              />
-            </label>
-            <label className="admin-editor-markdown">
-              <span>标签</span>
-              <textarea
-                value={customTagsText}
-                onChange={(event) => setCustomTagsText(event.currentTarget.value)}
-                placeholder="每行一个标签，或用逗号分隔"
-              />
-            </label>
-            <div className="admin-content-actions">
-              <button
-                className="secondary-action-button is-primary"
-                type="button"
-                disabled={isBusy}
-                onClick={saveDraft}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {editingContentId ? 'save' : 'add'}
-                </span>
-                <span>{editingContentId ? '保存草稿' : '创建草稿'}</span>
-              </button>
-              <button type="button" disabled={isBusy} onClick={resetEditor}>
-                关闭
-              </button>
             </div>
+            {editingContentId ? (
+              <>
+                <p>{markdown.trim().split('\n').find(Boolean) ?? '正文为空'}</p>
+                {isBusy || isContentEditorDirty ? (
+                  <Button variant="secondary" icon="edit_note" disabled>
+                    打开 Markdown 编辑器
+                  </Button>
+                ) : (
+                  <ButtonLink
+                    variant="secondary"
+                    href={appPath(
+                      `/admin/operations/editor?contentId=${encodeURIComponent(editingContentId)}`,
+                    )}
+                    icon="edit_note"
+                  >
+                    打开 Markdown 编辑器
+                  </ButtonLink>
+                )}
+                {isContentEditorDirty ? (
+                  <small className="muted">请先保存当前元数据修改，再进入 Markdown 编辑器。</small>
+                ) : null}
+              </>
+            ) : (
+              <p className="muted">创建草稿后将自动进入独立 Markdown 编辑器。</p>
+            )}
           </section>
-        </div>
+          <label>
+            <span>素材 ID</span>
+            <input
+              value={assetIdsText}
+              onChange={(event) => setAssetIdsText(event.currentTarget.value)}
+            />
+          </label>
+          <ContentPoiBindingEditor
+            selectedIds={relatedPoiMarkerIds}
+            onChange={(markerIds) => {
+              setRelatedPoiMarkerIds(markerIds);
+              markContentEditorDirty();
+            }}
+          />
+          <CheckboxRow
+            checked={showInBanner}
+            onChange={(event) => setShowInBanner(event.currentTarget.checked)}
+            label="作为首页重点资讯候选"
+          />
+          <label>
+            <span>重点排序</span>
+            <input
+              type="number"
+              step="1"
+              value={bannerSortOrderValue}
+              onChange={(event) => setBannerSortOrderValue(event.currentTarget.value)}
+              placeholder="数值越小越靠前"
+            />
+          </label>
+          <label className="admin-editor-markdown">
+            <span>标签</span>
+            <textarea
+              value={customTagsText}
+              onChange={(event) => setCustomTagsText(event.currentTarget.value)}
+              placeholder="每行一个标签，或用逗号分隔"
+            />
+          </label>
+          <div className="admin-content-actions">
+            <Button
+              variant="primary"
+              icon={editingContentId ? 'save' : 'add'}
+              disabled={isBusy}
+              onClick={saveDraft}
+            >
+              {editingContentId ? '保存草稿' : '创建草稿'}
+            </Button>
+            <button type="button" disabled={isBusy} onClick={resetEditor}>
+              关闭
+            </button>
+          </div>
+        </Modal>
       ) : null}
 
       {activeSection === 'reminders' ? (
@@ -1816,27 +1777,16 @@ export function AdminOperationsPanel({
             解析出的客运公告也会自动并入候选与投递预览；如果只是旧公告源
             更新、没有改动规则正文，可直接用下方“重算投递”同步当前队列。
           </p>
-          <fieldset className="segmented-control admin-subsection-segmented-control">
-            <legend>首页强提醒工作区</legend>
-            <div>
-              <button
-                className={reminderWorkspace === 'rules' ? 'is-active' : ''}
-                type="button"
-                aria-pressed={reminderWorkspace === 'rules'}
-                onClick={() => setReminderWorkspace('rules')}
-              >
-                规则列表
-              </button>
-              <button
-                className={reminderWorkspace === 'preview' ? 'is-active' : ''}
-                type="button"
-                aria-pressed={reminderWorkspace === 'preview'}
-                onClick={() => setReminderWorkspace('preview')}
-              >
-                投递预览
-              </button>
-            </div>
-          </fieldset>
+          <SegmentedTabs
+            label="首页强提醒工作区"
+            className="admin-subsection-segmented-control"
+            options={[
+              { value: 'rules' as const, label: '规则列表' },
+              { value: 'preview' as const, label: '投递预览' },
+            ]}
+            value={reminderWorkspace}
+            onChange={setReminderWorkspace}
+          />
 
           {reminderWorkspace === 'rules' ? (
             <>
@@ -1855,16 +1805,9 @@ export function AdminOperationsPanel({
                 className="admin-poi-toolbar admin-content-toolbar"
                 aria-label="首页强提醒规则筛选"
               >
-                <button
-                  className="secondary-action-button is-primary"
-                  type="button"
-                  onClick={openCreateReminderEditor}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    add_alert
-                  </span>
-                  <span>{editingReminderId ? '继续编辑规则' : '新增规则'}</span>
-                </button>
+                <Button variant="primary" icon="add_alert" onClick={openCreateReminderEditor}>
+                  {editingReminderId ? '继续编辑规则' : '新增规则'}
+                </Button>
                 <div className="admin-segmented-field">
                   <span>状态</span>
                   <SegmentedControl
@@ -1909,17 +1852,13 @@ export function AdminOperationsPanel({
                       <strong>{describeReminderRuleTitle(rule)}</strong>
                       <p className="muted">{describeReminderRuleMeta(rule)}</p>
                       <div className="operation-tag-list" aria-label={`${rule.id} 规则标签`}>
-                        <span className="operation-tag">
-                          {describeReminderRuleSourceKind(rule.sourceKind)}
-                        </span>
-                        <span
-                          className={`operation-tag ${rule.enabled === false ? 'is-warning' : 'is-ok'}`}
-                        >
+                        <StatusChip>{describeReminderRuleSourceKind(rule.sourceKind)}</StatusChip>
+                        <StatusChip tone={rule.enabled === false ? 'warning' : 'ok'}>
                           {rule.enabled === false ? '已停用' : '已启用'}
-                        </span>
-                        {rule.label ? <span className="operation-tag">{rule.label}</span> : null}
+                        </StatusChip>
+                        {rule.label ? <StatusChip>{rule.label}</StatusChip> : null}
                         {rule.contentId ? (
-                          <span className="operation-tag">{`内容 ${rule.contentId}`}</span>
+                          <StatusChip>{`内容 ${rule.contentId}`}</StatusChip>
                         ) : null}
                       </div>
                     </div>
@@ -1978,81 +1917,56 @@ export function AdminOperationsPanel({
                 <span className="muted">{reminderPreviewStatusText}</span>
               </div>
               <div className="admin-toolbar">
-                <button
-                  className="secondary-action-button"
-                  type="button"
+                <Button
+                  variant="secondary"
+                  icon="list_alt"
                   onClick={() => setReminderWorkspace('rules')}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    list_alt
-                  </span>
-                  <span>查看规则列表</span>
-                </button>
-                <button
-                  className="secondary-action-button is-primary"
-                  type="button"
-                  onClick={openCreateReminderEditor}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    add_alert
-                  </span>
-                  <span>新增规则</span>
-                </button>
-                <button
-                  className="secondary-action-button"
-                  type="button"
+                  查看规则列表
+                </Button>
+                <Button variant="primary" icon="add_alert" onClick={openCreateReminderEditor}>
+                  新增规则
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon="sync"
                   disabled={isBusy}
                   onClick={() => void syncReminderSources(false)}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    sync
-                  </span>
-                  <span>同步公告源</span>
-                </button>
-                <button
-                  className="secondary-action-button"
-                  type="button"
+                  同步公告源
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon="published_with_changes"
                   disabled={isBusy}
                   onClick={() => void syncReminderSources(true)}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    published_with_changes
-                  </span>
-                  <span>强制同步并重算</span>
-                </button>
-                <button
-                  className="secondary-action-button"
-                  type="button"
+                  强制同步并重算
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon="refresh"
                   disabled={isBusy}
                   onClick={() => void loadReminderPreview()}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    refresh
-                  </span>
-                  <span>刷新预览</span>
-                </button>
-                <button
-                  className="secondary-action-button"
-                  type="button"
+                  刷新预览
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon="play_circle"
                   disabled={isBusy}
                   onClick={runReminderTasks}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    play_circle
-                  </span>
-                  <span>运行统一任务</span>
-                </button>
-                <button
-                  className="secondary-action-button"
-                  type="button"
+                  运行统一任务
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon="notifications_active"
                   disabled={isBusy}
                   onClick={refreshReminderDeliveries}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    notifications_active
-                  </span>
-                  <span>重算投递</span>
-                </button>
+                  重算投递
+                </Button>
               </div>
 
               {reminderPreview ? (
@@ -2198,173 +2112,152 @@ export function AdminOperationsPanel({
       ) : null}
 
       {isReminderEditorOpen ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={resetReminderEditor}>
-          <section
-            className="modal-panel admin-reminder-editor-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="admin-reminder-editor-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="section-heading">
-              <h2 id="admin-reminder-editor-title">
-                {editingReminderId ? '编辑首页强提醒规则' : '新增首页强提醒规则'}
-              </h2>
-              <button
-                className="icon-action-button"
-                type="button"
-                onClick={resetReminderEditor}
-                aria-label="关闭强提醒编辑器"
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            </div>
-            {editingReminderId ? (
-              <p className="muted">{`当前正在编辑 ${editingReminderId.slice(-8).toUpperCase()} 规则`}</p>
-            ) : null}
-            <div className="admin-segmented-field">
-              <span>来源</span>
-              <SegmentedControl
-                ariaLabel="强提醒来源"
-                className="material-mode-switch material-variant-switch"
-                value={reminderSourceKind}
-                onChange={setReminderSourceKind}
-                options={[
-                  { value: 'manual', label: '手动录入' },
-                  { value: 'content', label: '关联内容' },
-                ]}
-              />
-            </div>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={reminderEnabled}
-                onChange={(event) => setReminderEnabled(event.currentTarget.checked)}
-              />
-              <span>启用这条强提醒</span>
-            </label>
-            <label>
-              <span>语义色</span>
-              <select
-                value={reminderTone}
-                onChange={(event) =>
-                  setReminderTone(
-                    event.currentTarget.value as NonNullable<OperationsStrongReminderRule['tone']>,
-                  )
-                }
-              >
-                {reminderToneOptions.map((option) => (
-                  <option value={option.value} key={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>排序</span>
-              <input
-                type="number"
-                step="1"
-                value={reminderSortOrderValue}
-                onChange={(event) => setReminderSortOrderValue(event.currentTarget.value)}
-                placeholder="数值越小越靠前"
-              />
-            </label>
-            <label>
-              <span>标签</span>
-              <input
-                value={reminderLabel}
-                onChange={(event) => setReminderLabel(event.currentTarget.value)}
-                placeholder="如 地铁运营 / 客运调整"
-              />
-            </label>
-            <label>
-              <span>关联内容</span>
-              <input
-                list="admin-operations-reminder-content-options"
-                value={reminderContentId}
-                disabled={reminderSourceKind !== 'content'}
-                onChange={(event) => setReminderContentId(event.currentTarget.value)}
-                placeholder="可输入本地内容 ID，也可从下方建议中选择"
-              />
-              <datalist id="admin-operations-reminder-content-options">
-                {sortedRecords.map((record) => (
-                  <option
-                    value={record.contentId}
-                    label={`${record.revision.title}（${statusLabel(record)}）`}
-                    key={record.contentId}
-                  />
-                ))}
-              </datalist>
-            </label>
-            <label>
-              <span>{reminderSourceKind === 'content' ? '标题覆盖' : '标题'}</span>
-              <input
-                value={reminderTitle}
-                onChange={(event) => setReminderTitle(event.currentTarget.value)}
-                placeholder={
-                  reminderSourceKind === 'content'
-                    ? '留空则使用关联内容标题'
-                    : '如 今晚地铁加开列车'
-                }
-              />
-            </label>
-            <label className="admin-editor-markdown">
-              <span>{reminderSourceKind === 'content' ? '摘要覆盖' : '摘要'}</span>
-              <textarea
-                value={reminderSummary}
-                onChange={(event) => setReminderSummary(event.currentTarget.value)}
-                placeholder={
-                  reminderSourceKind === 'content'
-                    ? '留空则使用关联内容摘要'
-                    : '适合放 1 到 2 句，说明这条提醒为什么重要'
-                }
-              />
-            </label>
-            <label>
-              <span>跳转链接</span>
-              <input
-                value={reminderHref}
-                onChange={(event) => setReminderHref(event.currentTarget.value)}
-                placeholder="/operations/xxx 或 https://..."
-              />
-            </label>
-            <label>
-              <span>开始时间</span>
-              <input
-                type="datetime-local"
-                value={reminderStartsAtValue}
-                onChange={(event) => setReminderStartsAtValue(event.currentTarget.value)}
-              />
-            </label>
-            <label>
-              <span>结束时间</span>
-              <input
-                type="datetime-local"
-                value={reminderEndsAtValue}
-                onChange={(event) => setReminderEndsAtValue(event.currentTarget.value)}
-              />
-            </label>
-            <div className="admin-content-actions">
-              <button
-                className="secondary-action-button is-primary"
-                type="button"
-                disabled={isBusy}
-                onClick={saveReminderRule}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {editingReminderId ? 'save' : 'add_alert'}
-                </span>
-                <span>{editingReminderId ? '保存规则' : '新增规则'}</span>
-              </button>
-              <button type="button" disabled={isBusy} onClick={resetReminderEditor}>
-                关闭
-              </button>
-            </div>
-          </section>
-        </div>
+        <Modal
+          labelledBy="admin-reminder-editor-title"
+          className="admin-reminder-editor-dialog"
+          onBackdropClick={resetReminderEditor}
+        >
+          <div className="section-heading">
+            <h2 id="admin-reminder-editor-title">
+              {editingReminderId ? '编辑首页强提醒规则' : '新增首页强提醒规则'}
+            </h2>
+            <IconButton icon="close" label="关闭强提醒编辑器" onClick={resetReminderEditor} />
+          </div>
+          {editingReminderId ? (
+            <p className="muted">{`当前正在编辑 ${editingReminderId.slice(-8).toUpperCase()} 规则`}</p>
+          ) : null}
+          <div className="admin-segmented-field">
+            <span>来源</span>
+            <SegmentedControl
+              ariaLabel="强提醒来源"
+              className="material-mode-switch material-variant-switch"
+              value={reminderSourceKind}
+              onChange={setReminderSourceKind}
+              options={[
+                { value: 'manual', label: '手动录入' },
+                { value: 'content', label: '关联内容' },
+              ]}
+            />
+          </div>
+          <CheckboxRow
+            checked={reminderEnabled}
+            onChange={(event) => setReminderEnabled(event.currentTarget.checked)}
+            label="启用这条强提醒"
+          />
+          <label>
+            <span>语义色</span>
+            <select
+              value={reminderTone}
+              onChange={(event) =>
+                setReminderTone(
+                  event.currentTarget.value as NonNullable<OperationsStrongReminderRule['tone']>,
+                )
+              }
+            >
+              {reminderToneOptions.map((option) => (
+                <option value={option.value} key={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>排序</span>
+            <input
+              type="number"
+              step="1"
+              value={reminderSortOrderValue}
+              onChange={(event) => setReminderSortOrderValue(event.currentTarget.value)}
+              placeholder="数值越小越靠前"
+            />
+          </label>
+          <label>
+            <span>标签</span>
+            <input
+              value={reminderLabel}
+              onChange={(event) => setReminderLabel(event.currentTarget.value)}
+              placeholder="如 地铁运营 / 客运调整"
+            />
+          </label>
+          <label>
+            <span>关联内容</span>
+            <input
+              list="admin-operations-reminder-content-options"
+              value={reminderContentId}
+              disabled={reminderSourceKind !== 'content'}
+              onChange={(event) => setReminderContentId(event.currentTarget.value)}
+              placeholder="可输入本地内容 ID，也可从下方建议中选择"
+            />
+            <datalist id="admin-operations-reminder-content-options">
+              {sortedRecords.map((record) => (
+                <option
+                  value={record.contentId}
+                  label={`${record.revision.title}（${statusLabel(record)}）`}
+                  key={record.contentId}
+                />
+              ))}
+            </datalist>
+          </label>
+          <label>
+            <span>{reminderSourceKind === 'content' ? '标题覆盖' : '标题'}</span>
+            <input
+              value={reminderTitle}
+              onChange={(event) => setReminderTitle(event.currentTarget.value)}
+              placeholder={
+                reminderSourceKind === 'content' ? '留空则使用关联内容标题' : '如 今晚地铁加开列车'
+              }
+            />
+          </label>
+          <label className="admin-editor-markdown">
+            <span>{reminderSourceKind === 'content' ? '摘要覆盖' : '摘要'}</span>
+            <textarea
+              value={reminderSummary}
+              onChange={(event) => setReminderSummary(event.currentTarget.value)}
+              placeholder={
+                reminderSourceKind === 'content'
+                  ? '留空则使用关联内容摘要'
+                  : '适合放 1 到 2 句，说明这条提醒为什么重要'
+              }
+            />
+          </label>
+          <label>
+            <span>跳转链接</span>
+            <input
+              value={reminderHref}
+              onChange={(event) => setReminderHref(event.currentTarget.value)}
+              placeholder="/operations/xxx 或 https://..."
+            />
+          </label>
+          <label>
+            <span>开始时间</span>
+            <input
+              type="datetime-local"
+              value={reminderStartsAtValue}
+              onChange={(event) => setReminderStartsAtValue(event.currentTarget.value)}
+            />
+          </label>
+          <label>
+            <span>结束时间</span>
+            <input
+              type="datetime-local"
+              value={reminderEndsAtValue}
+              onChange={(event) => setReminderEndsAtValue(event.currentTarget.value)}
+            />
+          </label>
+          <div className="admin-content-actions">
+            <Button
+              variant="primary"
+              icon={editingReminderId ? 'save' : 'add_alert'}
+              disabled={isBusy}
+              onClick={saveReminderRule}
+            >
+              {editingReminderId ? '保存规则' : '新增规则'}
+            </Button>
+            <button type="button" disabled={isBusy} onClick={resetReminderEditor}>
+              关闭
+            </button>
+          </div>
+        </Modal>
       ) : null}
 
       {activeSection === 'assets' ? (
@@ -2465,17 +2358,14 @@ export function AdminOperationsPanel({
                 value={assetRecords.filter((record) => record.asset.status === 'approved').length}
                 tone="ok"
               />
-              <button
-                className="secondary-action-button"
-                type="button"
+              <Button
+                variant="secondary"
+                icon="inventory_2"
                 disabled={isBusy}
                 onClick={importLegacyAssets}
               >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  inventory_2
-                </span>
-                <span>导入旧素材</span>
-              </button>
+                导入旧素材
+              </Button>
             </div>
 
             <div className="admin-asset-upload-row">
@@ -2488,17 +2378,14 @@ export function AdminOperationsPanel({
                   onChange={(event) => setSelectedAssetFile(event.currentTarget.files?.[0] ?? null)}
                 />
               </label>
-              <button
-                className="secondary-action-button"
-                type="button"
+              <Button
+                variant="secondary"
+                icon="upload"
                 disabled={isBusy || !selectedAssetFile}
                 onClick={uploadAsset}
               >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  upload
-                </span>
-                <span>上传</span>
-              </button>
+                上传
+              </Button>
               {recentUploadedAsset ? (
                 <p className="muted">
                   {recentUploadedAsset.asset.id} · {markdownImageSnippet(recentUploadedAsset.asset)}
@@ -2559,28 +2446,23 @@ export function AdminOperationsPanel({
             ))}
           </div>
           <div className="admin-toolbar">
-            <button
-              className="secondary-action-button is-primary"
-              type="button"
+            <Button
+              variant="primary"
+              icon="add"
               disabled={isBusy}
               onClick={openCreateContentEditor}
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                add
-              </span>
-              <span>{editingContentId ? '继续编辑内容' : '新建内容'}</span>
-            </button>
+              {editingContentId ? '继续编辑内容' : '新建内容'}
+            </Button>
           </div>
           <div className="admin-content-bulk-bar" aria-label="内容批量操作">
-            <label className="checkbox-row admin-content-bulk-select">
-              <input
-                type="checkbox"
-                checked={isAllVisibleContentSelected}
-                disabled={filteredContentRecords.length === 0}
-                onChange={toggleVisibleContentSelection}
-              />
-              <span>{`选择当前列表 ${selectedVisibleContentRecords.length}/${filteredContentRecords.length}`}</span>
-            </label>
+            <CheckboxRow
+              className="admin-content-bulk-select"
+              checked={isAllVisibleContentSelected}
+              disabled={filteredContentRecords.length === 0}
+              onChange={toggleVisibleContentSelection}
+              label={`选择当前列表 ${selectedVisibleContentRecords.length}/${filteredContentRecords.length}`}
+            />
             <span className="muted">{`已选 ${selectedContentRecords.length} 条，可恢复 ${batchRestoreContentRecords.length} 条，可提交 ${batchSubmitContentRecords.length} 条，可归档 ${batchArchiveContentRecords.length} 条`}</span>
             <button
               type="button"
@@ -2942,54 +2824,51 @@ function ContentRejectDialog({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <div
-        className="modal-panel admin-poi-reject-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-content-reject-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2 id="admin-content-reject-title">驳回内容</h2>
-          <span className="muted">{record.revision.title}</span>
-        </div>
-        <div className="admin-poi-reject-presets" aria-label="常用驳回原因">
-          {contentRejectReasonPresets.map((preset) => (
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={() => {
-                setReason(preset);
-                setError('');
-              }}
-              key={preset}
-            >
-              {preset}
-            </button>
-          ))}
-        </div>
-        <label>
-          <span>驳回原因</span>
-          <textarea
-            value={reason}
-            onChange={(event) => {
-              setReason(event.currentTarget.value);
+    <Modal
+      labelledBy="admin-content-reject-title"
+      className="admin-poi-reject-dialog"
+      as="div"
+      onBackdropClick={() => onClose}
+    >
+      <div className="section-heading">
+        <h2 id="admin-content-reject-title">驳回内容</h2>
+        <span className="muted">{record.revision.title}</span>
+      </div>
+      <div className="admin-poi-reject-presets" aria-label="常用驳回原因">
+        {contentRejectReasonPresets.map((preset) => (
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={() => {
+              setReason(preset);
               setError('');
             }}
-          />
-        </label>
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <div className="admin-content-actions">
-          <button type="button" disabled={isBusy} onClick={onClose}>
-            取消
+            key={preset}
+          >
+            {preset}
           </button>
-          <button type="button" disabled={isBusy} onClick={() => void submit()}>
-            确认驳回
-          </button>
-        </div>
+        ))}
       </div>
-    </div>
+      <label>
+        <span>驳回原因</span>
+        <textarea
+          value={reason}
+          onChange={(event) => {
+            setReason(event.currentTarget.value);
+            setError('');
+          }}
+        />
+      </label>
+      {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+      <div className="admin-content-actions">
+        <button type="button" disabled={isBusy} onClick={onClose}>
+          取消
+        </button>
+        <button type="button" disabled={isBusy} onClick={() => void submit()}>
+          确认驳回
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -3019,72 +2898,67 @@ function ContentArchiveDialog({
   const isPublished = record.revision.status === 'published';
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <div
-        className="modal-panel admin-content-publish-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-content-archive-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2 id="admin-content-archive-title">归档内容</h2>
-          <span className="muted">{record.revision.title}</span>
-        </div>
-        <p className="muted">归档后内容会离开当前工作流；已发布内容归档后不再作为公开内容返回。</p>
-        <dl className="admin-content-publish-summary">
-          <div>
-            <dt>当前状态</dt>
-            <dd>{statusLabel(record)}</dd>
-          </div>
-          <div>
-            <dt>分类</dt>
-            <dd>{record.revision.categoryId}</dd>
-          </div>
-          <div>
-            <dt>发布时间</dt>
-            <dd>
-              {record.revision.publishedAt ? formatDateTime(record.revision.publishedAt) : '未发布'}
-            </dd>
-          </div>
-          <div>
-            <dt>有效期</dt>
-            <dd>
-              {record.metadata.expiresAt ? formatDateTime(record.metadata.expiresAt) : '未设置'}
-            </dd>
-          </div>
-        </dl>
-        {isPublished ? (
-          <div className="admin-content-publish-warnings" aria-label="归档提醒">
-            <p>
-              {isScheduledPublishedContentRecord(record)
-                ? '这是一条未来定时发布内容，归档后定时上线计划会失效。'
-                : '这是一条已公开内容，归档后前台将不再展示。'}
-            </p>
-          </div>
-        ) : null}
-        <label className="checkbox-row admin-content-publish-confirm">
-          <input
-            type="checkbox"
-            checked={confirmed}
-            onChange={(event) => {
-              setConfirmed(event.currentTarget.checked);
-              setError('');
-            }}
-          />
-          <span>我已确认归档影响，继续归档这条内容。</span>
-        </label>
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <div className="admin-content-actions">
-          <button type="button" disabled={isBusy} onClick={onClose}>
-            取消
-          </button>
-          <button type="button" disabled={isBusy} onClick={() => void submit()}>
-            确认归档
-          </button>
-        </div>
+    <Modal
+      labelledBy="admin-content-archive-title"
+      className="admin-content-publish-dialog"
+      as="div"
+      onBackdropClick={() => onClose}
+    >
+      <div className="section-heading">
+        <h2 id="admin-content-archive-title">归档内容</h2>
+        <span className="muted">{record.revision.title}</span>
       </div>
-    </div>
+      <p className="muted">归档后内容会离开当前工作流；已发布内容归档后不再作为公开内容返回。</p>
+      <dl className="admin-content-publish-summary">
+        <div>
+          <dt>当前状态</dt>
+          <dd>{statusLabel(record)}</dd>
+        </div>
+        <div>
+          <dt>分类</dt>
+          <dd>{record.revision.categoryId}</dd>
+        </div>
+        <div>
+          <dt>发布时间</dt>
+          <dd>
+            {record.revision.publishedAt ? formatDateTime(record.revision.publishedAt) : '未发布'}
+          </dd>
+        </div>
+        <div>
+          <dt>有效期</dt>
+          <dd>
+            {record.metadata.expiresAt ? formatDateTime(record.metadata.expiresAt) : '未设置'}
+          </dd>
+        </div>
+      </dl>
+      {isPublished ? (
+        <div className="admin-content-publish-warnings" aria-label="归档提醒">
+          <p>
+            {isScheduledPublishedContentRecord(record)
+              ? '这是一条未来定时发布内容，归档后定时上线计划会失效。'
+              : '这是一条已公开内容，归档后前台将不再展示。'}
+          </p>
+        </div>
+      ) : null}
+      <CheckboxRow
+        className="admin-content-publish-confirm"
+        checked={confirmed}
+        onChange={(event) => {
+          setConfirmed(event.currentTarget.checked);
+          setError('');
+        }}
+        label="我已确认归档影响，继续归档这条内容。"
+      />
+      {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+      <div className="admin-content-actions">
+        <button type="button" disabled={isBusy} onClick={onClose}>
+          取消
+        </button>
+        <button type="button" disabled={isBusy} onClick={() => void submit()}>
+          确认归档
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -3114,75 +2988,66 @@ function ContentBulkArchiveDialog({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <div
-        className="modal-panel admin-content-publish-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-content-bulk-archive-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2 id="admin-content-bulk-archive-title">批量归档内容</h2>
-          <span className="muted">{`${records.length} 条内容`}</span>
-        </div>
-        <dl className="admin-content-publish-summary">
-          <div>
-            <dt>归档数量</dt>
-            <dd>{records.length}</dd>
-          </div>
-          <div>
-            <dt>已发布</dt>
-            <dd>{publishedCount}</dd>
-          </div>
-          <div>
-            <dt>定时发布</dt>
-            <dd>{scheduledCount}</dd>
-          </div>
-          <div>
-            <dt>待审核</dt>
-            <dd>
-              {records.filter((record) => record.revision.status === 'pending_review').length}
-            </dd>
-          </div>
-        </dl>
-        {publishedCount > 0 ? (
-          <div className="admin-content-publish-warnings" aria-label="批量归档提醒">
-            <p>所选内容中包含已发布或定时发布内容，归档后会影响前台公开展示。</p>
-          </div>
-        ) : null}
-        <div className="admin-content-publish-assets" aria-label="批量归档内容样例">
-          {records.slice(0, 8).map((record) => (
-            <span className="operation-tag" key={record.contentId}>
-              {`${record.revision.title} · ${statusLabel(record)}`}
-            </span>
-          ))}
-          {records.length > 8 ? (
-            <span className="operation-tag">{`另有 ${records.length - 8} 条`}</span>
-          ) : null}
-        </div>
-        <label className="checkbox-row admin-content-publish-confirm">
-          <input
-            type="checkbox"
-            checked={confirmed}
-            onChange={(event) => {
-              setConfirmed(event.currentTarget.checked);
-              setError('');
-            }}
-          />
-          <span>我已确认批量归档影响，继续归档这些内容。</span>
-        </label>
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <div className="admin-content-actions">
-          <button type="button" disabled={isBusy} onClick={onClose}>
-            取消
-          </button>
-          <button type="button" disabled={isBusy} onClick={() => void submit()}>
-            确认批量归档
-          </button>
-        </div>
+    <Modal
+      labelledBy="admin-content-bulk-archive-title"
+      className="admin-content-publish-dialog"
+      as="div"
+      onBackdropClick={() => onClose}
+    >
+      <div className="section-heading">
+        <h2 id="admin-content-bulk-archive-title">批量归档内容</h2>
+        <span className="muted">{`${records.length} 条内容`}</span>
       </div>
-    </div>
+      <dl className="admin-content-publish-summary">
+        <div>
+          <dt>归档数量</dt>
+          <dd>{records.length}</dd>
+        </div>
+        <div>
+          <dt>已发布</dt>
+          <dd>{publishedCount}</dd>
+        </div>
+        <div>
+          <dt>定时发布</dt>
+          <dd>{scheduledCount}</dd>
+        </div>
+        <div>
+          <dt>待审核</dt>
+          <dd>{records.filter((record) => record.revision.status === 'pending_review').length}</dd>
+        </div>
+      </dl>
+      {publishedCount > 0 ? (
+        <div className="admin-content-publish-warnings" aria-label="批量归档提醒">
+          <p>所选内容中包含已发布或定时发布内容，归档后会影响前台公开展示。</p>
+        </div>
+      ) : null}
+      <div className="admin-content-publish-assets" aria-label="批量归档内容样例">
+        {records.slice(0, 8).map((record) => (
+          <StatusChip key={record.contentId}>
+            {`${record.revision.title} · ${statusLabel(record)}`}
+          </StatusChip>
+        ))}
+        {records.length > 8 ? <StatusChip>{`另有 ${records.length - 8} 条`}</StatusChip> : null}
+      </div>
+      <CheckboxRow
+        className="admin-content-publish-confirm"
+        checked={confirmed}
+        onChange={(event) => {
+          setConfirmed(event.currentTarget.checked);
+          setError('');
+        }}
+        label="我已确认批量归档影响，继续归档这些内容。"
+      />
+      {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+      <div className="admin-content-actions">
+        <button type="button" disabled={isBusy} onClick={onClose}>
+          取消
+        </button>
+        <button type="button" disabled={isBusy} onClick={() => void submit()}>
+          确认批量归档
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -3231,14 +3096,12 @@ function ContentReviewSnapshot({
       {title ? <h3>{title}</h3> : null}
       <div className="operation-tag-list admin-content-review-tags">
         {preview.auditTags.map((tag) => (
-          <span
-            className={['operation-tag', tag.tone && tag.tone !== 'default' ? `is-${tag.tone}` : '']
-              .filter(Boolean)
-              .join(' ')}
+          <StatusChip
             key={`${tag.label}-${tag.tone ?? 'default'}`}
+            tone={tag.tone && tag.tone !== 'default' ? tag.tone : 'default'}
           >
             {tag.label}
-          </span>
+          </StatusChip>
         ))}
       </div>
       {preview.attentionItems.length > 0 ? (
@@ -3309,160 +3172,141 @@ function ContentPublishDialog({
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <div
-        className="modal-panel admin-content-publish-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-content-publish-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2 id="admin-content-publish-title">发布内容</h2>
-          <span className="muted">{record.revision.title}</span>
-        </div>
-        <p className="muted">
-          发布前先核对素材审核、首页重点位、有效期和发布时间，避免管理员点按钮后直接收到 `409`。
-        </p>
-        <fieldset className="segmented-control admin-content-publish-toggle">
-          <legend>上线方式</legend>
-          <div>
-            <button
-              className={mode === 'immediate' ? 'is-active' : ''}
-              type="button"
-              aria-pressed={mode === 'immediate'}
-              onClick={() => {
-                setMode('immediate');
-                setError('');
-              }}
-            >
-              立即发布
-            </button>
-            <button
-              className={mode === 'scheduled' ? 'is-active' : ''}
-              type="button"
-              aria-pressed={mode === 'scheduled'}
-              onClick={() => {
-                setMode('scheduled');
-                setError('');
-              }}
-            >
-              定时发布
-            </button>
-          </div>
-        </fieldset>
-        {mode === 'scheduled' ? (
-          <label>
-            <span>定时发布时间</span>
-            <input
-              type="datetime-local"
-              value={scheduledAtValue}
-              onChange={(event) => {
-                setScheduledAtValue(event.currentTarget.value);
-                setError('');
-              }}
-            />
-          </label>
-        ) : null}
-        <dl className="admin-content-publish-summary">
-          <div>
-            <dt>素材</dt>
-            <dd>{preview.summaryText}</dd>
-          </div>
-          <div>
-            <dt>分类</dt>
-            <dd>{record.revision.categoryId}</dd>
-          </div>
-          <div>
-            <dt>首页重点位</dt>
-            <dd>
-              {record.metadata.showInBanner
-                ? `是${record.metadata.bannerSortOrder !== undefined ? ` · 排序 #${record.metadata.bannerSortOrder}` : ''}`
-                : '否'}
-            </dd>
-          </div>
-          <div>
-            <dt>有效期</dt>
-            <dd>
-              {record.metadata.expiresAt ? formatDateTime(record.metadata.expiresAt) : '未设置'}
-            </dd>
-          </div>
-          <div>
-            <dt>发布时间</dt>
-            <dd>
-              {mode === 'scheduled' && scheduledAtValue
-                ? formatDateTimeLocalPreview(scheduledAtValue)
-                : '立即生效'}
-            </dd>
-          </div>
-          <div>
-            <dt>上次发布</dt>
-            <dd>
-              {preview.baselinePublishedAt
-                ? formatDateTime(preview.baselinePublishedAt)
-                : '无历史快照'}
-            </dd>
-          </div>
-          <div>
-            <dt>发布差异</dt>
-            <dd>{preview.diffSummaryText}</dd>
-          </div>
-        </dl>
-        <div className="admin-content-publish-diff" aria-label="发布差异摘要">
-          {preview.diffItems.map((item) => (
-            <p key={item}>{item}</p>
-          ))}
-        </div>
-        {preview.blockers.length > 0 ? (
-          <div className="admin-content-publish-blockers" aria-label="发布阻塞项">
-            {preview.blockers.map((item) => (
-              <p key={item}>{item}</p>
-            ))}
-          </div>
-        ) : null}
-        {preview.warnings.length > 0 ? (
-          <div className="admin-content-publish-warnings" aria-label="发布提醒">
-            {preview.warnings.map((item) => (
-              <p key={item}>{item}</p>
-            ))}
-          </div>
-        ) : null}
-        {preview.totalAssetCount > 0 ? (
-          <div className="admin-content-publish-assets" aria-label="素材审核状态">
-            {record.revision.assetIds.map((assetId) => {
-              const assetRecord = assetRecordById.get(assetId);
-              return (
-                <span className="operation-tag" key={assetId}>
-                  {assetRecord
-                    ? `${assetRecord.asset.fileName} · ${statusLabelForAsset(assetRecord.asset.status)}`
-                    : `${assetId} · 未找到`}
-                </span>
-              );
-            })}
-          </div>
-        ) : null}
-        <label className="checkbox-row admin-content-publish-confirm">
+    <Modal
+      labelledBy="admin-content-publish-title"
+      className="admin-content-publish-dialog"
+      as="div"
+      onBackdropClick={() => onClose}
+    >
+      <div className="section-heading">
+        <h2 id="admin-content-publish-title">发布内容</h2>
+        <span className="muted">{record.revision.title}</span>
+      </div>
+      <p className="muted">
+        发布前先核对素材审核、首页重点位、有效期和发布时间，避免管理员点按钮后直接收到 `409`。
+      </p>
+      <SegmentedTabs
+        label="上线方式"
+        className="admin-content-publish-toggle"
+        options={[
+          { value: 'immediate' as const, label: '立即发布' },
+          { value: 'scheduled' as const, label: '定时发布' },
+        ]}
+        value={mode}
+        onChange={(next) => {
+          setMode(next);
+          setError('');
+        }}
+      />
+      {mode === 'scheduled' ? (
+        <label>
+          <span>定时发布时间</span>
           <input
-            type="checkbox"
-            checked={confirmed}
+            type="datetime-local"
+            value={scheduledAtValue}
             onChange={(event) => {
-              setConfirmed(event.currentTarget.checked);
+              setScheduledAtValue(event.currentTarget.value);
               setError('');
             }}
           />
-          <span>我已核对内容、素材和发布时间，确认可以进入公开首页。</span>
         </label>
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
-          </button>
-          <button type="button" onClick={() => void submit()} disabled={isBusy}>
-            确认发布
-          </button>
+      ) : null}
+      <dl className="admin-content-publish-summary">
+        <div>
+          <dt>素材</dt>
+          <dd>{preview.summaryText}</dd>
         </div>
+        <div>
+          <dt>分类</dt>
+          <dd>{record.revision.categoryId}</dd>
+        </div>
+        <div>
+          <dt>首页重点位</dt>
+          <dd>
+            {record.metadata.showInBanner
+              ? `是${record.metadata.bannerSortOrder !== undefined ? ` · 排序 #${record.metadata.bannerSortOrder}` : ''}`
+              : '否'}
+          </dd>
+        </div>
+        <div>
+          <dt>有效期</dt>
+          <dd>
+            {record.metadata.expiresAt ? formatDateTime(record.metadata.expiresAt) : '未设置'}
+          </dd>
+        </div>
+        <div>
+          <dt>发布时间</dt>
+          <dd>
+            {mode === 'scheduled' && scheduledAtValue
+              ? formatDateTimeLocalPreview(scheduledAtValue)
+              : '立即生效'}
+          </dd>
+        </div>
+        <div>
+          <dt>上次发布</dt>
+          <dd>
+            {preview.baselinePublishedAt
+              ? formatDateTime(preview.baselinePublishedAt)
+              : '无历史快照'}
+          </dd>
+        </div>
+        <div>
+          <dt>发布差异</dt>
+          <dd>{preview.diffSummaryText}</dd>
+        </div>
+      </dl>
+      <div className="admin-content-publish-diff" aria-label="发布差异摘要">
+        {preview.diffItems.map((item) => (
+          <p key={item}>{item}</p>
+        ))}
       </div>
-    </div>
+      {preview.blockers.length > 0 ? (
+        <div className="admin-content-publish-blockers" aria-label="发布阻塞项">
+          {preview.blockers.map((item) => (
+            <p key={item}>{item}</p>
+          ))}
+        </div>
+      ) : null}
+      {preview.warnings.length > 0 ? (
+        <div className="admin-content-publish-warnings" aria-label="发布提醒">
+          {preview.warnings.map((item) => (
+            <p key={item}>{item}</p>
+          ))}
+        </div>
+      ) : null}
+      {preview.totalAssetCount > 0 ? (
+        <div className="admin-content-publish-assets" aria-label="素材审核状态">
+          {record.revision.assetIds.map((assetId) => {
+            const assetRecord = assetRecordById.get(assetId);
+            return (
+              <StatusChip key={assetId}>
+                {assetRecord
+                  ? `${assetRecord.asset.fileName} · ${statusLabelForAsset(assetRecord.asset.status)}`
+                  : `${assetId} · 未找到`}
+              </StatusChip>
+            );
+          })}
+        </div>
+      ) : null}
+      <CheckboxRow
+        className="admin-content-publish-confirm"
+        checked={confirmed}
+        onChange={(event) => {
+          setConfirmed(event.currentTarget.checked);
+          setError('');
+        }}
+        label="我已核对内容、素材和发布时间，确认可以进入公开首页。"
+      />
+      {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+      <div className="admin-content-actions">
+        <button type="button" onClick={onClose} disabled={isBusy}>
+          取消
+        </button>
+        <button type="button" onClick={() => void submit()} disabled={isBusy}>
+          确认发布
+        </button>
+      </div>
+    </Modal>
   );
 }
 

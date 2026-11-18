@@ -7,7 +7,10 @@ import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { AdminRefreshButton } from './admin-refresh-button';
 import { MaterialSymbol } from './material-symbol';
-import { SegmentedControl } from './segmented-control';
+import { SegmentedControl, SegmentedTabs } from './ui/segmented-control';
+import { StatusChip } from './ui/chip';
+import { Modal } from './ui/modal';
+import { Button } from './ui/button';
 
 interface AdminServiceEntry {
   id: string;
@@ -374,30 +377,19 @@ export function AdminServicesPanel() {
           className="admin-toolbar admin-poi-toolbar admin-services-toolbar"
           aria-label="服务入口筛选与操作"
         >
-          <fieldset className="segmented-control admin-services-segment">
-            <legend>入口系列</legend>
-            <div>
-              <button
-                className={categoryFilter === 'all' ? 'is-active' : ''}
-                type="button"
-                aria-pressed={categoryFilter === 'all'}
-                onClick={() => setCategoryFilter('all')}
-              >
-                全部
-              </button>
-              {categoryOptions.map((category) => (
-                <button
-                  className={categoryFilter === category.value ? 'is-active' : ''}
-                  type="button"
-                  aria-pressed={categoryFilter === category.value}
-                  key={category.value}
-                  onClick={() => setCategoryFilter(category.value)}
-                >
-                  {category.label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          <SegmentedTabs
+            label="入口系列"
+            className="admin-services-segment"
+            options={[
+              { value: 'all' as const, label: '全部' },
+              ...categoryOptions.map((category) => ({
+                value: category.value,
+                label: category.label,
+              })),
+            ]}
+            value={categoryFilter}
+            onChange={setCategoryFilter}
+          />
           <label>
             <span>状态</span>
             <select
@@ -421,16 +413,9 @@ export function AdminServicesPanel() {
               placeholder="名称、图标、链接、分类"
             />
           </label>
-          <button
-            className="secondary-action-button is-primary"
-            type="button"
-            onClick={openCreateDialog}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              add
-            </span>
-            <span>新建入口</span>
-          </button>
+          <Button variant="primary" icon="add" onClick={openCreateDialog}>
+            新建入口
+          </Button>
           <button
             type="button"
             onClick={() => {
@@ -449,9 +434,9 @@ export function AdminServicesPanel() {
               <div>
                 <div className="admin-service-title-row">
                   <strong>{entry.title}</strong>
-                  <span className={`admin-poi-status-chip is-${entry.status}`}>
+                  <StatusChip variant="poi" tone={entry.status}>
                     {statusLabel(entry.status)}
-                  </span>
+                  </StatusChip>
                 </div>
                 <p className="muted">
                   {categoryLabel(entry.categoryId)} · {openModeLabel(entry.openMode)} · 图标{' '}
@@ -460,7 +445,7 @@ export function AdminServicesPanel() {
                 </p>
                 <p className="muted">{entry.href}</p>
                 {entry.description ? <p>{entry.description}</p> : null}
-                {isDefaultEntry(entry) ? <span className="operation-tag">系统默认入口</span> : null}
+                {isDefaultEntry(entry) ? <StatusChip>系统默认入口</StatusChip> : null}
               </div>
               <div className="admin-content-actions">
                 <button
@@ -549,113 +534,110 @@ export function AdminServicesPanel() {
       </div>
 
       {isEditorOpen ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={closeEditor}>
-          <form
-            className="modal-panel admin-service-editor-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="admin-service-editor-title"
-            onMouseDown={(event) => event.stopPropagation()}
-            onSubmit={(event) => {
-              event.preventDefault();
-              void saveEntry();
-            }}
-          >
-            <div className="section-heading">
-              <h2 id="admin-service-editor-title">
-                {editingEntry ? '编辑服务入口' : '新建服务入口'}
-              </h2>
-              <span className="muted">
-                {editingEntry
-                  ? editingEntry.status === 'published'
-                    ? '当前入口已发布，保存后会直接更新公开服务列表。'
-                    : editingEntry.status === 'rejected'
-                      ? '驳回入口保存后会回到草稿。'
-                      : '保存后保留当前审核状态。'
-                  : '先创建草稿，再决定是否提交审核。'}
-              </span>
-            </div>
-            <label>
-              <span>名称</span>
+        <Modal
+          labelledBy="admin-service-editor-title"
+          className="admin-service-editor-dialog"
+          as="form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveEntry();
+          }}
+          onBackdropClick={() => closeEditor}
+        >
+          <div className="section-heading">
+            <h2 id="admin-service-editor-title">
+              {editingEntry ? '编辑服务入口' : '新建服务入口'}
+            </h2>
+            <span className="muted">
+              {editingEntry
+                ? editingEntry.status === 'published'
+                  ? '当前入口已发布，保存后会直接更新公开服务列表。'
+                  : editingEntry.status === 'rejected'
+                    ? '驳回入口保存后会回到草稿。'
+                    : '保存后保留当前审核状态。'
+                : '先创建草稿，再决定是否提交审核。'}
+            </span>
+          </div>
+          <label>
+            <span>名称</span>
+            <input
+              value={editorState.title}
+              onChange={(event) => updateEditorField('title', event.currentTarget.value)}
+            />
+          </label>
+          <div className="admin-segmented-field">
+            <span>分类</span>
+            <SegmentedControl
+              ariaLabel="服务分类"
+              className="material-mode-switch material-variant-switch"
+              value={editorState.categoryId}
+              onChange={(next) =>
+                updateEditorField('categoryId', next as AdminServiceEntry['categoryId'])
+              }
+              options={categoryOptions}
+            />
+          </div>
+          <label>
+            <span>图标</span>
+            <span className="admin-material-symbol-input">
+              <MaterialSymbol name={editorState.icon} preview aria-hidden="true" />
               <input
-                value={editorState.title}
-                onChange={(event) => updateEditorField('title', event.currentTarget.value)}
+                value={editorState.icon}
+                onChange={(event) => updateEditorField('icon', event.currentTarget.value)}
+                placeholder="apps"
               />
-            </label>
-            <div className="admin-segmented-field">
-              <span>分类</span>
-              <SegmentedControl
-                ariaLabel="服务分类"
-                className="material-mode-switch material-variant-switch"
-                value={editorState.categoryId}
-                onChange={(next) =>
-                  updateEditorField('categoryId', next as AdminServiceEntry['categoryId'])
-                }
-                options={categoryOptions}
-              />
-            </div>
-            <label>
-              <span>图标</span>
-              <span className="admin-material-symbol-input">
-                <MaterialSymbol name={editorState.icon} preview aria-hidden="true" />
-                <input
-                  value={editorState.icon}
-                  onChange={(event) => updateEditorField('icon', event.currentTarget.value)}
-                  placeholder="apps"
-                />
-              </span>
-            </label>
-            <label>
-              <span>排序</span>
-              <input
-                type="number"
-                min={0}
-                max={10000}
-                value={editorState.sortOrderValue}
-                onChange={(event) => updateEditorField('sortOrderValue', event.currentTarget.value)}
-              />
-            </label>
-            <div className="admin-segmented-field">
-              <span>打开方式</span>
-              <SegmentedControl
-                ariaLabel="打开方式"
-                className="material-mode-switch material-variant-switch"
-                value={editorState.openMode}
-                onChange={(next) =>
-                  updateEditorField('openMode', next as AdminServiceEntry['openMode'])
-                }
-                options={[
-                  { value: 'new_tab', label: '新标签页' },
-                  { value: 'same_tab', label: '当前页' },
-                ]}
-              />
-            </div>
-            <label className="admin-editor-markdown">
-              <span>链接</span>
-              <input
-                value={editorState.href}
-                onChange={(event) => updateEditorField('href', event.currentTarget.value)}
-                placeholder="https://..."
-              />
-            </label>
-            <label className="admin-editor-markdown">
-              <span>说明</span>
-              <textarea
-                value={editorState.description}
-                onChange={(event) => updateEditorField('description', event.currentTarget.value)}
-              />
-            </label>
-            {editorError ? <p className="muted admin-poi-dialog-error">{editorError}</p> : null}
-            <div className="admin-content-actions">
-              <button type="button" onClick={closeEditor} disabled={isBusy}>
-                取消
-              </button>
-              <button type="submit" disabled={isBusy}>
-                {editingEntry ? '保存修改' : '创建草稿'}
-              </button>
-            </div>
-          </form>
-        </div>
+            </span>
+          </label>
+          <label>
+            <span>排序</span>
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              value={editorState.sortOrderValue}
+              onChange={(event) => updateEditorField('sortOrderValue', event.currentTarget.value)}
+            />
+          </label>
+          <div className="admin-segmented-field">
+            <span>打开方式</span>
+            <SegmentedControl
+              ariaLabel="打开方式"
+              className="material-mode-switch material-variant-switch"
+              value={editorState.openMode}
+              onChange={(next) =>
+                updateEditorField('openMode', next as AdminServiceEntry['openMode'])
+              }
+              options={[
+                { value: 'new_tab', label: '新标签页' },
+                { value: 'same_tab', label: '当前页' },
+              ]}
+            />
+          </div>
+          <label className="admin-editor-markdown">
+            <span>链接</span>
+            <input
+              value={editorState.href}
+              onChange={(event) => updateEditorField('href', event.currentTarget.value)}
+              placeholder="https://..."
+            />
+          </label>
+          <label className="admin-editor-markdown">
+            <span>说明</span>
+            <textarea
+              value={editorState.description}
+              onChange={(event) => updateEditorField('description', event.currentTarget.value)}
+            />
+          </label>
+          {editorError ? <p className="muted admin-poi-dialog-error">{editorError}</p> : null}
+          <div className="admin-content-actions">
+            <button type="button" onClick={closeEditor} disabled={isBusy}>
+              取消
+            </button>
+            <button type="submit" disabled={isBusy}>
+              {editingEntry ? '保存修改' : '创建草稿'}
+            </button>
+          </div>
+        </Modal>
       ) : null}
     </section>
   );

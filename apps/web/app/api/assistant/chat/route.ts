@@ -2,9 +2,11 @@ import type { LocaleCode } from '@yct/contracts';
 import type { NextRequest } from 'next/server';
 import {
   AssistantProviderError,
+  buildAssistantChannelPrompt,
   buildAssistantContextBlock,
   buildAssistantSystemPrompt,
   streamAssistantReply,
+  type AssistantChannel,
   type AssistantChatMessage,
   type AssistantPageContext,
   type AssistantProviderMessage,
@@ -45,6 +47,8 @@ interface ChatRequestBody {
   locale?: unknown;
   messages?: unknown;
   page?: unknown;
+  /** 聊天渠道；网页端不传，QQ 机器人传 qq-group / qq-c2c 以获得更短的回复。 */
+  channel?: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -79,6 +83,7 @@ export async function POST(request: NextRequest) {
   }
 
   const page = normalizePageContext(body.page);
+  const channel = normalizeChannel(body.channel);
   // 页面标题只用于提示词，不参与检索，避免“这个页面怎么用”召回同名的无关地点。
   const retrievalQuery = messages
     .filter((message) => message.role === 'user')
@@ -95,6 +100,9 @@ export async function POST(request: NextRequest) {
     currentLocation,
   });
   const baseSystemPrompt = buildAssistantSystemPrompt(locale);
+  // 渠道提示放在工具规则之后，用来覆盖网页专属的 Markdown、引用编号和卡片格式。
+  const channelPrompt = channel ? buildAssistantChannelPrompt(channel) : '';
+  const plainSystemPrompt = [baseSystemPrompt, channelPrompt].filter(Boolean).join('\n\n');
   const systemPromptWithTools = [
     baseSystemPrompt,
     '',
@@ -103,7 +111,10 @@ export async function POST(request: NextRequest) {
     '2. 资料已经能回答时不要调用工具；每轮最多调用 3 个工具。',
     '3. 工具结果会附带引用编号，回答时继续用 [编号] 引用；不要编造编号。',
     buildAssistantToolPrompt(),
-  ].join('\n');
+    channelPrompt,
+  ]
+    .join('\n')
+    .trimEnd();
   // 时间、身份、页面与检索资料都属于会变化的内容，只拼进最后一条用户消息，
   // 系统提示与历史记录保持不变，模型的前缀缓存才能持续命中。
   const contextBlock = buildAssistantContextBlock({
@@ -203,7 +214,7 @@ export async function POST(request: NextRequest) {
               apiKey,
               messages: providerMessages,
               // 关闭工具时同时去掉工具清单，避免模型继续输出工具调用语法。
-              systemPrompt: useTools ? systemPromptWithTools : baseSystemPrompt,
+              systemPrompt: useTools ? systemPromptWithTools : plainSystemPrompt,
               tools: useTools ? toolDefinitions : undefined,
               signal: abortController.signal,
             })) {
@@ -353,6 +364,11 @@ function normalizeModel(value: unknown): string | undefined {
     return undefined;
   }
   return model;
+}
+
+/** 渠道是封闭枚举：只接受 QQ 群聊/单聊，避免被当成任意提示词注入。 */
+function normalizeChannel(value: unknown): AssistantChannel | undefined {
+  return value === 'qq-group' || value === 'qq-c2c' ? value : undefined;
 }
 
 function normalizeLocale(value: unknown): LocaleCode {

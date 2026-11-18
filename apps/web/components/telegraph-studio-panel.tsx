@@ -45,6 +45,9 @@ import {
 import { publishToastRequested } from '../lib/client-toast-events';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { useMobileActionRail, type MobileActionRailItem } from './mobile-action-rail';
+import { Button, IconButton } from './ui/button';
+import { Eyebrow } from './ui/status';
+import { Modal } from './ui/modal';
 
 const emptyDraft: TelegraphDraftInput = {
   province: '',
@@ -199,28 +202,20 @@ export function TelegraphToolbarActions() {
 
   const actions = (
     <div className="topbar-actions material-studio-topbar-actions telegraph-topbar-actions">
-      <button
-        className="icon-button"
-        type="button"
-        aria-label={t('telegraph.newLetter')}
+      <IconButton
+        variant="icon"
+        icon="note_add"
+        label={t('telegraph.newLetter')}
         title={t('telegraph.newLetter')}
         onClick={() => window.dispatchEvent(new Event(newLetterEvent))}
-      >
-        <span className="material-symbols-outlined" aria-hidden="true">
-          note_add
-        </span>
-      </button>
-      <button
-        className="icon-button"
-        type="button"
-        aria-label={t('telegraph.history')}
+      />
+      <IconButton
+        variant="icon"
+        icon="history"
+        label={t('telegraph.history')}
         title={t('telegraph.history')}
         onClick={() => window.dispatchEvent(new Event(historyToggleEvent))}
-      >
-        <span className="material-symbols-outlined" aria-hidden="true">
-          history
-        </span>
-      </button>
+      />
     </div>
   );
 
@@ -1096,27 +1091,18 @@ export function TelegraphStudioPanel() {
                 {t('telegraph.welcomeP3')}
               </p>
               <div className="telegraph-welcome-actions">
-                <button
-                  className="secondary-action-button is-primary"
-                  type="button"
-                  onClick={() => beginDraft()}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    edit_note
-                  </span>
+                <Button variant="primary" icon="edit_note" onClick={() => beginDraft()}>
                   {t('telegraph.startWriting')}
-                </button>
+                </Button>
                 {welcomeCodeComplete ? (
-                  <button
-                    className="secondary-action-button telegraph-welcome-replay"
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    className="telegraph-welcome-replay"
+                    icon="replay"
                     onClick={() => welcomeReplayRef.current?.()}
                   >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      replay
-                    </span>
                     {t('telegraph.replayAnimation')}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             </div>
@@ -1278,24 +1264,13 @@ export function TelegraphStudioPanel() {
               </span>
             </div>
             <div className="telegraph-paper-actions">
-              <button
-                className="secondary-action-button is-primary"
-                type="button"
-                onClick={() => requestPrint()}
-                disabled={busy}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  send
-                </span>
+              <Button variant="primary" icon="send" onClick={() => requestPrint()} disabled={busy}>
                 {t('telegraph.simulateSend')}
-              </button>
+              </Button>
               {busy ? (
-                <button className="secondary-action-button" type="button" onClick={skipAnimation}>
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    fast_forward
-                  </span>
+                <Button variant="secondary" icon="fast_forward" onClick={skipAnimation}>
                   {t('telegraph.skipAnimation')}
-                </button>
+                </Button>
               ) : null}
             </div>
             {animationState === 'editing' && scrollHints.sendPaperAtEnd && !busy ? (
@@ -1495,12 +1470,9 @@ export function TelegraphStudioPanel() {
                       )}
             </span>
             {outputSkipVisible ? (
-              <button className="secondary-action-button" type="button" onClick={skipAnimation}>
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  fast_forward
-                </span>
+              <Button variant="secondary" icon="fast_forward" onClick={skipAnimation}>
                 <span className="material-interaction-label">{t('telegraph.skipAnimation')}</span>
-              </button>
+              </Button>
             ) : null}
             {animationState === 'opened' ? (
               <div
@@ -1527,9 +1499,10 @@ export function TelegraphStudioPanel() {
               </div>
             ) : null}
             {animationState === 'sealed' ? (
-              <button
-                className="secondary-action-button telegraph-envelope-flip-button"
-                type="button"
+              <Button
+                variant="secondary"
+                className="telegraph-envelope-flip-button"
+                icon="flip"
                 onClick={flipEnvelope}
                 disabled={envelopeFlipping}
                 aria-label={
@@ -1539,81 +1512,60 @@ export function TelegraphStudioPanel() {
                   envelopeSide === 'back' ? t('telegraph.flipToFront') : t('telegraph.flipToBack')
                 }
               >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  flip
-                </span>
                 <span className="material-interaction-label">{t('telegraph.envelopeFlip')}</span>
-              </button>
+              </Button>
             ) : null}
             {showActions ? (
               <div className="telegraph-floating-actions telegraph-export-actions">
-                <button
-                  className="secondary-action-button"
-                  type="button"
+                <Button
+                  variant="secondary"
+                  icon="outbox"
                   onClick={() => void downloadPaper('send')}
                   disabled={busy}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    outbox
-                  </span>
                   <span className="material-interaction-label">{t('telegraph.sendPaper')}</span>
-                </button>
-                <button
-                  className="secondary-action-button"
-                  type="button"
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon="inbox"
                   onClick={() => void downloadPaper('receive')}
                   disabled={busy}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    inbox
-                  </span>
                   <span className="material-interaction-label">{t('telegraph.receivePaper')}</span>
-                </button>
-                <button
-                  className="secondary-action-button"
-                  type="button"
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon="content_copy"
                   onClick={downloadCode}
                   disabled={busy}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    content_copy
-                  </span>
                   <span className="material-interaction-label">{t('telegraph.code')}</span>
-                </button>
-                <button
-                  className="secondary-action-button"
-                  type="button"
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon="audio_file"
                   onClick={() => void downloadAudio()}
                   disabled={busy}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    audio_file
-                  </span>
                   <span className="material-interaction-label">{t('telegraph.audio')}</span>
-                </button>
+                </Button>
                 {animationState === 'opened' ? (
-                  <button className="secondary-action-button" type="button" onClick={packReceive}>
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      inventory_2
-                    </span>
+                  <Button variant="secondary" icon="inventory_2" onClick={packReceive}>
                     <span className="material-interaction-label">
                       {t('telegraph.insertEnvelope')}
                     </span>
-                  </button>
+                  </Button>
                 ) : null}
-                <button
-                  className="secondary-action-button"
-                  type="button"
+                <Button
+                  variant="secondary"
+                  icon="replay"
                   onClick={() => requestPrint(false)}
                   disabled={busy}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    replay
-                  </span>
                   <span className="material-interaction-label">
                     {t('telegraph.replayAnimation')}
                   </span>
-                </button>
+                </Button>
               </div>
             ) : null}
           </div>
@@ -1621,75 +1573,57 @@ export function TelegraphStudioPanel() {
       ) : null}
 
       {confirmOpen ? (
-        <div className="modal-backdrop telegraph-confirm-overlay" role="presentation">
-          <section
-            className="modal-panel telegraph-confirm-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="telegraph-confirm-title"
-          >
-            <div className="telegraph-output-heading">
-              <div>
-                <span className="eyebrow">READY TO SEND</span>
-                <h2 id="telegraph-confirm-title">{t('telegraph.confirmTitle')}</h2>
-              </div>
-              <button
-                className="icon-button"
-                type="button"
-                aria-label={t('telegraph.closeConfirm')}
-                onClick={() => setConfirmOpen(false)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
+        <Modal
+          className="telegraph-confirm-dialog"
+          labelledBy="telegraph-confirm-title"
+          backdropClassName="telegraph-confirm-overlay"
+        >
+          <div className="telegraph-output-heading">
+            <div>
+              <Eyebrow>READY TO SEND</Eyebrow>
+              <h2 id="telegraph-confirm-title">{t('telegraph.confirmTitle')}</h2>
             </div>
-            <div className="telegraph-confirm-summary">
-              <div>
-                <span>{t('telegraph.destination')}</span>
-                <strong>{result.destination || t('telegraph.notFilled')}</strong>
-              </div>
-              <div>
-                <span>{t('telegraph.recipient')}</span>
-                <strong>{draft.recipientInfo || t('telegraph.notFilled')}</strong>
-              </div>
-              <div>
-                <span>{t('telegraph.billableGrids')}</span>
-                <strong>{result.billableGrids}</strong>
-              </div>
-              <div>
-                <span>{t('telegraph.amount')}</span>
-                <strong>{result.amount.toFixed(2)}</strong>
-              </div>
+            <IconButton
+              variant="icon"
+              icon="close"
+              label={t('telegraph.closeConfirm')}
+              onClick={() => setConfirmOpen(false)}
+            />
+          </div>
+          <div className="telegraph-confirm-summary">
+            <div>
+              <span>{t('telegraph.destination')}</span>
+              <strong>{result.destination || t('telegraph.notFilled')}</strong>
             </div>
             <div>
-              <span className="telegraph-confirm-label">{t('telegraph.confirmBody')}</span>
-              <pre className="telegraph-confirm-message">
-                {draft.body || t('telegraph.notFilled')}
-              </pre>
+              <span>{t('telegraph.recipient')}</span>
+              <strong>{draft.recipientInfo || t('telegraph.notFilled')}</strong>
             </div>
-            <p>{t('telegraph.confirmHint')}</p>
-            <div className="telegraph-confirm-actions">
-              <button
-                className="secondary-action-button"
-                type="button"
-                onClick={() => setConfirmOpen(false)}
-              >
-                {t('telegraph.backEdit')}
-              </button>
-              <button
-                className="secondary-action-button is-primary"
-                type="button"
-                onClick={() => void startPrint()}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  send
-                </span>
-                {t('telegraph.confirmSend')}
-              </button>
+            <div>
+              <span>{t('telegraph.billableGrids')}</span>
+              <strong>{result.billableGrids}</strong>
             </div>
-          </section>
-        </div>
+            <div>
+              <span>{t('telegraph.amount')}</span>
+              <strong>{result.amount.toFixed(2)}</strong>
+            </div>
+          </div>
+          <div>
+            <span className="telegraph-confirm-label">{t('telegraph.confirmBody')}</span>
+            <pre className="telegraph-confirm-message">
+              {draft.body || t('telegraph.notFilled')}
+            </pre>
+          </div>
+          <p>{t('telegraph.confirmHint')}</p>
+          <div className="telegraph-confirm-actions">
+            <Button variant="secondary" onClick={() => setConfirmOpen(false)}>
+              {t('telegraph.backEdit')}
+            </Button>
+            <Button variant="primary" icon="send" onClick={() => void startPrint()}>
+              {t('telegraph.confirmSend')}
+            </Button>
+          </div>
+        </Modal>
       ) : null}
 
       {historyOpen ? (
@@ -1719,20 +1653,16 @@ export function TelegraphStudioPanel() {
                       {record.generatedAt.slice(0, 16).replace('T', ' ')} · {record.serialNumber}
                     </span>
                   </button>
-                  <button
-                    className="icon-button"
-                    type="button"
-                    aria-label={t('telegraph.deleteHistory')}
+                  <IconButton
+                    variant="icon"
+                    icon="delete"
+                    label={t('telegraph.deleteHistory')}
                     onClick={() =>
                       void deleteTelegraphHistory(record.id).then(() =>
                         listTelegraphHistory().then(setHistory),
                       )
                     }
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      delete
-                    </span>
-                  </button>
+                  />
                 </div>
               ))
             ) : (

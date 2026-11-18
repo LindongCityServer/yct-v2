@@ -20,6 +20,8 @@ import {
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { ProgressiveImage } from './progressive-image';
 import { TitleWithBreaks } from './title-with-breaks';
+import { Chip } from './ui/chip';
+import { EmptyState, Eyebrow } from './ui/status';
 
 const categories = [
   { key: 'all', labelKey: 'operations.category.all', icon: 'select_check_box', tone: 'primary' },
@@ -248,7 +250,7 @@ export function OperationsHome({
                   />
                 ) : null}
                 <div className="hero-copy">
-                  <p className="eyebrow">{item.categoryId}</p>
+                  <Eyebrow as="p">{item.categoryId}</Eyebrow>
                   <h1 id={isActive ? 'operations-title' : undefined} className="hero-title">
                     <TitleWithBreaks title={item.title} segments={item.titleSegments} />
                   </h1>
@@ -261,7 +263,7 @@ export function OperationsHome({
           })
         ) : (
           <div className="hero-copy">
-            <p className="eyebrow">{t('page.operations')}</p>
+            <Eyebrow as="p">{t('page.operations')}</Eyebrow>
             <h1 id="operations-title">{t('page.operations')}</h1>
             <p className="empty-copy">{t('operations.emptyFeatured')}</p>
           </div>
@@ -329,16 +331,15 @@ export function OperationsHome({
           {categories.map((category) => {
             const isActive = activeCategory === category.key;
             return (
-              <button
-                className={`category-chip tone-${category.tone}${isActive ? ' is-active' : ''}`}
-                type="button"
-                aria-pressed={isActive}
+              <Chip
                 key={category.key}
+                tone={category.tone}
+                active={isActive}
+                icon={category.icon}
                 onClick={() => setActiveCategory(category.key)}
               >
-                <span className="material-symbols-outlined">{category.icon}</span>
-                <span>{t(category.labelKey)}</span>
-              </button>
+                {t(category.labelKey)}
+              </Chip>
             );
           })}
         </div>
@@ -358,12 +359,9 @@ export function OperationsHome({
             ) : null}
           </>
         ) : (
-          <div className="empty-state">
-            <span className="material-symbols-outlined" aria-hidden="true">
-              inbox
-            </span>
+          <EmptyState icon="inbox">
             <p>{emptyText}</p>
-          </div>
+          </EmptyState>
         )}
       </section>
     </div>

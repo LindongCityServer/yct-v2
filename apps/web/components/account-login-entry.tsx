@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { openEmbeddedLoginPopup } from '../lib/client-embedded-auth';
+import { Button, ButtonLink } from './ui/button';
 import {
   detectEmbeddedContext,
   subscribeEmbeddedContextChanged,
@@ -10,7 +11,7 @@ import {
 
 interface AccountLoginEntryProps {
   ldpassConfigured: boolean;
-  className: string;
+  variant?: 'secondary' | 'primary';
   label: string;
 }
 
@@ -23,7 +24,7 @@ interface AccountLoginEntryProps {
  */
 export function AccountLoginEntry({
   ldpassConfigured,
-  className,
+  variant = 'secondary',
   label,
 }: Readonly<AccountLoginEntryProps>) {
   const [embedded, setEmbedded] = useState(false);
@@ -36,32 +37,27 @@ export function AccountLoginEntry({
 
   if (embedded && ldpassConfigured) {
     return (
-      <button
-        className={className}
-        type="button"
+      <Button
+        variant={variant}
+        icon="login"
         onClick={() => {
           // 保持同步调用，确保弹窗不被拦截器拦掉。
           openEmbeddedLoginPopup();
         }}
       >
-        <span className="material-symbols-outlined" aria-hidden="true">
-          login
-        </span>
-        <span>{label}</span>
-      </button>
+        {label}
+      </Button>
     );
   }
 
   return (
-    <a
-      className={className}
+    <ButtonLink
+      variant={variant}
       href={ldpassConfigured ? appPath('/api/auth/ldpass/start') : undefined}
       aria-disabled={!ldpassConfigured}
+      icon="login"
     >
-      <span className="material-symbols-outlined" aria-hidden="true">
-        login
-      </span>
-      <span>{label}</span>
-    </a>
+      {label}
+    </ButtonLink>
   );
 }

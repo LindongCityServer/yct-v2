@@ -39,6 +39,7 @@ import {
 import { EditorLoadingState } from './editor/editor-loading-state';
 import { RangeInput } from './range-input';
 import { VisualEditorShell } from './visual-editor-shell';
+import { Field, FieldGroup, Input, Select } from './ui/field';
 
 /**
  * 区划编辑工作台。
@@ -286,17 +287,15 @@ export function AdminAdministrativeAreaWorkbench({ areaId }: Readonly<{ areaId?:
             <div className="transit-visual-inspector-section-heading">
               <p className="transit-visual-inspector-section-title">区划属性</p>
             </div>
-            <label className="material-field">
-              <span>区划名称</span>
-              <input
+            <Field label={<>区划名称</>}>
+              <Input
                 value={values.name}
                 onChange={(event) => updateValues({ name: event.currentTarget.value })}
                 required
               />
-            </label>
-            <label className="material-field">
-              <span>级别</span>
-              <select
+            </Field>
+            <Field label={<>级别</>}>
+              <Select
                 value={values.level}
                 onChange={(event) =>
                   updateValues({ level: event.currentTarget.value as AdministrativeAreaLevel })
@@ -307,19 +306,17 @@ export function AdminAdministrativeAreaWorkbench({ areaId }: Readonly<{ areaId?:
                     {option.label}
                   </option>
                 ))}
-              </select>
-            </label>
-            <label className="material-field">
-              <span>编码</span>
-              <input
+              </Select>
+            </Field>
+            <Field label={<>编码</>}>
+              <Input
                 value={values.code}
                 onChange={(event) => updateValues({ code: event.currentTarget.value })}
                 required
               />
-            </label>
-            <label className="material-field">
-              <span>上级区划</span>
-              <select
+            </Field>
+            <Field label={<>上级区划</>}>
+              <Select
                 value={values.parentAreaId}
                 onChange={(event) => updateValues({ parentAreaId: event.currentTarget.value })}
               >
@@ -331,11 +328,10 @@ export function AdminAdministrativeAreaWorkbench({ areaId }: Readonly<{ areaId?:
                       {item.name}
                     </option>
                   ))}
-              </select>
-            </label>
-            <label className="material-field">
-              <span>标签位置</span>
-              <select
+              </Select>
+            </Field>
+            <Field label={<>标签位置</>}>
+              <Select
                 value={values.labelPositionPoiId}
                 onChange={(event) =>
                   updateValues({ labelPositionPoiId: event.currentTarget.value })
@@ -347,10 +343,9 @@ export function AdminAdministrativeAreaWorkbench({ areaId }: Readonly<{ areaId?:
                     绑定 POI · {marker.label}
                   </option>
                 ))}
-              </select>
-            </label>
-            <label className="material-field">
-              <span>区划颜色</span>
+              </Select>
+            </Field>
+            <FieldGroup as="label" label="区划颜色">
               <span className="admin-map-area-color-control">
                 <span
                   className="admin-map-area-color-swatch"
@@ -381,10 +376,9 @@ export function AdminAdministrativeAreaWorkbench({ areaId }: Readonly<{ areaId?:
                   ) : null}
                 </select>
               </span>
-            </label>
+            </FieldGroup>
             <div className="admin-map-area-opacity-grid">
-              <label className="material-field">
-                <span>{`填充透明度 · ${values.fillOpacity}`}</span>
+              <FieldGroup as="label" label={`填充透明度 · ${values.fillOpacity}`}>
                 <RangeInput
                   min={0}
                   max={1}
@@ -392,9 +386,8 @@ export function AdminAdministrativeAreaWorkbench({ areaId }: Readonly<{ areaId?:
                   value={Number(values.fillOpacity)}
                   onChange={(event) => updateValues({ fillOpacity: event.currentTarget.value })}
                 />
-              </label>
-              <label className="material-field">
-                <span>{`描边透明度 · ${values.strokeOpacity}`}</span>
+              </FieldGroup>
+              <FieldGroup as="label" label={`描边透明度 · ${values.strokeOpacity}`}>
                 <RangeInput
                   min={0}
                   max={1}
@@ -402,12 +395,11 @@ export function AdminAdministrativeAreaWorkbench({ areaId }: Readonly<{ areaId?:
                   value={Number(values.strokeOpacity)}
                   onChange={(event) => updateValues({ strokeOpacity: event.currentTarget.value })}
                 />
-              </label>
+              </FieldGroup>
             </div>
             <div className="poi-visual-point-fields">
-              <label className="material-field">
-                <span>最小缩放</span>
-                <input
+              <Field label={<>最小缩放</>}>
+                <Input
                   type="number"
                   min="-20"
                   max="20"
@@ -415,10 +407,9 @@ export function AdminAdministrativeAreaWorkbench({ areaId }: Readonly<{ areaId?:
                   value={values.minZoom}
                   onChange={(event) => updateValues({ minZoom: event.currentTarget.value })}
                 />
-              </label>
-              <label className="material-field">
-                <span>标签最大缩放</span>
-                <input
+              </Field>
+              <Field label={<>标签最大缩放</>}>
+                <Input
                   type="number"
                   min="-20"
                   max="20"
@@ -427,7 +418,7 @@ export function AdminAdministrativeAreaWorkbench({ areaId }: Readonly<{ areaId?:
                   onChange={(event) => updateValues({ maxZoom: event.currentTarget.value })}
                   required
                 />
-              </label>
+              </Field>
             </div>
           </div>
         }

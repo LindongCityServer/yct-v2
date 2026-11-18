@@ -5,6 +5,7 @@ import { appPath } from '../lib/app-paths';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { getLocalizedFaqContent } from '../lib/faq-translations';
 import { MaterialSymbol } from './material-symbol';
+import { EmptyState } from './ui/status';
 
 const serviceCategoryLabelKeys: Record<ServiceEntry['categoryId'], CommonMessageKey> = {
   operations: 'services.category.operations',
@@ -76,12 +77,9 @@ export function ServicesPageContent({
           ))}
         </div>
       ) : (
-        <div className="empty-state">
-          <span className="material-symbols-outlined" aria-hidden="true">
-            apps
-          </span>
+        <EmptyState icon="apps">
           <p>{t('services.empty')}</p>
-        </div>
+        </EmptyState>
       )}
     </section>
   );

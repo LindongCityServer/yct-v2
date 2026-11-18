@@ -1,0 +1,5287 @@
+/* 从 apps/web/app/globals.css 按顺序拆出（20-layout）：本文件顺序参与全局级联，勿调换 layout.tsx 的 import 顺序。 */
+
+@media (max-width: 760px) {
+  /* 手机端改为底部面板，按钮保持 44px 触控高度并避开安全区。 */
+  .map-measure-panel {
+    right: var(--yct-map-control-inset);
+    left: var(--yct-map-control-inset);
+    bottom: calc(var(--yct-map-bottom-controls-offset) + var(--yct-space-3));
+    width: auto;
+    max-height: 42dvh;
+    padding: var(--yct-space-3) var(--yct-space-3)
+      calc(var(--yct-space-3) + env(safe-area-inset-bottom));
+    transform: none;
+  }
+
+  .map-measure-panel.is-positioned {
+    right: auto;
+  }
+
+  .map-measure-button {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+.map-poi-detail-panel {
+  display: grid;
+  gap: var(--yct-space-3);
+  width: 100%;
+  padding: var(--yct-space-4);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 96%, transparent);
+  box-shadow: var(--yct-shadow-floating);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.map-poi-detail-panel.is-collapsed {
+  gap: 0;
+}
+
+.map-poi-detail-header {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) repeat(2, 38px);
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+/* 顶栏列数必须跟随实际渲染出的按钮数量：AdminEditLink 对非管理员返回 null，
+ * 线路信息按钮也只在公交线路详情出现，用 :has 逐个补齐，避免按钮换行到第二行。 */
+.map-poi-detail-header:has(> .admin-edit-link),
+.map-poi-detail-header:has(> .map-line-info-button) {
+  grid-template-columns: 32px minmax(0, 1fr) repeat(3, 38px);
+}
+
+.map-poi-detail-header:has(> .admin-edit-link):has(> .map-line-info-button) {
+  grid-template-columns: 32px minmax(0, 1fr) repeat(4, 38px);
+}
+
+.map-poi-detail-header > div {
+  min-width: 0;
+}
+
+.map-poi-detail-header img {
+  justify-self: center;
+  max-width: 28px;
+  max-height: 28px;
+  object-fit: contain;
+}
+
+.map-poi-detail-header img.map-player-list-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  object-fit: cover;
+}
+
+.map-poi-detail-header h2 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-17);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-poi-detail-header span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+.map-player-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.map-player-presence .material-symbols-outlined {
+  font-size: var(--yct-font-size-15);
+}
+
+.map-player-presence.is-online {
+  color: var(--yct-color-secondary);
+}
+
+.map-player-presence.is-offline {
+  color: var(--yct-color-text-muted);
+}
+
+.map-player-detail-summary {
+  display: grid;
+  gap: 6px;
+  padding: 2px 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+}
+
+.map-player-detail-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+}
+
+.map-player-detail-summary-row span {
+  color: var(--yct-color-text-muted);
+  font-weight: 650;
+}
+
+.map-player-detail-summary-row strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+  font-weight: 800;
+}
+
+.map-player-detail-summary p {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+}
+
+.map-poi-detail-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+}
+
+.map-poi-detail-tabs button {
+  min-width: 0;
+  min-height: 30px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+  font-size: var(--yct-font-size-12);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-poi-detail-tabs button.is-active {
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  box-shadow: var(--yct-shadow-soft);
+  font-weight: 800;
+}
+
+.map-poi-detail-body {
+  --map-poi-detail-body-max-height: min(390px, calc(var(--yct-visible-map-height) - 250px));
+  display: grid;
+  gap: var(--yct-space-3);
+  /* 操作底栏已移至滚动区外成为固定 grid 项，高度预算需扣除底栏与反馈状态行，防止被面板 overflow:hidden 裁切 */
+  max-height: var(--map-poi-detail-body-max-height);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+/* 线路详情：方向切换与实时公交固定在上方，站点列表单独滚动。
+ * 否则列表（连同左侧线路连接线）会滚到实时公交下方再透出来，看起来像线路图向上延伸。
+ * 只对含站点列表的线路详情生效，道路详情仍保持整体滚动。 */
+.map-poi-detail-body:has(> .map-linear-detail > .map-line-station-list) {
+  overflow: hidden;
+}
+
+.map-poi-detail-body > .map-linear-detail:has(> .map-line-station-list) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: var(--map-poi-detail-body-max-height);
+}
+
+.map-poi-detail-body > .map-linear-detail:has(> .map-line-station-list) > .map-line-detail-summary {
+  position: static;
+}
+
+.map-poi-detail-body > .map-linear-detail:has(> .map-line-station-list) > .map-line-station-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.map-poi-detail-body p {
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.map-poi-detail-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-muted);
+}
+
+.map-poi-detail-gallery {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  touch-action: pan-y;
+}
+
+.map-poi-detail-gallery.is-multiple {
+  margin: 0 4px 6px 0;
+}
+
+.map-poi-detail-gallery.is-multiple::before,
+.map-poi-detail-gallery.is-multiple::after {
+  position: absolute;
+  inset: 6px -4px -6px 6px;
+  z-index: -1;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+  content: '';
+}
+
+.map-poi-detail-gallery.is-multiple::after {
+  inset: 3px -2px -3px 3px;
+}
+
+.map-poi-detail-gallery-button {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 50%;
+  color: white;
+  background: rgb(18 23 28 / 72%);
+  box-shadow: var(--yct-shadow-sm);
+}
+
+.map-poi-detail-gallery-button.is-previous {
+  left: 10px;
+}
+
+.map-poi-detail-gallery-button.is-next {
+  right: 10px;
+}
+
+.map-poi-detail-gallery-counter {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: white;
+  font-size: var(--yct-font-size-12);
+  line-height: 1.4;
+  background: rgb(18 23 28 / 72%);
+}
+
+.map-poi-detail-body dl {
+  display: grid;
+  gap: var(--yct-space-2);
+  margin: 0;
+}
+
+.map-poi-detail-body dl div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: var(--yct-space-2);
+}
+
+.map-poi-detail-body dt,
+.map-poi-detail-body dd {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--yct-font-size-13);
+}
+
+.map-poi-detail-body dt {
+  color: var(--yct-color-text-muted);
+  font-weight: 700;
+}
+
+.map-poi-detail-body dd {
+  color: var(--yct-color-text-secondary);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.map-poi-related-list {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.map-poi-related-filters {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-muted) 62%, transparent);
+}
+
+.map-poi-related-filters label,
+.map-poi-related-filter-section {
+  display: grid;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+.map-poi-related-keyword input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-sm);
+  outline: 0;
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  font: inherit;
+  font-size: var(--yct-font-size-14);
+  font-weight: 600;
+}
+
+.map-poi-related-keyword input:focus-visible {
+  border-color: var(--yct-color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--yct-color-primary) 14%, transparent);
+}
+
+.map-poi-related-filter-section .map-category-filter {
+  min-width: 0;
+}
+
+.map-poi-related-filter-section .map-category-strip {
+  gap: var(--yct-space-1);
+}
+
+.map-poi-facility-list {
+  display: grid;
+}
+
+.map-metro-station-infrastructure {
+  --map-metro-station-line-color: var(--yct-color-primary);
+  display: grid;
+  gap: var(--yct-space-2);
+  margin-bottom: var(--yct-space-3);
+}
+
+.map-metro-station-infrastructure-heading,
+.map-metro-station-detail-title,
+.map-metro-station-detail-group {
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.map-metro-station-infrastructure-heading {
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+}
+
+.map-metro-station-infrastructure-heading .material-symbols-outlined {
+  color: var(--map-metro-station-line-color);
+}
+
+.map-metro-station-detail {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.map-metro-station-detail-title {
+  justify-content: space-between;
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+}
+
+.map-metro-station-detail-title span,
+.map-metro-station-detail-note,
+.map-metro-station-detail-group {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.55;
+}
+
+.map-metro-station-detail-note {
+  margin: 0;
+}
+
+.map-metro-station-layer-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-1);
+}
+
+.map-metro-station-layer-list span {
+  padding: 3px 7px;
+  border-radius: var(--yct-radius-sm);
+  background: color-mix(in srgb, var(--map-metro-station-line-color) 10%, var(--yct-color-surface));
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+.map-metro-station-facility-list {
+  display: grid;
+  gap: 1px;
+  border-top: 1px solid var(--yct-color-border-subtle);
+}
+
+.map-metro-station-facility {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-2) 0;
+  border-bottom: 1px solid var(--yct-color-border-subtle);
+}
+
+.map-metro-station-facility > .material-symbols-outlined {
+  color: var(--map-metro-station-line-color);
+  font-size: var(--yct-font-size-20);
+}
+
+.map-metro-station-facility > span:last-child {
+  display: grid;
+  gap: 2px;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+}
+
+.map-metro-station-facility small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.45;
+}
+
+.map-metro-station-detail-group {
+  align-items: flex-start;
+}
+
+.map-metro-station-detail-group-label {
+  flex: 0 0 30px;
+  color: var(--yct-color-text-secondary);
+  font-weight: 700;
+}
+
+.map-metro-station-infrastructure-heading {
+  flex-wrap: wrap;
+}
+
+.map-metro-station-line-tabs {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.map-metro-station-detail-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  margin-left: auto;
+}
+
+.map-metro-station-line-tabs button {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-pill);
+  /* 一般态与标准 chip 未选中底色对齐（surface-muted）。 */
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-muted);
+  font: inherit;
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.map-metro-station-line-tabs button.is-active {
+  /* 选中态：线路色半透明版本（16% 与 chip 选中态/换乘线路 chip 同浓度），
+   * 文字保持线路色 + 线路色描边，强化线路辨识度。 */
+  border-color: var(--map-metro-station-line-color);
+  background: color-mix(in srgb, var(--map-metro-station-line-color) 16%, transparent);
+  color: var(--map-metro-station-line-color);
+}
+
+.map-metro-station-direction-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding-left: var(--yct-space-1);
+  border-left: 1px solid var(--yct-color-border-subtle);
+}
+
+.map-metro-station-direction-tabs button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-sm);
+  /* 与线路切换按钮同口径：一般态标准未选中 chip 底色。 */
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-muted);
+  cursor: pointer;
+}
+
+.map-metro-station-direction-tabs button.is-active {
+  border-color: var(--map-metro-station-line-color);
+  background: color-mix(in srgb, var(--map-metro-station-line-color) 16%, transparent);
+  color: var(--map-metro-station-line-color);
+}
+
+.map-metro-station-direction-tabs .material-symbols-outlined {
+  font-size: var(--yct-font-size-17);
+}
+
+.map-metro-station-floor {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border: 0;
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.map-metro-station-floor.is-platform {
+  background: color-mix(in srgb, var(--map-metro-station-line-color) 5%, var(--yct-color-surface));
+}
+
+.map-metro-station-floor-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-secondary);
+}
+
+.map-metro-station-floor-heading strong {
+  min-width: 24px;
+  color: var(--map-metro-station-line-color);
+  font-size: var(--yct-font-size-16);
+}
+
+.map-metro-station-floor-heading span {
+  font-size: var(--yct-font-size-13);
+  font-weight: 700;
+}
+
+.map-metro-station-floor-heading small {
+  margin-left: auto;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.map-metro-station-floor-empty {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.map-metro-station-exit-track {
+  display: grid;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.45;
+}
+
+.map-metro-station-platform-direction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.45;
+}
+
+.map-metro-station-exit-summary,
+.map-metro-station-exit-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--yct-space-2);
+}
+
+.map-metro-station-exit-summary {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.map-metro-station-exit-summary:focus-visible {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
+}
+
+.map-metro-station-exit-summary::-webkit-details-marker {
+  display: none;
+}
+
+.map-metro-station-exit-summary::after {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--yct-color-text-muted);
+  content: 'expand_more';
+  font-family: 'Material Symbols Outlined';
+  font-size: var(--yct-font-size-18);
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 600,
+    'GRAD' 0,
+    'opsz' 20;
+}
+
+.map-metro-station-exit-track[open] > .map-metro-station-exit-summary::after {
+  content: 'expand_less';
+}
+
+.map-metro-station-exit-summary .is-left {
+  grid-column: 1;
+}
+
+.map-metro-station-exit-summary .is-right {
+  grid-column: 3;
+}
+
+.map-metro-station-exit-details {
+  align-items: start;
+}
+
+.map-metro-station-exit-group {
+  display: grid;
+  min-width: 0;
+  gap: var(--yct-space-1);
+}
+
+.map-metro-station-exit-direction {
+  font-size: var(--yct-font-size-18);
+  line-height: 1;
+}
+
+.map-metro-station-exit-list {
+  display: grid;
+  min-width: 0;
+  gap: var(--yct-space-1);
+}
+
+.map-metro-station-exit-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+  gap: var(--yct-space-1);
+}
+
+.map-metro-station-exit-group.is-right .map-metro-station-exit-row {
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+.map-metro-station-exit-code {
+  white-space: nowrap;
+}
+
+.map-metro-station-exit-description {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.map-metro-station-exit-track .is-right,
+.map-metro-station-platform-direction span:last-child {
+  text-align: right;
+}
+
+.map-metro-station-exit-track span {
+  overflow-wrap: anywhere;
+}
+
+.map-metro-station-platform-schematic {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.map-metro-station-facility-track,
+.map-metro-station-transfer-track {
+  position: relative;
+  min-height: 34px;
+}
+
+.map-metro-station-facility-track {
+  min-height: 26px;
+}
+
+.map-metro-station-facility-icon,
+.map-metro-station-transfer-marker {
+  position: absolute;
+  left: var(--station-detail-position);
+  transform: translateX(calc(-50% + var(--station-detail-offset, 0px)));
+}
+
+.map-metro-station-detail.is-template-flipped .map-metro-station-facility-icon,
+.map-metro-station-detail.is-template-flipped .map-metro-station-transfer-marker {
+  left: calc(100% - var(--station-detail-position));
+}
+
+.map-metro-station-facility-icon {
+  bottom: 0;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  color: var(--map-metro-station-line-color);
+}
+
+.map-metro-station-facility-symbols {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.map-metro-station-facility-symbols.is-flipped {
+  transform: scaleX(-1);
+}
+
+.map-metro-station-facility-icon i {
+  font-size: var(--yct-font-size-21);
+  font-style: normal;
+}
+
+.map-metro-station-facility-asset {
+  display: block;
+  width: 21px;
+  height: 21px;
+  background: currentColor;
+  -webkit-mask: var(--map-metro-station-facility-asset) center / contain no-repeat;
+  mask: var(--map-metro-station-facility-asset) center / contain no-repeat;
+}
+
+.map-metro-station-carriages {
+  display: grid;
+  grid-template-columns: repeat(var(--station-carriage-count), minmax(0, 1fr));
+  gap: 3px;
+}
+
+.map-metro-station-carriages.is-template-flipped {
+  direction: rtl;
+}
+
+.map-metro-station-carriages span {
+  display: grid;
+  min-height: 30px;
+  place-items: center;
+  border: 1px solid var(--yct-color-border);
+  border-radius: 2px;
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+.map-metro-station-transfer-track {
+  margin-top: var(--yct-space-1);
+}
+
+.map-metro-station-transfer-marker {
+  top: 2px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--station-transfer-line-color);
+  color: #ffffff;
+  padding: 0;
+  font-size: var(--yct-font-size-11);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.map-metro-station-transfer-marker:disabled {
+  cursor: default;
+  opacity: 0.74;
+}
+
+.map-poi-facility-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-1);
+  padding: var(--yct-space-2);
+  border-bottom: 1px solid var(--yct-color-border);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  line-height: 1.45;
+}
+
+.map-poi-facility-item .material-symbols-outlined {
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-22);
+}
+
+.map-poi-related-group {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.map-poi-related-group h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+}
+
+.map-poi-related-group h4 small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 650;
+}
+
+.map-poi-related-group-items {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.map-poi-related-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-height: 42px;
+  padding: var(--yct-space-2);
+  border: 0;
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.map-poi-related-item:hover {
+  background: var(--yct-material-hover-state);
+}
+
+.map-poi-related-item span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.map-poi-related-item strong,
+.map-poi-related-item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-poi-related-item strong {
+  font-size: var(--yct-font-size-13);
+  font-weight: 700;
+}
+
+.map-poi-related-item small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 650;
+}
+
+.map-poi-related-item img {
+  justify-self: center;
+  max-width: 24px;
+  max-height: 24px;
+}
+
+.map-poi-related-item .map-marker-list-symbol {
+  justify-self: center;
+  font-size: var(--yct-font-size-20);
+}
+
+.map-transfer-line-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.map-transfer-line-chip {
+  --transfer-line-color: var(--yct-color-primary);
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  min-height: 24px;
+  box-sizing: border-box;
+  width: fit-content;
+  min-width: 0;
+  max-width: 128px;
+  padding: 0 7px;
+  overflow: hidden;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--transfer-line-color) 16%, var(--yct-color-surface-muted));
+  color: var(--transfer-line-color);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--yct-font-size-12);
+  font-weight: 800;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-poi-region-chip {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.map-poi-parent-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--yct-color-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+}
+
+.map-poi-parent-link:hover {
+  text-decoration: underline;
+}
+
+.admin-poi-icon-picker {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--yct-space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.admin-poi-icon-picker legend {
+  margin-bottom: var(--yct-space-2);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+.admin-poi-icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: var(--yct-space-2);
+}
+
+.admin-poi-icon-option {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+  min-height: 48px;
+  padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-sm);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.admin-poi-icon-option.is-selected {
+  border-color: var(--yct-color-primary);
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--yct-color-primary) 12%, transparent);
+}
+
+.admin-poi-icon-option img,
+.admin-poi-icon-option > .material-symbols-outlined {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.admin-poi-icon-option > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-transfer-line-chip:hover {
+  background: color-mix(in srgb, var(--transfer-line-color) 24%, var(--yct-color-surface-muted));
+}
+
+.map-linear-detail {
+  --map-line-detail-color: var(--yct-color-primary);
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.map-line-direction-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+}
+
+.map-line-direction-switch button {
+  min-width: 0;
+  min-height: 30px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--yct-font-size-12);
+  font-weight: 600;
+}
+
+.map-line-direction-switch button.is-active {
+  background: color-mix(in srgb, var(--map-line-detail-color) 14%, transparent);
+  color: var(--map-line-detail-color);
+  box-shadow: var(--yct-shadow-soft);
+  font-weight: 800;
+}
+
+.map-line-station-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0 0 0 20px;
+  list-style: none;
+}
+
+.map-line-station-list li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-height: 30px;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+  font-weight: 400;
+}
+
+.map-line-station-button {
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+/* 悬停沿用全局列表行的默认反馈，不带线路色。 */
+.map-line-station-button:hover,
+.map-line-station-button:focus-visible {
+  background: var(--yct-material-hover-state);
+  color: var(--yct-color-text);
+}
+
+.map-line-station-button small {
+  display: block;
+}
+
+.map-line-station-list li::before {
+  position: absolute;
+  top: 14px;
+  bottom: -14px;
+  left: 5px;
+  width: 4px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--map-line-detail-color);
+  content: '';
+}
+
+.map-line-station-list li:last-child::before {
+  display: none;
+}
+
+.map-line-station-node {
+  position: relative;
+  z-index: 1;
+  align-self: center;
+  width: 14px;
+  height: 14px;
+  border: 3px solid var(--map-line-detail-color);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+}
+
+.map-line-station-list small {
+  display: inline-flex;
+  margin-left: var(--yct-space-1);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 700;
+}
+
+.map-line-detail-summary {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: grid;
+  gap: var(--yct-space-3);
+  padding-bottom: var(--yct-space-2);
+}
+
+.map-line-station-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.map-line-station-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.map-line-station-poi-button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--map-line-detail-color) 32%, transparent);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--map-line-detail-color) 10%, var(--yct-color-surface-panel));
+  color: var(--map-line-detail-color);
+  cursor: pointer;
+  font: inherit;
+}
+
+.map-line-station-poi-button .material-symbols-outlined {
+  font-size: var(--yct-font-size-15);
+}
+
+/* 选中态必须与面板底色做不透明混合：面板是 96% 半透明 + backdrop-filter，
+ * 若用带 alpha 的 color-mix，线路色会被透光材质和背景地图冲淡到几乎看不出来。 */
+.map-line-station-list li.is-selected .map-line-station-button {
+  background: color-mix(in srgb, var(--map-line-detail-color) 26%, var(--yct-color-surface-panel));
+  color: var(--map-line-detail-color);
+  font-weight: 800;
+}
+
+/* 透光材质下，后面「液态材质通用选中项」的
+ * `[data-liquid-material] :is(button, a):is(…, [aria-pressed='true'])` 规则会把本站点按钮
+ * 刷成 --yct-color-surface-selected（主色 16% 透明），其特异性高于上面的线路色规则，
+ * 导致透光模式下选中态变回带 alpha 的绿色。这里用更高特异性把线路色取回来。 */
+:root[data-material-mode] .map-line-station-list li.is-selected .map-line-station-button {
+  background: color-mix(in srgb, var(--map-line-detail-color) 26%, var(--yct-color-surface-panel));
+}
+
+.map-line-station-list li.is-selected .map-line-station-node {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--map-line-detail-color) 24%, transparent);
+}
+
+.map-line-vehicle-badge {
+  position: absolute;
+  left: -18px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--map-line-detail-color);
+  box-shadow: var(--yct-shadow-soft);
+  color: var(--yct-color-on-primary);
+}
+
+.map-line-vehicle-badge.is-station {
+  top: 7px;
+}
+
+.map-line-vehicle-badge.is-segment {
+  transform: translateY(-50%);
+}
+
+.map-line-vehicle-badge .material-symbols-outlined {
+  font-size: var(--yct-font-size-11);
+}
+
+.map-line-vehicle-badge small {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--map-line-detail-color);
+  font-size: var(--yct-font-size-9);
+  font-weight: 800;
+  line-height: 12px;
+  text-align: center;
+}
+
+.map-line-realtime-selected {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--map-line-detail-color) 12%, var(--yct-color-surface-panel));
+}
+
+.map-line-realtime-selected-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.map-line-realtime-selected-head .material-symbols-outlined {
+  color: var(--map-line-detail-color);
+  font-size: var(--yct-font-size-16);
+}
+
+.map-line-realtime-selected-head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-12);
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-line-realtime-station-link {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--map-line-detail-color);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--yct-font-size-11);
+  font-weight: 800;
+}
+
+.map-line-realtime-selected small {
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-11);
+  font-weight: 600;
+}
+
+.map-line-realtime-list .map-line-realtime-eta {
+  color: var(--map-line-detail-color);
+  font-weight: 700;
+}
+
+.map-line-info-modal {
+  width: min(440px, 100%);
+}
+
+.map-line-realtime {
+  display: grid;
+  container-type: inline-size;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border: 1px solid color-mix(in srgb, var(--map-line-detail-color) 22%, transparent);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--map-line-detail-color) 6%, var(--yct-color-surface));
+}
+
+.map-line-realtime-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+}
+
+.map-line-realtime-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+  font-weight: 800;
+}
+
+.map-line-realtime-head h3 .material-symbols-outlined {
+  color: var(--map-line-detail-color);
+  font-size: var(--yct-font-size-18);
+}
+
+.map-line-realtime-head > span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-line-realtime-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--map-line-detail-color) 16%, transparent);
+  color: var(--map-line-detail-color);
+  font-size: var(--yct-font-size-10);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-line-realtime-meta {
+  white-space: nowrap;
+}
+
+.map-line-realtime-summary,
+.map-line-realtime-empty {
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.5;
+}
+
+.map-line-realtime-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map-line-realtime-list.is-board {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.map-line-realtime-list.is-board li {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+@container (max-width: 240px) {
+  .map-line-realtime-list.is-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .map-line-realtime-list.is-board li:nth-child(3) {
+    display: none;
+  }
+}
+
+.map-line-realtime-board-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--map-line-detail-color) 18%, transparent);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  box-shadow: var(--yct-shadow-soft);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.map-line-realtime-board-item:hover,
+.map-line-realtime-board-item:focus-visible {
+  background: color-mix(in srgb, var(--map-line-detail-color) 8%, var(--yct-color-surface-panel));
+}
+
+.map-line-realtime-board-item strong {
+  color: var(--map-line-detail-color);
+  font-size: var(--yct-font-size-16);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.map-line-realtime-board-item strong.is-waiting {
+  color: var(--yct-color-text-muted);
+}
+
+.map-line-realtime-board-item strong.is-arriving_now,
+.map-line-realtime-board-item strong.is-leaving {
+  color: var(--yct-color-warning);
+}
+
+.map-line-realtime-board-item small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+.map-line-trip-modal {
+  width: min(420px, 100%);
+}
+
+.map-line-realtime-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.map-line-realtime-all-trips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--map-line-detail-color) 22%, transparent);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--map-line-detail-color);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--yct-font-size-11);
+  font-weight: 800;
+}
+
+.map-line-realtime-all-trips:hover,
+.map-line-realtime-all-trips:focus-visible {
+  background: color-mix(in srgb, var(--map-line-detail-color) 10%, var(--yct-color-surface-panel));
+}
+
+.map-line-realtime-all-trips .material-symbols-outlined {
+  font-size: var(--yct-font-size-15);
+}
+
+.map-line-day-board-modal {
+  width: min(420px, 100%);
+}
+
+.map-line-realtime-list.map-line-day-board-list li {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.map-line-day-board-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--map-line-detail-color) 18%, transparent);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  box-shadow: var(--yct-shadow-soft);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.map-line-day-board-item:hover,
+.map-line-day-board-item:focus-visible {
+  background: color-mix(in srgb, var(--map-line-detail-color) 8%, var(--yct-color-surface-panel));
+}
+
+.map-line-day-board-trip {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--map-line-detail-color);
+  font-size: var(--yct-font-size-12);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-line-day-board-item strong {
+  color: var(--map-line-detail-color);
+  font-size: var(--yct-font-size-12);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.map-line-day-board-item strong.is-waiting,
+.map-line-day-board-item strong.is-passed {
+  color: var(--yct-color-text-muted);
+}
+
+.map-line-day-board-item strong.is-arriving_now,
+.map-line-day-board-item strong.is-leaving {
+  color: var(--yct-color-warning);
+}
+
+.map-line-day-board-item small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.map-line-realtime-list li {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  box-shadow: var(--yct-shadow-soft);
+}
+
+.map-line-realtime-trip {
+  color: var(--map-line-detail-color);
+  font-size: var(--yct-font-size-11);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-line-realtime-list strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+.map-line-realtime-track {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-border);
+}
+
+.map-line-realtime-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--map-line-detail-color);
+}
+
+.map-line-realtime-list small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 600;
+}
+
+.map-line-realtime-note {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.map-poi-action-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 38px);
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.map-poi-action-bar .secondary-action-button {
+  justify-content: center;
+}
+
+.map-poi-action-bar .icon-action-button.is-active {
+  --icon-fill: 1;
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+}
+
+.map-poi-action-status {
+  margin: var(--yct-space-2) 0 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+}
+
+.map-legal {
+  position: absolute;
+  right: var(--yct-map-control-inset);
+  bottom: var(--yct-map-control-inset);
+  z-index: 3;
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  max-width: min(440px, calc(100% - var(--yct-map-control-inset) * 2));
+  color: #ffffff;
+  font-size: var(--yct-font-size-12);
+  line-height: 1.5;
+  text-align: right;
+  /* 与比例尺一致：白字配黑描边，避免在卫星底图上失去对比度。 */
+  text-shadow:
+    0 1px 3px rgba(17, 24, 23, 0.72),
+    1px 0 0 rgba(17, 24, 23, 0.82),
+    -1px 0 0 rgba(17, 24, 23, 0.82),
+    0 1px 0 rgba(17, 24, 23, 0.82),
+    0 -1px 0 rgba(17, 24, 23, 0.82);
+  pointer-events: auto;
+}
+
+.map-legal p {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--yct-space-2);
+  margin: 0;
+}
+
+.map-legal a {
+  color: inherit;
+}
+
+.map-empty {
+  min-height: var(--yct-visible-map-height);
+  padding-bottom: 0;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+}
+
+/* 标题元素归一：section-heading 内 h2/h3 共用同一套标题规格。
+ * 此前仅覆盖 h2，使用 h3 的弹窗/面板标题会保留浏览器默认 margin，形成顶栏空白。 */
+.section-heading :is(h2, h3) {
+  margin: 0;
+  font-size: var(--yct-font-size-18);
+}
+
+.category-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.operations-feed-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+  margin-bottom: var(--yct-space-3);
+}
+
+.operations-feed-toolbar h2 {
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-18);
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.operations-social-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.operations-social-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  min-height: 32px;
+  padding: 4px var(--yct-space-2);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.operations-social-link:hover {
+  background: color-mix(in srgb, var(--yct-color-text) 7%, var(--yct-color-surface-muted));
+  color: var(--yct-color-text);
+}
+
+.operations-social-link img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.category-chip {
+  --category-chip-active-tone: var(--yct-color-text-secondary);
+  --category-chip-active-background: color-mix(
+    in srgb,
+    var(--category-chip-active-tone) 16%,
+    transparent
+  );
+  gap: var(--yct-space-1);
+  min-height: var(--yct-control-height-sm);
+  padding: 0 var(--yct-space-3);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+  font-weight: 600;
+}
+
+.category-chip.tone-primary {
+  --category-chip-active-tone: var(--yct-color-primary);
+}
+
+.category-chip.is-active {
+  --icon-fill: 1;
+  background: var(--category-chip-active-background);
+  color: var(--category-chip-active-tone);
+  font-weight: 700;
+}
+
+.category-chip.is-active.tone-primary {
+  background: color-mix(in srgb, var(--yct-color-primary) 16%, transparent);
+  color: var(--yct-color-primary);
+}
+
+.chip.is-active {
+  --icon-fill: 1;
+  font-weight: 700;
+}
+
+.category-chip.tone-metro {
+  --category-chip-active-tone: var(--yct-color-secondary);
+}
+
+.category-chip.tone-bus {
+  --category-chip-active-tone: var(--yct-color-tertiary);
+}
+
+.category-chip.tone-coach {
+  --category-chip-active-tone: var(--yct-color-coach);
+}
+
+.category-chip.tone-tram {
+  --category-chip-active-tone: var(--yct-color-tram);
+}
+
+.category-chip.tone-ferry {
+  --category-chip-active-tone: var(--yct-color-ferry);
+}
+
+.category-chip.tone-flight {
+  --category-chip-active-tone: var(--yct-color-flight);
+}
+
+.category-chip.tone-railway {
+  --category-chip-active-tone: var(--yct-color-railway);
+}
+
+.category-chip.tone-custom {
+  --category-chip-active-tone: var(--yct-color-primary);
+}
+
+.operations-feed-list {
+  display: grid;
+  gap: var(--yct-space-2);
+  margin-top: var(--yct-space-4);
+}
+
+.operations-feed-item {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: var(--yct-space-3);
+  align-items: center;
+  min-height: 84px;
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+  transition:
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    transform var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.operations-feed-item:hover {
+  background: var(--yct-color-surface-muted);
+}
+
+.feed-item-cover {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+  color: color-mix(in srgb, var(--yct-color-text) 54%, transparent);
+}
+
+.feed-item-cover.has-image {
+  background-color: var(--yct-color-surface-muted);
+}
+
+.feed-item-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.feed-item-copy {
+  min-width: 0;
+}
+
+.feed-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 600;
+}
+
+.feed-item-copy h2 {
+  margin: 3px 0;
+  overflow: hidden;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-15);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed-item-copy p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.expired-feed-group {
+  margin-top: var(--yct-space-4);
+}
+
+.expired-feed-group summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 0 var(--yct-space-3);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.expired-feed-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.expired-feed-group[open] summary {
+  background: var(--yct-color-surface-muted);
+}
+
+.search-results-panel {
+  display: grid;
+  gap: var(--yct-space-4);
+}
+
+.search-page-stack {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.search-page-box {
+  background: var(--yct-color-surface-panel);
+}
+
+.search-filter-strip {
+  justify-content: flex-start;
+}
+
+.search-filter-strip .category-chip {
+  min-height: var(--yct-control-height-compact);
+}
+
+.search-filter-strip .category-chip small {
+  margin-left: 4px;
+  color: currentColor;
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+  opacity: 0.72;
+}
+
+.search-filter-strip .category-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.search-result-groups,
+.search-result-group,
+.search-result-list {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.search-result-group h2 {
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-16);
+}
+
+.search-result-item {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: var(--yct-space-3);
+  align-items: center;
+  min-height: 58px;
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  transition:
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.search-result-item:hover {
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text);
+}
+
+.search-result-item:focus-visible {
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text);
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
+}
+
+.search-result-item > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.search-result-item strong {
+  overflow: hidden;
+  color: var(--yct-color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-item .muted {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.operation-detail {
+  display: grid;
+  gap: var(--yct-space-5);
+  padding-bottom: var(--yct-space-8);
+}
+
+.operation-detail-header {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.operation-detail-header h1 {
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-28);
+  line-height: 1.25;
+}
+
+.operation-detail-header p {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  line-height: 1.7;
+}
+
+.operation-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+/* 状态/标签芯片统一基线：28px 高 + space-2 内边距 + 12px/700 + 语义色 14% 染色。
+ * operation-tag / admin-poi-status-chip / trip-status-chip / ticket-order-status-badge
+ * 共用同一套尺寸与染色强度，避免同类控件出现多套变种。 */
+.operation-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--yct-chip-height);
+  padding: 0 var(--yct-space-2);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-primary) 14%, transparent);
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+.operation-tag.is-ok {
+  background: color-mix(in srgb, var(--yct-color-success) 14%, transparent);
+  color: var(--yct-color-success);
+}
+
+.operation-tag.is-warning {
+  background: color-mix(in srgb, var(--yct-color-warning) 14%, transparent);
+  color: var(--yct-color-warning);
+}
+
+.operation-tag.is-accent {
+  background: color-mix(in srgb, var(--yct-color-primary) 14%, transparent);
+  color: var(--yct-color-primary);
+}
+
+.operation-tag.is-danger {
+  background: color-mix(in srgb, var(--yct-color-danger) 14%, transparent);
+  color: var(--yct-color-danger);
+}
+
+.operation-detail-cover {
+  display: grid;
+  place-items: center;
+  gap: var(--yct-space-2);
+  min-height: 180px;
+  padding: var(--yct-space-5);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-muted);
+  background-position: center;
+  background-size: cover;
+  color: color-mix(in srgb, var(--yct-color-text) 58%, transparent);
+  text-align: center;
+}
+
+.operation-detail-cover .material-symbols-outlined {
+  font-size: 42px;
+}
+
+.operation-detail-cover span:last-child {
+  overflow-wrap: anywhere;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+}
+
+.markdown-blocks {
+  display: grid;
+  gap: var(--yct-space-3);
+  color: var(--yct-color-text-secondary);
+  line-height: 1.8;
+}
+
+.markdown-blocks p,
+.markdown-blocks h1,
+.markdown-blocks h2,
+.markdown-blocks h3,
+.markdown-blocks h4,
+.markdown-blocks ul,
+.markdown-blocks ol,
+.markdown-blocks blockquote,
+.markdown-blocks table,
+.markdown-blocks figure,
+.operation-source-note {
+  margin: 0;
+}
+
+.markdown-blocks h1,
+.markdown-blocks h2,
+.markdown-blocks h3,
+.markdown-blocks h4 {
+  scroll-margin-top: calc(var(--yct-topbar-height) + var(--yct-space-4));
+  color: var(--yct-color-text);
+  line-height: 1.35;
+}
+
+.markdown-blocks h1 {
+  font-size: var(--yct-font-size-26);
+}
+
+.markdown-blocks h2 {
+  font-size: var(--yct-font-size-22);
+}
+
+.markdown-blocks h3 {
+  font-size: var(--yct-font-size-19);
+}
+
+.markdown-blocks h4 {
+  font-size: var(--yct-font-size-16);
+}
+
+.markdown-blocks ul,
+.markdown-blocks ol {
+  display: grid;
+  gap: var(--yct-space-1);
+  padding-inline-start: 1.4em;
+}
+
+.markdown-blocks li {
+  padding-inline-start: 0.2em;
+}
+
+.markdown-blocks blockquote {
+  padding: var(--yct-space-3) var(--yct-space-4);
+  border-left: 4px solid var(--yct-color-primary);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-secondary);
+}
+
+.markdown-blocks hr {
+  width: 100%;
+  margin: var(--yct-space-2) 0;
+  border: 0;
+  border-top: 1px solid var(--yct-color-border-strong);
+}
+
+.markdown-table-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-sm);
+}
+
+.markdown-blocks table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-14);
+}
+
+.markdown-blocks th,
+.markdown-blocks td {
+  padding: var(--yct-space-2) var(--yct-space-3);
+  border-bottom: 1px solid var(--yct-color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-blocks th {
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text);
+  font-weight: 700;
+}
+
+.markdown-blocks tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown-blocks a {
+  color: var(--yct-color-primary);
+  font-weight: 700;
+}
+
+.markdown-blocks code {
+  padding: 2px 6px;
+  border-radius: var(--yct-radius-sm);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text);
+  font-size: 0.92em;
+}
+
+.markdown-image {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.markdown-image img {
+  display: block;
+  width: 100%;
+  max-height: 520px;
+  border-radius: var(--yct-radius-lg);
+  object-fit: contain;
+  background: var(--yct-color-surface-muted);
+}
+
+.markdown-image figcaption {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+  text-align: center;
+}
+
+.operation-source-note {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+  overflow-wrap: anywhere;
+}
+
+.operation-toc {
+  position: relative;
+  z-index: 55;
+  display: grid;
+  justify-items: end;
+  flex: 0 0 auto;
+}
+
+.operation-toc-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--yct-color-text);
+  box-shadow: none;
+  font: inherit;
+  font-size: var(--yct-font-size-13);
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transition:
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    transform var(--yct-motion-duration-standard) var(--yct-motion-easing-emphasized);
+}
+
+.operation-toc-toggle .material-symbols-outlined {
+  font-size: var(--yct-font-size-20);
+}
+
+.operation-toc-panel {
+  position: absolute;
+  top: calc(100% + var(--yct-space-3));
+  right: 0;
+  width: min(320px, calc(100vw - var(--yct-space-6)));
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 var(--yct-space-3);
+  border: 0 solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  color: var(--yct-color-text);
+  box-shadow: var(--yct-shadow-floating);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(var(--yct-motion-distance-sm)) scale(0.98);
+  visibility: hidden;
+  -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
+  backdrop-filter: blur(var(--yct-material-blur-medium));
+  transition:
+    max-height var(--yct-motion-duration-layout) var(--yct-motion-easing-emphasized),
+    padding var(--yct-motion-duration-layout) var(--yct-motion-easing-emphasized),
+    border-width var(--yct-motion-duration-layout) var(--yct-motion-easing-emphasized),
+    opacity var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    transform var(--yct-motion-duration-standard) var(--yct-motion-easing-emphasized),
+    visibility 0s linear var(--yct-motion-duration-standard);
+}
+
+.operation-toc.is-expanded .operation-toc-panel,
+.operation-toc-panel.is-expanded {
+  max-height: min(60dvh, 520px);
+  overflow: auto;
+  padding: var(--yct-space-3);
+  border-width: 1px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.operation-toc-title {
+  display: block;
+  padding: 2px var(--yct-space-2) var(--yct-space-2);
+  font-size: var(--yct-font-size-14);
+  font-weight: 600;
+}
+
+.operation-toc-panel ol {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.operation-toc-panel li {
+  min-width: 0;
+}
+
+.operation-toc-panel a {
+  display: block;
+  min-width: 0;
+  padding: 7px var(--yct-space-2);
+  border-radius: var(--yct-radius-sm);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.operation-toc-panel .is-level-1 a {
+  color: var(--yct-color-text);
+  font-weight: 700;
+}
+
+.operation-toc-panel .is-level-2 a {
+  color: var(--yct-color-text);
+  font-weight: 600;
+}
+
+.operation-toc-panel .is-level-3 a {
+  padding-inline-start: var(--yct-space-4);
+}
+
+.operation-toc-panel .is-level-4 a {
+  padding-inline-start: var(--yct-space-6);
+  color: var(--yct-color-text-muted);
+}
+
+.operation-toc-panel a:is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+}
+
+.operation-toc-panel a[aria-current='location'] {
+  background: var(--yct-material-selected-state);
+  color: var(--yct-color-primary);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .operation-toc-toggle,
+  .operation-toc-panel {
+    transition: none;
+  }
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  color: var(--yct-color-text-muted);
+  text-align: center;
+}
+
+.empty-state .material-symbols-outlined {
+  font-size: 34px;
+}
+
+.empty-state.is-compact {
+  min-height: 92px;
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-muted);
+}
+
+.offline-page-panel {
+  display: grid;
+  gap: var(--yct-space-4);
+  align-content: start;
+  padding: var(--yct-space-6);
+}
+
+.offline-page-panel > .material-symbols-outlined {
+  color: var(--yct-color-text-muted);
+  font-size: 40px;
+  font-variation-settings: 'FILL' 1;
+}
+
+.offline-page-panel h1,
+.offline-page-panel p {
+  margin: 0;
+}
+
+.offline-page-panel > p {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-14);
+  font-weight: 650;
+  line-height: 1.65;
+}
+
+.settings-list {
+  display: grid;
+  gap: var(--yct-space-2);
+  margin-top: var(--yct-space-4);
+}
+
+.account-auth-panel {
+  display: grid;
+  gap: var(--yct-space-3);
+  margin-top: var(--yct-space-4);
+  padding: var(--yct-space-4);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.account-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-3);
+  min-width: 0;
+}
+
+.account-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-primary);
+}
+
+.account-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.account-identity h2 {
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-18);
+  line-height: 1.25;
+}
+
+.account-identity p {
+  margin: var(--yct-space-1) 0 0;
+}
+
+.auth-status {
+  margin: 0;
+  padding: var(--yct-space-2) var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  background: color-mix(in srgb, var(--yct-color-tertiary) 14%, transparent);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+}
+
+.auth-status.is-success {
+  background: color-mix(in srgb, var(--yct-color-primary) 14%, transparent);
+  color: var(--yct-color-primary);
+}
+
+.account-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.account-local-admin-login {
+  display: grid;
+  gap: 4px;
+}
+
+.account-local-admin-login small {
+  max-width: 260px;
+  line-height: 1.45;
+}
+
+.admin-operations-panel {
+  display: grid;
+  gap: var(--yct-space-4);
+}
+
+.material-studio,
+.admin-materials-panel {
+  display: grid;
+  gap: var(--yct-space-4);
+  margin: 0 auto;
+  padding: var(--yct-space-5) 0;
+}
+
+.material-studio {
+  width: min(1120px, 100%);
+  padding-top: 0;
+  padding-bottom: var(--yct-space-6);
+}
+
+.admin-materials-panel {
+  width: min(1120px, calc(100% - 32px));
+}
+
+.material-studio-heading {
+  align-items: end;
+  padding-bottom: var(--yct-space-3);
+}
+
+.material-studio-heading h1 {
+  margin: 0;
+  font-size: var(--yct-font-size-24);
+  line-height: 1.25;
+}
+
+.material-studio-heading .eyebrow {
+  display: block;
+  margin-bottom: var(--yct-space-1);
+}
+
+.material-studio-heading .muted {
+  margin: 0;
+}
+
+.material-studio.is-busy,
+.material-studio.is-busy * {
+  cursor: progress !important;
+}
+
+/* 完全不可用的控件显示禁用指针；加载中导致的禁用改为「进行中」指针。 */
+.visual-editor-page :disabled {
+  cursor: not-allowed;
+}
+
+.visual-editor-page[aria-busy='true'] :disabled {
+  cursor: progress;
+}
+
+.material-studio-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(240px, 340px);
+  gap: var(--yct-space-4);
+  align-items: start;
+}
+
+/*
+  宽屏（≥960px）：预览与导视牌辅助面板（插入建议 / 宽度警告）共用布局的第三列，
+  预览在上、辅助面板在下。整页始终只有三列，辅助面板不会被挤到第二行，
+  material-studio-layout 的总高度因此只取决于三列中最高的那一列。
+  断点由 JS 的 `isPreviewDialogViewport`（matchMedia `(max-width: 959px)`）驱动：
+  窄屏时轨道容器追加 `.is-stacked` 整体透明（display: contents），
+  此时两个面板都不在轨道内，堆叠顺序与改动前完全一致。
+*/
+.material-studio-preview-track {
+  display: grid;
+  align-content: start;
+  gap: var(--yct-space-3);
+  min-width: 0;
+  /*
+    编辑器列往往比预览轨道长得多。轨道吸顶后，向下滚动编辑元素时预览与
+    辅助面板仍留在视野内，不必回到页面顶部才能看到结果。
+    偏移必须让开 sticky 顶栏（.topbar，z-index 10），否则轨道会被顶栏压住；
+    这里沿用 .service-entry-grid.admin-home-grid 的既有写法。
+    max-height + overflow 是保护：轨道比视口还高时退化为轨道内部滚动，
+    避免吸顶后底部内容被永久裁掉。窄屏 .is-stacked 为 display: contents，
+    不生成盒子，以下定位/溢出属性自动失效。
+  */
+  position: sticky;
+  top: calc(var(--yct-topbar-height) + var(--yct-space-4));
+  max-height: calc(100dvh - var(--yct-topbar-height) - var(--yct-space-8));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.material-studio-preview-track.is-stacked {
+  display: contents;
+}
+
+/*
+  编辑器列是**轨道**而不是卡片：它承载整张表单（模式切换 / 字段网格 / 线路画布编辑器 /
+  导视编辑器），本身不该有卡片式的独立面板外观——否则「卡片里套卡片」的层级会让人
+  误以为它是一个可选模块。侧栏与预览才是独立面板，因此只有它俩保留 surface-panel 材质。
+  这与 `.material-studio-preview-track` 的口径一致：轨道只负责排布与间距，不画背景。
+*/
+.material-studio-editor {
+  display: grid;
+  align-content: start;
+  gap: var(--yct-space-3);
+  min-width: 0;
+}
+
+/*
+  轨道本身透明后，真正需要面板外观的是它的直接子块。这里只给「块级子元素」补
+  **无边框面性卡片**材质：靠 surface-panel 底色成面，不描边（<fieldset> 有 UA 默认
+  描边，显式 border: 0 兜底）。纯文本提示（.material-studio-empty）不补，否则空态
+  会变成一个空盒子。
+
+  `> .material-field` 也在列：它是「服务器公交站 / 项目站点」选择器（内含站点线路列表），
+  是编辑器列在 transit_station 模式下的一个完整控件块。列改成轨道后它没有自己的底色，
+  会直接落在页面底色上（surface #f7f8f8 vs 卡面 #ffffff），必须补成卡片才能保持列内节奏。
+
+  两个**刻意不在列**的选择器：
+
+  1. `> section`（即 `.metro-wayfinding-editor`）：它自己就是一套轨道——内部由工具栏、
+     元素行列表、选中元素编辑区等多个并列的面性卡片组成。给它套卡片材质就会变成
+     「卡片里再套一排卡片」，多出一层无意义的盒子边界。它保留 grid + gap 负责排布，
+     让里面的卡片与 .material-field-grid / .material-canvas-editor 视觉上真正同级。
+
+  2. `.material-mode-switch`：它是 pill 分段控件（自带 gap/padding 3px、radius-pill、
+     surface-muted 底与 is-active 高亮），是一套自洽的控件造型。给它套卡片材质会把
+     内部 3px 间距撑成 16px、胶囊压成圆角矩形。它本身已是「面性」的，无需再补。
+
+  `.material-studio-empty` 同样不补：纯文本空态提示，补了会变成一个空盒子。
+*/
+.material-studio-editor > .material-field,
+.material-studio-editor > .material-field-grid,
+.material-studio-editor > .material-canvas-editor {
+  padding: var(--yct-space-4);
+  border: 0;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.material-studio-sidebar,
+.material-preview {
+  display: grid;
+  align-content: start;
+  gap: var(--yct-space-3);
+  min-width: 0;
+  padding: var(--yct-space-4);
+  border: 0;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.material-sidebar-disclosure,
+.material-sidebar-disclosure-body {
+  display: contents;
+  min-width: 0;
+}
+
+.material-sidebar-disclosure > summary {
+  display: none;
+}
+
+.material-studio-sidebar > label,
+.material-field,
+.material-canvas-editor > label {
+  display: grid;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  font-weight: 600;
+}
+
+.material-studio-sidebar > label select,
+.material-field input,
+.material-field select,
+.material-field textarea,
+.material-canvas-editor input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--yct-field-height);
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  font: inherit;
+  transition:
+    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    box-shadow var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+/* 文件选择是控件内嵌按钮：让选择按钮符合次要按钮的尺寸/圆角/字重。 */
+.material-field input[type='file'] {
+  padding: var(--yct-space-1) var(--yct-space-2);
+}
+
+.material-field input[type='file']::file-selector-button {
+  min-height: var(--yct-control-height-dense);
+  margin-right: var(--yct-space-2);
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.material-field input[type='file']::file-selector-button:hover {
+  background: var(--yct-color-interaction-hover);
+}
+
+/* 颜色选择器是固定格式控件：保持正方形色板，不跟随字段全宽拉伸。 */
+.material-field input[type='color'] {
+  width: var(--yct-field-height);
+  min-width: var(--yct-field-height);
+  padding: 4px;
+  cursor: pointer;
+}
+
+/* 多行文本域：与单行输入共用边框/圆角/底色，高度自适应并可垂直拉伸。 */
+.material-field textarea {
+  min-height: 96px;
+  padding: var(--yct-space-3);
+  resize: vertical;
+}
+
+.material-field :is(input, select, textarea):disabled {
+  cursor: not-allowed;
+  opacity: var(--yct-disabled-opacity);
+}
+
+.material-field :is(input, textarea)[readonly] {
+  background: var(--yct-color-surface-muted);
+}
+
+.material-field :is(input, select, textarea)[aria-invalid='true'],
+.material-field :is(input, select, textarea)[aria-invalid='true']:focus-visible {
+  border-color: var(--yct-color-error);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--yct-color-error) 16%, transparent);
+}
+
+.material-studio-sidebar > label select:focus-visible,
+.material-field :is(input, select, textarea):focus-visible,
+.material-canvas-editor input:focus-visible {
+  border-color: var(--yct-color-primary);
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--yct-color-primary) 18%, transparent);
+}
+
+.material-template-examples {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding-top: var(--yct-space-3);
+}
+
+.material-template-examples-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  gap: var(--yct-space-2);
+  margin-bottom: var(--yct-space-1);
+  padding: var(--yct-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.material-template-example-context-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.material-template-examples-heading,
+.material-template-example-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.material-template-examples-heading strong,
+.material-template-example-heading strong {
+  font-size: var(--yct-font-size-13);
+}
+
+.material-template-examples-heading span,
+.material-template-example-heading span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  line-height: 1.4;
+}
+
+.material-template-example-heading strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.material-template-example-heading span {
+  flex: 0 0 auto;
+}
+
+.material-template-example-meta {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  line-height: 1.4;
+}
+
+.material-template-example-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  grid-auto-rows: 8px;
+  align-items: start;
+  gap: var(--yct-space-2);
+  max-height: min(620px, 58vh);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+/* 与 map-poi-detail-tabs / segmented-control 统一：pill 轨道 + pill 按钮 + 主色选中态。 */
+.material-template-example-category-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+}
+
+.material-template-example-category-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  font: inherit;
+  font-size: var(--yct-font-size-12);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.material-template-example-category-tabs button.is-active {
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  box-shadow: var(--yct-shadow-soft);
+  font-weight: 700;
+}
+
+.material-template-example-category-tabs button span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-10);
+}
+
+.material-template-example {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  align-self: start;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 88%, var(--yct-color-surface));
+  color: var(--yct-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    box-shadow var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.material-template-example:hover:not(:disabled) {
+  border-color: var(--yct-color-primary);
+  box-shadow: 0 4px 14px rgb(30 45 42 / 10%);
+}
+
+.material-template-example:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--yct-color-primary) 24%, transparent);
+}
+
+.material-template-example:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.material-template-example-load {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-12);
+}
+
+.material-template-example-load .material-symbols-outlined {
+  font-size: var(--yct-font-size-16);
+}
+
+.metro-wayfinding-example-preview {
+  display: grid;
+  place-items: center;
+  min-height: 92px;
+  overflow: hidden;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--yct-color-surface-muted);
+}
+
+.metro-wayfinding-example-preview-sign {
+  display: grid;
+  max-width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgb(20 24 23 / 18%);
+}
+
+.metro-wayfinding-example-preview.is-vertical .metro-wayfinding-example-preview-sign {
+  max-width: 100%;
+}
+
+.metro-wayfinding-example-preview-row {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+  padding: 4px;
+  gap: 2px;
+}
+
+.metro-wayfinding-example-preview.is-vertical .metro-wayfinding-example-preview-row {
+  flex-direction: column;
+}
+
+.metro-wayfinding-example-preview-element {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.metro-wayfinding-example-preview-element.is-icon {
+  flex: 0 0 26px;
+}
+
+.metro-wayfinding-example-preview.is-vertical .metro-wayfinding-example-preview-element.is-icon {
+  flex-basis: 25px;
+}
+
+.metro-wayfinding-example-preview-element.is-icon .metro-wayfinding-facility-asset,
+.metro-wayfinding-example-preview-element.is-icon .material-symbols-outlined {
+  width: 22px;
+  height: 22px;
+  font-size: var(--yct-font-size-22);
+}
+
+.metro-wayfinding-example-preview-element.is-text {
+  display: grid;
+  flex: 0 1 auto;
+  align-content: center;
+  padding: 1px 2px;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.metro-wayfinding-example-preview-element.is-text strong,
+.metro-wayfinding-example-preview-element.is-text small {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.metro-wayfinding-example-preview-element.is-text strong {
+  font-size: 8px;
+}
+
+.metro-wayfinding-example-preview-element.is-text small {
+  font-size: 5px;
+}
+
+.metro-wayfinding-example-preview-element.is-text.is-center strong,
+.metro-wayfinding-example-preview-element.is-text.is-center small {
+  justify-content: center;
+}
+
+.metro-wayfinding-example-preview-element.is-text.is-right strong,
+.metro-wayfinding-example-preview-element.is-text.is-right small {
+  justify-content: flex-end;
+}
+
+.metro-wayfinding-example-preview-element.is-writing-vertical {
+  justify-self: center;
+  writing-mode: vertical-rl;
+}
+
+.metro-wayfinding-example-preview-element.is-text i {
+  font-style: normal;
+}
+
+.metro-wayfinding-example-preview-element.is-text .is-line {
+  display: inline-grid;
+  min-width: 10px;
+  height: 10px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 6px;
+}
+
+.metro-wayfinding-example-preview-element.is-text .is-boxed,
+.metro-wayfinding-example-preview-element.is-large-text:not(.is-none) {
+  border: 1px solid currentColor;
+}
+
+.metro-wayfinding-example-preview-element.is-large-text {
+  position: relative;
+  flex: 0 0 20px;
+  height: 20px;
+  font-size: var(--yct-font-size-11);
+  font-weight: 700;
+}
+
+.metro-wayfinding-example-preview-element.is-large-text.is-circle {
+  border-radius: 50%;
+}
+
+.metro-wayfinding-example-preview-element.is-large-text small {
+  font-size: 6px;
+}
+
+.metro-wayfinding-example-preview-element.is-space {
+  flex: 0 0 8px;
+}
+
+.metro-wayfinding-example-preview-element.is-space.is-flex {
+  flex: 1 1 16px;
+}
+
+.metro-wayfinding-example-preview-element.is-divider {
+  flex: 0 0 1px;
+  align-self: stretch;
+  background: currentColor;
+  opacity: 0.72;
+}
+
+.metro-wayfinding-example-preview.is-vertical .metro-wayfinding-example-preview-element.is-divider {
+  flex-basis: 1px;
+  width: 100%;
+}
+
+.metro-wayfinding-example-preview-element.is-combination {
+  display: inline-flex;
+  flex: 0 1 auto;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid currentColor;
+}
+
+.material-studio-sidebar > p,
+.material-studio-editor > .muted {
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  line-height: 1.55;
+}
+
+.transit-network-source {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding-top: var(--yct-space-3);
+}
+
+.transit-network-source-heading,
+.transit-network-source-heading > div,
+.transit-network-import-summary {
+  min-width: 0;
+}
+
+.transit-network-source-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+}
+
+.transit-network-source-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.transit-network-source-heading h2 {
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-14);
+  line-height: 1.3;
+}
+
+.transit-network-source-heading span,
+.transit-network-import-summary span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.4;
+}
+
+.transit-network-heading-import-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--yct-color-primary) 40%, var(--yct-color-border));
+  border-radius: var(--yct-radius-control);
+  background: var(--yct-color-primary-soft);
+  color: var(--yct-color-primary-hover);
+  font: inherit;
+  font-size: var(--yct-font-size-12);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.transit-network-source-heading .transit-network-heading-import-button span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.transit-network-heading-import-button .material-symbols-outlined {
+  font-size: var(--yct-font-size-18);
+}
+
+.transit-network-heading-import-button:is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary);
+  background: var(--yct-material-hover-state);
+}
+
+.transit-network-import-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--yct-space-2);
+  min-height: 42px;
+  padding: 0 var(--yct-space-3);
+  border: 1px dashed var(--yct-color-border-strong);
+  border-radius: var(--yct-radius-md);
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transit-network-import-button:is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary);
+  color: var(--yct-color-primary);
+}
+
+.transit-network-import-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-2);
+  padding-block: var(--yct-space-1);
+}
+
+.transit-network-import-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+}
+
+.transit-network-maintenance-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-primary);
+  font: inherit;
+  font-size: var(--yct-font-size-11);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.transit-network-maintenance-button .material-symbols-outlined {
+  font-size: var(--yct-font-size-17);
+}
+
+.transit-network-import-actions .transit-network-maintenance-button span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.transit-network-maintenance-button:not(:disabled):is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary);
+  background: var(--yct-color-primary-soft);
+}
+
+.transit-network-maintenance-button:disabled {
+  color: var(--yct-color-text-muted);
+  cursor: default;
+  opacity: 0.72;
+}
+
+.transit-network-import-summary > div:first-child {
+  display: grid;
+  min-width: 0;
+}
+
+.transit-network-import-summary strong {
+  overflow: hidden;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-network-palette {
+  display: flex;
+  align-items: center;
+  max-width: 70px;
+}
+
+.transit-network-palette > span {
+  width: 12px;
+  height: 12px;
+  margin-left: -3px;
+  border: 1px solid var(--yct-color-surface-panel);
+  border-radius: 50%;
+}
+
+.transit-network-palette > span:first-child {
+  margin-left: 0;
+}
+
+.transit-network-palette small {
+  margin-left: 3px;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-10);
+}
+
+.transit-network-import-error,
+.transit-network-match-warning {
+  margin: 0;
+  font-size: var(--yct-font-size-12);
+  line-height: 1.5;
+}
+
+.transit-network-import-error {
+  color: var(--yct-color-error);
+}
+
+.transit-network-station-lines {
+  display: grid;
+  gap: var(--yct-space-1);
+}
+
+.transit-network-station-lines > span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+.transit-network-station-lines > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-1) var(--yct-space-2);
+}
+
+.transit-network-station-lines > div > span,
+.transit-network-line-name-list label > span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-network-station-lines i,
+.transit-network-line-name-list i {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border: 1px solid color-mix(in srgb, var(--yct-color-text) 18%, transparent);
+  border-radius: 3px;
+}
+
+.transit-network-line-name-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(720px, calc(100dvh - 32px));
+}
+
+.transit-network-line-name-hint {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.6;
+}
+
+.transit-network-line-name-hint code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--yct-color-text) 8%, transparent);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-11);
+}
+
+.transit-network-station-name-dialog {
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(760px, calc(100dvh - 32px));
+}
+
+.transit-network-line-name-list {
+  display: grid;
+  gap: var(--yct-space-2);
+  overflow-y: auto;
+}
+
+.transit-network-station-name-list {
+  display: grid;
+  gap: var(--yct-space-2);
+  overflow-y: auto;
+}
+
+.transit-network-station-name-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.1fr) repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.transit-network-station-name-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.transit-network-station-name-row strong,
+.transit-network-station-name-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-network-station-name-row strong {
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-network-station-name-row span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+}
+
+.transit-network-line-name-list label {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--yct-space-3);
+}
+
+.transit-network-line-name-list label > span strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-network-match-empty {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--yct-space-2);
+}
+
+.transit-network-match-empty > p {
+  margin: 0;
+}
+
+.transit-network-match-empty > button {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transit-network-match-empty > button .material-symbols-outlined {
+  font-size: var(--yct-font-size-18);
+}
+
+@media (max-width: 520px) {
+  .transit-network-line-name-list label,
+  .transit-network-station-name-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--yct-space-1);
+  }
+}
+
+.transit-network-match-warning {
+  color: var(--yct-color-warning-strong);
+}
+
+.material-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+}
+
+/* 版式/样式分段控件：选项数量不固定（2～3 个），横向按数量均分。 */
+.material-mode-switch.material-variant-switch {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+
+/* 物料后台：模板 / 待审核物料 / 下载预览记录三块的分段切换。 */
+.admin-materials-section-switch {
+  max-width: 720px;
+  margin-block: var(--yct-space-1) var(--yct-space-3);
+}
+
+/* 下载预览记录的搜索与筛选工具条。 */
+.admin-material-audit-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yct-space-2);
+  margin-bottom: var(--yct-space-2);
+}
+
+.admin-material-audit-search {
+  display: flex;
+  flex: 1 1 260px;
+  align-items: center;
+  gap: 6px;
+  min-width: 200px;
+  padding-inline: 10px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+}
+
+.admin-material-audit-search .material-symbols-outlined {
+  font-size: var(--yct-font-size-18);
+  color: var(--yct-color-text-muted);
+}
+
+.admin-material-audit-search input {
+  flex: 1;
+  min-width: 0;
+  padding-block: 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.admin-material-audit-filter {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.admin-material-audit-filter select {
+  min-height: 36px;
+  padding-inline: 10px 26px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  font: inherit;
+  font-size: var(--yct-font-size-13);
+}
+
+/* 后台固定 ≤4 个选项的字段改用分段控件：可见标签 + 控件纵向排列，与原生字段一致。 */
+.admin-segmented-field {
+  display: grid;
+  gap: var(--yct-space-1);
+  min-width: 0;
+  font-size: var(--yct-font-size-13);
+}
+
+.admin-segmented-field > span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 650;
+}
+
+/* 筛选条空间有限：按钮压到与 select 同高，避免把工具条撑高。 */
+.admin-material-audit-filter .material-mode-switch button {
+  min-height: 32px;
+  padding-inline: 10px;
+  font-size: var(--yct-font-size-12);
+}
+
+.admin-poi-toolbar .admin-segmented-field {
+  min-width: 220px;
+}
+
+/* 两列表单里分段控件独占整行：半列宽度会迫使 3–4 个选项折行。 */
+.admin-poi-edit-coordinate-fields > .admin-segmented-field,
+.transit-station-coordinate-form > .admin-segmented-field {
+  grid-column: 1 / -1;
+}
+
+/* 站台设置 / 出入口行是横向 flex，分段控件需要宽度下限，避免 3–4 个选项被压到换行。 */
+.transit-station-profile-settings > .admin-segmented-field {
+  min-width: 260px;
+}
+
+.transit-station-exit-row-fields > .admin-segmented-field {
+  min-width: 220px;
+}
+
+.material-mode-switch button,
+.material-action-row button,
+.material-history-item button,
+.admin-materials-panel button {
+  min-height: 38px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.material-mode-switch button {
+  min-height: 38px;
+  border-color: transparent;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  white-space: nowrap;
+}
+
+/* 工作台字段里的分段控件：检查器列较窄，长选项允许在按钮内换行，不横向溢出。 */
+.material-field-segmented button {
+  min-height: var(--yct-control-height-sm);
+  padding-inline: 4px;
+  font-size: var(--yct-font-size-12);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+/* 颜色预设：选中时按钮直接用该颜色填充，文字转白。 */
+.material-field-segmented button.is-active.has-accent {
+  border-color: transparent;
+  background: var(--yct-segmented-accent);
+  color: #fff;
+}
+
+.material-mode-switch button:not(.is-active):not(:disabled):is(:hover, :focus-visible),
+.material-history-item button:not(.is-primary):not(:disabled):is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+}
+
+.material-mode-switch button.is-active {
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  box-shadow: var(--yct-shadow-soft);
+}
+
+.material-mode-switch button:focus-visible,
+.material-history-item button:focus-visible {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
+}
+
+.material-canvas-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--yct-space-2) 0 0;
+  border: 0;
+}
+
+.material-canvas-editor legend {
+  padding: 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+.material-canvas-editor .material-checkbox-row,
+.material-canvas-editor .material-radio-row,
+.material-canvas-editor output {
+  grid-column: 1 / -1;
+}
+
+/* 表单勾选行统一：复选框行与单选框行共用同一套布局与 18px 勾选框，只是语义类名不同。 */
+.material-checkbox-row,
+.material-radio-row,
+.checkbox-row,
+.radio-row {
+  display: flex !important;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+/* checkbox-row 常用于 grid 表单内，需要清掉容器残留的列定义。 */
+.checkbox-row {
+  grid-template-columns: none;
+}
+
+/* 标签侧为可收缩的弹性列：勾选框固定 18px 不参与拉伸，
+ * 剩余空间全部归标签，避免长文案把行撑破或在窄容器里被勾选框挤掉。 */
+.material-checkbox-row > span,
+.material-radio-row > span,
+.checkbox-row > span,
+.radio-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 勾选框/单选框的尺寸与配色分别由全局 input[type='checkbox'] / input[type='radio'] 规范统一接管。 */
+
+.material-canvas-editor output {
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  font-variant-numeric: tabular-nums;
+}
+
+.material-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-3);
+}
+
+/* 分段字段独占整行：两列网格里半列约 130px，4 个选项会被压成逐字竖排。 */
+.material-field-grid > .material-field.is-segmented {
+  grid-column: 1 / -1;
+}
+
+/*
+  首末班车时间的一组输入（首班 / 末班）。只在项目线网来源下出现——项目存档不带运营时间，
+  服务端解析出来是空串，这两个输入框是唯一的数据入口。
+  它在 .material-field-grid 里占满一整行，内部再按两列摆两个时间输入。
+*/
+.material-service-time-fields {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-3);
+  border: 1px dashed var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+}
+
+.material-service-time-fields > span,
+.material-service-time-fields > small {
+  grid-column: 1 / -1;
+}
+
+.material-service-time-fields > span {
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  font-weight: 650;
+}
+
+.material-service-time-fields > small {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 400;
+}
+
+.metro-wayfinding-editor,
+.metro-wayfinding-toolbar,
+.metro-wayfinding-element,
+.metro-wayfinding-element-body,
+.metro-wayfinding-text-row-editor,
+.metro-wayfinding-text-row-list,
+.metro-wayfinding-main-segments {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+/*
+  导视编辑器是**轨道**：它只负责把「工具栏 / 元素行列表 / 选中元素编辑区」这几张面性
+  卡片竖直排开，自己不画面板。卡片材质由各个子块自己承担，这样它们与编辑器列里的
+  .material-field-grid、.material-canvas-editor 才是同一级，不会多出一层嵌套盒子。
+  min-width: 0 是 grid 子项的必备项，否则内部横向滚动的元素列表会把整列撑破。
+*/
+.metro-wayfinding-editor {
+  min-width: 0;
+}
+
+.metro-wayfinding-toolbar,
+.metro-wayfinding-color-row,
+.metro-wayfinding-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-3);
+}
+
+/* 工作台右侧检查器只有 340px，元素属性统一单列排列，避免双列挤压。 */
+.poi-visual-inspector .metro-wayfinding-field-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* 颜色字段同样单列；下拉 + 自定义色块 + 色值保持一行，窄屏再换行。 */
+.poi-visual-inspector .metro-wayfinding-color-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/*
+ * 大文字的内联段编辑：占满字段网格整行（它是一排「文本段 + 下角标 chip」，
+ * 挤在半列里会不停换行）。不放 `.material-field`——见组件里的注释。
+ */
+.metro-wayfinding-large-text-field {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--yct-space-1);
+  min-width: 0;
+}
+
+.metro-wayfinding-large-text-field > span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+/* 无边框面性卡片：导视编辑器改回轨道后，工具栏就是列内的一级卡片分区，不再描边。 */
+.metro-wayfinding-toolbar {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  padding: var(--yct-space-3);
+  border: 0;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.metro-wayfinding-toolbar > summary {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text);
+  cursor: pointer;
+  font-size: var(--yct-font-size-13);
+  font-weight: 750;
+  list-style: none;
+}
+
+.metro-wayfinding-toolbar-title {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/*
+  标题栏图标：纯视觉提示，暗示折叠面板内还有模板库 / 反转 / 清空三个操作。
+  不可点按；展开后由下方规则隐藏，因为此时真实按钮就在面板里可见了。
+*/
+.metro-wayfinding-toolbar-hints {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  color: var(--yct-color-text-muted);
+  opacity: 0.7;
+  transition: opacity var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.metro-wayfinding-toolbar-hints .material-symbols-outlined {
+  font-size: var(--yct-font-size-17);
+}
+
+.metro-wayfinding-toolbar[open] > summary .metro-wayfinding-toolbar-hints {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.metro-wayfinding-toolbar > summary,
+.metro-wayfinding-toolbar-content {
+  grid-column: 1 / -1;
+}
+
+.metro-wayfinding-toolbar > summary::-webkit-details-marker {
+  display: none;
+}
+
+.metro-wayfinding-toolbar > summary .metro-wayfinding-toolbar-expander {
+  flex: 0 0 auto;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-20);
+  transition: transform var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.metro-wayfinding-toolbar[open] > summary .metro-wayfinding-toolbar-expander {
+  transform: rotate(180deg);
+}
+
+.metro-wayfinding-toolbar-content {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding-top: var(--yct-space-3);
+}
+
+.metro-wayfinding-toolbar-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+  justify-content: flex-end;
+}
+
+.metro-wayfinding-toolbar-actions .secondary-action-button .material-symbols-outlined {
+  font-size: var(--yct-font-size-18);
+}
+
+.metro-wayfinding-empty-card {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  border: 1px dashed var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-muted) 62%, var(--yct-color-surface));
+}
+
+.metro-wayfinding-empty-card > div:first-child {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--yct-space-3);
+}
+
+.metro-wayfinding-empty-card > div:first-child > .material-symbols-outlined {
+  flex: 0 0 auto;
+  color: var(--yct-color-primary);
+  font-size: var(--yct-font-size-30);
+}
+
+.metro-wayfinding-empty-card > div:first-child > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+
+.metro-wayfinding-empty-card strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-14);
+}
+
+.metro-wayfinding-empty-card span:not(.material-symbols-outlined) {
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.45;
+}
+
+.metro-wayfinding-empty-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: var(--yct-space-2);
+}
+
+.metro-wayfinding-empty-card-actions > button {
+  white-space: nowrap;
+}
+
+.metro-wayfinding-import-button .material-symbols-outlined {
+  font-variation-settings: 'FILL' 0;
+}
+
+.metro-wayfinding-import-button:disabled .material-symbols-outlined {
+  animation: none;
+}
+
+.metro-wayfinding-import-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--yct-space-2) var(--yct-space-3);
+  border-left: 3px solid var(--yct-color-error);
+  background: color-mix(in srgb, var(--yct-color-error) 8%, transparent);
+  color: var(--yct-color-error);
+  font-size: var(--yct-font-size-12);
+  overflow-wrap: anywhere;
+}
+
+.metro-wayfinding-import-backdrop {
+  z-index: 100;
+}
+
+.metro-wayfinding-project-backdrop {
+  z-index: 99;
+}
+
+.modal-panel.metro-wayfinding-project-dialog {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: min(980px, 100%);
+  max-height: min(820px, calc(100dvh - 32px));
+  overflow: hidden;
+}
+
+/* 该弹窗为“头部/工具栏/内部滚动区”三行网格，头部不参与面板滚动；
+ * 用与标准固定头部相同的负 margin 吃满面板 padding，标题栏贴齐面板顶端。 */
+.metro-wayfinding-project-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+  margin: calc(-1 * var(--yct-space-5)) calc(-1 * var(--yct-space-5)) 0;
+  padding: var(--yct-space-5) var(--yct-space-5) var(--yct-space-4);
+  background: var(--yct-color-surface-panel);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.metro-wayfinding-project-dialog > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.metro-wayfinding-project-dialog > header span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.metro-wayfinding-project-dialog h2 {
+  margin: 0;
+  font-size: var(--yct-font-size-20);
+}
+
+.metro-wayfinding-project-dialog-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.metro-wayfinding-project-dialog .material-template-examples {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.metro-wayfinding-project-dialog .material-template-example-list {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.metro-wayfinding-project-empty,
+.metro-wayfinding-project-import {
+  display: grid;
+  gap: var(--yct-space-2);
+  min-height: 300px;
+  padding: var(--yct-space-5);
+  border: 1px dashed var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  color: var(--yct-color-text-secondary);
+  text-align: center;
+}
+
+.metro-wayfinding-project-empty {
+  place-items: center;
+}
+
+.metro-wayfinding-project-import {
+  align-content: center;
+  justify-items: stretch;
+  transition:
+    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    box-shadow var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.metro-wayfinding-project-import.is-drag-active {
+  border-color: var(--yct-color-primary);
+  background: color-mix(in srgb, var(--yct-color-primary) 8%, var(--yct-color-surface-panel));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--yct-color-primary) 18%, transparent);
+}
+
+.metro-wayfinding-project-empty .material-symbols-outlined,
+.metro-wayfinding-project-import > .material-symbols-outlined {
+  color: var(--yct-color-primary);
+  font-size: 36px;
+}
+
+.metro-wayfinding-project-import > .material-symbols-outlined,
+.metro-wayfinding-project-import > button {
+  justify-self: center;
+}
+
+.metro-wayfinding-project-import-copy {
+  display: grid;
+  justify-items: center;
+  gap: var(--yct-space-1);
+  text-align: center;
+}
+
+.metro-wayfinding-project-import-copy strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-16);
+}
+
+.metro-wayfinding-project-import-copy p {
+  max-width: 620px;
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.55;
+}
+
+.metro-wayfinding-project-import-sources,
+.metro-wayfinding-project-import-limits {
+  display: grid;
+  width: min(620px, 100%);
+  justify-self: center;
+  gap: var(--yct-space-1);
+  text-align: left;
+}
+
+.metro-wayfinding-project-import-sources > span,
+.metro-wayfinding-project-import-limits > span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 700;
+}
+
+.metro-wayfinding-project-import-sources ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-block: 1px solid var(--yct-color-border);
+  list-style: none;
+}
+
+.metro-wayfinding-project-import-sources li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+  min-height: 34px;
+  border-bottom: 1px solid var(--yct-color-border);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+}
+
+.metro-wayfinding-project-import-sources li:last-child {
+  border-bottom: 0;
+}
+
+.metro-wayfinding-project-import-sources a {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  color: var(--yct-color-primary);
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+
+.metro-wayfinding-project-import-sources a .material-symbols-outlined {
+  flex: 0 0 auto;
+  font-size: var(--yct-font-size-15);
+}
+
+.metro-wayfinding-project-import-sources small,
+.metro-wayfinding-project-import-limits small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.5;
+}
+
+.metro-wayfinding-project-import-drop-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-self: center;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.metro-wayfinding-project-import-drop-hint .material-symbols-outlined {
+  font-size: var(--yct-font-size-17);
+}
+
+.metro-wayfinding-project-import.is-drag-active .metro-wayfinding-project-import-drop-hint {
+  color: var(--yct-color-primary);
+  font-weight: 700;
+}
+
+.metro-wayfinding-project-import .metro-wayfinding-import-error {
+  width: min(560px, 100%);
+  margin-top: var(--yct-space-2);
+}
+
+.metro-wayfinding-import-dialog {
+  width: min(720px, 100%);
+  /*
+   * 三行 grid：header / 中间滚动区 / footer。
+   * 中间区独自 overflow:auto，footer 不再 sticky——它始终在 panel 底部，
+   * 内容区滚到底时被遮挡的死区被消除（之前 sticky footer 会盖住最后一行）。
+   * max-height 由外层 .modal-panel 的 min(760, 100dvh-32) 提供。
+   */
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.metro-wayfinding-import-dialog > .metro-wayfinding-import-scroll {
+  display: grid;
+  gap: var(--yct-space-4);
+  min-height: 0;
+  overflow: auto;
+  /* 滚动区自身留底部 4px，避免最后一行与 panel padding 视觉粘连 */
+  padding-block-end: var(--yct-space-1);
+}
+
+.metro-wayfinding-import-dialog > header,
+.metro-wayfinding-import-dialog > footer,
+.metro-wayfinding-import-dialog > footer > div,
+.metro-wayfinding-import-rows > li,
+.metro-wayfinding-import-row-actions,
+.metro-wayfinding-import-warnings > header {
+  display: flex;
+  align-items: center;
+}
+
+.metro-wayfinding-import-dialog > header,
+.metro-wayfinding-import-dialog > footer,
+.metro-wayfinding-import-rows > li {
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+}
+
+.metro-wayfinding-import-dialog > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.metro-wayfinding-import-dialog > header span,
+.metro-wayfinding-import-dialog > footer > span,
+.metro-wayfinding-import-rows small,
+.metro-wayfinding-import-facts dt {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.metro-wayfinding-import-dialog h2 {
+  margin: 0;
+  font-size: var(--yct-font-size-20);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * 工程转换预览里的「转换后牌面」：直接复用模板库示例卡片的
+ * `.metro-wayfinding-example-preview*` 视觉（等比缩放的牌面 + 灰底衬底），
+ * 这里只补外层间距与一行说明，不另起一套样式——两处观感必须一致。
+ * 牌面本身按 `widthM × heightM` 的 aspectRatio 缩放，内容随「转换方式」实时变化。
+ */
+.metro-wayfinding-import-sign-preview {
+  display: grid;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.metro-wayfinding-import-sign-preview small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  text-align: center;
+}
+
+.metro-wayfinding-import-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-3);
+  margin: 0;
+  padding-block: var(--yct-space-3);
+  border-block: 1px solid var(--yct-color-border);
+}
+
+.metro-wayfinding-import-facts > div,
+.metro-wayfinding-import-rows > li > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.metro-wayfinding-import-facts dd {
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.metro-wayfinding-import-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--yct-color-border);
+  list-style: none;
+}
+
+.metro-wayfinding-import-rows > li {
+  min-height: 76px;
+  padding-block: var(--yct-space-3);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.metro-wayfinding-import-rows strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-14);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * 工程转换预览行的图形化预览：
+ * 复用 .metro-wayfinding-example-preview-row 的 flex 排版（横向元素 + gap 2px）。
+ * 刻意不渲染整张牌面的底色/前景色——这里只是「图标 + 文本」的一字排开清单，
+ * 颜色由元素自身的语义色（线路色 / 方框填充）承担，其余交给弹窗中性色。
+ * div / combination 的边框与 divider 线靠 currentColor 自动跟随中性文字色，
+ * 因此无需单独配色就能看见结构边界。
+ */
+.metro-wayfinding-import-row-preview {
+  min-height: 32px;
+  padding: 4px 0;
+  overflow: hidden;
+}
+
+.metro-wayfinding-import-row-preview > .metro-wayfinding-example-preview-element {
+  flex-shrink: 0;
+}
+
+/*
+ * 中性一字排开展示容器：用于工程转换预览弹窗与后台待审核物料面板。
+ * 不复原牌面底色/前景色，但要让 space / divider / combination 边界 / 线路徽标
+ * 这些「结构元素」可见。具体规则：
+ * - is-space 固定/弹性空格：沿用 `metro-wayfinding-element-list` 的标识
+ *   （固定→ space_bar，弹性→ arrow_range），并叠加 opacity 让它比正常文本
+ *   更克制，不抢戏。
+ * - divider 仍是 1px 竖线（继承自 `.is-divider { background: currentColor }`），
+ *   组合框边界靠 `.is-combination { border: 1px solid currentColor }` 自动可见。
+ */
+.metro-wayfinding-element-strip {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  min-height: 32px;
+  min-width: 0;
+  padding: 4px 0;
+  overflow: hidden;
+  gap: 2px;
+  /* 中性化的基准色：对齐 `metro-wayfinding-element-list` 按钮的文本色。
+   * 元素一律 `color: inherit` + 透明背景，只有边框/图标自身着色。 */
+  color: var(--yct-color-text-secondary);
+}
+
+.metro-wayfinding-element-strip > .metro-wayfinding-example-preview-element {
+  flex-shrink: 0;
+}
+
+/*
+ * 固定空格的行内 `flexBasis`（`units * 3` px，最小 8px）优先级高于 CSS。
+ * 直接写 `flex: 0 0 22px` 会被它覆盖、`space_bar` 符号会被父级
+ * `overflow: hidden` 裁掉。用 `min-width` 作尺寸下限（flex item 上 min-width
+ * 会把 hypothetical main size 强制抬到 22px），既保留 unit 比例信息、又保证
+ * 符号完整可见。模板库预览不受影响（不渲染符号且无此规则）。
+ */
+.metro-wayfinding-element-strip .metro-wayfinding-example-preview-element.is-space {
+  min-width: 22px;
+}
+
+/* 弹性空格无行内 flexBasis（由 `flex: 1 1 16px` 基线驱动），这里显式抬到 22px
+ * 给 `arrow_range` 留位。
+ */
+.metro-wayfinding-element-strip .metro-wayfinding-example-preview-element.is-space.is-flex {
+  flex: 1 1 22px;
+}
+
+/* strip 内的空格 material 符号：透明度克制，宽度填满父级。 */
+.metro-wayfinding-element-strip
+  .metro-wayfinding-example-preview-element.is-space
+  .material-symbols-outlined {
+  width: 100%;
+  font-size: var(--yct-font-size-16);
+  opacity: 0.55;
+  font-variation-settings:
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
+}
+
+/*
+ * 线路徽标中性化后背景是透明的，而基础样式写死了 `color: #fff`——
+ * 白字在浅底上完全看不见。这里覆盖为继承的文本色，并补一圈 currentColor
+ * 边框，保留「这是个圆形徽标」的可辨识度。
+ */
+.metro-wayfinding-element-strip .metro-wayfinding-example-preview-element.is-text .is-line {
+  border: 1px solid currentColor;
+  color: inherit;
+}
+
+/*
+ * 分割线：竖线本体靠 `.is-divider { background: currentColor }`，
+ * 组件刻意不传行内 `background-color`（否则会把它染成透明而看不见）。
+ * 中性色下 currentColor 跟随上面的 text-secondary，自然可见。
+ */
+.metro-wayfinding-element-strip .metro-wayfinding-example-preview-element.is-divider {
+  opacity: 0.72;
+}
+
+.metro-wayfinding-import-row-actions,
+.metro-wayfinding-import-dialog > footer > div,
+.metro-wayfinding-import-warnings > header {
+  gap: var(--yct-space-2);
+}
+
+.metro-wayfinding-import-row-actions .material-symbols-outlined {
+  font-size: var(--yct-font-size-18);
+}
+
+.metro-wayfinding-import-warnings {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border-left: 3px solid var(--yct-color-warning);
+  border-radius: var(--yct-radius-sm);
+  background: color-mix(in srgb, var(--yct-color-warning) 9%, transparent);
+}
+
+.metro-wayfinding-import-warnings > header {
+  color: var(--yct-color-text);
+}
+
+.metro-wayfinding-import-warnings > header .material-symbols-outlined {
+  color: var(--yct-color-warning);
+  font-size: var(--yct-font-size-18);
+}
+
+.metro-wayfinding-import-warnings ul {
+  display: grid;
+  gap: var(--yct-space-1);
+  margin: 0;
+  padding-left: 20px;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+}
+
+.metro-wayfinding-import-dialog > footer {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .metro-wayfinding-empty-card {
+    grid-template-columns: 1fr;
+  }
+
+  .metro-wayfinding-empty-card-actions {
+    justify-content: stretch;
+  }
+
+  .metro-wayfinding-empty-card-actions > button {
+    flex: 1 1 0;
+  }
+
+  .metro-wayfinding-import-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .metro-wayfinding-import-dialog > footer,
+  .metro-wayfinding-import-dialog > footer > div {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .metro-wayfinding-import-dialog > footer > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.material-field-text-autocomplete {
+  position: relative;
+  min-width: 0;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.material-field-text-autocomplete-ghost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--yct-radius-md);
+  color: transparent;
+  font: inherit;
+  pointer-events: none;
+  white-space: pre;
+}
+
+.material-field-text-autocomplete-ghost strong {
+  color: var(--yct-color-text-muted);
+  font-weight: 500;
+}
+
+.material-field-text-autocomplete > input {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+
+.metro-wayfinding-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.metro-wayfinding-inline-actions button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+  font-weight: 700;
+  transition:
+    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.metro-wayfinding-inline-actions button:is(:hover, :focus-visible):not(:disabled) {
+  border-color: var(--yct-color-border);
+  background: var(--yct-material-hover-state);
+  color: var(--yct-color-text);
+}
+
+.metro-wayfinding-inline-actions button:disabled,
+.metro-wayfinding-element-actions button:disabled,
+.metro-wayfinding-segment-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.metro-wayfinding-inline-actions .material-symbols-outlined {
+  font-size: var(--yct-font-size-18);
+}
+
+/*
+  无边框面性卡片：靠 surface-panel 底色成面，不描边（<fieldset> 的 UA 默认描边在此显式清零）。
+
+  注意下面的 **button 仍保留 1px 边框**：按钮底色与卡片同为 surface-panel，一旦去掉描边
+  按钮就会完全融进背景、丢失可点击性。卡片的「无边框」说的是载体，不是内部控件——
+  建议类按钮需要描边来与卡面分离，不要顺手一起清掉。
+*/
+.metro-wayfinding-text-suggestions {
+  display: grid;
+  min-width: 0;
+  gap: var(--yct-space-2);
+  margin: 0;
+  padding: var(--yct-space-3);
+  border: 0;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.metro-wayfinding-text-suggestions legend {
+  margin-bottom: var(--yct-space-2);
+  padding: 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+.metro-wayfinding-text-suggestions > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--yct-space-2);
+}
+
+.metro-wayfinding-text-suggestions button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  min-height: 50px;
+  padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  text-align: left;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.metro-wayfinding-text-suggestions button:hover:not(:disabled) {
+  border-color: var(--yct-color-border);
+  background: var(--yct-material-hover-state);
+  color: var(--yct-color-text);
+}
+
+.metro-wayfinding-text-suggestions button:focus-visible {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
+}
+
+.metro-wayfinding-text-suggestions button:active:not(:disabled) {
+  background: var(--yct-material-hover-state);
+}
+
+.metro-wayfinding-text-suggestions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.metro-wayfinding-text-suggestions button > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.metro-wayfinding-text-suggestions strong,
+.metro-wayfinding-text-suggestions small {
+  overflow-wrap: anywhere;
+  letter-spacing: 0;
+}
+
+.metro-wayfinding-text-suggestions strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+}
+
+.metro-wayfinding-text-suggestions small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 500;
+}
+
+/*
+  无边框面性卡片。警告语义靠**底色**传达而不是描边：这里沿用 .admin-poi-conflict-list 的
+  口径，用 oklab 把警告色混进 --yct-color-surface-panel（而不是混进 transparent）。
+  混 transparent 得到的是半透明薄雾，叠在预览面板上会透出下层、边缘发脏；
+  混 surface-panel 才是真正的「面」——不透明、自成一块，去掉描边也不会失去边界感。
+*/
+.metro-wayfinding-width-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--yct-space-2);
+  margin: 0;
+  padding: var(--yct-space-3);
+  border: 0;
+  border-radius: var(--yct-radius-md);
+  background: color-mix(
+    in srgb,
+    var(--yct-color-warning) 10%,
+    var(--yct-color-surface-panel)
+  );
+  color: var(--yct-color-warning-strong);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.5;
+}
+
+.metro-wayfinding-width-warning .material-symbols-outlined {
+  flex: 0 0 auto;
+  font-size: var(--yct-font-size-18);
+}
+
+.metro-wayfinding-text-suggestions .metro-wayfinding-facility-asset {
+  font-size: var(--yct-font-size-18);
+}
+
+/*
+  宽屏下挂载在预览面板下方的辅助面板容器（插入建议 + 宽度警告）。
+  视觉上沿用普通卡片，与上方的 preview 面板保持一致的表面语言。
+*/
+.metro-wayfinding-inspector {
+  display: grid;
+  align-content: start;
+  gap: var(--yct-space-3);
+  min-width: 0;
+}
+
+.metro-wayfinding-inspector:empty {
+  display: none;
+}
+
+.metro-wayfinding-row-lists {
+  display: grid;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.metro-wayfinding-row-list {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.metro-wayfinding-row-list.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.metro-wayfinding-row-list > strong {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.3;
+  text-align: center;
+}
+
+.metro-wayfinding-element-list {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  gap: 2px;
+  margin: 0;
+  padding: 3px;
+  list-style: none;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+  scrollbar-width: thin;
+}
+
+.metro-wayfinding-element-list li {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.metro-wayfinding-element-list .metro-wayfinding-element-list-add {
+  position: sticky;
+  z-index: 2;
+  right: 0;
+  margin-left: auto;
+  padding-left: 2px;
+  background: var(--yct-color-surface-muted);
+  box-shadow: -6px 0 8px color-mix(in srgb, var(--yct-color-surface-muted) 88%, transparent);
+}
+
+.metro-wayfinding-element-list button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, auto);
+  align-items: center;
+  gap: 5px;
+  min-width: 88px;
+  max-width: 160px;
+  min-height: 40px;
+  padding: 0 var(--yct-space-2);
+  border: 0;
+  border-radius: calc(var(--yct-radius-md) - 2px);
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  text-align: left;
+}
+
+.metro-wayfinding-element-list button.is-draggable {
+  cursor: grab;
+}
+
+.metro-wayfinding-element-list button.is-dragging {
+  cursor: grabbing;
+  opacity: 0.45;
+}
+
+.metro-wayfinding-element-list button.is-drop-before::before,
+.metro-wayfinding-element-list button.is-drop-after::after {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--yct-color-primary);
+  content: '';
+}
+
+.metro-wayfinding-element-list button.is-drop-before::before {
+  left: -2px;
+}
+
+.metro-wayfinding-element-list button.is-drop-after::after {
+  right: -2px;
+}
+
+.metro-wayfinding-element-list button.is-icon-only {
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  min-width: 44px;
+  width: 44px;
+  padding-inline: 0;
+}
+
+.metro-wayfinding-element-list button:is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+}
+
+.metro-wayfinding-element-list button.is-active {
+  background: var(--yct-color-surface-selected);
+  box-shadow: var(--yct-shadow-sm);
+  color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-element-list-add button {
+  color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-element-list-add button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.metro-wayfinding-element-list .material-symbols-outlined,
+.metro-wayfinding-element-list .metro-wayfinding-facility-asset {
+  overflow: hidden;
+  font-size: var(--yct-font-size-22);
+}
+
+.metro-wayfinding-facility-asset {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 1em;
+  height: 1em;
+  background: currentColor;
+  -webkit-mask: var(--metro-wayfinding-facility-asset) center / contain no-repeat;
+  mask: var(--metro-wayfinding-facility-asset) center / contain no-repeat;
+  transform-origin: center;
+}
+
+.metro-wayfinding-element-tab-summary {
+  overflow: hidden;
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+  无边框面性卡片，用**通用卡片底色** surface-panel（与 .material-field-grid、
+  .material-canvas-editor、工具栏同级）。
+
+  这里不需要降档到 surface-muted：它的父级 `.metro-wayfinding-editor` 已经是透明轨道，
+  不存在「两级同色糊在一起」的问题。它内部的字段网格 / 文本行编辑器 / 元素块全是透明的，
+  由这一张卡片统一兜底成面。
+*/
+.metro-wayfinding-element-panel {
+  min-width: 0;
+  padding: var(--yct-space-3);
+  border: 0;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.metro-wayfinding-element {
+  padding-block: 0;
+}
+
+.metro-wayfinding-text-row-item > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+}
+
+.metro-wayfinding-text-row-item > header > strong {
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-14);
+}
+
+.metro-wayfinding-element-actions,
+.metro-wayfinding-segment-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.metro-wayfinding-element-actions .icon-button,
+.metro-wayfinding-segment-actions .icon-button {
+  width: var(--yct-control-size-sm);
+  min-width: 32px;
+  height: var(--yct-control-size-sm);
+  min-height: var(--yct-control-height-dense);
+}
+
+.metro-wayfinding-text-metrics {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  min-height: 40px;
+  padding: var(--yct-space-1) var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+}
+
+.metro-wayfinding-text-metrics span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 700;
+}
+
+.metro-wayfinding-text-metrics strong {
+  overflow: hidden;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metro-wayfinding-text-row-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.metro-wayfinding-text-row-item {
+  display: grid;
+  min-width: 0;
+  gap: var(--yct-space-2);
+  padding-top: var(--yct-space-3);
+  border-top: 1px solid var(--yct-color-border);
+}
+
+.metro-wayfinding-main-segments {
+  min-width: 0;
+}
+
+.metro-wayfinding-main-segment-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  min-width: 0;
+  gap: 3px;
+}
+
+/* ── 主文本内联编辑：文本段 + chip ─────────────────────────────── */
+
+.metro-wayfinding-main-segments-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  min-height: var(--yct-control-height-compact);
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.metro-wayfinding-main-segments-input:focus-within {
+  border-color: var(--yct-color-primary);
+  box-shadow: var(--yct-shadow-soft);
+}
+
+/* 文本段：看起来像普通行内文本，宽度随内容自适应。
+ * 用 input 的 size 属性驱动宽度（`width: auto` + 行内元素的 size 换算），
+ * 不要写死 ch/em——写死会把中文 / 长文本截断。 */
+.metro-wayfinding-main-segments-text {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 1ch;
+  max-width: 100%;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+  font-weight: 600;
+  letter-spacing: 0;
+  field-sizing: content;
+}
+
+.metro-wayfinding-main-segments-text:focus {
+  outline: none;
+}
+
+/* chip：线路号 / 方框文本，整体参与光标移动 */
+.metro-wayfinding-main-segments-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 26px;
+  gap: 2px;
+  padding: 0 2px 0 4px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+}
+
+.metro-wayfinding-main-segments-chip.is-line {
+  border-color: color-mix(
+    in srgb,
+    var(--metro-wayfinding-segment-color) 72%,
+    var(--yct-color-border)
+  );
+  background: color-mix(
+    in srgb,
+    var(--metro-wayfinding-segment-color) 14%,
+    var(--yct-color-surface-panel)
+  );
+}
+
+.metro-wayfinding-main-segments-chip.is-boxed {
+  border-color: var(--yct-color-text-secondary);
+  border-radius: 2px;
+  background: var(--yct-color-surface-panel);
+}
+
+/*
+ * 大文本内联编辑器里的**下角标** chip：沿用主文本 chip 的外壳（同一套手感），
+ * 只靠 `is-suffix` 区分语义——虚线框表示「这是角标不是正文」，`align-self: end`
+ * 让它略微下沉，呼应牌面上角标比正文小的观感。
+ */
+.metro-wayfinding-main-segments-chip.is-suffix {
+  align-self: end;
+  border-style: dashed;
+  background: transparent;
+}
+
+.metro-wayfinding-main-segments-chip.is-suffix .metro-wayfinding-main-segments-chip-input {
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+.metro-wayfinding-main-segments-chip-icon,
+.metro-wayfinding-main-segments-chip-remove {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--yct-radius-sm);
+  background: transparent;
+  color: var(--yct-color-text-muted);
+}
+
+.metro-wayfinding-main-segments-chip.is-line .metro-wayfinding-main-segments-chip-icon {
+  color: var(--metro-wayfinding-segment-color);
+}
+
+.metro-wayfinding-main-segments-chip-icon:not(:disabled):is(:hover, :focus-visible),
+.metro-wayfinding-main-segments-chip-remove:not(:disabled):is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+  color: var(--yct-color-text);
+}
+
+.metro-wayfinding-main-segments-chip-icon:disabled,
+.metro-wayfinding-main-segments-chip-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.metro-wayfinding-main-segments-chip-icon .material-symbols-outlined,
+.metro-wayfinding-main-segments-chip-remove .material-symbols-outlined {
+  font-size: var(--yct-font-size-16);
+}
+
+.metro-wayfinding-main-segments-chip-input {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 1ch;
+  max-width: 100%;
+  height: 22px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+  font-weight: 700;
+  letter-spacing: 0;
+  field-sizing: content;
+}
+
+.metro-wayfinding-main-segments-chip-input:focus {
+  outline: none;
+}
+
+.metro-wayfinding-main-segments-chip-input::placeholder {
+  color: var(--yct-color-text-muted);
+  font-weight: 500;
+}
+
+/* 线路色色板 */
+.metro-wayfinding-main-segments-chip-palette {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: 260px;
+  gap: 6px;
+  padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  box-shadow: var(--yct-shadow-soft);
+}
+
+/* 色板项：色点 + 线路编号，点一下即把编号写进 chip */
+.metro-wayfinding-main-segments-chip-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 2px 8px 2px 4px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-12);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.metro-wayfinding-main-segments-chip-swatch-color {
+  flex: 0 0 auto;
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--metro-wayfinding-swatch-color);
+}
+
+.metro-wayfinding-main-segments-chip-swatch-label {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metro-wayfinding-main-segments-chip-swatch[aria-selected='true'] {
+  border-color: var(--yct-color-text);
+  background: var(--yct-color-surface-muted);
+}
+
+.metro-wayfinding-main-segments-chip-swatch:not(:disabled):is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary);
+  color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-main-segments-chip-swatch:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* 文本段 + 光标处装饰（幽灵建议、添加按钮）拼成的行内整体。
+ * 作为一个 flex item 参与外层换行，内部用 inline-flex 让装饰紧跟光标。 */
+.metro-wayfinding-main-segments-text-flow {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 2px;
+}
+
+/* 幽灵建议：渲染在光标之后，点击或按 Tab 采纳。
+ * 用虚线底边 + 弱化字色区分「未落盘的补全」与真实输入。 */
+.metro-wayfinding-main-segments-suggestion {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  max-width: 40ch;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 1px dashed var(--yct-color-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-13);
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metro-wayfinding-main-segments-suggestion:not(:disabled):is(:hover, :focus-visible) {
+  border-bottom-color: var(--yct-color-primary);
+  color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-main-segments-suggestion:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* 光标处的「添加线路号 / 添加方框」按钮组：贴在光标之后，随光标移动。 */
+.metro-wayfinding-main-segments-caret-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.metro-wayfinding-main-segments-caret-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 1px dashed var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: transparent;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.metro-wayfinding-main-segments-caret-actions > button:not(:disabled):is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary);
+  border-style: solid;
+  background: var(--yct-material-hover-state);
+  color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-main-segments-caret-actions > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.metro-wayfinding-main-segments-caret-actions .material-symbols-outlined {
+  font-size: var(--yct-font-size-15);
+}
+
+/* 两个按钮用不同图标样式区分功能：线路号=彩色线路图标，方框=空心方框图标 */
+.metro-wayfinding-main-segments-insert-line .material-symbols-outlined {
+  color: var(--yct-color-primary);
+  font-variation-settings:
+    'FILL' 1,
+    'wght' 500,
+    'GRAD' 0,
+    'opsz' 20;
+}
+
+.metro-wayfinding-main-segments-insert-boxed .material-symbols-outlined {
+  color: var(--yct-color-text-secondary);
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 20;
+}
+
+/* 大文本「添加下角标」按钮：与方框按钮同一次级色，不抢主色。 */
+.metro-wayfinding-main-segments-insert-suffix .material-symbols-outlined {
+  color: var(--yct-color-text-secondary);
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 20;
+}
+
+.metro-wayfinding-combination-edit-button {
+  grid-column: 1 / -1;
+  width: fit-content;
+}
+
+.modal-backdrop.metro-wayfinding-combination-dialog-backdrop {
+  z-index: 125;
+}
+
+.modal-panel.metro-wayfinding-combination-dialog {
+  width: min(920px, 100%);
+  max-height: min(90vh, 920px);
+  overflow-y: auto;
+  gap: var(--yct-space-3);
+}
+
+.metro-wayfinding-combination-dialog > header,
+.metro-wayfinding-combination-child-editor > header,
+.metro-wayfinding-combination-dialog > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+}
+
+.metro-wayfinding-combination-dialog > header {
+  align-items: flex-start;
+}
+
+.metro-wayfinding-combination-dialog > header > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.metro-wayfinding-combination-dialog h2 {
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-18);
+  line-height: 1.3;
+}
+
+.metro-wayfinding-combination-dialog > header span:not(.material-symbols-outlined) {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.metro-wayfinding-combination-dialog > .muted {
+  margin: 0;
+}
+
+.metro-wayfinding-combination-child-list {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  gap: var(--yct-space-2);
+  margin: 0;
+  padding: 1px 1px var(--yct-space-1);
+  list-style: none;
+  scrollbar-width: thin;
+}

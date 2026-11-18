@@ -1,9 +1,14 @@
 'use client';
 
-import type { TicketOrderListItem, TicketableServiceKind, TravelTripInstance } from '@yct/contracts';
+import type {
+  TicketOrderListItem,
+  TicketableServiceKind,
+  TravelTripInstance,
+} from '@yct/contracts';
 import Link from 'next/link';
 import { appPath } from '../lib/app-paths';
 import { useI18n } from '../lib/client-i18n';
+import { Button, ButtonLink, IconButton } from './ui/button';
 
 type TicketOrderTripLookup = Map<string, TravelTripInstance>;
 type Translate = ReturnType<typeof useI18n>['t'];
@@ -31,8 +36,9 @@ export function TicketOrderDraftPanel({
   const displayTitle = title ?? t('ticketOrderDraft.title');
   const displayDescription = description ?? t('ticketOrderDraft.description');
   const visibleOrders =
-    orders?.filter((item) => item.order.status === 'draft' || item.order.status === 'pending_issue') ??
-    [];
+    orders?.filter(
+      (item) => item.order.status === 'draft' || item.order.status === 'pending_issue',
+    ) ?? [];
 
   return (
     <section className="ticket-order-draft-panel" aria-label={displayTitle}>
@@ -41,16 +47,7 @@ export function TicketOrderDraftPanel({
           <h3>{displayTitle}</h3>
           <span className="muted">{displayDescription}</span>
         </div>
-        <button
-          className="icon-action-button"
-          type="button"
-          aria-label={t('ticketOrderDraft.refresh')}
-          onClick={onRefresh}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            refresh
-          </span>
-        </button>
+        <IconButton icon="refresh" label={t('ticketOrderDraft.refresh')} onClick={onRefresh} />
       </div>
       {visibleOrders.length > 0 ? (
         <div className="ticket-order-draft-list">
@@ -67,36 +64,32 @@ export function TicketOrderDraftPanel({
                     })
                   : t('ticketOrderDraft.noHold')}
               </span>
-              <Link
-                className="secondary-action-button"
+              <ButtonLink
+                variant="secondary"
                 href={appPath(`/travel/ticketing/orders/${encodeURIComponent(item.order.orderId)}`)}
+                icon="receipt_long"
               >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  receipt_long
-                </span>
-                <span>{t('ticketOrderDraft.details')}</span>
-              </Link>
-              <button
-                className="secondary-action-button"
-                type="button"
+                {t('ticketOrderDraft.details')}
+              </ButtonLink>
+              <Button
+                variant="secondary"
+                icon="cancel"
+                loading={cancellingOrderId === item.order.orderId}
                 disabled={cancellingOrderId === item.order.orderId}
                 onClick={() => onCancel(item.order.orderId)}
               >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  cancel
-                </span>
-                <span>
-                  {cancellingOrderId === item.order.orderId
-                    ? t('ticketOrderDraft.canceling')
-                    : t('ticketOrderDraft.cancelDraft')}
-                </span>
-              </button>
+                {cancellingOrderId === item.order.orderId
+                  ? t('ticketOrderDraft.canceling')
+                  : t('ticketOrderDraft.cancelDraft')}
+              </Button>
             </article>
           ))}
         </div>
       ) : (
         <p className="ticket-order-draft-empty">
-          {orders === null ? t('ticketOrderDraft.loading') : statusText || t('ticketOrderDraft.empty')}
+          {orders === null
+            ? t('ticketOrderDraft.loading')
+            : statusText || t('ticketOrderDraft.empty')}
         </p>
       )}
       {statusText && visibleOrders.length > 0 ? (
@@ -184,7 +177,9 @@ export function formatTicketServiceKind(kind: TicketableServiceKind, t?: Transla
 function formatTripHeading(trip: TravelTripInstance, t?: Translate): string {
   const prefix =
     trip.tripCode ??
-    (t ? t('ticketOrderDraft.serviceTrip', { service: trip.serviceLabel }) : `${trip.serviceLabel}班次`);
+    (t
+      ? t('ticketOrderDraft.serviceTrip', { service: trip.serviceLabel })
+      : `${trip.serviceLabel}班次`);
   return trip.lineName ? `${prefix} - ${trip.lineName}` : prefix;
 }
 

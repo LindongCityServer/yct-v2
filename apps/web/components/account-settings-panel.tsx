@@ -6,6 +6,11 @@ import { AccountLoginEntry } from './account-login-entry';
 import { AccountLogoutEntry } from './account-logout-entry';
 import { ProgressiveImage } from './progressive-image';
 import { RangeInput } from './range-input';
+import { SegmentedTabs } from './ui/segmented-control';
+import { Button, ButtonLink, IconButton } from './ui/button';
+import { Field, Input, Select } from './ui/field';
+import { SwitchControl } from './ui/switch';
+import { FormErrorText } from './ui/status';
 import { SmartQaGlyph } from './smart-qa-icon';
 
 import type {
@@ -111,6 +116,7 @@ import {
 } from '../lib/client-mobile-action-rail';
 import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
 import { TicketOrderDraftPanel } from './ticket-order-draft-panel';
+import { Modal } from './ui/modal';
 
 const themeOptionKeys: Array<{ value: ThemeMode; labelKey: CommonMessageKey }> = [
   { value: 'system', labelKey: 'settings.theme.system' },
@@ -1272,16 +1278,13 @@ export function AccountSettingsPanel({
               <span>{t('settings.material.invertTint')}</span>
               <span className="settings-row-note">{t('settings.material.invertTintNote')}</span>
             </span>
-            <label className="switch-control" title={t('settings.material.invertTint')}>
-              <input
-                type="checkbox"
-                aria-label={t('settings.material.invertTint')}
-                checked={materialPreference.invertTint}
-                disabled={materialPreference.mode !== 'advanced'}
-                onChange={(event) => updateMaterialInvertTint(event.currentTarget.checked)}
-              />
-              <span />
-            </label>
+            <SwitchControl
+              label={t('settings.material.invertTint')}
+              labelTitle={t('settings.material.invertTint')}
+              checked={materialPreference.invertTint}
+              disabled={materialPreference.mode !== 'advanced'}
+              onChange={(event) => updateMaterialInvertTint(event.currentTarget.checked)}
+            />
           </div>
         </section>
 
@@ -1319,15 +1322,12 @@ export function AccountSettingsPanel({
                 ? t('settings.mobileActionRail.enabled')
                 : t('settings.mobileActionRail.disabled')}
             </span>
-            <label className="switch-control" title={t('settings.mobileActionRail.label')}>
-              <input
-                type="checkbox"
-                aria-label={t('settings.mobileActionRail.label')}
-                checked={mobileActionRail.enabled}
-                onChange={(event) => updateMobileActionRailEnabled(event.currentTarget.checked)}
-              />
-              <span />
-            </label>
+            <SwitchControl
+              label={t('settings.mobileActionRail.label')}
+              labelTitle={t('settings.mobileActionRail.label')}
+              checked={mobileActionRail.enabled}
+              onChange={(event) => updateMobileActionRailEnabled(event.currentTarget.checked)}
+            />
           </div>
           <p className="settings-row-note">{t('settings.mobileActionRail.note')}</p>
           <SegmentedControl
@@ -1383,66 +1383,50 @@ export function AccountSettingsPanel({
                 <strong>{t('settings.assistant.enabled')}</strong>
                 <small>{t('settings.assistant.enabledNote')}</small>
               </div>
-              <label className="switch-control" title={t('settings.assistant.enabled')}>
-                <input
-                  type="checkbox"
-                  aria-label={t('settings.assistant.enabled')}
-                  checked={assistantPreference.enabled}
-                  onChange={(event) =>
-                    updateAssistantPreference({ enabled: event.currentTarget.checked })
-                  }
-                />
-                <span />
-              </label>
+              <SwitchControl
+                label={t('settings.assistant.enabled')}
+                labelTitle={t('settings.assistant.enabled')}
+                checked={assistantPreference.enabled}
+                onChange={(event) =>
+                  updateAssistantPreference({ enabled: event.currentTarget.checked })
+                }
+              />
             </div>
             <div className="settings-toggle-row">
               <div>
                 <strong>{t('settings.assistant.allPages')}</strong>
                 <small>{t('settings.assistant.allPagesNote')}</small>
               </div>
-              <label className="switch-control" title={t('settings.assistant.allPages')}>
-                <input
-                  type="checkbox"
-                  aria-label={t('settings.assistant.allPages')}
-                  checked={assistantPreference.allPages}
-                  disabled={!assistantPreference.enabled}
-                  onChange={(event) =>
-                    updateAssistantPreference({ allPages: event.currentTarget.checked })
-                  }
-                />
-                <span />
-              </label>
+              <SwitchControl
+                label={t('settings.assistant.allPages')}
+                labelTitle={t('settings.assistant.allPages')}
+                checked={assistantPreference.allPages}
+                disabled={!assistantPreference.enabled}
+                onChange={(event) =>
+                  updateAssistantPreference({ allPages: event.currentTarget.checked })
+                }
+              />
             </div>
             <div className="settings-toggle-row">
               <div>
                 <strong>{t('settings.assistant.aiSuggestions')}</strong>
                 <small>{t('settings.assistant.aiSuggestionsNote')}</small>
               </div>
-              <label className="switch-control" title={t('settings.assistant.aiSuggestions')}>
-                <input
-                  type="checkbox"
-                  aria-label={t('settings.assistant.aiSuggestions')}
-                  checked={assistantPreference.aiSuggestions}
-                  disabled={!assistantPreference.enabled || !assistantConfig}
-                  onChange={(event) =>
-                    updateAssistantPreference({ aiSuggestions: event.currentTarget.checked })
-                  }
-                />
-                <span />
-              </label>
+              <SwitchControl
+                label={t('settings.assistant.aiSuggestions')}
+                labelTitle={t('settings.assistant.aiSuggestions')}
+                checked={assistantPreference.aiSuggestions}
+                disabled={!assistantPreference.enabled || !assistantConfig}
+                onChange={(event) =>
+                  updateAssistantPreference({ aiSuggestions: event.currentTarget.checked })
+                }
+              />
             </div>
           </div>
           <div className="settings-action-row">
-            <button
-              className="secondary-action-button"
-              type="button"
-              onClick={() => setAssistantConfigOpen(true)}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                tune
-              </span>
-              <span>{t('settings.assistant.configure')}</span>
-            </button>
+            <Button variant="secondary" icon="tune" onClick={() => setAssistantConfigOpen(true)}>
+              {t('settings.assistant.configure')}
+            </Button>
           </div>
         </section>
 
@@ -1456,18 +1440,13 @@ export function AccountSettingsPanel({
             </span>
             <span id="notification-settings-title">{t('account.notification.title')}</span>
             <span className="settings-inline-status">{notificationMasterStatus}</span>
-            <label
-              className="switch-control notification-master-switch"
-              title={notificationMasterLabel}
-            >
-              <input
-                type="checkbox"
-                aria-label={notificationMasterLabel}
-                checked={notificationEnabled}
-                onChange={(event) => updateNotificationEnabled(event.currentTarget.checked)}
-              />
-              <span />
-            </label>
+            <SwitchControl
+              className="notification-master-switch"
+              label={notificationMasterLabel}
+              labelTitle={notificationMasterLabel}
+              checked={notificationEnabled}
+              onChange={(event) => updateNotificationEnabled(event.currentTarget.checked)}
+            />
           </div>
           <p className="settings-row-note">{t('account.notification.note')}</p>
           <div className="time-control-row">
@@ -1550,62 +1529,46 @@ export function AccountSettingsPanel({
             <span>{t('account.history.pendingSync', { count: tripSummary?.localOnly ?? 0 })}</span>
           </div>
           <div className="settings-action-row">
-            <a className="secondary-action-button" href={appPath('/travel')}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                event_upcoming
-              </span>
-              <span>{t('account.history.action.manageTrips')}</span>
-            </a>
-            <a className="secondary-action-button" href={appPath('/travel/schedules')}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                departure_board
-              </span>
-              <span>{t('account.history.action.searchSchedules')}</span>
-            </a>
-            <a className="secondary-action-button" href={appPath('/map')}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                map
-              </span>
-              <span>{t('account.history.action.viewMap')}</span>
-            </a>
-            <button
-              className="secondary-action-button"
-              type="button"
+            <ButtonLink variant="secondary" href={appPath('/travel')} icon="event_upcoming">
+              {t('account.history.action.manageTrips')}
+            </ButtonLink>
+            <ButtonLink
+              variant="secondary"
+              href={appPath('/travel/schedules')}
+              icon="departure_board"
+            >
+              {t('account.history.action.searchSchedules')}
+            </ButtonLink>
+            <ButtonLink variant="secondary" href={appPath('/map')} icon="map">
+              {t('account.history.action.viewMap')}
+            </ButtonLink>
+            <Button
+              variant="secondary"
+              icon="cloud_sync"
+              loading={isSyncingTripReminders}
               disabled={
                 !auth.session?.user || isSyncingTripReminders || (tripSummary?.localOnly ?? 0) === 0
               }
               onClick={() => void syncTripRemindersToAccount()}
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                cloud_sync
-              </span>
-              <span>
-                {isSyncingTripReminders
-                  ? t('account.history.action.syncing')
-                  : t('account.history.action.sync')}
-              </span>
-            </button>
-            <button
-              className="secondary-action-button"
-              type="button"
+              {isSyncingTripReminders
+                ? t('account.history.action.syncing')
+                : t('account.history.action.sync')}
+            </Button>
+            <Button
+              variant="secondary"
+              icon="rule"
+              loading={isRevokingLegacyTripSyncConsent}
               disabled={!legacyTripSyncConsentGranted || isRevokingLegacyTripSyncConsent}
               onClick={() => void revokeLegacyTripSyncConsent()}
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                rule
-              </span>
-              <span>
-                {isRevokingLegacyTripSyncConsent
-                  ? t('account.history.action.revokingLegacy')
-                  : t('account.history.action.revokeLegacy')}
-              </span>
-            </button>
-            <button className="secondary-action-button" type="button" onClick={clearLocalHistory}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                delete_sweep
-              </span>
-              <span>{t('account.history.action.clearLocal')}</span>
-            </button>
+              {isRevokingLegacyTripSyncConsent
+                ? t('account.history.action.revokingLegacy')
+                : t('account.history.action.revokeLegacy')}
+            </Button>
+            <Button variant="secondary" icon="delete_sweep" onClick={clearLocalHistory}>
+              {t('account.history.action.clearLocal')}
+            </Button>
           </div>
           {tripSyncStatusText ? <span className="muted">{tripSyncStatusText}</span> : null}
         </section>
@@ -1651,39 +1614,27 @@ export function AccountSettingsPanel({
           </p>
           <p className="settings-row-note">{installStatusDescription(installStatus, t)}</p>
           <div className="settings-action-row">
-            <button
-              className="secondary-action-button"
-              type="button"
+            <Button
+              variant="secondary"
+              icon="install_mobile"
               disabled={installStatus === 'installed' || installStatus === 'unsupported'}
               onClick={installPwa}
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                install_mobile
-              </span>
-              <span>{t('account.pwa.action.install')}</span>
-            </button>
-            <button className="secondary-action-button" type="button" onClick={warmPwaCache}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                cached
-              </span>
-              <span>{t('account.pwa.action.refreshCache')}</span>
-            </button>
-            <button className="secondary-action-button" type="button" onClick={clearPwaCache}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                delete
-              </span>
-              <span>{t('account.pwa.action.clearCache')}</span>
-            </button>
-            <button
-              className="secondary-action-button"
-              type="button"
+              {t('account.pwa.action.install')}
+            </Button>
+            <Button variant="secondary" icon="cached" onClick={warmPwaCache}>
+              {t('account.pwa.action.refreshCache')}
+            </Button>
+            <Button variant="secondary" icon="delete" onClick={clearPwaCache}>
+              {t('account.pwa.action.clearCache')}
+            </Button>
+            <Button
+              variant="secondary"
+              icon="add_location_alt"
               onClick={() => setOfflinePackageFormOpen(true)}
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                add_location_alt
-              </span>
-              <span>{t('account.offlinePackage.newRange')}</span>
-            </button>
+              {t('account.offlinePackage.newRange')}
+            </Button>
           </div>
           <div className="offline-package-summary">
             <span>
@@ -1732,33 +1683,24 @@ export function AccountSettingsPanel({
                     </small>
                   </div>
                   <div className="offline-package-actions">
-                    <button
-                      className="secondary-action-button"
-                      type="button"
+                    <Button
+                      variant="secondary"
+                      icon="sync"
+                      loading={refreshingPackageId === offlinePackage.packageId}
                       disabled={refreshingPackageId === offlinePackage.packageId}
                       onClick={() => void refreshOfflinePackage(offlinePackage)}
                     >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        sync
-                      </span>
-                      <span>
-                        {refreshingPackageId === offlinePackage.packageId
-                          ? t('account.offlinePackage.refreshing')
-                          : t('account.offlinePackage.refresh')}
-                      </span>
-                    </button>
-                    <button
-                      className="icon-action-button"
-                      type="button"
-                      onClick={() => void removeOfflinePackage(offlinePackage)}
-                      aria-label={t('account.offlinePackage.deleteAria', {
+                      {refreshingPackageId === offlinePackage.packageId
+                        ? t('account.offlinePackage.refreshing')
+                        : t('account.offlinePackage.refresh')}
+                    </Button>
+                    <IconButton
+                      icon="delete"
+                      label={t('account.offlinePackage.deleteAria', {
                         name: offlinePackage.name,
                       })}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        delete
-                      </span>
-                    </button>
+                      onClick={() => void removeOfflinePackage(offlinePackage)}
+                    />
                   </div>
                 </article>
               ))
@@ -1781,243 +1723,196 @@ export function AccountSettingsPanel({
             })}
           </p>
           <div className="settings-action-row">
-            <a className="secondary-action-button" href={appPath('/services/changelog')}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                history
-              </span>
-              <span>{t('account.about.viewChangelog')}</span>
-            </a>
-            <a
-              className="secondary-action-button"
+            <ButtonLink variant="secondary" href={appPath('/services/changelog')} icon="history">
+              {t('account.about.viewChangelog')}
+            </ButtonLink>
+            <ButtonLink
+              variant="secondary"
               href={projectRepositoryUrl}
               target="_blank"
               rel="noreferrer"
+              icon="code"
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                code
-              </span>
-              <span>{t('account.about.github')}</span>
-            </a>
+              {t('account.about.github')}
+            </ButtonLink>
           </div>
         </section>
       </div>
 
       {assistantConfigOpen ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={() => setAssistantConfigOpen(false)}
+        <Modal
+          labelledBy="assistant-config-title"
+          className="settings-assistant-modal"
+          onBackdropClick={() => setAssistantConfigOpen(false)}
         >
-          <section
-            className="modal-panel settings-assistant-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="assistant-config-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="section-heading">
-              <div>
-                <h2 id="assistant-config-title">{t('settings.assistant.configTitle')}</h2>
-                <span className="muted">{t('settings.assistant.configDescription')}</span>
-              </div>
-              <button
-                className="icon-action-button"
-                type="button"
-                onClick={() => setAssistantConfigOpen(false)}
-                aria-label={t('account.offlinePackage.close')}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
+          <div className="section-heading">
+            <div>
+              <h2 id="assistant-config-title">{t('settings.assistant.configTitle')}</h2>
+              <span className="muted">{t('settings.assistant.configDescription')}</span>
             </div>
+            <IconButton
+              icon="close"
+              label={t('account.offlinePackage.close')}
+              onClick={() => setAssistantConfigOpen(false)}
+            />
+          </div>
 
-            <div className="settings-control-grid">
-              <label className="material-field">
-                <span>{t('settings.assistant.provider')}</span>
-                <select
-                  value={assistantProviderId}
-                  onChange={(event) => updateAssistantProvider(event.currentTarget.value)}
-                >
-                  {assistantProviders.map((provider) => (
-                    <option value={provider.id} key={provider.id}>
-                      {provider.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="material-field">
-                <span>{t('settings.assistant.model')}</span>
-                <input
-                  value={assistantModel}
-                  onChange={(event) => setAssistantModel(event.currentTarget.value)}
-                  list="account-assistant-models"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <datalist id="account-assistant-models">
-                  {selectedAssistantProvider.models.map((model) => (
-                    <option value={model} key={model} />
-                  ))}
-                </datalist>
-              </label>
-              <label className="material-field settings-assistant-key-field">
-                <span>{t('settings.assistant.key')}</span>
-                <input
-                  type="password"
-                  value={assistantKeyInput}
-                  onChange={(event) => setAssistantKeyInput(event.currentTarget.value)}
-                  placeholder={t('settings.assistant.keyPlaceholder')}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </label>
-            </div>
-            <p className="settings-row-note">{t('settings.assistant.encryptionNote')}</p>
-            <p className="settings-row-note">{t('settings.assistant.modelNote')}</p>
-            <div className="settings-action-row">
-              <button
-                className="secondary-action-button"
-                type="button"
-                onClick={() => void saveAssistantSettings()}
-                disabled={!assistantKeyInput.trim()}
+          <div className="settings-control-grid">
+            <Field label={t('settings.assistant.provider')}>
+              <Select
+                value={assistantProviderId}
+                onChange={(event) => updateAssistantProvider(event.currentTarget.value)}
               >
-                {t('settings.assistant.save')}
-              </button>
-              {assistantConfig ? (
-                <button
-                  className="secondary-action-button"
-                  type="button"
-                  onClick={() => void clearAssistantSettings()}
-                >
-                  {t('settings.assistant.clear')}
-                </button>
-              ) : null}
-            </div>
+                {assistantProviders.map((provider) => (
+                  <option value={provider.id} key={provider.id}>
+                    {provider.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label={t('settings.assistant.model')}>
+              <Input
+                value={assistantModel}
+                onChange={(event) => setAssistantModel(event.currentTarget.value)}
+                list="account-assistant-models"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <datalist id="account-assistant-models">
+                {selectedAssistantProvider.models.map((model) => (
+                  <option value={model} key={model} />
+                ))}
+              </datalist>
+            </Field>
+            <Field label={t('settings.assistant.key')} className="settings-assistant-key-field">
+              <Input
+                type="password"
+                value={assistantKeyInput}
+                onChange={(event) => setAssistantKeyInput(event.currentTarget.value)}
+                placeholder={t('settings.assistant.keyPlaceholder')}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </Field>
+          </div>
+          <p className="settings-row-note">{t('settings.assistant.encryptionNote')}</p>
+          <p className="settings-row-note">{t('settings.assistant.modelNote')}</p>
+          <div className="settings-action-row">
+            <Button
+              variant="secondary"
+              onClick={() => void saveAssistantSettings()}
+              disabled={!assistantKeyInput.trim()}
+            >
+              {t('settings.assistant.save')}
+            </Button>
+            {assistantConfig ? (
+              <Button variant="secondary" onClick={() => void clearAssistantSettings()}>
+                {t('settings.assistant.clear')}
+              </Button>
+            ) : null}
+          </div>
 
-            <div className="settings-about-mcp">
-              <h3>{t('account.about.mcpTitle')}</h3>
-              <p className="settings-row-note">{t('account.about.mcpDescription')}</p>
-              <div className="settings-about-mcp-endpoint">
-                <code>{mcpEndpoint || '/api/mcp'}</code>
-                <button
-                  className="secondary-action-button"
-                  type="button"
-                  disabled={!mcpEndpoint}
-                  onClick={() => void copyMcpEndpoint()}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    {mcpEndpointCopied ? 'check' : 'content_copy'}
-                  </span>
-                  <span>
-                    {mcpEndpointCopied ? t('account.about.mcpCopied') : t('account.about.mcpCopy')}
-                  </span>
-                </button>
-              </div>
-              <pre className="settings-about-mcp-example">
-                {[
-                  '{',
-                  '  "mcpServers": {',
-                  '    "yuchengtong": {',
-                  '      "type": "http",',
-                  `      "url": "${mcpEndpoint || 'https://<站点>/api/mcp'}"`,
-                  '    }',
-                  '  }',
-                  '}',
-                ].join('\n')}
-              </pre>
+          <div className="settings-about-mcp">
+            <h3>{t('account.about.mcpTitle')}</h3>
+            <p className="settings-row-note">{t('account.about.mcpDescription')}</p>
+            <div className="settings-about-mcp-endpoint">
+              <code>{mcpEndpoint || '/api/mcp'}</code>
+              <Button
+                variant="secondary"
+                icon={mcpEndpointCopied ? 'check' : 'content_copy'}
+                disabled={!mcpEndpoint}
+                onClick={() => void copyMcpEndpoint()}
+              >
+                {mcpEndpointCopied ? t('account.about.mcpCopied') : t('account.about.mcpCopy')}
+              </Button>
             </div>
-          </section>
-        </div>
+            <pre className="settings-about-mcp-example">
+              {[
+                '{',
+                '  "mcpServers": {',
+                '    "yuchengtong": {',
+                '      "type": "http",',
+                `      "url": "${mcpEndpoint || 'https://<站点>/api/mcp'}"`,
+                '    }',
+                '  }',
+                '}',
+              ].join('\n')}
+            </pre>
+          </div>
+        </Modal>
       ) : null}
 
       {offlinePackageFormOpen ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={() => setOfflinePackageFormOpen(false)}
+        <Modal
+          labelledBy="offline-package-form-title"
+          className="offline-package-modal"
+          onBackdropClick={() => setOfflinePackageFormOpen(false)}
         >
-          <section
-            className="modal-panel offline-package-modal"
-            aria-labelledby="offline-package-form-title"
-            role="dialog"
-            aria-modal="true"
-            onMouseDown={(event) => event.stopPropagation()}
+          <div className="section-heading">
+            <div>
+              <h2 id="offline-package-form-title">{t('account.offlinePackage.title')}</h2>
+              <span className="muted">{t('account.offlinePackage.description')}</span>
+            </div>
+            <IconButton
+              icon="close"
+              label={t('account.offlinePackage.close')}
+              onClick={() => setOfflinePackageFormOpen(false)}
+            />
+          </div>
+          <form
+            className="offline-package-form"
+            id={offlinePackageFormId}
+            onSubmit={submitOfflinePackage}
           >
-            <div className="section-heading">
-              <div>
-                <h2 id="offline-package-form-title">{t('account.offlinePackage.title')}</h2>
-                <span className="muted">{t('account.offlinePackage.description')}</span>
-              </div>
-              <button
-                className="icon-action-button"
-                type="button"
-                onClick={() => setOfflinePackageFormOpen(false)}
-                aria-label={t('account.offlinePackage.close')}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            </div>
-            <form
-              className="offline-package-form"
-              id={offlinePackageFormId}
-              onSubmit={submitOfflinePackage}
-            >
-              <label className="offline-package-name-field">
-                <span>{t('account.offlinePackage.name')}</span>
-                <input
-                  autoFocus
-                  value={offlinePackageDraft.name}
-                  onChange={(event) => updateOfflinePackageDraft('name', event.currentTarget.value)}
-                  placeholder={t('account.offlinePackage.namePlaceholder')}
-                />
-              </label>
-              <label>
-                <span>{t('account.offlinePackage.minX')}</span>
-                <input
-                  inputMode="decimal"
-                  value={offlinePackageDraft.minX}
-                  onChange={(event) => updateOfflinePackageDraft('minX', event.currentTarget.value)}
-                />
-              </label>
-              <label>
-                <span>{t('account.offlinePackage.minZ')}</span>
-                <input
-                  inputMode="decimal"
-                  value={offlinePackageDraft.minZ}
-                  onChange={(event) => updateOfflinePackageDraft('minZ', event.currentTarget.value)}
-                />
-              </label>
-              <label>
-                <span>{t('account.offlinePackage.maxX')}</span>
-                <input
-                  inputMode="decimal"
-                  value={offlinePackageDraft.maxX}
-                  onChange={(event) => updateOfflinePackageDraft('maxX', event.currentTarget.value)}
-                />
-              </label>
-              <label>
-                <span>{t('account.offlinePackage.maxZ')}</span>
-                <input
-                  inputMode="decimal"
-                  value={offlinePackageDraft.maxZ}
-                  onChange={(event) => updateOfflinePackageDraft('maxZ', event.currentTarget.value)}
-                />
-              </label>
-            </form>
-            {offlinePackageError ? <p className="form-error-text">{offlinePackageError}</p> : null}
-            <div className="admin-content-actions">
-              <button className="primary-action-button" type="submit" form={offlinePackageFormId}>
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  add_location_alt
-                </span>
-                <span>{t('account.offlinePackage.save')}</span>
-              </button>
-            </div>
-          </section>
-        </div>
+            <label className="offline-package-name-field">
+              <span>{t('account.offlinePackage.name')}</span>
+              <input
+                autoFocus
+                value={offlinePackageDraft.name}
+                onChange={(event) => updateOfflinePackageDraft('name', event.currentTarget.value)}
+                placeholder={t('account.offlinePackage.namePlaceholder')}
+              />
+            </label>
+            <label>
+              <span>{t('account.offlinePackage.minX')}</span>
+              <input
+                inputMode="decimal"
+                value={offlinePackageDraft.minX}
+                onChange={(event) => updateOfflinePackageDraft('minX', event.currentTarget.value)}
+              />
+            </label>
+            <label>
+              <span>{t('account.offlinePackage.minZ')}</span>
+              <input
+                inputMode="decimal"
+                value={offlinePackageDraft.minZ}
+                onChange={(event) => updateOfflinePackageDraft('minZ', event.currentTarget.value)}
+              />
+            </label>
+            <label>
+              <span>{t('account.offlinePackage.maxX')}</span>
+              <input
+                inputMode="decimal"
+                value={offlinePackageDraft.maxX}
+                onChange={(event) => updateOfflinePackageDraft('maxX', event.currentTarget.value)}
+              />
+            </label>
+            <label>
+              <span>{t('account.offlinePackage.maxZ')}</span>
+              <input
+                inputMode="decimal"
+                value={offlinePackageDraft.maxZ}
+                onChange={(event) => updateOfflinePackageDraft('maxZ', event.currentTarget.value)}
+              />
+            </label>
+          </form>
+          {offlinePackageError ? <FormErrorText>{offlinePackageError}</FormErrorText> : null}
+          <div className="admin-content-actions">
+            <Button type="submit" form={offlinePackageFormId} icon="add_location_alt">
+              {t('account.offlinePackage.save')}
+            </Button>
+          </div>
+        </Modal>
       ) : null}
     </section>
   );
@@ -2093,39 +1988,27 @@ function AccountAuthPanel({
       <div className="account-auth-actions">
         {user || readonlyUser ? (
           <>
-            <a className="secondary-action-button" href={appPath('/admin')}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                admin_panel_settings
-              </span>
-              <span>{t('account.auth.adminPortal')}</span>
-            </a>
+            <ButtonLink variant="secondary" href={appPath('/admin')} icon="admin_panel_settings">
+              {t('account.auth.adminPortal')}
+            </ButtonLink>
             {auth.ldpassBaseUrl ? (
-              <a
-                className="secondary-action-button"
+              <ButtonLink
+                variant="secondary"
                 href={auth.ldpassBaseUrl}
                 target="_blank"
                 rel="noreferrer"
+                icon="open_in_new"
               >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  open_in_new
-                </span>
-                <span>{t('account.auth.ldpassAccount')}</span>
-              </a>
+                {t('account.auth.ldpassAccount')}
+              </ButtonLink>
             ) : null}
-            <AccountLogoutEntry
-              className="secondary-action-button"
-              label={t('account.auth.logout')}
-            />
+            <AccountLogoutEntry label={t('account.auth.logout')} />
           </>
         ) : (
           <>
             <AccountLoginEntry
               ldpassConfigured={auth.ldpassConfigured}
-              className={
-                auth.ldpassConfigured
-                  ? 'secondary-action-button is-primary'
-                  : 'secondary-action-button'
-              }
+              variant={auth.ldpassConfigured ? 'primary' : 'secondary'}
               label={t('account.auth.login')}
             />
             {auth.localAdminAuthEnabled ? (
@@ -2134,12 +2017,9 @@ function AccountAuthPanel({
                 method="post"
                 action={appPath('/api/auth/local-admin')}
               >
-                <button className="secondary-action-button" type="submit">
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    developer_mode
-                  </span>
-                  <span>{t('account.auth.localAdminLogin')}</span>
-                </button>
+                <Button variant="secondary" type="submit" icon="developer_mode">
+                  {t('account.auth.localAdminLogin')}
+                </Button>
                 <small className="muted">{t('account.auth.localAdminLoginHint')}</small>
               </form>
             ) : null}
@@ -2200,26 +2080,16 @@ function SegmentedControl<TValue extends string>({
   onChange: (value: TValue) => void;
 }>) {
   return (
-    <fieldset className={disabled ? 'segmented-control is-disabled' : 'segmented-control'}>
-      <legend>{label}</legend>
-      <div>
-        {options.map((option) => {
-          const isActive = option.value === value;
-          return (
-            <button
-              className={isActive ? 'is-active' : ''}
-              type="button"
-              aria-pressed={isActive}
-              disabled={disabled}
-              key={option.value}
-              onClick={() => onChange(option.value)}
-            >
-              <span className="material-interaction-label">{option.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </fieldset>
+    <SegmentedTabs
+      label={label}
+      disabled={disabled}
+      options={options.map((option) => ({
+        value: option.value,
+        label: <span className="material-interaction-label">{option.label}</span>,
+      }))}
+      value={value}
+      onChange={onChange}
+    />
   );
 }
 

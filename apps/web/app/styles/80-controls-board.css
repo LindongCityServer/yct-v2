@@ -1,0 +1,831 @@
+/**
+ * /dev/controls 控件展示板样式（从 globals.css 拆出，Phase 3 Stage 1）。
+ * 所有规则限定在 .controls-showcase 作用域内，不影响业务页面。
+ */
+/* ============================================================
+ * /dev/controls 控件展示板（仅开发环境或 NEXT_PUBLIC_ENABLE_CONTROLS=1 可访问）
+ * 样式全部限定在 .controls-showcase 作用域内，不影响业务页面
+ * ============================================================ */
+.controls-showcase {
+  display: grid;
+  gap: var(--yct-space-4);
+  width: min(960px, 100%);
+  margin: 0 auto;
+  padding: var(--yct-space-5) var(--yct-space-4) var(--yct-space-6);
+}
+
+.controls-showcase-header h1 {
+  margin: 0;
+  font-size: var(--yct-font-size-22);
+  font-weight: 800;
+}
+
+.controls-showcase-header p {
+  margin: var(--yct-space-2) 0 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  line-height: 1.6;
+}
+
+.controls-card {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  /* 标准卡片：surface-panel + lg 圆角，靠底色分层，不画灰色描边。 */
+  border: 0;
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.controls-card > h2 {
+  margin: 0;
+  font-size: var(--yct-font-size-15);
+  font-weight: 800;
+}
+
+.controls-note {
+  margin: calc(var(--yct-space-2) * -1) 0 0;
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.5;
+}
+
+.controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: var(--yct-space-3);
+}
+
+.controls-field {
+  display: grid;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+}
+
+.controls-field-wide {
+  grid-column: 1 / -1;
+}
+
+.controls-field > input,
+.controls-field > textarea,
+.controls-field > select {
+  width: 100%;
+}
+
+.controls-range {
+  display: grid;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+}
+
+.controls-range input {
+  width: 100%;
+}
+
+.controls-switch-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.controls-route-demo {
+  display: grid;
+  justify-items: start;
+  gap: var(--yct-space-3);
+  min-width: 0;
+}
+
+.controls-route-sort-demo {
+  min-width: min(420px, 100%);
+}
+
+.controls-switch-item .switch-control {
+  margin-left: 0;
+}
+
+.controls-switch-label {
+  font-size: var(--yct-font-size-13);
+  color: var(--yct-color-text-secondary);
+}
+
+.controls-topbar-stack {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.controls-topbar-demo {
+  overflow: hidden;
+  border-radius: var(--yct-radius-lg);
+}
+
+/* 展示板里预览真实 SecondaryPageHeader：取消吸顶，避免盖住展示板内容。 */
+.controls-topbar-demo .topbar {
+  position: relative;
+  top: auto;
+}
+
+.controls-form-dialog form {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.controls-longform {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.controls-longform p {
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-14);
+  line-height: 1.7;
+}
+
+/* ------------------------------------------------------------
+ * 第二轮扩充：导航框架 / 芯片 / 分段变体 / 地图悬浮件 / 列表卡片
+ * 仅做展示板内的布局与「脱离地图/应用壳后的定位复位」，不改业务样式
+ * ------------------------------------------------------------ */
+.controls-stack {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.controls-sub-label {
+  margin: 0 0 var(--yct-space-1);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  font-weight: 700;
+}
+
+/* 侧栏 rail 与移动端 bottom-nav 同排对照；bottom-nav 业务中 fixed 且桌面隐藏，展示板内复位 */
+.controls-nav-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--yct-space-4);
+}
+
+.controls-showcase .bottom-nav {
+  position: static;
+  inset: auto;
+  display: grid;
+  width: min(420px, 100%);
+  height: auto;
+}
+
+/* operation-toc 面板业务中 absolute 悬浮，展示板内静态展开 */
+.controls-toc-demo {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: var(--yct-space-2);
+}
+
+.controls-showcase .operation-toc-panel {
+  position: static;
+  inset: auto;
+  width: min(320px, 100%);
+  max-height: none;
+}
+
+/* 地图悬浮芯片脱离地图容器后复位为静态排列 */
+.controls-showcase .map-source-chip,
+.controls-showcase .map-routing-status,
+.controls-showcase .map-coordinate-pick-hint {
+  position: static;
+  inset: auto;
+  transform: none;
+}
+
+/* 展示板为白底，HUD 芯片在此恢复普通文本色，避免白字不可见 */
+.controls-showcase .map-source-chip,
+.controls-showcase .map-coordinate-chip {
+  color: var(--yct-color-text-secondary) !important;
+  text-shadow: none !important;
+}
+
+.controls-map-split {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--yct-space-4);
+}
+
+.controls-map-split > .controls-stack {
+  flex: 1 1 260px;
+}
+
+.controls-layer-list {
+  flex: 0 1 320px;
+  min-width: 260px;
+}
+
+/* 列表项与卡片：两栏对照，窄屏自动堆叠 */
+.controls-card-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: var(--yct-space-4);
+  align-items: start;
+}
+
+.controls-card-split > * {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.controls-panel-demo {
+  width: min(360px, 100%);
+}
+
+.controls-route-stack {
+  display: grid;
+  gap: var(--yct-space-2);
+  max-width: 380px;
+}
+
+.controls-feed-demo {
+  max-width: 420px;
+}
+
+/* fieldset 套 controls-field 时去掉浏览器默认边框 */
+.controls-showcase fieldset.controls-field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------
+ * 右下角「全局外观」悬浮面板（固定定位 + 可折叠）
+ * ------------------------------------------------------------ */
+.controls-appearance-dock {
+  position: fixed;
+  right: var(--yct-space-4);
+  bottom: var(--yct-space-4);
+  z-index: 40;
+  display: grid;
+  justify-items: end;
+  gap: var(--yct-space-2);
+  width: min(320px, calc(100vw - var(--yct-space-8)));
+  /* 容器本身不拦截点击，仅按钮与面板可交互，避免遮挡右下角内容。 */
+  pointer-events: none;
+}
+
+.controls-appearance-dock > * {
+  pointer-events: auto;
+}
+
+/* 对齐项目悬浮面板规范（.operation-toc-panel）：94% 白底 + radius-md + floating 阴影 +
+ * 13px 文本；透光模式下的液态材质配方见下方 advanced 规则。 */
+.controls-appearance-panel {
+  display: grid;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  box-shadow: var(--yct-shadow-floating);
+  color: var(--yct-color-text);
+  font-size: var(--yct-font-size-13);
+  -webkit-backdrop-filter: blur(var(--yct-material-blur-soft));
+  backdrop-filter: blur(var(--yct-material-blur-soft));
+}
+
+/* 标题栏即折叠开关：整条可点击，左图标 + 标题 + 右侧展开箭头。 */
+.controls-appearance-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-height: var(--yct-control-height-lg);
+  padding: 0 var(--yct-space-3);
+  border: 0;
+  border-radius: calc(var(--yct-radius-md) - 1px) calc(var(--yct-radius-md) - 1px) 0 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.controls-appearance-heading > .material-symbols-outlined {
+  font-size: var(--yct-font-size-18);
+}
+
+.controls-appearance-title {
+  font-weight: 700;
+}
+
+.controls-appearance-caret {
+  color: var(--yct-color-text-muted);
+}
+
+.controls-appearance-body {
+  display: grid;
+  gap: var(--yct-space-3);
+  max-height: min(56vh, 380px);
+  overflow: auto;
+  padding: var(--yct-space-3);
+  border-top: 1px solid var(--yct-color-border);
+}
+
+/* 简约/均衡模式下按「悬浮控件」规范加 2px 描边，与页面其它悬浮件一致。 */
+:root[data-material-mode='performance'] .controls-appearance-panel,
+:root[data-material-mode='balanced'] .controls-appearance-panel {
+  border: 2px solid var(--yct-color-border);
+}
+
+/* 透光模式：与 .operation-toc-panel 同款液态材质配方（中性半透明底 + 背景滤镜 + 扭曲 +
+ * 内阴影/边缘高光 + 文本阴影）；扭曲滤镜由 liquid-material-bridge 注册提供。 */
+:root[data-material-mode='advanced'] .controls-appearance-panel {
+  border-color: color-mix(in srgb, var(--yct-color-border) 76%, transparent);
+  background: var(--yct-material-neutral-surface);
+  box-shadow: var(--yct-material-surface-shadow);
+  text-shadow: var(--yct-material-text-shadow);
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+:root[data-material-mode='advanced'] .controls-appearance-body {
+  border-top-color: transparent;
+}
+
+/* 目录跳转锚点补偿：抵消页面标题栏吸顶高度（与目录 96px 的活跃判定阈值一致）。 */
+.controls-showcase .controls-card {
+  scroll-margin-top: 96px;
+}
+
+.controls-showcase .controls-layer-panel {
+  position: static;
+  inset: auto;
+  width: min(360px, 100%);
+  max-height: none;
+  flex: 0 1 360px;
+  transform: none;
+}
+
+.controls-showcase .controls-layer-list {
+  min-width: 0;
+}
+
+.controls-card,
+.controls-card > *,
+.controls-grid > * {
+  min-width: 0;
+}
+
+.controls-inventory-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: var(--yct-space-3);
+}
+
+.controls-inventory-item {
+  border-bottom: 1px solid var(--yct-color-border-subtle);
+}
+
+.controls-inventory-item > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yct-space-3);
+  min-height: 48px;
+  padding: var(--yct-space-2) 0;
+  cursor: pointer;
+  font-size: var(--yct-font-size-13);
+}
+
+.controls-inventory-item > summary > span:first-child {
+  display: grid;
+  gap: var(--yct-space-1);
+}
+
+.controls-inventory-item :is(code, strong, a),
+.controls-inventory-detail {
+  overflow-wrap: anywhere;
+}
+
+.controls-inventory-detail {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: 0 0 var(--yct-space-3);
+  font-size: var(--yct-font-size-12);
+}
+
+.controls-inventory-detail p {
+  margin: 0;
+}
+
+.controls-inventory-links,
+.controls-inventory-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.controls-inventory-pagination > span {
+  margin-right: auto;
+  font-size: var(--yct-font-size-13);
+}
+
+@media (max-width: 720px) {
+  .controls-inventory-item > summary {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--yct-space-1);
+  }
+}
+
+/* ------------------------------------------------------------
+ * 组件文档信息架构（参考 Ant Design 组件页）
+ * 左侧分类目录 + 右侧组件页；组件页统一为
+ * 标题/状态/类名 → 示例 → 状态矩阵 → Anatomy → Token → API → A11y → Do/Don't
+ * ------------------------------------------------------------ */
+.secondary-content:has(.controls-showcase) {
+  width: min(1280px, calc(100% - 32px));
+}
+
+@media (min-width: 761px) {
+  .secondary-content.has-desktop-navigation:has(.controls-showcase) {
+    grid-template-columns: 224px minmax(0, 1fr);
+    width: min(1280px, calc(100% - 32px));
+  }
+}
+
+.controls-showcase {
+  width: 100%;
+}
+
+.controls-catalog {
+  position: sticky;
+  top: 88px;
+  display: grid;
+  gap: var(--yct-space-3);
+  max-height: calc(100dvh - 104px);
+  overflow: auto;
+  padding-right: var(--yct-space-1);
+  font-size: var(--yct-font-size-13);
+}
+
+.controls-catalog-search {
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-height: var(--yct-control-height-toolbar);
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-muted);
+}
+
+.controls-catalog-search .material-symbols-outlined {
+  font-size: var(--yct-font-size-17);
+}
+
+.controls-catalog-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--yct-color-text);
+  font: inherit;
+  outline: none;
+}
+
+.controls-catalog-search:focus-within {
+  border-color: var(--yct-color-primary);
+  outline: var(--yct-focus-ring-width) solid var(--yct-focus-ring-color);
+  outline-offset: var(--yct-focus-ring-offset);
+}
+
+.controls-catalog-groups {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.controls-catalog-group h3 {
+  margin: 0 0 var(--yct-space-1);
+  padding: 0 var(--yct-space-2);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.controls-catalog-group ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.controls-catalog-group a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+  min-height: var(--yct-control-height-sm);
+  padding: 0 var(--yct-space-2);
+  border-radius: var(--yct-radius-sm);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  text-decoration: none;
+}
+
+.controls-catalog-group a:hover {
+  background: var(--yct-color-interaction-hover);
+}
+
+.controls-catalog-group a.is-active {
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  font-weight: 700;
+}
+
+.controls-catalog-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--yct-color-primary);
+  opacity: 0.55;
+}
+
+.controls-catalog-dot.is-beta {
+  background: var(--yct-color-warning);
+}
+
+.controls-catalog-dot.is-deprecated {
+  background: var(--yct-color-text-muted);
+}
+
+.controls-catalog-empty,
+.controls-catalog-footer {
+  margin: 0;
+  padding: 0 var(--yct-space-2);
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.controls-catalog-footer {
+  border-top: 1px solid var(--yct-color-border-subtle);
+  padding-top: var(--yct-space-2);
+}
+
+.controls-doc-header {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.controls-doc-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.controls-doc-title-row h2 {
+  margin: 0;
+  font-size: var(--yct-font-size-18);
+  font-weight: 800;
+}
+
+.controls-doc-status {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--yct-space-2);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-primary) 14%, transparent);
+  color: color-mix(in srgb, var(--yct-color-primary) 78%, var(--yct-color-text));
+  font-size: var(--yct-font-size-11);
+  font-weight: 700;
+}
+
+.controls-doc-status.is-beta {
+  background: color-mix(in srgb, var(--yct-color-warning) 16%, transparent);
+  color: var(--yct-color-warning-strong);
+}
+
+.controls-doc-status.is-deprecated {
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-muted);
+}
+
+.controls-doc-summary {
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  line-height: 1.65;
+}
+
+.controls-doc-classes,
+.controls-doc-aliases {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--yct-font-size-12);
+}
+
+.controls-doc-label {
+  color: var(--yct-color-text-muted);
+  font-weight: 700;
+}
+
+.controls-doc-classes code,
+.controls-doc-alias code {
+  padding: 2px 6px;
+  border-radius: var(--yct-radius-xs);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--yct-font-size-11);
+  overflow-wrap: anywhere;
+}
+
+.controls-doc-alias {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--yct-color-text-muted);
+}
+
+.controls-doc-block {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding-top: var(--yct-space-3);
+  border-top: 1px solid var(--yct-color-border-subtle);
+}
+
+.controls-doc-block-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--yct-space-2);
+}
+
+.controls-doc-block-heading h3 {
+  margin: 0;
+  font-size: var(--yct-font-size-13);
+  font-weight: 800;
+}
+
+.controls-doc-block-heading span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.5;
+}
+
+.controls-doc-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-md);
+}
+
+.controls-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--yct-font-size-12);
+  line-height: 1.55;
+}
+
+.controls-doc-table th,
+.controls-doc-table td {
+  padding: var(--yct-space-2) var(--yct-space-3);
+  border-bottom: 1px solid var(--yct-color-border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.controls-doc-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.controls-doc-table th {
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.controls-doc-table td:first-child {
+  color: var(--yct-color-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.controls-doc-table code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--yct-font-size-11);
+  overflow-wrap: anywhere;
+}
+
+.controls-doc-anatomy,
+.controls-doc-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-13);
+  line-height: 1.65;
+}
+
+.controls-doc-anatomy strong {
+  color: var(--yct-color-text);
+}
+
+.controls-doc-dos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: var(--yct-space-3);
+}
+
+.controls-doc-do,
+.controls-doc-dont {
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+}
+
+.controls-doc-do h4,
+.controls-doc-dont h4 {
+  margin: 0 0 6px;
+  font-size: var(--yct-font-size-12);
+  font-weight: 800;
+}
+
+.controls-doc-do h4 {
+  color: var(--yct-color-success-strong);
+}
+
+.controls-doc-dont h4 {
+  color: var(--yct-color-danger);
+}
+
+.controls-doc-do ul,
+.controls-doc-dont ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  line-height: 1.6;
+}
+
+.controls-doc-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.controls-doc-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--yct-control-height-sm);
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+  text-decoration: none;
+}
+
+.controls-doc-links a:hover {
+  background: var(--yct-color-interaction-hover);
+}
+
+@media (max-width: 1100px) {
+  .controls-catalog {
+    top: 80px;
+  }
+}
+
+/* 窄屏表格不再逐字换行：保持可读列宽，交给容器横向滚动。 */
+@media (max-width: 720px) {
+  .controls-doc-table {
+    min-width: 480px;
+  }
+
+  .controls-doc-table td:first-child {
+    white-space: normal;
+  }
+}

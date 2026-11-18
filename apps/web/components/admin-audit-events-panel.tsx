@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { AdminRefreshButton } from './admin-refresh-button';
 import { SegmentedControl } from './segmented-control';
+import { Button } from './ui/button';
 
 type AdminAuditStatusFilter = AdminAuditEventRecord['status'] | 'all';
 
@@ -297,9 +298,8 @@ export function AdminAuditEventsPanel() {
         ) : null}
       </div>
       <div className="admin-analytics-pagination">
-        <button
-          className="secondary-action-button"
-          type="button"
+        <Button
+          variant="secondary"
           disabled={offset === 0 || isBusy}
           onClick={() => void loadAuditEvents(Math.max(offset - pageSize, 0))}
         >
@@ -307,15 +307,14 @@ export function AdminAuditEventsPanel() {
             chevron_left
           </span>
           <span>上一页</span>
-        </button>
+        </Button>
         <span>
           {total === 0
             ? '共 0 条'
             : `第 ${offset + 1}-${Math.min(offset + pageSize, total)} 条 / 共 ${total} 条`}
         </span>
-        <button
-          className="secondary-action-button"
-          type="button"
+        <Button
+          variant="secondary"
           disabled={offset + pageSize >= total || isBusy}
           onClick={() => void loadAuditEvents(offset + pageSize)}
         >
@@ -323,7 +322,7 @@ export function AdminAuditEventsPanel() {
           <span className="material-symbols-outlined" aria-hidden="true">
             chevron_right
           </span>
-        </button>
+        </Button>
       </div>
     </section>
   );

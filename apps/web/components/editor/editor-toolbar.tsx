@@ -1,14 +1,9 @@
 'use client';
 
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { EditorTool } from '../../lib/editor/types';
 import { EditorToolbarActionButton } from './editor-toolbar-actions';
+import { EditorPanelTogglePortal } from './editor-panel-toggle-portal';
 import {
   EditorToolbarOverflowMenu,
   type EditorToolbarOverflowItem,
@@ -230,6 +225,7 @@ export function EditorToolbar({
     ) : null;
 
   let managedIndex = 0;
+  const inHeader = className?.split(/\s+/).includes('is-in-header') ?? false;
 
   return (
     <div
@@ -238,22 +234,7 @@ export function EditorToolbar({
       aria-label={ariaLabel}
       ref={toolbarRef}
     >
-      {panels ? (
-        <div className="editor-toolbar-group">
-          <button
-            aria-expanded={panels.visible}
-            aria-label={panels.label ?? '面板'}
-            className={`editor-toolbar-button${panels.visible ? ' is-active' : ''}`}
-            onClick={panels.onToggle}
-            title={panels.label ?? '面板'}
-            type="button"
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              view_sidebar
-            </span>
-          </button>
-        </div>
-      ) : null}
+      {panels && inHeader ? <EditorPanelTogglePortal panels={panels} /> : null}
       {resolvedSections.map((section) => {
         if (visibleSectionIds.has(section.id)) {
           const index = managedIndex;

@@ -6,6 +6,9 @@ tmp/
 artifacts/
 .turbo/
 .workbuddy-ai/
+.pnpm-store/
+.screenshots/
+/card-*.png
 node_modules/
 dist/
 coverage/
@@ -18,6 +21,7 @@ packages/schemas/src/*.js
 .env
 .env.*
 !.env.example
+integrations/qq-bot/state/
 pnpm-debug.log*
 npm-debug.log*
 yarn-debug.log*

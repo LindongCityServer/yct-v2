@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { appPath } from '../lib/app-paths';
 import { useI18n } from '../lib/client-i18n';
+import { ButtonLink } from './ui/button';
 
 export function OfflinePageContent() {
   const { t } = useI18n();
@@ -15,30 +16,18 @@ export function OfflinePageContent() {
       <h1 id="offline-title">{t('offline.title')}</h1>
       <p>{t('offline.description')}</p>
       <div className="settings-action-row" aria-label={t('offline.actions')}>
-        <Link className="secondary-action-button" href={appPath('/')}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            article
-          </span>
-          <span>{t('offline.operations')}</span>
-        </Link>
-        <Link className="secondary-action-button" href={appPath('/map')}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            map
-          </span>
-          <span>{t('offline.map')}</span>
-        </Link>
-        <Link className="secondary-action-button" href={appPath('/travel/schedules')}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            departure_board
-          </span>
-          <span>{t('offline.schedules')}</span>
-        </Link>
-        <Link className="secondary-action-button" href={appPath('/account')}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            download_for_offline
-          </span>
-          <span>{t('offline.manageAfterOnline')}</span>
-        </Link>
+        <ButtonLink variant="secondary" href={appPath('/')} icon="article">
+          {t('offline.operations')}
+        </ButtonLink>
+        <ButtonLink variant="secondary" href={appPath('/map')} icon="map">
+          {t('offline.map')}
+        </ButtonLink>
+        <ButtonLink variant="secondary" href={appPath('/travel/schedules')} icon="departure_board">
+          {t('offline.schedules')}
+        </ButtonLink>
+        <ButtonLink variant="secondary" href={appPath('/account')} icon="download_for_offline">
+          {t('offline.manageAfterOnline')}
+        </ButtonLink>
       </div>
       <p className="settings-row-note">{t('offline.note')}</p>
     </section>

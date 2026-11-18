@@ -1,0 +1,17 @@
+{
+  "name": "yct-qq-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "雨城通「问一问」的 QQ 官方机器人接入层（零运行时依赖）",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.mjs",
+    "check": "node src/index.mjs --check",
+    "probe": "node src/index.mjs --probe",
+    "ask": "node src/index.mjs --ask",
+    "test": "node --test test"
+  }
+}

@@ -1,0 +1,94 @@
+# 问一问 QQ 机器人
+
+把雨城通「问一问」接到 QQ 官方机器人：群里 @ 机器人或单聊提问，回答仍由站内
+`/api/assistant/chat` 生成，检索、工具和引用与网页端完全一致。
+
+- **零运行时依赖**：只需要 Node.js 22 或更高版本（当前部署用 Node 24），不用 `pnpm install`，没有 `node_modules`。
+- **独立进程**：不进入 Next.js 部署包，网页发版、重启都不影响机器人进程。
+- **只需出站网络**：通过 QQ 网关 WebSocket 收事件，不需要公网回调地址或证书。
+- **聊天式回复**：默认 `QQ_BOT_STYLE=chat`，请求会带 `channel` 让问一问按 QQ 语境缩短回答；
+  超过约 240 字会再调用一次模型精炼到 180 字左右，失败则本地按整句取舍，最长 360 字。
+  需要网页版完整格式时改 `QQ_BOT_STYLE=full`。
+- **卡片转文字**：网页版的 `ui` 卡片指令会按引用还原成地点列表、线路站点和班次时间，不会丢内容或发 JSON。
+- **无链接、无表格**：URL（含 `www.`、裸域名）会被去掉，Markdown 表格会转成自然语言列表。
+- **快捷指令**：`/随机`、`/骰子`、`/算`、`/电码`、`/gb2312`、`/天气`、`/ip`、`/历史`、`/对联`；
+  也支持自然触发词（`计算 1+2`、`上海天气`、`历史上的今天`、`菜单`）。这些在本地处理，
+  不经过问一问，详见 [快捷指令文档](../../docs/QQ_BOT_COMMANDS.md)。
+  `/天气` 配置 `QQ_BOT_AMAP_KEY` 时走高德，未配置则回退 wttr.in。
+- **群互动**：`签到`、`签到榜`、`发言统计 [天数]`、`发言榜 [天数]`、`今日运势`、`重置运势`；
+  状态保存在 `state/`，更新时保留。
+- **指令卡片**：除签到、帮助、关于、新对话外，本地指令会在文字后附一张 720px PNG，
+  版式对齐地图分享卡片（主题色渐变、Material Symbols 图标、胶囊 meta、列表和原始品牌图标）；
+  需 `YCT_PUBLIC_BASE_URL` 和 `QQ_BOT_CARDS=1`。
+- **回答配图**：运营内容引用带封面时，可在文字后补一张图片（需 `YCT_PUBLIC_BASE_URL` 和
+  `QQ_BOT_IMAGES=1`），会占用一次被动回复。
+
+完整接入步骤、平台配置和排障见 [docs/QQ_BOT.md](../../docs/QQ_BOT.md)。
+
+## 1. 填密钥
+
+编辑本目录的 `.env`（已被 `.gitignore` 忽略，不会提交）：
+
+```dotenv
+QQ_BOT_APP_ID=你的机器人 AppID
+QQ_BOT_APP_SECRET=你的机器人 AppSecret
+YCT_ASSISTANT_KEY=模型服务商的 API Key
+```
+
+`YCT_BASE_URL` 默认是 `http://127.0.0.1:3300`，即网页服务在本机的监听地址。
+
+## 2. 三步自检
+
+```powershell
+node src/index.mjs --check          # 配置 + QQ 凭证 + 网关 + 网页健康
+node src/index.mjs --ask "中华路沿线有哪些公交站"   # 不连 QQ，直接测问一问
+node src/index.mjs --probe          # 连网关等 READY，确认事件权限
+```
+
+## 3. 启动
+
+```powershell
+node src/index.mjs
+```
+
+Windows 服务器建议用启动脚本常驻（自动重启、按天写 UTF-8 日志）。
+脚本需要 PowerShell 7（`pwsh`）：5.1 会把无 BOM 的 UTF-8 脚本读成乱码。
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-qq-bot.ps1 -NodePath "C:\node-v24\node.exe"
+```
+
+需要开机自启时，以管理员身份运行：
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -NodePath "C:\node-v24\node.exe"
+```
+
+## 文件说明
+
+| 文件                       | 作用                                                         |
+| -------------------------- | ------------------------------------------------------------ |
+| `src/index.mjs`            | 命令行入口：常驻运行、`--check`、`--probe`、`--ask`          |
+| `src/gateway.mjs`          | QQ 网关 WebSocket：Hello/Identify/Resume、心跳、压缩帧、重连 |
+| `src/qq-api.mjs`           | access_token、网关地址、群聊/单聊消息、输入状态              |
+| `src/assistant-client.mjs` | 调用 `/api/assistant/chat` 并消费 SSE                        |
+| `src/condense.mjs`         | 长回答二次精炼（直连模型服务商，失败自动回退）               |
+| `src/answer.mjs`           | Markdown 转 QQ 纯文本、表格转列表、按句取舍、分段            |
+| `src/bot.mjs`              | 事件处理、去重、限流、被动回复序号、对话上下文               |
+| `src/commands.mjs`         | 本地快捷指令分发                                             |
+| `src/community.mjs`        | 签到、发言统计、今日运势与本地状态                           |
+| `src/images.mjs`           | 从引用里挑选可发送的配图                                     |
+| `src/calc.mjs`             | 安全算式求值，不调用 eval                                    |
+| `src/random.mjs`           | 随机整数与骰子                                               |
+| `src/weather.mjs`          | 高德天气（优先）与 wttr.in 回退                              |
+| `src/ip.mjs`               | IP 属地查询（ipwho.is，失败回退 ipapi.co）                   |
+| `src/history.mjs`          | 历史上的今天（百度百科按月数据）                             |
+| `src/couplet.mjs`          | 对对联提示词与模型调用                                       |
+| `src/model-api.mjs`        | 模型服务商兼容接口封装                                       |
+| `data/`                    | 中文电码与 GB2312 静态表                                     |
+| `state/`                   | 签到、发言统计和运势状态；更新时保留                         |
+| `src/conversation.mjs`     | 对话记录、限流器、去重集合、会话队列                         |
+| `src/config.mjs`           | `.env` 读取与校验                                            |
+| `start-qq-bot.ps1`         | Windows 常驻启动脚本（自动重启 + 日志）                      |
+| `install-qq-bot-task.ps1`  | 注册/卸载开机计划任务                                        |
+| `test/`                    | `node --test test`，不依赖网络和真实 QQ 凭证                 |

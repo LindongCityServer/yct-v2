@@ -13,6 +13,9 @@ import {
   type TripReminderState,
 } from '../lib/client-trip-reminders';
 import { useI18n } from '../lib/client-i18n';
+import { Button, IconButton } from './ui/button';
+import { EmptyState, FormErrorText } from './ui/status';
+import { Modal } from './ui/modal';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
@@ -119,12 +122,9 @@ export function TripReminderPanel() {
           <span className="trip-local-badge">
             {t('tripReminder.localBadge', { count: state?.summary.localOnly ?? 0 })}
           </span>
-          <button className="primary-action-button" type="button" onClick={() => setFormOpen(true)}>
-            <span className="material-symbols-outlined" aria-hidden="true">
-              add_alarm
-            </span>
-            <span>{t('tripReminder.add')}</span>
-          </button>
+          <Button icon="add_alarm" onClick={() => setFormOpen(true)}>
+            {t('tripReminder.add')}
+          </Button>
         </div>
       </div>
 
@@ -135,81 +135,69 @@ export function TripReminderPanel() {
       ) : null}
 
       {formOpen ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setFormOpen(false)}>
-          <section
-            className="modal-panel trip-reminder-modal"
-            aria-labelledby="trip-reminder-form-title"
-            role="dialog"
-            aria-modal="true"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="section-heading">
-              <h3 id="trip-reminder-form-title">{t('tripReminder.formTitle')}</h3>
-              <button
-                className="icon-action-button"
-                type="button"
-                onClick={() => setFormOpen(false)}
-                aria-label={t('tripReminder.close')}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            </div>
-            <form className="trip-reminder-form" id={reminderFormId} onSubmit={createReminder}>
-              <label>
-                <span>{t('tripReminder.field.title')}</span>
-                <input
-                  autoFocus
-                  value={draft.title}
-                  onChange={(event) => updateDraft('title', event.currentTarget.value)}
-                  placeholder={t('tripReminder.placeholder.title')}
-                />
-              </label>
-              <label>
-                <span>{t('tripReminder.field.remindAt')}</span>
-                <input
-                  type="datetime-local"
-                  value={draft.remindAt}
-                  onChange={(event) => updateDraft('remindAt', event.currentTarget.value)}
-                />
-              </label>
-              <label>
-                <span>{t('tripReminder.field.departure')}</span>
-                <input
-                  value={draft.departure}
-                  onChange={(event) => updateDraft('departure', event.currentTarget.value)}
-                  placeholder={t('tripReminder.placeholder.optional')}
-                />
-              </label>
-              <label>
-                <span>{t('tripReminder.field.arrival')}</span>
-                <input
-                  value={draft.arrival}
-                  onChange={(event) => updateDraft('arrival', event.currentTarget.value)}
-                  placeholder={t('tripReminder.placeholder.optional')}
-                />
-              </label>
-              <label>
-                <span>{t('tripReminder.field.lineName')}</span>
-                <input
-                  value={draft.lineName}
-                  onChange={(event) => updateDraft('lineName', event.currentTarget.value)}
-                  placeholder={t('tripReminder.placeholder.optional')}
-                />
-              </label>
-            </form>
-            {errorText ? <p className="form-error-text">{errorText}</p> : null}
-            <div className="admin-content-actions">
-              <button className="primary-action-button" type="submit" form={reminderFormId}>
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  add_alarm
-                </span>
-                <span>{t('tripReminder.add')}</span>
-              </button>
-            </div>
-          </section>
-        </div>
+        <Modal
+          labelledBy="trip-reminder-form-title"
+          className="trip-reminder-modal"
+          onBackdropClick={() => setFormOpen(false)}
+        >
+          <div className="section-heading">
+            <h3 id="trip-reminder-form-title">{t('tripReminder.formTitle')}</h3>
+            <IconButton
+              icon="close"
+              label={t('tripReminder.close')}
+              onClick={() => setFormOpen(false)}
+            />
+          </div>
+          <form className="trip-reminder-form" id={reminderFormId} onSubmit={createReminder}>
+            <label>
+              <span>{t('tripReminder.field.title')}</span>
+              <input
+                autoFocus
+                value={draft.title}
+                onChange={(event) => updateDraft('title', event.currentTarget.value)}
+                placeholder={t('tripReminder.placeholder.title')}
+              />
+            </label>
+            <label>
+              <span>{t('tripReminder.field.remindAt')}</span>
+              <input
+                type="datetime-local"
+                value={draft.remindAt}
+                onChange={(event) => updateDraft('remindAt', event.currentTarget.value)}
+              />
+            </label>
+            <label>
+              <span>{t('tripReminder.field.departure')}</span>
+              <input
+                value={draft.departure}
+                onChange={(event) => updateDraft('departure', event.currentTarget.value)}
+                placeholder={t('tripReminder.placeholder.optional')}
+              />
+            </label>
+            <label>
+              <span>{t('tripReminder.field.arrival')}</span>
+              <input
+                value={draft.arrival}
+                onChange={(event) => updateDraft('arrival', event.currentTarget.value)}
+                placeholder={t('tripReminder.placeholder.optional')}
+              />
+            </label>
+            <label>
+              <span>{t('tripReminder.field.lineName')}</span>
+              <input
+                value={draft.lineName}
+                onChange={(event) => updateDraft('lineName', event.currentTarget.value)}
+                placeholder={t('tripReminder.placeholder.optional')}
+              />
+            </label>
+          </form>
+          {errorText ? <FormErrorText>{errorText}</FormErrorText> : null}
+          <div className="admin-content-actions">
+            <Button type="submit" form={reminderFormId} icon="add_alarm">
+              {t('tripReminder.add')}
+            </Button>
+          </div>
+        </Modal>
       ) : null}
 
       <TripReminderList
@@ -282,49 +270,31 @@ function TripReminderList({
               <div className="trip-reminder-actions">
                 {!compact ? (
                   <>
-                    <button
-                      className="icon-action-button"
-                      type="button"
+                    <IconButton
+                      icon="task_alt"
+                      label={t('tripReminder.action.complete')}
                       onClick={() => onComplete(reminder, 'completed')}
-                      aria-label={t('tripReminder.action.complete')}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        task_alt
-                      </span>
-                    </button>
-                    <button
-                      className="icon-action-button"
-                      type="button"
+                    />
+                    <IconButton
+                      icon="notifications_off"
+                      label={t('tripReminder.action.cancel')}
                       onClick={() => onCancel(reminder, 'cancelled')}
-                      aria-label={t('tripReminder.action.cancel')}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        notifications_off
-                      </span>
-                    </button>
+                    />
                   </>
                 ) : null}
-                <button
-                  className="icon-action-button"
-                  type="button"
+                <IconButton
+                  icon="delete"
+                  label={t('tripReminder.action.delete')}
                   onClick={() => onDelete(reminder)}
-                  aria-label={t('tripReminder.action.delete')}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    delete
-                  </span>
-                </button>
+                />
               </div>
             </article>
           ))}
         </div>
       ) : (
-        <div className="empty-state is-compact">
-          <span className="material-symbols-outlined" aria-hidden="true">
-            event_upcoming
-          </span>
+        <EmptyState icon="event_upcoming" compact>
           <p>{emptyText}</p>
-        </div>
+        </EmptyState>
       )}
     </section>
   );

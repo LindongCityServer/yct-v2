@@ -12,6 +12,9 @@ import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { roadNameTranslationEntityId } from '../lib/entity-translation-keys';
 import { isMapRoadGeometryMarker } from '../lib/map-road-geometry';
 import { AdminRefreshButton } from './admin-refresh-button';
+import { StatusText } from './ui/status';
+import { Chip } from './ui/chip';
+import { SearchField } from './ui/field';
 
 type EntityTranslationDraft = LocalizedLabelMap & {
   roadSignPinyin?: string;
@@ -219,42 +222,29 @@ export function AdminEntityTranslationsPanel() {
       </div>
 
       <div className="admin-translation-toolbar">
-        <label className="search-box">
-          <span className="material-symbols-outlined" aria-hidden="true">
-            search
-          </span>
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder="搜索源名称、实体 ID 或译名"
-          />
-        </label>
+        <SearchField
+          as="label"
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+          placeholder="搜索源名称、实体 ID 或译名"
+        />
         <div className="category-strip" aria-label="翻译实体类型">
           {kindOptions.map((option) => (
-            <button
-              className={
-                filter === option.value
-                  ? 'category-chip tone-primary is-active'
-                  : 'category-chip tone-primary'
-              }
-              type="button"
-              aria-pressed={filter === option.value}
-              onClick={() => setFilter(option.value)}
+            <Chip
               key={option.value}
+              tone="primary"
+              active={filter === option.value}
+              icon={option.icon}
+              onClick={() => setFilter(option.value)}
             >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {option.icon}
-              </span>
-              <span>{option.label}</span>
-            </button>
+              {option.label}
+            </Chip>
           ))}
         </div>
       </div>
 
-      <p className="status-note" role="status">
-        {status}
-      </p>
+      <StatusText role="status">{status}</StatusText>
       <div className="admin-translation-list">
         {visibleEntities.map((entity) => {
           const key = translationEntityKey(entity);

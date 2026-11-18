@@ -4,6 +4,8 @@ import type { TransitScreenGate, TransitScreenSnapshot, TransitScreenTrip } from
 import { useMemo, useState } from 'react';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { formatFareTextWithoutCurrencyUnit } from '../lib/fare-display';
+import { EmptyState } from './ui/status';
+import { SearchField } from './ui/field';
 
 type TimeFilter = 'all' | 'upcoming' | 'past';
 
@@ -11,13 +13,15 @@ export function TransitScreenEmptyState({ message }: Readonly<{ message?: string
   const { t } = useI18n();
 
   return (
-    <section className="module-panel empty-state" aria-labelledby="screen-empty-title">
-      <span className="material-symbols-outlined" aria-hidden="true">
-        departure_board
-      </span>
+    <EmptyState
+      as="section"
+      className="module-panel"
+      aria-labelledby="screen-empty-title"
+      icon="departure_board"
+    >
       <h2 id="screen-empty-title">{t('transitScreen.empty.unavailable')}</h2>
       <p>{message ?? t('transitScreen.empty.noData')}</p>
-    </section>
+    </EmptyState>
   );
 }
 
@@ -95,30 +99,16 @@ export function TransitScreenDetailPanel({
       </div>
 
       <div className="screen-filter-panel" aria-label={t('travel.screenDetail.filterAria')}>
-        <div className="search-box screen-search-box">
-          <span className="material-symbols-outlined" aria-hidden="true">
-            search
-          </span>
-          <input
-            type="search"
-            aria-label={t('travel.screenDetail.search')}
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder={t('travel.screenDetail.search')}
-          />
-          {query ? (
-            <button
-              className="search-clear-button"
-              type="button"
-              aria-label={t('travel.screenDetail.searchClear')}
-              onClick={() => setQuery('')}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                close
-              </span>
-            </button>
-          ) : null}
-        </div>
+        <SearchField
+          className="screen-search-box"
+          type="search"
+          aria-label={t('travel.screenDetail.search')}
+          value={query}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+          placeholder={t('travel.screenDetail.search')}
+          clearLabel={t('travel.screenDetail.searchClear')}
+          onClear={() => setQuery('')}
+        />
 
         <div className="screen-filter-grid">
           <label>
@@ -190,12 +180,9 @@ export function TransitScreenDetailPanel({
           ))}
         </div>
       ) : (
-        <div className="empty-state">
-          <span className="material-symbols-outlined" aria-hidden="true">
-            event_busy
-          </span>
+        <EmptyState icon="event_busy">
           <p>{t('travel.screenDetail.empty')}</p>
-        </div>
+        </EmptyState>
       )}
     </section>
   );

@@ -5,6 +5,9 @@ import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { AdminRefreshButton } from './admin-refresh-button';
 import { SegmentedControl } from './segmented-control';
+import { Eyebrow } from './ui/status';
+import { CheckboxRow } from './ui/checkbox-row';
+import { IconButton } from './ui/button';
 import { METRO_WAYFINDING_TEMPLATE_ID, parseMetroWayfindingLayout } from '../lib/metro-wayfinding';
 import { MetroWayfindingExamplePreviewElement } from './metro-wayfinding-editor';
 
@@ -349,7 +352,16 @@ export function AdminMaterialsPanel() {
         if (!query) {
           return true;
         }
-        return [item.actorName, item.actorId, item.templateTitle, item.templateId, item.contentSummary, item.ipLocation, item.ipAddress, item.id]
+        return [
+          item.actorName,
+          item.actorId,
+          item.templateTitle,
+          item.templateId,
+          item.contentSummary,
+          item.ipLocation,
+          item.ipAddress,
+          item.id,
+        ]
           .filter(Boolean)
           .join(' ')
           .toLocaleLowerCase('zh-CN')
@@ -362,7 +374,7 @@ export function AdminMaterialsPanel() {
     <section className="admin-materials-panel" aria-label="物料后台">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">物料后台</span>
+          <Eyebrow>物料后台</Eyebrow>
           <h1>模板与审核</h1>
         </div>
         <div className="admin-content-actions">
@@ -414,166 +426,165 @@ export function AdminMaterialsPanel() {
       />
 
       {activeSection === 'templates' ? (
-      <div className="admin-materials-list">
-        {templates.length ? (
-          templates.map((record) => {
-            const version = latestVersion(record);
-            if (!version) {
-              return null;
-            }
-            return (
-              <article className="admin-material-template" key={record.id}>
-                <div>
-                  <div className="admin-material-template-heading">
-                    <strong>{version.title}</strong>
-                    <span>{familyLabels[version.family]}</span>
+        <div className="admin-materials-list">
+          {templates.length ? (
+            templates.map((record) => {
+              const version = latestVersion(record);
+              if (!version) {
+                return null;
+              }
+              return (
+                <article className="admin-material-template" key={record.id}>
+                  <div>
+                    <div className="admin-material-template-heading">
+                      <strong>{version.title}</strong>
+                      <span>{familyLabels[version.family]}</span>
+                    </div>
+                    <p>{version.description || '无说明'}</p>
+                    <small>
+                      {record.id} · 最新版本 v{version.version} · {statusLabel(version.status)}
+                    </small>
                   </div>
-                  <p>{version.description || '无说明'}</p>
-                  <small>
-                    {record.id} · 最新版本 v{version.version} · {statusLabel(version.status)}
-                  </small>
-                </div>
-                <div className="admin-content-actions">
-                  <button type="button" onClick={() => openRevision(record)} disabled={isBusy}>
-                    修订
-                  </button>
-                  {version.status === 'draft' ? (
-                    <button
-                      type="button"
-                      className="is-primary"
-                      onClick={() => void publishVersion(record, version)}
-                      disabled={isBusy}
-                    >
-                      发布
+                  <div className="admin-content-actions">
+                    <button type="button" onClick={() => openRevision(record)} disabled={isBusy}>
+                      修订
                     </button>
-                  ) : null}
-                </div>
-              </article>
-            );
-          })
-        ) : (
-          <p className="admin-content-empty">当前还没有模板，可直接新建模板草稿。</p>
-        )}
-      </div>
+                    {version.status === 'draft' ? (
+                      <button
+                        type="button"
+                        className="is-primary"
+                        onClick={() => void publishVersion(record, version)}
+                        disabled={isBusy}
+                      >
+                        发布
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })
+          ) : (
+            <p className="admin-content-empty">当前还没有模板，可直接新建模板草稿。</p>
+          )}
+        </div>
       ) : null}
 
       {activeSection === 'drafts' ? (
-      <section className="admin-material-review-list" aria-labelledby="material-review-heading">
-        <div className="admin-material-review-heading">
-          <h2 id="material-review-heading">待审核物料</h2>
-          <span>{pendingDrafts.length}</span>
-        </div>
-        {pendingDrafts.length ? (
-          pendingDrafts.map((draft) => (
-            <article className="admin-material-draft" key={draft.id}>
-              <div>
-                <strong>
-                  {templateVersionByKey.get(`${draft.templateId}:${draft.templateVersion}`)
-                    ?.title ?? draft.templateId}{' '}
-                  · v{draft.templateVersion} · {materialDraftStatusLabel(draft.status)}
-                </strong>
-                <div className="admin-material-draft-content">
-                  {formatMaterialDraftInput(
-                    draft,
-                    templateVersionByKey.get(`${draft.templateId}:${draft.templateVersion}`),
-                  )}
-                  <p>
-                    画布：{draft.canvas.widthM} × {draft.canvas.heightM} 米，输出基准{' '}
-                    {draft.canvas.tileSizePx} px
-                  </p>
+        <section className="admin-material-review-list" aria-labelledby="material-review-heading">
+          <div className="admin-material-review-heading">
+            <h2 id="material-review-heading">待审核物料</h2>
+            <span>{pendingDrafts.length}</span>
+          </div>
+          {pendingDrafts.length ? (
+            pendingDrafts.map((draft) => (
+              <article className="admin-material-draft" key={draft.id}>
+                <div>
+                  <strong>
+                    {templateVersionByKey.get(`${draft.templateId}:${draft.templateVersion}`)
+                      ?.title ?? draft.templateId}{' '}
+                    · v{draft.templateVersion} · {materialDraftStatusLabel(draft.status)}
+                  </strong>
+                  <div className="admin-material-draft-content">
+                    {formatMaterialDraftInput(
+                      draft,
+                      templateVersionByKey.get(`${draft.templateId}:${draft.templateVersion}`),
+                    )}
+                    <p>
+                      画布：{draft.canvas.widthM} × {draft.canvas.heightM} 米，输出基准{' '}
+                      {draft.canvas.tileSizePx} px
+                    </p>
+                  </div>
+                  <small>
+                    发起者：{formatActor(draft.createdBy, actorById)} · 提交于{' '}
+                    {formatTime(draft.submittedAt ?? draft.createdAt)} · 草稿 ID：{draft.id}
+                  </small>
                 </div>
-                <small>
-                  发起者：{formatActor(draft.createdBy, actorById)} · 提交于{' '}
-                  {formatTime(draft.submittedAt ?? draft.createdAt)} · 草稿 ID：{draft.id}
-                </small>
-              </div>
-              <div className="admin-content-actions">
-                <button
-                  type="button"
-                  onClick={() => void reviewDraft(draft, 'rejected')}
-                  disabled={isBusy}
-                >
-                  驳回
-                </button>
-                <button
-                  type="button"
-                  className="is-primary"
-                  onClick={() => void reviewDraft(draft, 'approved')}
-                  disabled={isBusy}
-                >
-                  通过
-                </button>
-              </div>
-            </article>
-          ))
-        ) : (
-          <p className="admin-content-empty">当前没有待审核物料。</p>
-        )}
-      </section>
+                <div className="admin-content-actions">
+                  <button
+                    type="button"
+                    onClick={() => void reviewDraft(draft, 'rejected')}
+                    disabled={isBusy}
+                  >
+                    驳回
+                  </button>
+                  <button
+                    type="button"
+                    className="is-primary"
+                    onClick={() => void reviewDraft(draft, 'approved')}
+                    disabled={isBusy}
+                  >
+                    通过
+                  </button>
+                </div>
+              </article>
+            ))
+          ) : (
+            <p className="admin-content-empty">当前没有待审核物料。</p>
+          )}
+        </section>
       ) : null}
 
       {activeSection === 'audits' ? (
-      <section
-        className="admin-material-review-list"
-        aria-labelledby="material-export-audit-heading"
-      >
-        <div className="admin-material-review-heading">
-          <h2 id="material-export-audit-heading">下载与预览记录</h2>
-          <span>
-            {filteredExports.length} / {exports.length}
-          </span>
-        </div>
-        <div className="admin-material-audit-toolbar">
-          <label className="admin-material-audit-search">
-            <span className="material-symbols-outlined" aria-hidden="true">
-              search
+        <section
+          className="admin-material-review-list"
+          aria-labelledby="material-export-audit-heading"
+        >
+          <div className="admin-material-review-heading">
+            <h2 id="material-export-audit-heading">下载与预览记录</h2>
+            <span>
+              {filteredExports.length} / {exports.length}
             </span>
-            <input
-              type="search"
-              value={auditQuery}
-              placeholder="搜索用户、模板、内容、属地或图片 ID"
-              onChange={(event) => setAuditQuery(event.currentTarget.value)}
-            />
-          </label>
-          <div className="admin-material-audit-filter">
-            <span>类型</span>
-            <SegmentedControl
-              ariaLabel="记录类型"
-              className="material-mode-switch material-variant-switch"
-              value={auditKind}
-              onChange={setAuditKind}
-              options={[
-                { value: 'all', label: '全部' },
-                { value: 'preview', label: '预览' },
-                { value: 'export', label: '下载' },
-              ]}
-            />
           </div>
-          <div className="admin-material-audit-filter">
-            <span>水印</span>
-            <SegmentedControl
-              ariaLabel="水印筛选"
-              className="material-mode-switch material-variant-switch"
-              value={auditWatermark}
-              onChange={setAuditWatermark}
-              options={[
-                { value: 'all', label: '全部' },
-                { value: 'free', label: '无水印' },
-                { value: 'watermarked', label: '带水印' },
-              ]}
-            />
+          <div className="admin-material-audit-toolbar">
+            <label className="admin-material-audit-search">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                search
+              </span>
+              <input
+                type="search"
+                value={auditQuery}
+                placeholder="搜索用户、模板、内容、属地或图片 ID"
+                onChange={(event) => setAuditQuery(event.currentTarget.value)}
+              />
+            </label>
+            <div className="admin-material-audit-filter">
+              <span>类型</span>
+              <SegmentedControl
+                ariaLabel="记录类型"
+                className="material-mode-switch material-variant-switch"
+                value={auditKind}
+                onChange={setAuditKind}
+                options={[
+                  { value: 'all', label: '全部' },
+                  { value: 'preview', label: '预览' },
+                  { value: 'export', label: '下载' },
+                ]}
+              />
+            </div>
+            <div className="admin-material-audit-filter">
+              <span>水印</span>
+              <SegmentedControl
+                ariaLabel="水印筛选"
+                className="material-mode-switch material-variant-switch"
+                value={auditWatermark}
+                onChange={setAuditWatermark}
+                options={[
+                  { value: 'all', label: '全部' },
+                  { value: 'free', label: '无水印' },
+                  { value: 'watermarked', label: '带水印' },
+                ]}
+              />
+            </div>
           </div>
-        </div>
-        {filteredExports.length ? (
-          filteredExports.slice(0, 20).map((item) => (
+          {filteredExports.length ? (
+            filteredExports.slice(0, 20).map((item) => (
               <article className="admin-material-draft" key={item.id}>
                 <div>
                   <strong>
                     {item.kind === 'preview' ? '预览' : '下载'} ·{' '}
                     {item.templateTitle ??
-                      templateVersionByKey.get(
-                        `${item.templateId}:${item.templateVersion}`,
-                      )?.title ??
+                      templateVersionByKey.get(`${item.templateId}:${item.templateVersion}`)
+                        ?.title ??
                       item.templateId}{' '}
                     · v{item.templateVersion} · {item.outputWidthPx} × {item.outputHeightPx} px
                     {item.contentSummary ? ` · ${item.contentSummary}` : ''}
@@ -583,24 +594,20 @@ export function AdminMaterialsPanel() {
                     {item.ipLocation ?? '未知属地'}
                     {item.ipAddress ? `（${item.ipAddress}）` : ''} · 来源：
                     {formatMaterialSource(item)} · 图片 ID：{item.id.slice(-12)} ·{' '}
-                    {item.watermark === false
-                      ? '无水印'
-                      : item.watermark
-                        ? '带水印'
-                        : '水印未知'}{' '}
-                    · {formatTime(item.requestedAt)}
+                    {item.watermark === false ? '无水印' : item.watermark ? '带水印' : '水印未知'} ·{' '}
+                    {formatTime(item.requestedAt)}
                   </small>
                 </div>
               </article>
             ))
-        ) : (
-          <p className="admin-content-empty">
-            {exports.length
-              ? '没有匹配的记录，试试放宽搜索或筛选条件。'
-              : '当前没有下载或预览记录。'}
-          </p>
-        )}
-      </section>
+          ) : (
+            <p className="admin-content-empty">
+              {exports.length
+                ? '没有匹配的记录，试试放宽搜索或筛选条件。'
+                : '当前没有下载或预览记录。'}
+            </p>
+          )}
+        </section>
       ) : null}
 
       {isEditorOpen ? (
@@ -614,17 +621,13 @@ export function AdminMaterialsPanel() {
           >
             <div className="admin-material-editor-heading">
               <h2>{editingRecord ? '创建模板修订' : '创建模板'}</h2>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="关闭"
+              <IconButton
+                variant="icon"
+                icon="close"
+                label="关闭"
                 onClick={closeEditor}
                 disabled={isBusy}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
+              />
             </div>
             <label>
               <span>模板名称</span>
@@ -730,14 +733,11 @@ export function AdminMaterialsPanel() {
                 required
               />
             </label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={editor.alignToTile}
-                onChange={(event) => updateEditorField('alignToTile', event.currentTarget.checked)}
-              />
-              <span>对齐到整数地图画尺寸</span>
-            </label>
+            <CheckboxRow
+              checked={editor.alignToTile}
+              label="对齐到整数地图画尺寸"
+              onChange={(event) => updateEditorField('alignToTile', event.currentTarget.checked)}
+            />
             {editorError ? <p className="muted admin-poi-dialog-error">{editorError}</p> : null}
             <div className="admin-content-actions admin-material-editor-actions">
               <button type="button" onClick={closeEditor} disabled={isBusy}>

@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { TransitModeProfile } from '@yct/contracts';
 import { appPath } from '../lib/app-paths';
+import { Chip } from './ui/chip';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import type { TransitLineSummary, TransitModeSummary } from '../lib/legacy-transit';
 import { TitleWithBreaks } from './title-with-breaks';
@@ -148,36 +149,24 @@ export function TransitLineBrowser({
         className="category-strip transit-filter-strip"
         aria-label={t('transitLineBrowser.filterAria')}
       >
-        <button
-          className={
-            activeMode === 'all'
-              ? 'category-chip tone-primary is-active'
-              : 'category-chip tone-primary'
-          }
-          type="button"
+        <Chip
+          tone="primary"
+          active={activeMode === 'all'}
+          icon="route"
           onClick={() => setActiveMode('all')}
         >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            route
-          </span>
-          <span>{t('map.route.mode.all')}</span>
-        </button>
+          {t('map.route.mode.all')}
+        </Chip>
         {availableModes.map((item) => (
-          <button
-            className={
-              activeMode === item.mode
-                ? `category-chip tone-${item.mode} is-active`
-                : `category-chip tone-${item.mode}`
-            }
-            type="button"
+          <Chip
             key={item.mode}
+            tone={item.mode}
+            active={activeMode === item.mode}
+            icon={modeIcon(item.mode, modeProfileByMode)}
             onClick={() => setActiveMode(item.mode)}
           >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              {modeIcon(item.mode, modeProfileByMode)}
-            </span>
-            <span>{modeLabelByMode.get(item.mode) ?? item.label}</span>
-          </button>
+            {modeLabelByMode.get(item.mode) ?? item.label}
+          </Chip>
         ))}
       </div>
 

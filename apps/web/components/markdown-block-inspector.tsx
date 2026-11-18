@@ -17,6 +17,8 @@ import {
 } from '../lib/editor/markdown-blocks';
 import { useEditorFieldDraft as useFieldDraft } from '../lib/editor/use-editor-field-draft';
 import { SegmentedControl } from './segmented-control';
+import { Button, IconButton } from './ui/button';
+import { Field, Input, Textarea } from './ui/field';
 
 /** 单个 Markdown 块的属性检查器：按块类型给出可写控件。 */
 export function MarkdownBlockInspector({
@@ -79,50 +81,28 @@ export function MarkdownBlockInspector({
       />
 
       <div className="poi-visual-inspector-actions">
-        <button
-          className="secondary-action-button"
+        <Button
+          variant="secondary"
+          icon="arrow_upward"
           disabled={disabled || !canMoveUp}
-          type="button"
           onClick={onMoveUp}
         >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            arrow_upward
-          </span>
-          <span>上移</span>
-        </button>
-        <button
-          className="secondary-action-button"
+          上移
+        </Button>
+        <Button
+          variant="secondary"
+          icon="arrow_downward"
           disabled={disabled || !canMoveDown}
-          type="button"
           onClick={onMoveDown}
         >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            arrow_downward
-          </span>
-          <span>下移</span>
-        </button>
-        <button
-          className="secondary-action-button"
-          disabled={disabled}
-          type="button"
-          onClick={onDuplicate}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            content_copy
-          </span>
-          <span>复制</span>
-        </button>
-        <button
-          className="secondary-action-button"
-          disabled={disabled}
-          type="button"
-          onClick={onRemove}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            delete
-          </span>
-          <span>移除</span>
-        </button>
+          下移
+        </Button>
+        <Button variant="secondary" icon="content_copy" disabled={disabled} onClick={onDuplicate}>
+          复制
+        </Button>
+        <Button variant="secondary" icon="delete" disabled={disabled} onClick={onRemove}>
+          移除
+        </Button>
       </div>
     </div>
   );
@@ -330,17 +310,7 @@ export function MarkdownInlineBlockEditor({
       )}
       <div className="markdown-inline-text-footer">
         <span>{`${markdownBlockTypeLabel(block)} · Esc 退出`}</span>
-        <button
-          aria-label="完成编辑"
-          className="icon-action-button"
-          title="完成编辑"
-          type="button"
-          onClick={onExit}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            check
-          </span>
-        </button>
+        <IconButton icon="check" label="完成编辑" title="完成编辑" onClick={onExit} />
       </div>
     </div>
   );
@@ -376,29 +346,27 @@ function HeadingBlockForm({
       </div>
       <div className="markdown-inspector-field">
         <span>级别</span>
-        <div className="segmented-control">
-          <SegmentedControl
-            ariaLabel="标题级别"
-            className="transit-visual-segmented"
-            disabled={disabled}
-            options={[
-              { value: '1', label: 'H1' },
-              { value: '2', label: 'H2' },
-              { value: '3', label: 'H3' },
-              { value: '4', label: 'H4' },
-            ]}
-            value={String(level)}
-            onChange={(value) => {
-              const nextLevel = Number(value) as 1 | 2 | 3 | 4;
-              setLevel(nextLevel);
-              commit(nextLevel, textField.value.trim() ? textField.value : block.text);
-            }}
-          />
-        </div>
+        <SegmentedControl
+          ariaLabel="标题级别"
+          className="transit-visual-segmented"
+          disabled={disabled}
+          options={[
+            { value: '1', label: 'H1' },
+            { value: '2', label: 'H2' },
+            { value: '3', label: 'H3' },
+            { value: '4', label: 'H4' },
+          ]}
+          value={String(level)}
+          onChange={(value) => {
+            const nextLevel = Number(value) as 1 | 2 | 3 | 4;
+            setLevel(nextLevel);
+            commit(nextLevel, textField.value.trim() ? textField.value : block.text);
+          }}
+          wrapperClassName=""
+        />
       </div>
-      <label className="material-field">
-        <span>标题文字</span>
-        <input
+      <Field label={<>标题文字</>}>
+        <Input
           disabled={disabled}
           value={textField.value}
           onBlur={() => {
@@ -422,7 +390,7 @@ function HeadingBlockForm({
             }
           }}
         />
-      </label>
+      </Field>
       <p className="poi-visual-panel-empty">标题文字实时写回 Markdown 源码。</p>
     </div>
   );
@@ -478,9 +446,8 @@ function ImageBlockForm({
       <div className="markdown-inspector-section-heading">
         <p className="markdown-inspector-section-title">图片</p>
       </div>
-      <label className="material-field">
-        <span>替代文字</span>
-        <input
+      <Field label={<>替代文字</>}>
+        <Input
           disabled={disabled}
           value={altField.value}
           onBlur={() => {
@@ -501,10 +468,9 @@ function ImageBlockForm({
           }}
           onFocus={altField.handleFocus}
         />
-      </label>
-      <label className="material-field">
-        <span>图片链接</span>
-        <input
+      </Field>
+      <Field label="图片链接" hint={srcError ? '图片链接不能为空。' : undefined}>
+        <Input
           disabled={disabled}
           placeholder="/content-assets/... 或 https://..."
           value={srcField.value}
@@ -529,12 +495,10 @@ function ImageBlockForm({
           }}
           onFocus={srcField.handleFocus}
         />
-        {srcError ? <small className="muted">图片链接不能为空。</small> : null}
-      </label>
+      </Field>
       <div className="markdown-image-replace" data-inspector-section="image-replace">
-        <label className="material-field">
-          <span>替换图片</span>
-          <input
+        <Field label={<>替换图片</>}>
+          <Input
             ref={fileInputRef}
             accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/avif"
             disabled={disabled || replacing}
@@ -546,7 +510,7 @@ function ImageBlockForm({
               }
             }}
           />
-        </label>
+        </Field>
         {replacing ? <small className="muted">正在上传并替换…</small> : null}
       </div>
       {isImageHref(srcField.value) ? (
@@ -613,27 +577,25 @@ function ListBlockForm({
       </div>
       <div className="markdown-inspector-field">
         <span>类型</span>
-        <div className="segmented-control">
-          <SegmentedControl
-            ariaLabel="列表类型"
-            className="transit-visual-segmented"
-            disabled={disabled}
-            options={[
-              { value: 'unordered', label: '无序' },
-              { value: 'ordered', label: '有序' },
-            ]}
-            value={ordered ? 'ordered' : 'unordered'}
-            onChange={(value) => {
-              const nextOrdered = value === 'ordered';
-              setOrdered(nextOrdered);
-              commit(nextOrdered);
-            }}
-          />
-        </div>
+        <SegmentedControl
+          ariaLabel="列表类型"
+          className="transit-visual-segmented"
+          disabled={disabled}
+          options={[
+            { value: 'unordered', label: '无序' },
+            { value: 'ordered', label: '有序' },
+          ]}
+          value={ordered ? 'ordered' : 'unordered'}
+          onChange={(value) => {
+            const nextOrdered = value === 'ordered';
+            setOrdered(nextOrdered);
+            commit(nextOrdered);
+          }}
+          wrapperClassName=""
+        />
       </div>
-      <label className="material-field">
-        <span>列表项（每行一个）</span>
-        <textarea
+      <Field label={<>列表项（每行一个）</>}>
+        <Textarea
           disabled={disabled}
           value={itemsField.value}
           onBlur={() => {
@@ -649,7 +611,7 @@ function ListBlockForm({
           }}
           onFocus={itemsField.handleFocus}
         />
-      </label>
+      </Field>
       <p className="poi-visual-panel-empty">列表项实时写回源码；嵌套列表请使用源码模式。</p>
     </div>
   );
@@ -673,9 +635,8 @@ function CodeBlockForm({
       <div className="markdown-inspector-section-heading">
         <p className="markdown-inspector-section-title">代码块</p>
       </div>
-      <label className="material-field">
-        <span>语言</span>
-        <input
+      <Field label={<>语言</>}>
+        <Input
           disabled={disabled}
           placeholder="例如 json / ts / text"
           value={languageField.value}
@@ -690,10 +651,9 @@ function CodeBlockForm({
           }}
           onFocus={languageField.handleFocus}
         />
-      </label>
-      <label className="material-field">
-        <span>代码内容</span>
-        <textarea
+      </Field>
+      <Field label={<>代码内容</>}>
+        <Textarea
           disabled={disabled}
           spellCheck={false}
           value={bodyField.value}
@@ -708,7 +668,7 @@ function CodeBlockForm({
           }}
           onFocus={bodyField.handleFocus}
         />
-      </label>
+      </Field>
       {containsFence ? (
         <p className="poi-visual-panel-empty">
           内容里包含 ``` 行，保存后会提前闭合代码块，请改用其他写法。
@@ -782,15 +742,14 @@ function SourceTextarea({
   value: string;
 }>) {
   return (
-    <label className="material-field">
-      <span>{label}</span>
-      <textarea
+    <Field label={<>{label}</>}>
+      <Textarea
         disabled={disabled}
         spellCheck={false}
         value={value}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
-    </label>
+    </Field>
   );
 }
 

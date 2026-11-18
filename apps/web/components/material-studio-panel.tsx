@@ -5,9 +5,18 @@ import type {
   MaterialTransitNetworkSnapshot,
   TileProviderDescriptor,
 } from '@yct/contracts';
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { trackAnalyticsEvent } from '../lib/analytics/client';
 import { appPath } from '../lib/app-paths';
+import { PREVIEW_DIALOG_MEDIA_QUERY, SINGLE_COLUMN_MEDIA_QUERY } from '../lib/breakpoints';
 import {
   createMaterialOfflineDraftId,
   readLatestMaterialOfflineDraft,
@@ -107,6 +116,11 @@ import { VisualEditorShell } from './visual-editor-shell';
 import { EditorDialogPortal } from './editor/editor-dialog-portal';
 import { TransitNetworkSourceControl } from './transit-network-source-control';
 import { MaterialPreviewErrorNotice } from './material-save-download-dialog';
+import { Button, IconButton } from './ui/button';
+import { Eyebrow } from './ui/status';
+import { CheckboxRow, RadioRow } from './ui/checkbox-row';
+import { Field, FieldGroup, Input, Select } from './ui/field';
+import { Modal } from './ui/modal';
 
 type MaterialFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'metro_line' | 'custom';
 
@@ -265,7 +279,7 @@ type StudioMode = 'manual' | 'server';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
-const MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY = '(max-width: 959px)';
+const MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY = PREVIEW_DIALOG_MEDIA_QUERY;
 
 /**
  * 导视牌编辑器的固定标识。
@@ -368,9 +382,9 @@ export function MaterialStudioPanel({
   const [transitDirection, setTransitDirection] = useState<'east' | 'west' | 'north' | 'south'>(
     'east',
   );
-  const [transitTerminalRole, setTransitTerminalRole] = useState<
-    'origin' | 'terminal' | ''
-  >('origin');
+  const [transitTerminalRole, setTransitTerminalRole] = useState<'origin' | 'terminal' | ''>(
+    'origin',
+  );
   const [selectedTransitLineIds, setSelectedTransitLineIds] = useState<string[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState('');
   const [locationQuery, setLocationQuery] = useState('');
@@ -551,7 +565,10 @@ export function MaterialStudioPanel({
     try {
       // 只保留当前模板的字段，避免切换模板的瞬间旧模板字段触发「字段不属于当前模板」。
       const previewValues = Object.fromEntries(
-        selected.template.fields.map((field) => [field.key, debouncedPreviewInput[field.key] ?? '']),
+        selected.template.fields.map((field) => [
+          field.key,
+          debouncedPreviewInput[field.key] ?? '',
+        ]),
       );
       const result = composeMaterialTemplateSvg({
         template: { ...selected.template, source: templateSource },
@@ -622,7 +639,11 @@ export function MaterialStudioPanel({
     }
     setPreviewError(localPreview.error);
     // 字段级错误已经画在画布上并在预览区常驻提示；只有整张预览无法生成时才弹 toast。
-    if (!localPreview.svg && localPreview.error && !localPreview.error.includes('模板源码尚未加载')) {
+    if (
+      !localPreview.svg &&
+      localPreview.error &&
+      !localPreview.error.includes('模板源码尚未加载')
+    ) {
       publishToastRequested({
         dedupeKey: `material-preview-error:${studioId}`,
         message: `预览失败：${localPreview.error}`,
@@ -1143,8 +1164,7 @@ export function MaterialStudioPanel({
     const nextIndex = direction === 'first' ? index - 1 : index + 1;
     const nextName = stations[nextIndex];
     const isBoundary = nextIndex < 0 || nextIndex >= stations.length;
-    const terminalName =
-      direction === 'first' ? (stations[0] ?? '') : (stations.at(-1) ?? '');
+    const terminalName = direction === 'first' ? (stations[0] ?? '') : (stations.at(-1) ?? '');
     const candidates: Record<string, string> = {
       travelDirection: direction,
       routeOrigin: direction === 'first' ? (stations.at(-1) ?? '') : (stations[0] ?? ''),
@@ -1167,12 +1187,7 @@ export function MaterialStudioPanel({
       );
       return changed ? { ...current, ...updates } : current;
     });
-  }, [
-    input.currentStationIndex,
-    input.routeStations,
-    input.travelDirection,
-    selected?.id,
-  ]);
+  }, [input.currentStationIndex, input.routeStations, input.travelDirection, selected?.id]);
   const availableEntryVariants = selectedEntryVariants?.filter(
     (item) =>
       stationSupportsTerminalVariant ||
@@ -1246,7 +1261,10 @@ export function MaterialStudioPanel({
     setInput((current) => {
       const nextTerminal = current.terminalName ?? '';
       const nextPinyin = current.terminalNamePinyin ?? '';
-      if (nextTerminal === terminal && (!fieldKeys.has('terminalNamePinyin') || nextPinyin === terminalPinyin)) {
+      if (
+        nextTerminal === terminal &&
+        (!fieldKeys.has('terminalNamePinyin') || nextPinyin === terminalPinyin)
+      ) {
         return current;
       }
       return {
@@ -1569,7 +1587,8 @@ export function MaterialStudioPanel({
           (station) => station.id === selectedImportedTransitStation.markerId,
         );
         // 到终点站时按「开往首站」方向取下一站与起终点。
-        const direction = currentIndex >= 0 && currentIndex === stations.length - 1 ? 'first' : 'last';
+        const direction =
+          currentIndex >= 0 && currentIndex === stations.length - 1 ? 'first' : 'last';
         const nextIndex = direction === 'first' ? currentIndex - 1 : currentIndex + 1;
         const nextName = stations[nextIndex]?.name;
         const isBoundary = nextIndex < 0 || nextIndex >= stations.length;
@@ -1618,10 +1637,7 @@ export function MaterialStudioPanel({
         setField('lineEnglishLabel', `Line ${resolveMetroLineNumber(primaryLine.name)}`.trim());
         setField('routeStations', stationNames.join('\n'));
         setField('currentStationIndex', primaryLine.currentStationIndex);
-        setField(
-          'routeOrigin',
-          direction === 'first' ? stationNames.at(-1) : stationNames[0],
-        );
+        setField('routeOrigin', direction === 'first' ? stationNames.at(-1) : stationNames[0]);
         setField('routeTerminal', direction === 'first' ? stationNames[0] : stationNames.at(-1));
         setField('nextStation', isBoundary ? '终 点 站' : nextName);
         setField('nextStationName', isBoundary ? '' : nextName);
@@ -1629,16 +1645,19 @@ export function MaterialStudioPanel({
           'terminalName',
           direction === 'first'
             ? stationNames[0]
-            : (primaryLine.destinationName || stationNames.at(-1)),
+            : primaryLine.destinationName || stationNames.at(-1),
         );
         setField('travelDirection', direction);
         setField('routeStationState', isBoundary ? 'terminal_station' : 'next_station');
-        setField('stationNamePinyin', toUppercasePinyin(stationNames[primaryLine.currentStationIndex] ?? ''));
+        setField(
+          'stationNamePinyin',
+          toUppercasePinyin(stationNames[primaryLine.currentStationIndex] ?? ''),
+        );
         setField('nextStationPinyin', toUppercasePinyin(nextName ?? ''));
         setField(
           'terminalNamePinyin',
           toUppercasePinyin(
-            direction === 'first' ? stationNames[0] ?? '' : stationNames.at(-1) ?? '',
+            direction === 'first' ? (stationNames[0] ?? '') : (stationNames.at(-1) ?? ''),
           ),
         );
         setField('routeFirstLast', primaryLine.firstLastBus);
@@ -1684,10 +1703,11 @@ export function MaterialStudioPanel({
       const templateResponse = await fetch(appPath('/api/materials/templates'), {
         cache: 'no-store',
       });
-      const templateData = (await readJsonResponse<{
-        items?: PublishedMaterialTemplate[];
-        message?: string;
-      }>(templateResponse)) ?? {};
+      const templateData =
+        (await readJsonResponse<{
+          items?: PublishedMaterialTemplate[];
+          message?: string;
+        }>(templateResponse)) ?? {};
       if (!templateResponse.ok) {
         setWorkspaceBlockMessage(templateData.message ?? t('materialStudio.templateReadFailed'));
         return;
@@ -1742,7 +1762,8 @@ export function MaterialStudioPanel({
         pendingRequests.push(
           fetch(appPath('/api/materials/transit-lines'), { cache: 'no-store' })
             .then(async (response) => {
-              const data = (await readJsonResponse<{ items?: TransitLineOption[] }>(response)) ?? {};
+              const data =
+                (await readJsonResponse<{ items?: TransitLineOption[] }>(response)) ?? {};
               if (response.ok) {
                 const lines = data.items ?? [];
                 setTransitLines(lines);
@@ -1762,7 +1783,8 @@ export function MaterialStudioPanel({
         pendingRequests.push(
           fetch(appPath('/api/materials/transit-stations'), { cache: 'no-store' })
             .then(async (response) => {
-              const data = (await readJsonResponse<{ items?: TransitStationOption[] }>(response)) ?? {};
+              const data =
+                (await readJsonResponse<{ items?: TransitStationOption[] }>(response)) ?? {};
               if (response.ok) {
                 const stations = data.items ?? [];
                 setTransitStations(stations);
@@ -1785,7 +1807,8 @@ export function MaterialStudioPanel({
         pendingRequests.push(
           fetch(appPath('/api/materials/locations'), { cache: 'no-store' })
             .then(async (response) => {
-              const data = (await readJsonResponse<{ items?: MaterialLocationOption[] }>(response)) ?? {};
+              const data =
+                (await readJsonResponse<{ items?: MaterialLocationOption[] }>(response)) ?? {};
               if (response.ok) {
                 const nextLocations = data.items ?? [];
                 setLocations(nextLocations);
@@ -1819,7 +1842,8 @@ export function MaterialStudioPanel({
         pendingRequests.push(
           fetch(appPath('/api/map/tile-providers'), { cache: 'no-store' })
             .then(async (response) => {
-              const data = (await readJsonResponse<{ items?: TileProviderDescriptor[] }>(response)) ?? {};
+              const data =
+                (await readJsonResponse<{ items?: TileProviderDescriptor[] }>(response)) ?? {};
               if (!response.ok) {
                 return;
               }
@@ -1997,9 +2021,7 @@ export function MaterialStudioPanel({
         : undefined;
     const fieldKeys = new Set(selected.template.fields.map((field) => field.key));
     const restoredInput = savedDraft?.input
-      ? Object.fromEntries(
-          Object.entries(savedDraft.input).filter(([key]) => fieldKeys.has(key)),
-        )
+      ? Object.fromEntries(Object.entries(savedDraft.input).filter(([key]) => fieldKeys.has(key)))
       : undefined;
     const nextInput =
       restoredInput ??
@@ -2280,7 +2302,7 @@ export function MaterialStudioPanel({
 
   useEffect(() => {
     const previewDialogQuery = window.matchMedia(MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY);
-    const singleColumnQuery = window.matchMedia('(max-width: 720px)');
+    const singleColumnQuery = window.matchMedia(SINGLE_COLUMN_MEDIA_QUERY);
     const syncViewport = () => {
       setIsPreviewDialogViewport(previewDialogQuery.matches);
       setIsSingleColumnViewport(singleColumnQuery.matches);
@@ -2449,7 +2471,9 @@ export function MaterialStudioPanel({
     );
     const targetTemplate = templates.find((item) => item.id === targetId);
     carryTransitSelectionToSourceKind(
-      targetTemplate ? (serverSources?.[targetTemplate.template.family] ?? serverSource) : undefined,
+      targetTemplate
+        ? (serverSources?.[targetTemplate.template.family] ?? serverSource)
+        : undefined,
     );
     setApplyWizardEntryId(targetEntry?.id ?? '');
     setApplyWizardStyleIndex(
@@ -3033,9 +3057,8 @@ export function MaterialStudioPanel({
         }),
       });
       const data =
-        (await readJsonResponse<{ values?: Record<string, string>; message?: string }>(
-          response,
-        )) ?? {};
+        (await readJsonResponse<{ values?: Record<string, string>; message?: string }>(response)) ??
+        {};
       if (!response.ok || !data.values) {
         publishToastRequested({
           message: data.message ?? '数据来源解析失败。',
@@ -3852,141 +3875,115 @@ export function MaterialStudioPanel({
     <>
       {(isPreviewDialogViewport || workspace) && isPreviewDialogOpen ? (
         <EditorDialogPortal>
-          <div
-            className="modal-backdrop editor-dialog-backdrop"
-            role="presentation"
-            onMouseDown={(event) => {
-              if (event.currentTarget === event.target) {
-                setIsPreviewDialogOpen(false);
-              }
-            }}
+          <Modal
+            labelledBy="material-preview-dialog-heading"
+            backdropClassName="editor-dialog-backdrop"
+            className="material-preview"
+            panelStyle={{ width: 'min(760px, 100%)' }}
+            onBackdropClick={() => setIsPreviewDialogOpen(false)}
           >
-            <section
-              className="modal-panel material-preview"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="material-preview-dialog-heading"
-              style={{ width: 'min(760px, 100%)' }}
-            >
-              <div className="material-preview-heading">
-                <div style={{ display: 'grid', gap: 2 }}>
-                  <h2 id="material-preview-dialog-heading">{t('materialStudio.preview')}</h2>
-                  <MaterialPreviewDescription
-                    previewSize={previewSize}
-                    isRendering={isPreviewRendering}
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={t('materialStudio.closePreview')}
-                  title={t('materialStudio.closePreview')}
-                  autoFocus
-                  onClick={() => setIsPreviewDialogOpen(false)}
-                  style={{ flex: '0 0 40px', width: 40 }}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    close
-                  </span>
-                </button>
+            <div className="material-preview-heading">
+              <div style={{ display: 'grid', gap: 2 }}>
+                <h2 id="material-preview-dialog-heading">{t('materialStudio.preview')}</h2>
+                <MaterialPreviewDescription
+                  previewSize={previewSize}
+                  isRendering={isPreviewRendering}
+                />
               </div>
-              <MaterialPreviewStage
-                previewUrl={previewUrl}
-                isRendering={isPreviewRendering}
-                alt={t('materialStudio.previewAlt', {
-                  title: selected?.template.title ?? title,
-                })}
+              <IconButton
+                variant="icon"
+                icon="close"
+                label={t('materialStudio.closePreview')}
+                title={t('materialStudio.closePreview')}
+                autoFocus
+                onClick={() => setIsPreviewDialogOpen(false)}
+                style={{ flex: '0 0 40px', width: 40 }}
               />
-            </section>
-          </div>
+            </div>
+            <MaterialPreviewStage
+              previewUrl={previewUrl}
+              isRendering={isPreviewRendering}
+              alt={t('materialStudio.previewAlt', {
+                title: selected?.template.title ?? title,
+              })}
+            />
+          </Modal>
         </EditorDialogPortal>
       ) : null}
 
       {isHistoryDialogOpen ? (
         <EditorDialogPortal>
-          <div
-            className="modal-backdrop editor-dialog-backdrop"
-            role="presentation"
-            onMouseDown={(event) => {
-              if (event.currentTarget === event.target) setIsHistoryDialogOpen(false);
-            }}
+          <Modal
+            labelledBy="material-history-heading"
+            backdropClassName="editor-dialog-backdrop"
+            className="material-history-dialog"
+            onBackdropClick={() => setIsHistoryDialogOpen(false)}
           >
-            <section
-              className="modal-panel material-history-dialog"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="material-history-heading"
-            >
-              <div className="material-history-heading">
-                <div>
-                  <h2 id="material-history-heading">{t('materialStudio.historyTitle')}</h2>
-                  <p className="muted">{t('materialStudio.historyHint')}</p>
-                </div>
-                <div className="material-history-heading-actions">
-                  <span>{t('services.itemCount', { count: historyDrafts.length })}</span>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label={t('materialStudio.closeHistory')}
-                    title={t('materialStudio.closeHistory')}
-                    autoFocus
-                    onClick={() => setIsHistoryDialogOpen(false)}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      close
-                    </span>
-                  </button>
-                </div>
+            <div className="material-history-heading">
+              <div>
+                <h2 id="material-history-heading">{t('materialStudio.historyTitle')}</h2>
+                <p className="muted">{t('materialStudio.historyHint')}</p>
               </div>
-              {historyDrafts.length ? (
-                <div className="material-history-list">
-                  {historyDrafts.map((draft) => {
-                    const template = templateVersionByKey.get(
-                      `${draft.templateId}:${draft.templateVersion}`,
-                    );
-                    return (
-                      <article className="material-history-item" key={draft.id}>
-                        <div>
-                          <strong>
-                            {template?.title ?? draft.templateId} · v{draft.templateVersion} ·{' '}
-                            {materialDraftStatusLabel(draft.status, t)}
-                          </strong>
-                          <p>{formatStudioDraftInput(draft, template, t)}</p>
-                          <small>
-                            {t('materialStudio.submittedAt', {
-                              time: formatTime(draft.submittedAt ?? draft.createdAt, locale),
-                            })}
-                            {draft.reviewedAt
-                              ? ` · ${t('materialStudio.reviewedAt', {
-                                  time: formatTime(draft.reviewedAt, locale),
-                                })}`
-                              : ''}
-                            {draft.reviewReason ? ` · ${draft.reviewReason}` : ''}
-                          </small>
-                        </div>
-                        {draft.status === 'approved' ? (
-                          <button
-                            type="button"
-                            className="is-primary"
-                            onClick={() => void exportDraft(draft)}
-                            disabled={isBusy}
-                            title={t('materialStudio.download')}
-                          >
-                            <span className="material-symbols-outlined" aria-hidden="true">
-                              download
-                            </span>
-                            {t('materialStudio.download')}
-                          </button>
-                        ) : null}
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="material-history-empty">{t('materialStudio.noSubmittedYet')}</p>
-              )}
-            </section>
-          </div>
+              <div className="material-history-heading-actions">
+                <span>{t('services.itemCount', { count: historyDrafts.length })}</span>
+                <IconButton
+                  variant="icon"
+                  icon="close"
+                  label={t('materialStudio.closeHistory')}
+                  title={t('materialStudio.closeHistory')}
+                  autoFocus
+                  onClick={() => setIsHistoryDialogOpen(false)}
+                />
+              </div>
+            </div>
+            {historyDrafts.length ? (
+              <div className="material-history-list">
+                {historyDrafts.map((draft) => {
+                  const template = templateVersionByKey.get(
+                    `${draft.templateId}:${draft.templateVersion}`,
+                  );
+                  return (
+                    <article className="material-history-item" key={draft.id}>
+                      <div>
+                        <strong>
+                          {template?.title ?? draft.templateId} · v{draft.templateVersion} ·{' '}
+                          {materialDraftStatusLabel(draft.status, t)}
+                        </strong>
+                        <p>{formatStudioDraftInput(draft, template, t)}</p>
+                        <small>
+                          {t('materialStudio.submittedAt', {
+                            time: formatTime(draft.submittedAt ?? draft.createdAt, locale),
+                          })}
+                          {draft.reviewedAt
+                            ? ` · ${t('materialStudio.reviewedAt', {
+                                time: formatTime(draft.reviewedAt, locale),
+                              })}`
+                            : ''}
+                          {draft.reviewReason ? ` · ${draft.reviewReason}` : ''}
+                        </small>
+                      </div>
+                      {draft.status === 'approved' ? (
+                        <button
+                          type="button"
+                          className="is-primary"
+                          onClick={() => void exportDraft(draft)}
+                          disabled={isBusy}
+                          title={t('materialStudio.download')}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            download
+                          </span>
+                          {t('materialStudio.download')}
+                        </button>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="material-history-empty">{t('materialStudio.noSubmittedYet')}</p>
+            )}
+          </Modal>
         </EditorDialogPortal>
       ) : null}
     </>
@@ -4006,13 +4003,16 @@ export function MaterialStudioPanel({
     ) : (!requireServerMode || mode === 'server') &&
       (sourceKindOverride ?? activeServerSource) === 'transit_station' ? (
       <>
-        <label className="material-field">
-          <span>
-            {transitNetworkSource === 'rmp'
-              ? t('materialStudio.projectStation')
-              : t('materialStudio.selectServerStation')}
-          </span>
-          <select
+        <Field
+          label={
+            <>
+              {transitNetworkSource === 'rmp'
+                ? t('materialStudio.projectStation')
+                : t('materialStudio.selectServerStation')}
+            </>
+          }
+        >
+          <Select
             value={
               transitNetworkSource === 'rmp'
                 ? selectedImportedStationNodeId
@@ -4046,8 +4046,8 @@ export function MaterialStudioPanel({
                 </option>
               ),
             )}
-          </select>
-        </label>
+          </Select>
+        </Field>
         {transitNetworkSource === 'rmp' && activeTransitStation?.projectLines?.length ? (
           <div
             className="transit-network-station-lines"
@@ -4063,12 +4063,13 @@ export function MaterialStudioPanel({
             </div>
           </div>
         ) : null}
-        <div className="material-field">
-          <span>
-            {transitNetworkSource === 'rmp'
+        <FieldGroup
+          label={
+            transitNetworkSource === 'rmp'
               ? t('materialStudio.mapDrivingDirection')
-              : t('materialStudio.roadDrivingDirection')}
-          </span>
+              : t('materialStudio.roadDrivingDirection')
+          }
+        >
           <SegmentedControl
             ariaLabel={
               transitNetworkSource === 'rmp'
@@ -4087,7 +4088,7 @@ export function MaterialStudioPanel({
             }
             options={activeTransitStation?.directionOptions ?? []}
           />
-        </div>
+        </FieldGroup>
         <fieldset className="material-canvas-editor" disabled={isBusy || !activeTransitStation}>
           <legend>
             {transitNetworkSource === 'rmp'
@@ -4102,63 +4103,11 @@ export function MaterialStudioPanel({
               .filter((line) => line.direction === transitDirection)
               .map((line) => {
                 const checked = selectedTransitLineIds.includes(line.id);
+                const Row = usesSingleTransitLineSelection ? RadioRow : CheckboxRow;
                 return (
-                  <label
-                    className={
-                      usesSingleTransitLineSelection
-                        ? 'material-radio-row'
-                        : 'material-checkbox-row'
-                    }
+                  <Row
                     key={line.id}
-                  >
-                    <input
-                      type={usesSingleTransitLineSelection ? 'radio' : 'checkbox'}
-                      name={
-                        usesSingleTransitLineSelection
-                          ? `material-transit-line-${activeTransitStation?.markerId ?? ''}`
-                          : undefined
-                      }
-                      checked={checked}
-                      disabled={
-                        !usesSingleTransitLineSelection &&
-                        !checked &&
-                        selectedTransitLineIds.length >= maximumTransitLineCount
-                      }
-                      onChange={(event) => {
-                        const nextChecked = event.currentTarget.checked;
-                        setSelectedTransitLineIds((current) =>
-                          usesSingleTransitLineSelection
-                            ? [line.id]
-                            : nextChecked
-                              ? [...current, line.id].slice(0, maximumTransitLineCount)
-                              : current.filter((lineId) => lineId !== line.id),
-                        );
-                        clearPreview();
-                      }}
-                    />
-                    <i
-                      className="transit-network-line-swatch"
-                      style={{ backgroundColor: line.color }}
-                      aria-hidden="true"
-                    />
-                    <span>
-                      {line.name} {line.secondaryName ? ` / ${line.secondaryName}` : ''}
-                    </span>
-                  </label>
-                );
-              })
-          ) : transitNetworkSource === 'server' && selectableServerTransitLines.length ? (
-            selectableServerTransitLines.map((line) => {
-              const checked = selectedTransitLineIds.includes(line.id);
-              return (
-                <label
-                  className={
-                    usesSingleTransitLineSelection ? 'material-radio-row' : 'material-checkbox-row'
-                  }
-                  key={line.id}
-                >
-                  <input
-                    type={usesSingleTransitLineSelection ? 'radio' : 'checkbox'}
+                    variant="material"
                     name={
                       usesSingleTransitLineSelection
                         ? `material-transit-line-${activeTransitStation?.markerId ?? ''}`
@@ -4181,15 +4130,63 @@ export function MaterialStudioPanel({
                       );
                       clearPreview();
                     }}
+                    icon={
+                      <i
+                        className="transit-network-line-swatch"
+                        style={{ backgroundColor: line.color }}
+                        aria-hidden="true"
+                      />
+                    }
+                    label={
+                      <>
+                        {line.name} {line.secondaryName ? ` / ${line.secondaryName}` : ''}
+                      </>
+                    }
                   />
-                  <span>
-                    {line.name} · {t('materialStudio.directionTo')}
-                    {line.destinationName || t('materialStudio.destinationPending')} ·
-                    {line.firstLastBus} {line.operator ? ` · ${line.operator}` : ''}
-                    {line.isOriginAtStation ? ` · ${t('materialStudio.originAtStation')}` : ''}
-                    {line.isTerminalAtStation ? ` · ${t('materialStudio.terminalAtStation')}` : ''}
-                  </span>
-                </label>
+                );
+              })
+          ) : transitNetworkSource === 'server' && selectableServerTransitLines.length ? (
+            selectableServerTransitLines.map((line) => {
+              const checked = selectedTransitLineIds.includes(line.id);
+              const Row = usesSingleTransitLineSelection ? RadioRow : CheckboxRow;
+              return (
+                <Row
+                  key={line.id}
+                  variant="material"
+                  name={
+                    usesSingleTransitLineSelection
+                      ? `material-transit-line-${activeTransitStation?.markerId ?? ''}`
+                      : undefined
+                  }
+                  checked={checked}
+                  disabled={
+                    !usesSingleTransitLineSelection &&
+                    !checked &&
+                    selectedTransitLineIds.length >= maximumTransitLineCount
+                  }
+                  onChange={(event) => {
+                    const nextChecked = event.currentTarget.checked;
+                    setSelectedTransitLineIds((current) =>
+                      usesSingleTransitLineSelection
+                        ? [line.id]
+                        : nextChecked
+                          ? [...current, line.id].slice(0, maximumTransitLineCount)
+                          : current.filter((lineId) => lineId !== line.id),
+                    );
+                    clearPreview();
+                  }}
+                  label={
+                    <>
+                      {line.name} · {t('materialStudio.directionTo')}
+                      {line.destinationName || t('materialStudio.destinationPending')} ·
+                      {line.firstLastBus} {line.operator ? ` · ${line.operator}` : ''}
+                      {line.isOriginAtStation ? ` · ${t('materialStudio.originAtStation')}` : ''}
+                      {line.isTerminalAtStation
+                        ? ` · ${t('materialStudio.terminalAtStation')}`
+                        : ''}
+                    </>
+                  }
+                />
               );
             })
           ) : (
@@ -4218,9 +4215,8 @@ export function MaterialStudioPanel({
       (sourceKindOverride ?? activeServerSource) === 'transit_line' ? (
       transitNetworkSource === 'rmp' ? (
         <div className="material-field-grid">
-          <label className="material-field">
-            <span>{t('materialStudio.projectLines')}</span>
-            <select
+          <Field label={t('materialStudio.projectLines')}>
+            <Select
               value={metroLineMapProjectLineKey}
               onChange={(event) => setMetroLineMapProjectLineKey(event.currentTarget.value)}
               disabled={isBusy || !metroLineMapProjectLines.length}
@@ -4230,11 +4226,10 @@ export function MaterialStudioPanel({
                   {line.label} {line.secondaryLabel ? ` / ${line.secondaryLabel}` : ''}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="material-field">
-            <span>{t('materialStudio.projectCurrentStation')}</span>
-            <select
+            </Select>
+          </Field>
+          <Field label={t('materialStudio.projectCurrentStation')}>
+            <Select
               value={metroLineMapProjectNodeId}
               onChange={(event) => setMetroLineMapProjectNodeId(event.currentTarget.value)}
               disabled={isBusy || !metroLineMapProjectStations.length}
@@ -4244,14 +4239,13 @@ export function MaterialStudioPanel({
                   {station.name}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
         </div>
       ) : (
         <>
-          <label className="material-field">
-            <span>{t('materialStudio.serverLines')}</span>
-            <select
+          <Field label={<>{t('materialStudio.serverLines')}</>}>
+            <Select
               value={selectedLineId}
               onChange={(event) => {
                 const lineId = event.currentTarget.value;
@@ -4269,11 +4263,10 @@ export function MaterialStudioPanel({
                   {line.operator ? ` · ${line.operator}` : ''}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="material-field">
-            <span>{t('materialStudio.serverStations')}</span>
-            <select
+            </Select>
+          </Field>
+          <Field label={<>{t('materialStudio.serverStations')}</>}>
+            <Select
               value={selectedStationSourceId}
               onChange={(event) => {
                 setSelectedStationSourceId(event.currentTarget.value);
@@ -4286,36 +4279,34 @@ export function MaterialStudioPanel({
                   {station.stationName}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
         </>
       )
     ) : (!requireServerMode || mode === 'server') &&
       (sourceKindOverride ?? activeServerSource) === 'map_location' ? (
       <>
-        <label className="material-field">
-          <span>
-            {t(
-              usesAddressPoiSource
-                ? 'materialStudio.addressPoiSearch'
-                : 'materialStudio.searchServerPlace',
-            )}
-          </span>
-          <input
+        <Field
+          label={
+            usesAddressPoiSource
+              ? t('materialStudio.addressPoiSearch')
+              : t('materialStudio.searchServerPlace')
+          }
+        >
+          <Input
             value={locationQuery}
             onChange={(event) => setLocationQuery(event.currentTarget.value)}
             disabled={isBusy}
           />
-        </label>
-        <label className="material-field">
-          <span>
-            {t(
-              usesAddressPoiSource
-                ? 'materialStudio.addressPoiPlaces'
-                : 'materialStudio.serverPlaces',
-            )}
-          </span>
-          <select
+        </Field>
+        <Field
+          label={
+            usesAddressPoiSource
+              ? t('materialStudio.addressPoiPlaces')
+              : t('materialStudio.serverPlaces')
+          }
+        >
+          <Select
             value={selectedLocationId}
             onChange={(event) => {
               setSelectedLocationId(event.currentTarget.value);
@@ -4329,21 +4320,18 @@ export function MaterialStudioPanel({
                 {location.address ? ` · ${location.address}` : ''}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
         {usesAddressPoiSource && !addressPoiLocations.length ? (
-          <small className="material-field-hint">
-            {t('materialStudio.addressPoiEmpty')}
-          </small>
+          <small className="material-field-hint">{t('materialStudio.addressPoiEmpty')}</small>
         ) : null}
       </>
     ) : (!requireServerMode || mode === 'server') &&
       (sourceKindOverride ?? activeServerSource) === 'road_coordinate' ? (
       <>
         <div className="material-field-grid">
-          <label className="material-field">
-            <span>{t('materialStudio.coordinateX')}</span>
-            <input
+          <Field label={<>{t('materialStudio.coordinateX')}</>}>
+            <Input
               type="number"
               inputMode="decimal"
               value={roadCoordinate?.[0] ?? ''}
@@ -4357,10 +4345,9 @@ export function MaterialStudioPanel({
                 clearPreview();
               }}
             />
-          </label>
-          <label className="material-field">
-            <span>{t('materialStudio.coordinateZ')}</span>
-            <input
+          </Field>
+          <Field label={<>{t('materialStudio.coordinateZ')}</>}>
+            <Input
               type="number"
               inputMode="decimal"
               value={roadCoordinate?.[1] ?? ''}
@@ -4374,7 +4361,7 @@ export function MaterialStudioPanel({
                 clearPreview();
               }}
             />
-          </label>
+          </Field>
         </div>
         <EmbeddedMapLocationPicker
           ariaLabel={t('materialStudio.pickCoordinateHint')}
@@ -4421,7 +4408,7 @@ export function MaterialStudioPanel({
     >
       <div className="section-heading material-studio-heading">
         <div>
-          <span className="eyebrow">{t('materialStudio.workspaceEyebrow')}</span>
+          <Eyebrow>{t('materialStudio.workspaceEyebrow')}</Eyebrow>
           <h1>{panelTitle}</h1>
         </div>
         <div className="settings-action-row" role="status" aria-live="polite">
@@ -4434,20 +4421,16 @@ export function MaterialStudioPanel({
                 )}`
               : ''}
           </span>
-          <button
-            type="button"
-            className="icon-button"
+          <IconButton
+            variant="icon"
+            icon="cloud_upload"
+            label={t('materialStudio.syncLocalDraft')}
+            title={t('materialStudio.syncLocalDraft')}
             onClick={() => void syncLocalDraft()}
             disabled={
               !localDraft || !isOnline || isBusy || isSyncingLocalDraft || mode !== 'manual'
             }
-            title={t('materialStudio.syncLocalDraft')}
-            aria-label={t('materialStudio.syncLocalDraft')}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              cloud_upload
-            </span>
-          </button>
+          />
         </div>
       </div>
 
@@ -4526,8 +4509,7 @@ export function MaterialStudioPanel({
 
         <div className="material-studio-editor">
           {availableLayoutGroups && availableLayoutGroups.length > 1 ? (
-            <div className="material-field">
-              <span>{layoutSwitchLabel}</span>
+            <FieldGroup label={layoutSwitchLabel}>
               <div
                 className="material-mode-switch material-variant-switch"
                 role="group"
@@ -4545,11 +4527,10 @@ export function MaterialStudioPanel({
                   </button>
                 ))}
               </div>
-            </div>
+            </FieldGroup>
           ) : null}
           {layoutStyleVariants && layoutStyleVariants.length > 1 ? (
-            <div className="material-field">
-              <span>{selectedEntryVariantLabel}</span>
+            <FieldGroup label={selectedEntryVariantLabel}>
               <div
                 className="material-mode-switch material-variant-switch"
                 role="group"
@@ -4567,7 +4548,7 @@ export function MaterialStudioPanel({
                   </button>
                 ))}
               </div>
-            </div>
+            </FieldGroup>
           ) : null}
           {canUseServerSource ? (
             <div
@@ -4731,9 +4712,8 @@ export function MaterialStudioPanel({
 
   const workspaceTemplateControls = (
     <>
-      <label className="material-field">
-        <span>{t('materialStudio.templates')}</span>
-        <select
+      <Field label={<>{t('materialStudio.templates')}</>}>
+        <Select
           value={selectedEntry?.id ?? ''}
           onChange={(event) => {
             const entry = templateEntries.find(
@@ -4757,48 +4737,44 @@ export function MaterialStudioPanel({
               {entry.titleKey ? t(entry.titleKey) : (entry.title ?? '')}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
       {availableLayoutGroups && availableLayoutGroups.length > 1 ? (
-        <div className="material-field">
-          <span>{layoutSwitchLabel}</span>
-          <div className="segmented-control">
-            <SegmentedControl
-              ariaLabel={layoutSwitchLabel}
-              className="transit-visual-segmented"
-              disabled={isBusy}
-              value={activeLayoutGroup?.id ?? availableLayoutGroups[0]!.id}
-              options={availableLayoutGroups.map((group) => ({
-                value: group.id,
-                label: group.labelKey ? t(group.labelKey) : (group.label ?? group.id),
-              }))}
-              onChange={(groupId) => {
-                const group = availableLayoutGroups.find((item) => item.id === groupId);
-                if (group) {
-                  selectLayoutGroup(group);
-                }
-              }}
-            />
-          </div>
-        </div>
+        <FieldGroup label={layoutSwitchLabel}>
+          <SegmentedControl
+            ariaLabel={layoutSwitchLabel}
+            className="transit-visual-segmented"
+            disabled={isBusy}
+            value={activeLayoutGroup?.id ?? availableLayoutGroups[0]!.id}
+            options={availableLayoutGroups.map((group) => ({
+              value: group.id,
+              label: group.labelKey ? t(group.labelKey) : (group.label ?? group.id),
+            }))}
+            onChange={(groupId) => {
+              const group = availableLayoutGroups.find((item) => item.id === groupId);
+              if (group) {
+                selectLayoutGroup(group);
+              }
+            }}
+            wrapperClassName=""
+          />
+        </FieldGroup>
       ) : null}
       {layoutStyleVariants && layoutStyleVariants.length > 1 ? (
-        <div className="material-field">
-          <span>{selectedEntryVariantLabel}</span>
-          <div className="segmented-control">
-            <SegmentedControl
-              ariaLabel={selectedEntryVariantLabel}
-              className="transit-visual-segmented"
-              disabled={isBusy}
-              value={selected?.id ?? ''}
-              options={layoutStyleVariants.map((item) => ({
-                value: item.id,
-                label: item.template.title.match(/（([^）]+)）\s*$/u)?.[1] ?? item.template.title,
-              }))}
-              onChange={applyTemplateDirect}
-            />
-          </div>
-        </div>
+        <FieldGroup label={selectedEntryVariantLabel}>
+          <SegmentedControl
+            ariaLabel={selectedEntryVariantLabel}
+            className="transit-visual-segmented"
+            disabled={isBusy}
+            value={selected?.id ?? ''}
+            options={layoutStyleVariants.map((item) => ({
+              value: item.id,
+              label: item.template.title.match(/（([^）]+)）\s*$/u)?.[1] ?? item.template.title,
+            }))}
+            onChange={applyTemplateDirect}
+            wrapperClassName=""
+          />
+        </FieldGroup>
       ) : null}
     </>
   );
@@ -4822,17 +4798,15 @@ export function MaterialStudioPanel({
         // 路牌等工作台没有线网导入，直接把地点 / 坐标选择器放进全局属性的数据来源。
         <>
           {workspaceSourceSelection}
-          <button
-            type="button"
-            className="secondary-action-button material-source-apply"
+          <Button
+            variant="secondary"
+            icon="download_done"
+            className="material-source-apply"
             disabled={isBusy || isResolvingSource || !selected}
             onClick={() => void applyResolvedSourceValues()}
           >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              download_done
-            </span>
             {isResolvingSource ? '正在套用…' : '套用位置信息'}
-          </button>
+          </Button>
         </>
       )}
     </>
@@ -4855,12 +4829,9 @@ export function MaterialStudioPanel({
   const wizardSourceControls =
     wizardTargetFamily === 'metro_line' ? (
       <div className="material-apply-wizard-source">
-        <label className="material-field">
-          <span>套用线路</span>
-          <select
-            value={
-              transitNetworkSource === 'rmp' ? metroLineMapProjectLineKey : selectedLineId
-            }
+        <Field label={<>套用线路</>}>
+          <Select
+            value={transitNetworkSource === 'rmp' ? metroLineMapProjectLineKey : selectedLineId}
             onChange={(event) => {
               const lineId = event.currentTarget.value;
               if (transitNetworkSource === 'rmp') {
@@ -4872,29 +4843,26 @@ export function MaterialStudioPanel({
               setSelectedStationSourceId(line?.stations[0]?.stationSourceId ?? '');
             }}
           >
-            {(transitNetworkSource === 'rmp' ? metroLineMapProjectLines : wizardMetroLineOptions).map(
-              (line) =>
-                'lineKey' in line ? (
-                  <option key={line.lineKey} value={line.lineKey}>
-                    {line.label}
-                    {line.secondaryLabel ? ` / ${line.secondaryLabel}` : ''}
-                  </option>
-                ) : (
-                  <option key={line.id} value={line.id}>
-                    {line.name}
-                    {line.mode === 'tram'
-                      ? '（有轨）'
-                      : line.mode === 'custom'
-                        ? '（专用线）'
-                        : ''}
-                  </option>
-                ),
+            {(transitNetworkSource === 'rmp'
+              ? metroLineMapProjectLines
+              : wizardMetroLineOptions
+            ).map((line) =>
+              'lineKey' in line ? (
+                <option key={line.lineKey} value={line.lineKey}>
+                  {line.label}
+                  {line.secondaryLabel ? ` / ${line.secondaryLabel}` : ''}
+                </option>
+              ) : (
+                <option key={line.id} value={line.id}>
+                  {line.name}
+                  {line.mode === 'tram' ? '（有轨）' : line.mode === 'custom' ? '（专用线）' : ''}
+                </option>
+              ),
             )}
-          </select>
-        </label>
-        <label className="material-field">
-          <span>当前站</span>
-          <select
+          </Select>
+        </Field>
+        <Field label={<>当前站</>}>
+          <Select
             value={
               transitNetworkSource === 'rmp' ? metroLineMapProjectNodeId : selectedStationSourceId
             }
@@ -4920,14 +4888,13 @@ export function MaterialStudioPanel({
                 {station.label}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
       </div>
     ) : wizardTargetFamily === 'bus_stop' ? (
       <div className="material-apply-wizard-source">
-        <label className="material-field">
-          <span>套用车站</span>
-          <select
+        <Field label={<>套用车站</>}>
+          <Select
             value={
               transitNetworkSource === 'rmp'
                 ? selectedImportedStationNodeId
@@ -4949,11 +4916,10 @@ export function MaterialStudioPanel({
                 </option>
               ),
             )}
-          </select>
-        </label>
-        <label className="material-field">
-          <span>道路方向</span>
-          <select
+          </Select>
+        </Field>
+        <Field label={<>道路方向</>}>
+          <Select
             value={transitDirection}
             onChange={(event) => {
               setTransitDirection(event.currentTarget.value as 'east' | 'west' | 'north' | 'south');
@@ -4965,25 +4931,24 @@ export function MaterialStudioPanel({
                 {option.label}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
         <fieldset className="material-canvas-editor">
           <legend>套用线路（最多 {maximumTransitLineCount} 条）</legend>
           {selectableTransitLines.map((line) => (
-            <label key={line.id} className="material-checkbox-row">
-              <input
-                type="checkbox"
-                checked={selectedTransitLineIds.includes(line.id)}
-                onChange={() =>
-                  setSelectedTransitLineIds((current) =>
-                    current.includes(line.id)
-                      ? current.filter((id) => id !== line.id)
-                      : [...current, line.id].slice(0, maximumTransitLineCount),
-                  )
-                }
-              />
-              <span>{line.name}</span>
-            </label>
+            <CheckboxRow
+              key={line.id}
+              variant="material"
+              checked={selectedTransitLineIds.includes(line.id)}
+              onChange={() =>
+                setSelectedTransitLineIds((current) =>
+                  current.includes(line.id)
+                    ? current.filter((id) => id !== line.id)
+                    : [...current, line.id].slice(0, maximumTransitLineCount),
+                )
+              }
+              label={line.name}
+            />
           ))}
           {!selectableTransitLines.length ? (
             <p className="poi-visual-panel-empty">当前站点在该方向下没有可选线路。</p>
@@ -4994,152 +4959,132 @@ export function MaterialStudioPanel({
       // 路牌 / 门牌等非线网模板：按目标模板渲染对应来源组件（地点搜索或坐标选点），
       // 避免切换模板时仍显示当前模板的套用控件。
       <div className="material-apply-wizard-source">
-        {renderStudioSourceSelection(
-          false,
-          serverSources?.[wizardTargetFamily] ?? serverSource,
-        )}
+        {renderStudioSourceSelection(false, serverSources?.[wizardTargetFamily] ?? serverSource)}
       </div>
     ) : null;
 
   const applyWizardDialog = isApplyWizardOpen ? (
     <EditorDialogPortal>
-      <div
-        className="modal-backdrop editor-dialog-backdrop"
-        role="presentation"
-        onMouseDown={(event) => {
-          if (event.currentTarget === event.target) {
-            setIsApplyWizardOpen(false);
-          }
-        }}
+      <Modal
+        labelledBy="material-apply-wizard-title"
+        backdropClassName="editor-dialog-backdrop"
+        className="metro-wayfinding-project-dialog material-apply-wizard"
+        onBackdropClick={() => setIsApplyWizardOpen(false)}
       >
-        <section
-          className="modal-panel metro-wayfinding-project-dialog material-apply-wizard"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="material-apply-wizard-title"
-        >
-          <header>
-            <div>
-              <span>{t('materialStudio.templateLibrary')}</span>
-              <h2 id="material-apply-wizard-title">{t('materialStudio.applyWizardTitle')}</h2>
+        <header>
+          <div>
+            <span>{t('materialStudio.templateLibrary')}</span>
+            <h2 id="material-apply-wizard-title">{t('materialStudio.applyWizardTitle')}</h2>
+          </div>
+          <IconButton
+            variant="icon"
+            icon="close"
+            label={t('materialStudio.close')}
+            title={t('materialStudio.close')}
+            onClick={() => setIsApplyWizardOpen(false)}
+          />
+        </header>
+        <div className="metro-wayfinding-project-dialog-body material-apply-wizard-body">
+          <section className="material-apply-wizard-section">
+            <h3>{t('materialStudio.template')}</h3>
+            <Field label={<>{t('materialStudio.templateEntry')}</>}>
+              <Select
+                value={applyWizardEntry?.id ?? ''}
+                onChange={(event) => {
+                  const entry = templateEntries.find(
+                    (candidate) => candidate.id === event.currentTarget.value,
+                  );
+                  if (!entry) {
+                    return;
+                  }
+                  const nextTemplateId =
+                    entry.templateIds.find((templateId) =>
+                      templates.some((item) => item.id === templateId),
+                    ) ?? entry.templateIds[0];
+                  const nextTemplate = templates.find((item) => item.id === nextTemplateId);
+                  // 入口跨数据来源时，把当前已选线路 / 站点映射到目标来源，避免变成另一条线。
+                  carryTransitSelectionToSourceKind(
+                    nextTemplate
+                      ? (serverSources?.[nextTemplate.template.family] ?? serverSource)
+                      : undefined,
+                  );
+                  setApplyWizardEntryId(entry.id);
+                  setApplyWizardStyleIndex(0);
+                  setApplyWizardTemplateId(nextTemplateId ?? '');
+                }}
+              >
+                {templateEntries.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.titleKey ? t(entry.titleKey) : (entry.title ?? '')}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </section>
+          <section className="material-apply-wizard-section">
+            <h3>{t('materialStudio.applyStepSource', { step: 1 })}</h3>
+            {allowTransitNetworkImport ? workspaceDataSourceControls : null}
+            {wizardSourceControls}
+          </section>
+          <section className="material-apply-wizard-section">
+            <h3>{t('materialStudio.applyStepStyle', { step: wizardStyleStep })}</h3>
+            <div className="material-apply-wizard-style">
+              <FieldGroup label={t('materialStudio.style')}>
+                <SegmentedControl
+                  ariaLabel={t('materialStudio.style')}
+                  className="transit-visual-segmented"
+                  value={String(applyWizardStyleIndex)}
+                  options={applyWizardStyleOptions}
+                  onChange={(value) => setApplyWizardStyleIndex(Number(value))}
+                  wrapperClassName=""
+                />
+              </FieldGroup>
             </div>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={t('materialStudio.close')}
-              title={t('materialStudio.close')}
-              onClick={() => setIsApplyWizardOpen(false)}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                close
-              </span>
-            </button>
-          </header>
-          <div className="metro-wayfinding-project-dialog-body material-apply-wizard-body">
-            <section className="material-apply-wizard-section">
-              <h3>{t('materialStudio.template')}</h3>
-              <label className="material-field">
-                <span>{t('materialStudio.templateEntry')}</span>
-                <select
-                  value={applyWizardEntry?.id ?? ''}
-                  onChange={(event) => {
-                    const entry = templateEntries.find(
-                      (candidate) => candidate.id === event.currentTarget.value,
-                    );
-                    if (!entry) {
-                      return;
-                    }
-                    const nextTemplateId =
-                      entry.templateIds.find((templateId) =>
-                        templates.some((item) => item.id === templateId),
-                      ) ?? entry.templateIds[0];
-                    const nextTemplate = templates.find((item) => item.id === nextTemplateId);
-                    // 入口跨数据来源时，把当前已选线路 / 站点映射到目标来源，避免变成另一条线。
-                    carryTransitSelectionToSourceKind(
-                      nextTemplate
-                        ? (serverSources?.[nextTemplate.template.family] ?? serverSource)
-                        : undefined,
-                    );
-                    setApplyWizardEntryId(entry.id);
-                    setApplyWizardStyleIndex(0);
-                    setApplyWizardTemplateId(nextTemplateId ?? '');
+          </section>
+          <section className="material-apply-wizard-section">
+            <h3>{t('materialStudio.applyStepLayout', { step: wizardLayoutStep })}</h3>
+            <div className="material-apply-wizard-layouts">
+              {applyWizardLayoutCards.map((card) => (
+                <button
+                  key={card.id}
+                  type="button"
+                  className={`material-template-example${
+                    card.templateId === applyWizardTemplateId ? ' is-active' : ''
+                  }`}
+                  // 点击卡片即视为确认套用，不再需要底部操作按钮。
+                  onClick={() => {
+                    setApplyWizardTemplateId(card.templateId);
+                    confirmApplyWizard(card.templateId);
                   }}
                 >
-                  {templateEntries.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.titleKey ? t(entry.titleKey) : (entry.title ?? '')}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </section>
-            <section className="material-apply-wizard-section">
-              <h3>{t('materialStudio.applyStepSource', { step: 1 })}</h3>
-              {allowTransitNetworkImport ? workspaceDataSourceControls : null}
-              {wizardSourceControls}
-            </section>
-            <section className="material-apply-wizard-section">
-              <h3>{t('materialStudio.applyStepStyle', { step: wizardStyleStep })}</h3>
-              <div className="material-apply-wizard-style">
-                <div className="material-field">
-                  <span>{t('materialStudio.style')}</span>
-                  <div className="segmented-control">
-                    <SegmentedControl
-                      ariaLabel={t('materialStudio.style')}
-                      className="transit-visual-segmented"
-                      value={String(applyWizardStyleIndex)}
-                      options={applyWizardStyleOptions}
-                      onChange={(value) => setApplyWizardStyleIndex(Number(value))}
-                    />
+                  <MaterialLayoutThumbnail
+                    source={templateSources[`${card.templateId}:${card.template.version}`]}
+                    template={card.template}
+                    values={buildTransitNetworkFieldValues(card.template.fields)}
+                  />
+                  <div className="material-template-example-heading">
+                    <strong>{card.label}</strong>
+                    <span>{card.template.title}</span>
                   </div>
-                </div>
-              </div>
-            </section>
-            <section className="material-apply-wizard-section">
-              <h3>{t('materialStudio.applyStepLayout', { step: wizardLayoutStep })}</h3>
-              <div className="material-apply-wizard-layouts">
-                {applyWizardLayoutCards.map((card) => (
-                  <button
-                    key={card.id}
-                    type="button"
-                    className={`material-template-example${
-                      card.templateId === applyWizardTemplateId ? ' is-active' : ''
-                    }`}
-                    // 点击卡片即视为确认套用，不再需要底部操作按钮。
-                    onClick={() => {
-                      setApplyWizardTemplateId(card.templateId);
-                      confirmApplyWizard(card.templateId);
-                    }}
-                  >
-                    <MaterialLayoutThumbnail
-                      source={templateSources[`${card.templateId}:${card.template.version}`]}
-                      template={card.template}
-                      values={buildTransitNetworkFieldValues(card.template.fields)}
-                    />
-                    <div className="material-template-example-heading">
-                      <strong>{card.label}</strong>
-                      <span>{card.template.title}</span>
-                    </div>
-                    <small className="material-template-example-meta">
-                      {card.template.defaultCanvas.widthM} × {card.template.defaultCanvas.heightM} m
-                    </small>
-                    <span className="material-template-example-load">
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        file_open
-                      </span>
-                      {t('materialStudio.useThisLayout')}
+                  <small className="material-template-example-meta">
+                    {card.template.defaultCanvas.widthM} × {card.template.defaultCanvas.heightM} m
+                  </small>
+                  <span className="material-template-example-load">
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      file_open
                     </span>
-                  </button>
-                ))}
-                {!applyWizardLayoutCards.length ? (
-                  <p className="poi-visual-panel-empty">{t('materialStudio.noLayouts')}</p>
-                ) : null}
-              </div>
-            </section>
-          </div>
-          {/* 点击版式卡片即确认套用，不再提供底部操作按钮。 */}
-        </section>
-      </div>
+                    {t('materialStudio.useThisLayout')}
+                  </span>
+                </button>
+              ))}
+              {!applyWizardLayoutCards.length ? (
+                <p className="poi-visual-panel-empty">{t('materialStudio.noLayouts')}</p>
+              ) : null}
+            </div>
+          </section>
+        </div>
+        {/* 点击版式卡片即确认套用，不再提供底部操作按钮。 */}
+      </Modal>
     </EditorDialogPortal>
   ) : null;
 
@@ -5188,9 +5133,7 @@ export function MaterialStudioPanel({
       ? [...canonicalStationNames].reverse()
       : canonicalStationNames;
     const toCanonicalStationIndex = (displayIndex: number) =>
-      reverseWorkspaceStations
-        ? canonicalStationNames.length - 1 - displayIndex
-        : displayIndex;
+      reverseWorkspaceStations ? canonicalStationNames.length - 1 - displayIndex : displayIndex;
     const canonicalCurrentStationIndex = Number(input.currentStationIndex);
     const workspaceCurrentStationIndex = Number.isFinite(canonicalCurrentStationIndex)
       ? toCanonicalStationIndex(canonicalCurrentStationIndex)
@@ -5239,18 +5182,16 @@ export function MaterialStudioPanel({
         parseMaterialTransferLines(input.transferLines ?? '').get(stationName) ?? '';
       return (
         <div className="material-field-grid transit-material-field-grid">
-          <label className="material-field">
-            <span>站点名称</span>
-            <input
+          <Field label="站点名称">
+            <Input
               value={stationName}
               disabled={isBusy}
               onChange={(event) => updateWorkspaceStationName(index, event.currentTarget.value)}
             />
-          </label>
+          </Field>
           {hasTransferField ? (
-            <label className="material-field">
-              <span>换乘线路（如 2,4 或 2:#EC6941）</span>
-              <input
+            <Field label="换乘线路（如 2,4 或 2:#EC6941）">
+              <Input
                 value={transferLines}
                 disabled={isBusy}
                 placeholder="留空表示无换乘"
@@ -5258,18 +5199,16 @@ export function MaterialStudioPanel({
                   updateWorkspaceStationTransfer(stationName, event.currentTarget.value)
                 }
               />
-            </label>
+            </Field>
           ) : null}
           {hasCurrentStationField ? (
-            <label className="material-checkbox-row">
-              <input
-                type="checkbox"
-                checked={index === workspaceCurrentStationIndex}
-                disabled={isBusy}
-                onChange={() => updateWorkspaceCurrentStation(index)}
-              />
-              <span>设为当前站</span>
-            </label>
+            <CheckboxRow
+              variant="material"
+              checked={index === workspaceCurrentStationIndex}
+              disabled={isBusy}
+              onChange={() => updateWorkspaceCurrentStation(index)}
+              label="设为当前站"
+            />
           ) : null}
         </div>
       );
@@ -5344,9 +5283,8 @@ export function MaterialStudioPanel({
               disabled={isBusy}
               onChange={updateMaterialFieldValue.bind(null, field.key)}
             />
-            <label className="material-field" key="next-station-picker">
-              <span>从相邻站选择</span>
-              <select
+            <Field label={<>从相邻站选择</>}>
+              <Select
                 value={input.nextStationName ?? ''}
                 disabled={isBusy || !platformSignAdjacentStations.length}
                 onChange={(event) => {
@@ -5369,8 +5307,8 @@ export function MaterialStudioPanel({
                     {name}
                   </option>
                 ))}
-              </select>
-            </label>
+              </Select>
+            </Field>
           </>
         );
       }
@@ -5462,7 +5400,9 @@ export function MaterialStudioPanel({
             ) : undefined
           }
           canvasSize={
-            activeCanvas ? { widthM: activeCanvas.widthM, heightM: activeCanvas.heightM } : undefined
+            activeCanvas
+              ? { widthM: activeCanvas.widthM, heightM: activeCanvas.heightM }
+              : undefined
           }
           canvasLocks={canvasLocks}
           onCanvasSizeChange={(patch) => {
@@ -5694,7 +5634,9 @@ function groupMaterialFormFields(
   } else if (template.family === 'road_sign') {
     // 路牌：路名与方向各一个节点，属性合并进各自面板。
     groups.push(add('road-name', '路名', 'signpost', ['roadName', 'roadNamePinyin']));
-    groups.push(add('road-direction', '方向', 'explore', ['directionMode', 'arrowMode', 'signColor']));
+    groups.push(
+      add('road-direction', '方向', 'explore', ['directionMode', 'arrowMode', 'signColor']),
+    );
   } else if (template.family === 'address_sign') {
     if (templateId === NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID) {
       // 怀旧门牌只有一个整体版面，所有字段合并到一个节点。
@@ -6240,7 +6182,10 @@ function resolveTemplateThumbnailPalette(
   let fallbackTextColor: string | undefined;
   for (const [color] of [...textCounts.entries()].sort((left, right) => right[1] - left[1])) {
     fallbackTextColor ??= color;
-    if (background && Math.abs(thumbnailColorLuminance(color) - thumbnailColorLuminance(background)) > 0.28) {
+    if (
+      background &&
+      Math.abs(thumbnailColorLuminance(color) - thumbnailColorLuminance(background)) > 0.28
+    ) {
       foreground = color;
       break;
     }
@@ -6249,8 +6194,12 @@ function resolveTemplateThumbnailPalette(
   // 导视牌等模板把配色写在字段默认值 JSON 里，源码没有字面量颜色。
   if (!background || !foreground) {
     const defaults = template.fields.map((field) => field.defaultValue ?? '').join('\n');
-    background ??= normalizeThumbnailColor(/"backgroundColor"\s*:\s*"(#[0-9a-fA-F]{6})"/.exec(defaults)?.[1]);
-    foreground ??= normalizeThumbnailColor(/"foregroundColor"\s*:\s*"(#[0-9a-fA-F]{6})"/.exec(defaults)?.[1]);
+    background ??= normalizeThumbnailColor(
+      /"backgroundColor"\s*:\s*"(#[0-9a-fA-F]{6})"/.exec(defaults)?.[1],
+    );
+    foreground ??= normalizeThumbnailColor(
+      /"foregroundColor"\s*:\s*"(#[0-9a-fA-F]{6})"/.exec(defaults)?.[1],
+    );
   }
 
   background ??= fallback.background;
@@ -6564,8 +6513,7 @@ function CanvasEditor({
     !locks?.width && (sizeMode === 'full' || (sizeMode === 'length' && !isVerticalLength));
   const showHeightInput =
     !locks?.height && (sizeMode === 'full' || (sizeMode === 'length' && isVerticalLength));
-  const showMetroVerticalWidthInput =
-    isMetroVertical && !locks?.width && sizeMode === 'length';
+  const showMetroVerticalWidthInput = isMetroVertical && !locks?.width && sizeMode === 'length';
 
   return (
     <fieldset className="material-canvas-editor" disabled={disabled}>
@@ -6641,15 +6589,13 @@ function CanvasEditor({
           onChange={(event) => onChange('tileSizePx', Number(event.currentTarget.value))}
         />
       </label>
-      <label className="material-checkbox-row">
-        <input
-          type="checkbox"
-          checked={canvas.alignToTile}
-          disabled={isMetroWayfinding || lockAlignToTile}
-          onChange={(event) => onChange('alignToTile', event.currentTarget.checked)}
-        />
-        <span>{t('materialStudio.alignToMapSize')}</span>
-      </label>
+      <CheckboxRow
+        variant="material"
+        checked={canvas.alignToTile}
+        disabled={isMetroWayfinding || lockAlignToTile}
+        onChange={(event) => onChange('alignToTile', event.currentTarget.checked)}
+        label={t('materialStudio.alignToMapSize')}
+      />
       <output>
         {outputWidth} × {outputHeight} px
         {canvas.pxPerMeter > maxPxPerMeter ? ` · 上限 ${maxPxPerMeter} px/米` : ''}
@@ -6681,9 +6627,8 @@ function MaterialServiceTimeFields({
   return (
     <div className="material-service-time-fields">
       <span>{label}</span>
-      <label className="material-field">
-        <span>{t('materialStudio.firstBus')}</span>
-        <input
+      <Field label={t('materialStudio.firstBus')}>
+        <Input
           type="time"
           value={first}
           disabled={disabled}
@@ -6691,10 +6636,9 @@ function MaterialServiceTimeFields({
             onChange(formatServiceTimeRange(event.currentTarget.value, last || undefined))
           }
         />
-      </label>
-      <label className="material-field">
-        <span>{t('materialStudio.lastBus')}</span>
-        <input
+      </Field>
+      <Field label={t('materialStudio.lastBus')}>
+        <Input
           type="time"
           value={last}
           disabled={disabled}
@@ -6702,7 +6646,7 @@ function MaterialServiceTimeFields({
             onChange(formatServiceTimeRange(first || undefined, event.currentTarget.value))
           }
         />
-      </label>
+      </Field>
       <small>{t('materialStudio.projectNoTimeHint')}</small>
     </div>
   );
@@ -6761,9 +6705,7 @@ function MaterialFieldEditor({
             onChange={onChange}
             options={selectOptions.map((option) => ({
               ...option,
-              accentColor: materialColorOptionPattern.test(option.value)
-                ? option.value
-                : undefined,
+              accentColor: materialColorOptionPattern.test(option.value) ? option.value : undefined,
             }))}
           />
         ) : (

@@ -10,6 +10,7 @@ import {
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { AdminRefreshButton } from './admin-refresh-button';
+import { ButtonLink } from './ui/button';
 
 /**
  * 行政区划列表：只负责浏览、状态流转与进入工作台。
@@ -97,16 +98,14 @@ export function AdminAdministrativeAreaPanel({
             onRefresh={load}
             resource="administrative-areas"
           />
-          <a
-            className="secondary-action-button"
+          <ButtonLink
+            variant="secondary"
             href={appPath('/admin/map-areas/editor')}
+            icon="add"
             aria-label="新建行政区划工作台"
           >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              add
-            </span>
             新建
-          </a>
+          </ButtonLink>
         </div>
       </div>
       <p className="map-source-note">{status}</p>

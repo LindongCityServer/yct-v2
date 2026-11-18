@@ -1,0 +1,2160 @@
+/* 从 apps/web/app/globals.css 按顺序拆出（70-data）：本文件顺序参与全局级联，勿调换 layout.tsx 的 import 顺序。 */
+
+.dynamic-station-detail {
+  min-height: 280px;
+  padding: 20px;
+  background: #fff;
+}
+
+.dynamic-station-sequence {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  min-height: 42px;
+  border-bottom: 1px solid #e0e8e5;
+}
+
+.dynamic-station-sequence span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #73817d;
+  font-size: 0.83rem;
+}
+
+.dynamic-station-sequence span.is-current {
+  color: #8d252e;
+  font-weight: 700;
+}
+
+.dynamic-station-sequence i {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 3px solid;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.dynamic-station-profile {
+  display: grid;
+  gap: 8px;
+  padding: 18px 0 8px;
+}
+
+.dynamic-floor {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  min-height: 62px;
+  border-bottom: 1px solid #cbd8d3;
+}
+
+.dynamic-floor-label {
+  display: grid;
+  align-content: center;
+  justify-items: end;
+  gap: 3px;
+  padding-right: 12px;
+  color: #41564e;
+}
+
+.dynamic-floor-label strong {
+  font-size: 0.9rem;
+}
+
+.dynamic-floor-label small {
+  color: #87948f;
+  font-size: 0.7rem;
+}
+
+.dynamic-floor-content {
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 8px 12px;
+  border-left: 1px solid #cad7d2;
+}
+
+.dynamic-floor-content.is-platform {
+  min-height: 76px;
+}
+
+.dynamic-carriage-row {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 3px;
+  min-height: 28px;
+  border-bottom: 3px solid #455952;
+}
+
+.dynamic-carriage-row span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 23px;
+  border-radius: 7px 7px 2px 2px;
+  background: #d8e1de;
+  color: #54645f;
+  font-size: 0.7rem;
+}
+
+.dynamic-carriage-row span.is-selected {
+  background: var(--dynamic-line-color);
+  color: #fff;
+  font-weight: 700;
+}
+
+.dynamic-carriage-row b {
+  margin: 0 3px 3px;
+  color: #b52c35;
+}
+
+.dynamic-facility-track {
+  position: relative;
+  min-height: 27px;
+}
+
+.dynamic-facility-marker {
+  position: absolute;
+  top: 0;
+  display: grid;
+  justify-items: center;
+  width: 58px;
+  transform: translateX(-50%);
+  color: #46645a;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.dynamic-facility-marker .material-symbols-outlined {
+  font-size: var(--yct-font-size-18);
+}
+
+.dynamic-facility-marker small {
+  overflow: hidden;
+  max-width: 58px;
+  color: #667873;
+  font-size: 0.62rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dynamic-facility-unpositioned {
+  display: inline-block;
+  margin-right: 8px;
+  color: #75837e;
+  font-size: 0.7rem;
+}
+
+.dynamic-transfer-list {
+  position: relative;
+  min-height: 19px;
+}
+
+.dynamic-transfer-list span {
+  position: absolute;
+  transform: translateX(-50%);
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--dynamic-line-color);
+  color: #fff;
+  font-size: 0.62rem;
+  white-space: nowrap;
+}
+
+.dynamic-door-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #d8e2de;
+  border-radius: 6px;
+  background: #f7faf9;
+}
+
+.dynamic-door-status.is-open,
+.dynamic-door-status.is-both {
+  border-color: #75b99c;
+  color: #1f7652;
+}
+
+.dynamic-door-status.is-closed {
+  border-color: #e2b5b8;
+  color: #8d252e;
+}
+
+.dynamic-door-status small {
+  margin-left: auto;
+  color: #7b8985;
+  font-size: 0.72rem;
+}
+
+.dynamic-exit-summary {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  color: #566963;
+  font-size: 0.78rem;
+}
+
+.dynamic-exit-summary > div:first-child {
+  display: flex;
+  justify-content: space-between;
+}
+
+.dynamic-exit-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dynamic-exit-list span {
+  padding: 4px 7px;
+  border-left: 3px solid;
+  background: #f4f8f6;
+}
+
+.dynamic-station-empty {
+  display: grid;
+  place-items: center;
+  min-height: 210px;
+  color: #83918d;
+}
+
+@media (max-width: 760px) {
+  .dynamic-routemap-info-bar {
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 8px 12px;
+  }
+
+  .dynamic-routemap-info-bar strong {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+
+  .dynamic-routemap-info-bar span:last-child {
+    justify-self: end;
+  }
+
+  .dynamic-route-map {
+    min-height: 230px;
+    padding-inline: 4%;
+  }
+
+  .dynamic-route-map-track {
+    left: 4%;
+    right: 4%;
+  }
+
+  .dynamic-route-station {
+    width: 86px;
+  }
+
+  .dynamic-route-station-label {
+    font-size: 0.74rem;
+  }
+
+  .dynamic-route-map-caption {
+    font-size: 0.7rem;
+  }
+
+  .dynamic-routemap-control-row label {
+    min-width: calc(50% - 5px);
+    flex: 1 1 calc(50% - 5px);
+  }
+
+  .dynamic-routemap-control-row.is-secondary > * {
+    flex: 1 1 100%;
+  }
+
+  .dynamic-routemap-car-controls {
+    justify-content: center;
+  }
+
+  .dynamic-routemap-navigation > span {
+    font-size: 0.72rem;
+  }
+
+  .dynamic-station-detail {
+    padding: 12px;
+  }
+
+  .dynamic-station-sequence {
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .dynamic-station-sequence span {
+    max-width: 32%;
+    font-size: 0.68rem;
+  }
+
+  .dynamic-floor {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  .dynamic-floor-label {
+    padding-right: 7px;
+  }
+
+  .dynamic-carriage-row span {
+    width: 25px;
+  }
+
+  .dynamic-door-status {
+    flex-wrap: wrap;
+  }
+
+  .dynamic-door-status small {
+    width: 100%;
+    margin-left: 26px;
+  }
+}
+
+.content-poi-binding-editor {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text);
+}
+
+.content-poi-binding-editor legend {
+  padding: 0 4px;
+  color: var(--yct-color-text-secondary);
+  font-weight: 700;
+}
+
+.content-poi-binding-editor > .muted {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+}
+
+.content-poi-binding-editor > input[type='search'] {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  font: inherit;
+}
+
+.content-poi-binding-editor > input[type='search']::placeholder {
+  color: var(--yct-color-text-muted);
+}
+
+.content-poi-binding-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.content-poi-binding-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+  align-content: flex-start;
+}
+
+.content-poi-binding-selected button,
+.content-poi-binding-options button {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.75fr) minmax(0, 1.25fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.content-poi-binding-selected button {
+  display: inline-flex;
+  min-height: 32px;
+  padding: 6px 8px;
+}
+
+.content-poi-binding-options button {
+  width: 100%;
+}
+
+.content-poi-binding-options button.is-selected {
+  border-color: var(--yct-color-primary);
+  background: var(--yct-material-selected-state);
+}
+
+.content-poi-binding-selected button:hover,
+.content-poi-binding-options button:hover {
+  border-color: var(--yct-color-primary);
+  background: var(--yct-material-hover-state);
+}
+
+.content-poi-binding-options button > span,
+.content-poi-binding-options button small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.content-poi-binding-options button small {
+  color: var(--yct-color-text-muted);
+}
+
+.operation-related-pois {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--yct-color-border);
+}
+
+.operation-related-poi-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.operation-related-poi-link,
+.map-poi-operations-list a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--yct-color-border);
+  color: inherit;
+  text-decoration: none;
+}
+
+.operation-related-poi-link > span:nth-child(2),
+.map-poi-operations-list a > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.operation-related-poi-link strong,
+.operation-related-poi-link small,
+.map-poi-operations-list strong,
+.map-poi-operations-list small,
+.map-poi-operations-list a > span:nth-child(2) > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operation-related-poi-link small,
+.map-poi-operations-list small {
+  color: var(--yct-color-muted);
+}
+
+.map-poi-operations-list {
+  display: grid;
+  gap: 10px;
+}
+
+.map-poi-operations-list a {
+  align-items: flex-start;
+}
+
+.map-poi-operations-status {
+  padding: 18px 0;
+}
+
+.admin-edit-link {
+  flex: 0 0 auto;
+}
+
+.admin-content-item.is-deep-linked,
+.admin-map-area-item.is-deep-linked,
+.transit-entity-row.is-deep-linked {
+  outline: 2px solid color-mix(in srgb, var(--yct-color-primary) 60%, transparent);
+  outline-offset: 2px;
+  scroll-margin-block: 20px;
+}
+
+/* 收报纸按电码单元对齐，电码先出现，字符随后出现。 */
+.telegraph-receive-row {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0;
+  min-height: 42px;
+}
+.telegraph-receive-row.is-spacer {
+  min-height: 24px;
+}
+.telegraph-receive-cell {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  justify-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+.telegraph-receive-cell-code,
+.telegraph-receive-cell-text {
+  display: block;
+  width: 100%;
+  min-height: 1.25em;
+  overflow: hidden;
+  color: #1b1b1b;
+  font-family: 'Telegraph Dot Matrix', ui-monospace, monospace;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+.telegraph-receive-cell-text {
+  font-size: 0.92rem;
+}
+.telegraph-receive-cell-text.is-compressed {
+  transform: scaleY(0.6);
+  transform-origin: center top;
+}
+.telegraph-receive-rows {
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .transit-line-departure-direction-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-route-group {
+    padding-left: var(--yct-space-2);
+  }
+
+  .schedule-route-group-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.telegraph-receive-cell .telegraph-print-segment {
+  transition: none;
+  filter: none;
+}
+.telegraph-receive-paper.is-folded {
+  clip-path: inset(88px 0 70% 0);
+}
+.telegraph-receive-terminator {
+  font-size: 0.75rem;
+}
+
+/* 电报工作台最终交互覆盖。 */
+.telegraph-output-section {
+  scroll-margin-block: 18vh;
+}
+.telegraph-output-grid.is-sending,
+.telegraph-output-grid.is-receiving {
+  position: relative;
+  overflow: hidden;
+}
+.telegraph-output-grid.is-sending .telegraph-receive-paper,
+.telegraph-output-grid.is-receiving .telegraph-receive-paper {
+  opacity: 1;
+}
+.telegraph-output-grid.is-sending .telegraph-receive-paper {
+  opacity: 0;
+  transform: translateY(82px);
+}
+.telegraph-output-grid.is-receiving .telegraph-receive-paper {
+  animation: telegraph-paper-fly-in 680ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.telegraph-output-grid.is-sending .telegraph-envelope-wrap,
+.telegraph-output-grid.is-receiving .telegraph-envelope-wrap {
+  opacity: 0;
+  pointer-events: none;
+}
+.telegraph-envelope-wrap.is-folding {
+  transform: translateY(-12px);
+}
+.telegraph-receive-paper.is-folded {
+  clip-path: inset(92px 0 74% 0);
+}
+.telegraph-receive-cell {
+  overflow: visible;
+}
+.telegraph-receive-cell-code,
+.telegraph-receive-cell-text {
+  overflow: visible;
+}
+.telegraph-receive-cell-code {
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+}
+.telegraph-history-overlay {
+  z-index: 80;
+  place-items: start end;
+  padding: 68px 20px 20px;
+  background: transparent;
+  pointer-events: none;
+}
+.telegraph-history-panel {
+  pointer-events: auto;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(60dvh, 520px);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  box-shadow: var(--yct-shadow-floating);
+  -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
+  backdrop-filter: blur(var(--yct-material-blur-medium));
+}
+.telegraph-history-row > button:first-child {
+  border-radius: var(--yct-radius-sm);
+  padding-inline: var(--yct-space-2);
+}
+.telegraph-history-row > button:first-child:is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+}
+.telegraph-confirm-overlay {
+  z-index: 110;
+}
+.telegraph-confirm-dialog {
+  width: min(560px, 100%);
+}
+@keyframes telegraph-paper-fly-in {
+  from {
+    opacity: 0;
+    transform: translateY(82px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 560px) {
+  .telegraph-history-overlay {
+    place-items: start center;
+    padding: 64px 12px 16px;
+  }
+  .telegraph-history-panel {
+    width: min(100%, 360px);
+  }
+}
+
+/* 电报模板最终坐标覆盖：收报地名输入区对应省、市、县前的留白。 */
+/* telegraph-width-tail-anchor */
+/* 电报欢迎态：图片置于页面下方，进入发报纸时随背景层淡出。 */
+div.telegraph-studio {
+  position: relative;
+  touch-action: pan-y;
+}
+body:has(.telegraph-studio.is-welcome) {
+  overflow-x: clip;
+}
+div.telegraph-studio.is-welcome {
+  width: 100dvw;
+  max-width: none;
+  margin-left: calc(50% - 50dvw);
+  overflow-x: clip;
+}
+div.telegraph-studio > .telegraph-building-backdrop {
+  position: absolute;
+  z-index: 0;
+  top: auto;
+  right: auto;
+  bottom: 0;
+  left: 50%;
+  width: 100vw;
+  height: clamp(500px, calc(100svh - 88px), 760px);
+  transform: translateX(-50%);
+  overflow: hidden;
+  background-color: #315d6b;
+  background-image: url('/telegraph/telegraph-building.webp');
+  background-position: center 28%;
+  background-size: cover;
+  opacity: 0.28;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgb(0 0 0 / 15%) 24%,
+    rgb(0 0 0 / 78%) 68%,
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgb(0 0 0 / 15%) 24%,
+    rgb(0 0 0 / 78%) 68%,
+    #000 100%
+  );
+  pointer-events: none;
+  animation: telegraph-building-backdrop-fade-in 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+div.telegraph-studio > .telegraph-building-backdrop.is-exiting {
+  top: 0;
+  bottom: auto;
+  height: clamp(500px, calc(100svh - 88px), 760px);
+  animation: telegraph-building-backdrop-fade-out 980ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes telegraph-building-backdrop-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.28;
+  }
+}
+@keyframes telegraph-building-backdrop-fade-out {
+  from {
+    opacity: 0.28;
+  }
+  to {
+    opacity: 0;
+  }
+}
+div.telegraph-studio > :not(.telegraph-building-backdrop) {
+  position: relative;
+  z-index: 1;
+}
+div.telegraph-studio > section.telegraph-welcome {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 980px;
+  min-width: 0;
+  min-height: max(clamp(500px, 68vh, 720px), calc(100svh - 114px)) !important;
+  margin: 0 auto;
+  overflow: visible;
+  display: grid;
+  grid-template-rows: auto minmax(360px, 1fr);
+  gap: 0;
+  align-content: start;
+  justify-items: start;
+  text-align: left;
+  padding: clamp(48px, 7vh, 92px) 24px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: telegraph-welcome-enter 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes telegraph-welcome-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+div.telegraph-studio > section.telegraph-welcome::before {
+  display: none;
+}
+div.telegraph-studio > section.telegraph-welcome > * {
+  position: relative;
+  z-index: 1;
+}
+div.telegraph-studio > section.telegraph-welcome > .telegraph-welcome-copy {
+  display: grid;
+  width: min(100%, 760px);
+  min-width: 0;
+  gap: 14px;
+  grid-row: 1;
+  justify-items: start;
+}
+div.telegraph-studio > .telegraph-welcome-swipe-hint {
+  position: fixed !important;
+  z-index: 2 !important;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--yct-color-text-muted);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transform: translateX(-50%);
+  text-align: center;
+}
+div.telegraph-studio > .telegraph-welcome-swipe-hint > span:last-child {
+  min-width: 0;
+  white-space: normal;
+}
+div.telegraph-studio > .telegraph-welcome-swipe-hint .material-symbols-outlined {
+  color: var(--yct-color-primary);
+}
+div.telegraph-studio .telegraph-send-swipe-hint {
+  justify-content: center;
+  padding-top: 2px;
+  color: var(--yct-color-primary);
+}
+div.telegraph-studio .telegraph-send-swipe-hint .material-symbols-outlined {
+  font-size: var(--yct-font-size-18);
+}
+div.telegraph-studio > section.telegraph-welcome > .telegraph-building-backdrop {
+  position: relative;
+  z-index: 0;
+  grid-row: 2;
+  left: 0;
+  justify-self: start;
+  margin-left: calc((100% - 100vw) / 2);
+  width: 100vw;
+  height: 100%;
+  min-height: clamp(360px, 52vh, 620px);
+  transform: none;
+  overflow: hidden;
+  background-color: #315d6b;
+  background-image: url('/telegraph/telegraph-building.webp');
+  background-position: center 28%;
+  background-size: cover;
+  opacity: 0.28;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgb(0 0 0 / 15%) 24%,
+    rgb(0 0 0 / 78%) 68%,
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgb(0 0 0 / 15%) 24%,
+    rgb(0 0 0 / 78%) 68%,
+    #000 100%
+  );
+  pointer-events: none;
+}
+div.telegraph-studio > section.telegraph-welcome .telegraph-welcome-code {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 3.4em;
+  margin-top: 2px;
+  color: var(--yct-color-primary);
+  font-family: 'Telegraph Dot Matrix', ui-monospace, monospace;
+  font-size: clamp(0.72rem, 1.6vw, 0.9rem);
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+}
+div.telegraph-studio > section.telegraph-welcome .telegraph-welcome-code-wrap {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+  width: 100%;
+}
+div.telegraph-studio > section.telegraph-welcome .telegraph-welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+div.telegraph-studio > section.telegraph-welcome .telegraph-welcome-replay {
+  justify-self: start;
+}
+div.telegraph-studio > section.telegraph-welcome .telegraph-welcome-code-group {
+  display: grid;
+  grid-template-rows: minmax(1.4em, auto) minmax(1.4em, auto);
+  min-width: 4ch;
+  gap: 2px;
+}
+div.telegraph-studio > section.telegraph-welcome .telegraph-welcome-code-group code {
+  display: block;
+  min-width: 4ch;
+  font: inherit;
+  font-weight: 400;
+  text-align: center;
+  font-family: 'Telegraph Dot Matrix', ui-monospace, monospace;
+  color: var(--yct-color-primary);
+}
+div.telegraph-studio
+  > section.telegraph-welcome
+  .telegraph-welcome-code-group
+  .telegraph-welcome-code-text {
+  display: block;
+  min-width: 4ch;
+  font: inherit;
+  font-weight: 400;
+  text-align: center;
+  font-family: 'Telegraph Dot Matrix', ui-monospace, monospace;
+  font-size: 1.05em;
+  color: var(--yct-color-text);
+}
+div.telegraph-studio > section.telegraph-welcome .eyebrow {
+  color: var(--yct-color-primary);
+}
+div.telegraph-studio > section.telegraph-welcome h1 {
+  max-width: 760px;
+  color: var(--yct-color-text);
+  text-shadow: none;
+}
+div.telegraph-studio > section.telegraph-welcome p {
+  max-width: 42rem;
+  color: var(--yct-color-text-secondary);
+  text-shadow: none;
+}
+
+/* 电报信封转场最终覆盖：动画末帧与后续状态保持完全一致。 */
+div.telegraph-output-scene.is-opening,
+div.telegraph-output-scene.is-opened,
+div.telegraph-output-scene.is-packing {
+  min-height: clamp(760px, 88vw, 900px) !important;
+}
+
+/* 打开完成后保留打开动画的绝对定位，避免 opened 状态重新排版。 */
+div.telegraph-output-grid.telegraph-output-scene.is-opened .telegraph-receive-paper-shell {
+  position: absolute !important;
+  z-index: 3;
+  left: 50%;
+  top: 0;
+  width: min(100%, 595px) !important;
+  height: auto;
+  overflow: visible;
+  clip-path: inset(0);
+  transform: translateX(-50%) !important;
+  pointer-events: auto;
+}
+
+/* 装入动画最后一帧直接落在 sealed 的裁剪尺寸，不再从 scale(.98) 跳到终态。 */
+@keyframes telegraph-paper-pack-into-envelope {
+  0% {
+    left: 0;
+    top: 0;
+    width: 100%;
+    clip-path: inset(0);
+    transform: translateX(0) scale(1);
+    transform-origin: center top;
+  }
+  34% {
+    opacity: 0;
+    transform: translateX(118%) scale(0.88);
+  }
+  43% {
+    opacity: 0;
+    transform: translateX(118%) scale(0.88);
+  }
+  100% {
+    left: 14.7%;
+    top: 24.5%;
+    width: 70.6%;
+    height: 53.3%;
+    clip-path: inset(0);
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    transform-origin: center top;
+  }
+}
+
+/* sealed 裁剪层沿用装入动画的最终裁剪状态，收报信息不会在切换时跳位。 */
+div.telegraph-output-grid.telegraph-output-scene.is-sealed .telegraph-receive-paper-shell {
+  clip-path: inset(0) !important;
+  transform: none !important;
+}
+
+/* 电报场景最终覆盖：纸张与信封同一层级流转，操作栏固定在底部。 */
+.telegraph-output-section {
+  position: relative;
+  display: block !important;
+  gap: 0 !important;
+  padding: 0 0 112px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.telegraph-output-scene {
+  position: relative;
+  display: block !important;
+  width: min(100%, 660px);
+  min-height: clamp(360px, 52vw, 520px);
+  margin: 0 auto;
+  overflow: visible !important;
+}
+.telegraph-output-scene.is-sending,
+.telegraph-output-scene.is-receiving {
+  min-height: clamp(620px, 72vw, 720px);
+}
+.telegraph-output-scene .telegraph-receive-paper-shell {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  top: 0;
+  width: 100% !important;
+  min-width: 0;
+  pointer-events: none;
+}
+.telegraph-output-scene .telegraph-receive-paper {
+  display: block !important;
+  width: min(100%, 595px) !important;
+  max-width: 595px !important;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+.telegraph-output-scene.is-sending .telegraph-receive-paper-shell {
+  opacity: 0;
+}
+.telegraph-output-scene.is-receiving .telegraph-receive-paper-shell {
+  opacity: 1;
+  animation: telegraph-paper-fly-in 680ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.telegraph-output-scene.is-folding .telegraph-receive-paper-shell,
+.telegraph-output-scene.is-sealed .telegraph-receive-paper-shell {
+  left: 14.7%;
+  top: 24.5%;
+  width: 70.6% !important;
+  height: 53.3%;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    left 900ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    top 900ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    width 900ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    height 900ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.telegraph-output-scene.is-folding .telegraph-receive-paper,
+.telegraph-output-scene.is-sealed .telegraph-receive-paper {
+  position: absolute;
+  left: 0;
+  top: var(--telegraph-sealed-paper-top);
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 0;
+  margin: 0;
+}
+.telegraph-output-scene.is-folding .telegraph-envelope-wrap,
+.telegraph-output-scene.is-sealed .telegraph-envelope-wrap,
+.telegraph-output-scene.is-opened .telegraph-envelope-wrap {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  margin: 0;
+}
+.telegraph-output-scene.is-folding .telegraph-envelope-wrap,
+.telegraph-output-scene.is-sealed .telegraph-envelope-wrap {
+  z-index: 2;
+  opacity: 1;
+  transform: translateY(-20px);
+}
+.telegraph-output-scene.is-folding .telegraph-envelope,
+.telegraph-output-scene.is-sealed .telegraph-envelope {
+  width: 100%;
+  max-width: 660px;
+}
+.telegraph-output-scene.is-sealed .telegraph-receive-paper {
+  display: block !important;
+}
+.telegraph-output-scene.is-opened {
+  min-height: clamp(760px, 88vw, 900px);
+}
+.telegraph-output-scene.is-opened .telegraph-receive-paper-shell {
+  position: relative;
+  z-index: 3;
+  width: 100% !important;
+  pointer-events: auto;
+}
+.telegraph-output-scene.is-opened .telegraph-receive-paper {
+  width: min(100%, 595px) !important;
+  max-width: 595px !important;
+  margin: 0 auto;
+  transform: none !important;
+  opacity: 1 !important;
+}
+.telegraph-output-scene.is-opened .telegraph-envelope-wrap {
+  z-index: 1;
+  pointer-events: auto;
+  transform: translateX(0) rotate(-7deg) !important;
+}
+.telegraph-output-scene.is-view-send .telegraph-receive-paper-shell {
+  visibility: hidden;
+  pointer-events: none;
+}
+.telegraph-send-paper-preview {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  cursor: pointer;
+}
+.telegraph-send-paper-preview:focus-visible {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 6px;
+}
+.telegraph-send-paper-preview .telegraph-send-paper {
+  margin: 0 auto;
+}
+.telegraph-grid-text-preview {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  left: 13.7%;
+  width: 81.65%;
+  pointer-events: none;
+}
+.telegraph-grid-text-preview span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: hidden;
+  color: #17372b;
+  font-size: clamp(9px, 1.85vw, 17px);
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+.telegraph-grid-text-preview.telegraph-recipient-grid {
+  top: 30.45%;
+  height: 11.95%;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+}
+.telegraph-grid-text-preview.telegraph-body-grid {
+  top: 45.31%;
+  height: 29.8%;
+  grid-template-rows: repeat(10, minmax(0, 1fr));
+}
+.telegraph-floating-toolbar {
+  position: fixed;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 70;
+  display: flex;
+  width: min(calc(100vw - 24px), 820px);
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  box-shadow: var(--yct-shadow-floating);
+  -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
+  backdrop-filter: blur(var(--yct-material-blur-medium));
+  transform: translateX(-50%);
+}
+.telegraph-floating-status {
+  flex: 0 0 auto;
+  color: var(--yct-color-text-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+/* telegraph-paper-view-toggle 的完整定义统一在上方（10036 处），此处不再重复。 */
+.telegraph-paper-view-toggle,
+.telegraph-floating-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.telegraph-floating-actions .secondary-action-button {
+  min-height: var(--yct-control-height-sm);
+  padding-inline: 10px;
+}
+@media (max-width: 640px) {
+  .telegraph-floating-toolbar {
+    width: min(calc(100vw - 16px), 520px);
+    flex-wrap: wrap;
+    border-radius: var(--yct-radius-md);
+  }
+  .telegraph-floating-status {
+    width: 100%;
+    text-align: center;
+  }
+}
+.telegraph-receive-paper-shell {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+.telegraph-output-grid.is-sending .telegraph-receive-paper,
+.telegraph-output-grid.is-receiving .telegraph-receive-paper {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 595px !important;
+  min-width: 0;
+}
+.telegraph-output-grid.is-receiving .telegraph-receive-paper-shell {
+  display: block;
+  justify-self: stretch;
+  width: 100% !important;
+  min-width: 0;
+}
+.telegraph-output-grid.is-receiving .telegraph-receive-paper {
+  transform-origin: center top;
+}
+
+/* 电报弹窗层级与定位：欢迎页的直接子元素布局规则不能影响弹窗。 */
+div.telegraph-studio > .telegraph-confirm-overlay,
+div.telegraph-studio > .telegraph-history-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  box-sizing: border-box;
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+  transform: none !important;
+  z-index: 180 !important;
+}
+
+div.telegraph-studio > .telegraph-confirm-overlay {
+  display: grid !important;
+  place-items: center !important;
+  align-content: center !important;
+  padding: clamp(16px, 4vw, 40px) !important;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+div.telegraph-studio > .telegraph-history-overlay {
+  display: block !important;
+  padding: 0 !important;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+div.telegraph-studio > .telegraph-confirm-overlay > .telegraph-confirm-dialog,
+div.telegraph-studio > .telegraph-history-overlay > .telegraph-history-panel {
+  position: relative !important;
+  inset: auto !important;
+  box-sizing: border-box;
+  transform: none;
+}
+
+div.telegraph-studio > .telegraph-confirm-overlay > .telegraph-confirm-dialog {
+  width: min(560px, 100%) !important;
+  max-width: 100% !important;
+  max-height: calc(100dvh - 32px);
+  margin: auto !important;
+  overflow-y: auto;
+}
+
+div.telegraph-studio > .telegraph-history-overlay > .telegraph-history-panel {
+  position: fixed !important;
+  top: calc(var(--yct-topbar-height) + var(--yct-space-3)) !important;
+  right: var(--yct-space-4) !important;
+  width: min(360px, calc(100vw - 32px)) !important;
+  max-width: calc(100vw - 32px) !important;
+  max-height: min(60dvh, 520px);
+  --telegraph-history-inset: var(--yct-space-3);
+  padding: var(--telegraph-history-inset) !important;
+  border: 0 !important;
+  margin: 0 !important;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+div.telegraph-studio
+  > .telegraph-history-overlay
+  > .telegraph-history-panel
+  > .telegraph-output-heading {
+  padding: 0 0 var(--telegraph-history-inset);
+}
+
+div.telegraph-studio
+  > .telegraph-history-overlay
+  > .telegraph-history-panel
+  .telegraph-history-row
+  > button:first-child {
+  padding-inline: 0;
+}
+
+@media (max-width: 560px) {
+  div.telegraph-studio > .telegraph-history-overlay > .telegraph-history-panel {
+    top: calc(var(--yct-topbar-height) + var(--yct-space-2)) !important;
+    right: var(--yct-space-2) !important;
+    width: min(360px, calc(100vw - 16px)) !important;
+    max-width: calc(100vw - 16px) !important;
+  }
+}
+.telegraph-destination-province,
+.telegraph-input-province {
+  left: 13.7% !important;
+  top: 42.3% !important;
+  width: 18.5% !important;
+  height: 3% !important;
+  text-align: center !important;
+}
+.telegraph-destination-city,
+.telegraph-input-city {
+  left: 34.8% !important;
+  top: 42.3% !important;
+  width: 18% !important;
+  height: 3% !important;
+  text-align: center !important;
+}
+.telegraph-destination-county,
+.telegraph-input-county {
+  left: 54.3% !important;
+  top: 42.3% !important;
+  width: 18% !important;
+  height: 3% !important;
+  text-align: center !important;
+}
+.telegraph-input-province,
+.telegraph-input-city,
+.telegraph-input-county {
+  box-sizing: border-box;
+  padding: 0 !important;
+}
+
+/* 电报模板最终覆盖：输入格落在带竖线行，电码落在下方无竖线行。 */
+.telegraph-grid-preview,
+.telegraph-cell-input-grid {
+  left: 13.7% !important;
+  width: 81.65% !important;
+}
+.telegraph-recipient-grid,
+.telegraph-recipient-input-grid {
+  top: 30.45% !important;
+  height: 11.95% !important;
+  grid-template-rows: repeat(4, minmax(0, 1fr)) !important;
+}
+.telegraph-body-grid,
+.telegraph-body-input-grid {
+  top: 45.31% !important;
+  height: 29.8% !important;
+  grid-template-rows: repeat(10, minmax(0, 1fr)) !important;
+}
+.telegraph-cell-input {
+  height: 100% !important;
+  align-self: stretch !important;
+}
+.telegraph-grid-preview span {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+}
+.telegraph-grid-preview b {
+  display: none !important;
+}
+.telegraph-grid-preview small {
+  align-self: center !important;
+  text-align: left !important;
+}
+
+/* 分段选中项使用默认面板底色；文字、图标和把手位置继续表达选中状态。
+ * 例外：.map-route-mode-toggle-list 的选中项使用语义色背景（见 2695 行），不在此覆盖。 */
+:root[data-material-mode]
+  :is(
+    .segmented-control,
+    .map-route-sort-control,
+    .map-nearby-scope-switch,
+    .map-poi-detail-tabs,
+    .map-line-direction-switch,
+    .line-direction-switch,
+    .screen-time-filter,
+    .schedule-time-filter,
+    .schedule-service-strip,
+    .material-mode-switch,
+    .metro-wayfinding-segmented-control,
+    .telegraph-paper-view-toggle,
+    .map-browse-mode-control
+  )
+  button:is(.is-active, .is-selected, [aria-selected='true'], [aria-pressed='true']) {
+  background: var(--yct-color-surface-panel);
+}
+
+/* 颜色预设例外：选中项直接用预设色填充，需要压过上面的面板底色规则。 */
+:root[data-material-mode] .material-field-segmented button.is-active.has-accent {
+  background: var(--yct-segmented-accent);
+  color: #fff;
+}
+
+.switch-control input:checked + span {
+  background: var(--yct-color-primary);
+}
+
+/* 原生滑杆必须关闭原生外观，才能在两个浏览器引擎中统一把手底色。 */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--yct-radius-pill);
+  background: linear-gradient(
+    to right,
+    var(--yct-color-primary) 0 var(--yct-range-progress, 0%),
+    var(--yct-color-border) var(--yct-range-progress, 0%) 100%
+  );
+}
+
+input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-border);
+}
+
+input[type='range']::-moz-range-progress {
+  height: 4px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-primary);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 18%);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 18%);
+}
+
+input[type='range']:focus-visible {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 4px;
+}
+
+/* 内部布局不再叠底色；分段轨道和独立控件各自只混合一次颜色 token。 */
+:root[data-material-mode='advanced'] [data-liquid-material] .map-category-strip {
+  background: transparent;
+}
+
+/* 路线方式切换条仅由按钮自身表达底色与选中态，容器不承载材质表面。 */
+:root[data-material-mode='advanced'] [data-liquid-material] .map-route-mode-toggle-list,
+:root[data-material-mode='performance'] [data-liquid-material] .map-route-mode-toggle-list {
+  background: transparent;
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .segmented-control:not(fieldset):not(:has(> div)),
+    .segmented-control > div,
+    .map-route-mode-toggle-list,
+    .map-route-sort-control,
+    .map-nearby-scope-switch,
+    .map-poi-detail-tabs,
+    .map-line-direction-switch,
+    .line-direction-switch,
+    .screen-time-filter,
+    .schedule-time-filter,
+    .schedule-service-strip,
+    .material-mode-switch,
+    .metro-wayfinding-segmented-control,
+    .metro-wayfinding-icon-picker,
+    .telegraph-paper-view-toggle,
+    .map-browse-mode-control
+  ) {
+  background: var(--yct-material-control-surface);
+  border-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* 内部按钮不独立叠加玻璃；清除旧样式留下的模糊、内描边和内阴影。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(button, a, summary, [role='button']):not([data-liquid-material]) {
+  --yct-material-resting-shadow: 0 0 0 transparent;
+  border-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: var(--yct-material-resting-shadow);
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] [data-material-nested] {
+  border: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: var(--yct-material-resting-shadow, 0 0 0 transparent);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .map-poi-related-item,
+    .category-chip,
+    .map-category-pill,
+    .map-category-toggle,
+    .map-nearby-search-exit,
+    .icon-action-button,
+    .map-route-plan-header-actions button,
+    select
+  ):not(.is-active, .is-selected, [aria-selected='true'], [aria-pressed='true'], [aria-current]) {
+  background: var(--yct-material-control-surface);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .icon-button:not(.is-primary),
+    .account-button,
+    .search-clear-button,
+    .rail-item,
+    .bottom-nav-item,
+    .map-marker-list-item,
+    .map-marker-list-toggle,
+    .map-layer-toggle,
+    .operation-toc-panel a,
+    .operation-toc-toggle,
+    .app-toast-close,
+    .telegraph-history-row > button:first-child,
+    .transit-visual-toolbar button,
+    .poi-visual-viewport-controls button
+  ):not(
+    .is-primary,
+    .is-active,
+    .is-selected,
+    [aria-selected='true'],
+    [aria-pressed='true'],
+    [aria-current],
+    [aria-expanded='true']
+  ) {
+  background: transparent;
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] .map-layer-toggle {
+  border-radius: var(--yct-radius-md);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(.map-marker-list-item, .map-poi-related-item) {
+  border-radius: var(--yct-radius-md);
+}
+
+/* 整个头部共用背景层；遮罩让底色与模糊同时淡出，避免透明底部仍有矩形滤镜边界。
+ * 遮罩仅作用于背景伪元素，不影响标题、分类控件及其悬停反馈。 */
+:root[data-material-mode='advanced'] .map-marker-list-header {
+  border-bottom: 0;
+}
+
+:root[data-material-mode='advanced']
+  .map-marker-list:not(.is-collapsed)
+  > .map-marker-list-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) max(78%, var(--yct-material-title-surface)),
+    transparent
+  );
+  -webkit-backdrop-filter: blur(max(8px, var(--yct-material-blur-soft)));
+  backdrop-filter: blur(max(8px, var(--yct-material-blur-soft)));
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgb(0 0 0 / 50%) 60%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgb(0 0 0 / 50%) 60%, transparent 100%);
+}
+
+/* 简约/均衡模式下，地图与页面上的悬浮控件统一加 2px 描边，强化浮起感；
+ * 透光模式沿用液态材质（自身有扭曲与高光），不再叠加描边，避免视觉重复。
+ * 对原本无边框的控件（如 toast/历史面板）补全边框样式与颜色。 */
+:root[data-material-mode='performance']
+  :is(
+    .map-coordinate-pick-hint,
+    .map-routing-status,
+    .map-marker-list,
+    .map-layer-panel,
+    .map-browse-mode-control,
+    .operation-toc-panel,
+    .app-toast,
+    .telegraph-history-panel,
+    .map-share-actions,
+    .modal-panel .section-heading > .icon-action-button,
+    .modal-panel .section-heading > .icon-button
+  ),
+:root[data-material-mode='balanced']
+  :is(
+    .map-coordinate-pick-hint,
+    .map-routing-status,
+    .map-marker-list,
+    .map-layer-panel,
+    .map-browse-mode-control,
+    .operation-toc-panel,
+    .app-toast,
+    .telegraph-history-panel,
+    .map-share-actions,
+    .modal-panel .section-heading > .icon-action-button,
+    .modal-panel .section-heading > .icon-button
+  ) {
+  border: 2px solid var(--yct-color-border);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .segmented-control,
+    .map-route-mode-toggle-list,
+    .map-route-sort-control,
+    .map-nearby-scope-switch,
+    .map-poi-detail-tabs,
+    .map-line-direction-switch,
+    .line-direction-switch,
+    .screen-time-filter,
+    .schedule-time-filter,
+    .schedule-service-strip,
+    .material-mode-switch,
+    .metro-wayfinding-segmented-control,
+    .metro-wayfinding-icon-picker,
+    .telegraph-paper-view-toggle,
+    .map-browse-mode-control
+  )
+  button {
+  background: transparent;
+}
+
+/* 强调按钮叠加液态材质时：保持主色填充观感与 on-primary 文本，
+ * 并按材质表面规范补齐按钮自身的材质属性：半透明主色底、背景滤镜、扭曲、
+ * 内阴影（含顶部边缘高光）与描边。
+ * 分两条覆盖：①按钮在材质内部（弹窗内主按钮）；②按钮自身即材质（标题栏工具栏主操作）。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .primary-action-button,
+    .secondary-action-button.is-primary,
+    .visual-editor-page-actions button.is-primary,
+    .material-action-row button.is-primary,
+    .material-history-item button.is-primary
+  ):not(:disabled),
+:root[data-material-mode='advanced']
+  :is(
+    .visual-editor-page-actions > button.is-primary,
+    .transit-entity-heading-actions > button.is-primary,
+    .primary-action-button[data-liquid-material],
+    .secondary-action-button.is-primary[data-liquid-material]
+  ):not(:disabled) {
+  /* 按反馈去掉描边与内阴影，仅保留外投影；不透明度 ×1.5（65% → 97.5%），
+   * 强化「主色填充 + on-primary 文本」的实心观感。 */
+  border: 0;
+  background: color-mix(
+    in srgb,
+    var(--yct-color-primary) calc(var(--yct-material-action-surface) * 1.5),
+    transparent
+  );
+  /* 文本/图标混色计算（97.5% 主色底 = 最坏情况底下透出纯黑时约 #158b75，
+   * 亮度 L≈0.208）：
+   * - 文本 96% on-primary + 4% primary → #f2faf7（L≈0.885），对比度约 3.6:1，
+   *   满足 14px/700 大文本 AA（≥3:1），并消除纯白在半透主色上的生硬感；
+   * - 图标（material-symbols）再降 4%，与文字形成墨水层次；
+   * - 白字不需要液态白色光晕，显式关掉继承的 text-shadow 保证清晰度。 */
+  color: color-mix(in srgb, var(--yct-color-on-primary) 96%, var(--yct-color-primary));
+  text-shadow: none;
+  box-shadow: var(--yct-material-floating-shadow);
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+/* 透光强调按钮内的图标：比文本多混 4% 主色（92% on-primary），
+ * 图标墨水略沉于文字，在半透明主色底上层次更稳。 */
+:root[data-material-mode='advanced']
+  :is(
+    .primary-action-button,
+    .secondary-action-button.is-primary,
+    .visual-editor-page-actions button.is-primary,
+    .material-action-row button.is-primary,
+    .material-history-item button.is-primary
+  ):not(:disabled)
+  .material-symbols-outlined,
+:root[data-material-mode='advanced']
+  :is(
+    .visual-editor-page-actions > button.is-primary,
+    .transit-entity-heading-actions > button.is-primary,
+    .primary-action-button[data-liquid-material],
+    .secondary-action-button.is-primary[data-liquid-material]
+  ):not(:disabled)
+  .material-symbols-outlined {
+  color: color-mix(in srgb, var(--yct-color-on-primary) 92%, var(--yct-color-primary));
+}
+
+/* 标题栏工具栏中的操作按钮（可视化编辑页的确定/保存/取消、实体标题栏操作等）：
+ * 透光模式下作为独立液态表面，外观与弹窗标题栏关闭钮同款；
+ * 选择器必须与 liquid-material-bridge 的 surfaceSelector 逐字同步。 */
+:root[data-material-mode='advanced']
+  :is(.visual-editor-page-actions, .visual-editor-page-header)
+  > :is(button, a),
+:root[data-material-mode='advanced'] .visual-editor-page-back,
+:root[data-material-mode='advanced'] .transit-entity-heading-actions > :is(button, a) {
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+/* 普通选中项只有强调色底色；只有分段控制的选中项允许保留第二层材质。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(button, a):is(
+    .is-active,
+    .is-selected,
+    [aria-selected='true'],
+    [aria-pressed='true'],
+    [aria-current]
+  ),
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  .operation-toc-toggle[aria-expanded='true'] {
+  background: var(--yct-color-surface-selected);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .segmented-control,
+    .map-route-mode-toggle-list,
+    .map-route-sort-control,
+    .map-nearby-scope-switch,
+    .map-poi-detail-tabs,
+    .map-line-direction-switch,
+    .line-direction-switch,
+    .screen-time-filter,
+    .schedule-time-filter,
+    .schedule-service-strip,
+    .material-mode-switch,
+    .metro-wayfinding-segmented-control,
+    .telegraph-paper-view-toggle,
+    .map-browse-mode-control
+  )
+  button:is(.is-active, .is-selected, [aria-selected='true'], [aria-pressed='true']) {
+  --yct-material-resting-shadow: var(--yct-material-thumb-shadow);
+  background: var(--yct-material-neutral-surface);
+  /* 选中项尺寸与父材质不同，仅保留自身的轻模糊。 */
+  -webkit-backdrop-filter: saturate(var(--yct-material-saturation))
+    blur(var(--yct-material-blur-soft));
+  backdrop-filter: saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur-soft));
+}
+
+/* 颜色预设例外：高级材质下也直接用预设色填充，上面的中性玻璃底不能盖住它。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  .material-field-segmented
+  button.is-active.has-accent {
+  background: var(--yct-segmented-accent);
+  color: #fff;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* 方式切换是独立多选 chip 组，定点退出“分段控件轨道/材质表面”体系：
+   容器透明、无填充无模糊、按钮自带语义描边；不改动上方公共选择器列表。
+   注意：不能带 [data-liquid-material] 祖先前缀——该标记仅 advanced 模式挂接，
+   否则 balanced/performance 下 chip 选中态会被公共规则染成实心 surface-panel。 */
+:root[data-material-mode] .map-route-plan-card .map-route-mode-toggle-list {
+  background: transparent;
+  border: 0;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+:root[data-material-mode]
+  .map-route-plan-card
+  .map-route-mode-toggle-list
+  button:not(.is-active, [aria-pressed='true']) {
+  border-color: var(--yct-color-border);
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-material-mode]
+  .map-route-plan-card
+  .map-route-mode-toggle-list
+  button:is(.is-active, [aria-pressed='true']) {
+  border-color: var(--route-mode-color);
+  background: color-mix(in srgb, var(--route-mode-color) 22%, transparent);
+  box-shadow: none;
+  --yct-material-resting-shadow: 0 0 0 transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] .switch-control span {
+  background: var(--yct-material-control-surface);
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] .switch-control input:checked + span {
+  background: var(--yct-color-primary);
+}
+
+/* 轮播选中点始终使用白色，避免随主题或材质厚度改变。 */
+:root[data-material-mode='advanced'] [data-liquid-material] .hero-carousel-pages button.is-active {
+  background: #ffffff;
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] .switch-control span::after {
+  background: var(--yct-material-neutral-surface);
+  -webkit-backdrop-filter: saturate(var(--yct-material-saturation))
+    blur(var(--yct-material-blur-soft));
+  backdrop-filter: saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur-soft));
+  box-shadow: var(--yct-material-thumb-shadow);
+}
+
+/* 浏览器专用伪元素必须分开写，避免其中一个不受支持导致整条规则失效。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  input[type='range']::-webkit-slider-thumb {
+  background: var(--yct-material-neutral-surface);
+  -webkit-backdrop-filter: saturate(var(--yct-material-saturation))
+    blur(var(--yct-material-blur-soft));
+  backdrop-filter: saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur-soft));
+  box-shadow: var(--yct-material-thumb-shadow);
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] input[type='range']::-moz-range-thumb {
+  background: var(--yct-material-neutral-surface);
+  backdrop-filter: saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur-soft));
+  box-shadow: var(--yct-material-thumb-shadow);
+}
+
+/* 全站共享悬停背景和内容缩放；材质上的重阴影仍由材质规则提供。 */
+:root :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle) {
+  --yct-material-hover-tint: color-mix(in srgb, currentColor 9%, transparent);
+  --yct-material-interaction-scale: 1;
+  --yct-material-interaction-shadow-core: initial;
+  --yct-material-interaction-shadow-halo: initial;
+  --yct-material-interaction-shadow-offset: initial;
+  transition:
+    background-color var(--yct-motion-duration-state) var(--yct-motion-easing-standard),
+    text-shadow var(--yct-motion-duration-state) var(--yct-motion-easing-standard);
+}
+
+:root
+  :is(
+    button,
+    [role='button'],
+    .primary-action-button,
+    .secondary-action-button,
+    .icon-action-button
+  ):not(.map-viewport *) {
+  border: 0;
+}
+
+:root
+  :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle)
+  :where(input:focus-visible)
+  + span {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
+}
+
+:root
+  :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle)
+  :where(input:disabled)
+  + span {
+  opacity: 0.5;
+}
+
+:root
+  :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle)
+  :where(input:checked)
+  + span {
+  background-color: var(--yct-color-primary);
+}
+
+:root
+  :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle)
+  :where(.material-interaction-label) {
+  min-width: 0;
+}
+
+:root
+  :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle)
+  :where(.material-interaction-label):empty {
+  display: none;
+}
+
+:root
+  :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle):not(
+    :disabled,
+    [aria-disabled='true'],
+    .is-disabled,
+    .map-viewport *
+  ):not(:has(> input:disabled)):not(:active):is(:focus-visible, :has(> input:focus-visible)) {
+  --yct-material-interaction-scale: var(--yct-motion-scale-hover);
+  background-image: linear-gradient(var(--yct-material-hover-tint), var(--yct-material-hover-tint));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root
+    :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle):not(
+      :disabled,
+      [aria-disabled='true'],
+      .is-disabled,
+      .map-viewport *
+    ):not(:has(> input:disabled)):hover:not(:active) {
+    --yct-material-interaction-scale: var(--yct-motion-scale-hover);
+    background-image: linear-gradient(
+      var(--yct-material-hover-tint),
+      var(--yct-material-hover-tint)
+    );
+  }
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material]:is(button, a) {
+  --yct-material-resting-shadow: var(--yct-material-surface-shadow);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]:is(button, a):is(:hover, :focus-visible) {
+  background-color: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    [data-liquid-material]:is(button, a),
+    [data-liquid-material]
+      :is(button, a, summary, [role='button'], .switch-control, .map-layer-toggle)
+  )
+  :where(input:focus-visible)
+  + span {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    [data-liquid-material]:is(button, a),
+    [data-liquid-material]
+      :is(button, a, summary, [role='button'], .switch-control, .map-layer-toggle)
+  )
+  :where(input:disabled)
+  + span {
+  opacity: 0.5;
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    [data-liquid-material]:is(button, a),
+    [data-liquid-material]
+      :is(button, a, summary, [role='button'], .switch-control, .map-layer-toggle)
+  ):not(:disabled, [aria-disabled='true'], .is-disabled):not(:has(> input:disabled)):not(
+    :active
+  ):is(:focus-visible, :has(> input:focus-visible)) {
+  --yct-material-interaction-scale: var(--yct-motion-scale-hover);
+  --yct-material-interaction-shadow-core: 8px;
+  --yct-material-interaction-shadow-halo: 18px;
+  --yct-material-interaction-shadow-offset: 2px;
+  background-image: linear-gradient(var(--yct-material-hover-tint), var(--yct-material-hover-tint));
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-material-mode='advanced']
+    :is(
+      [data-liquid-material]:is(button, a),
+      [data-liquid-material]
+        :is(button, a, summary, [role='button'], .switch-control, .map-layer-toggle)
+    ):not(:disabled, [aria-disabled='true'], .is-disabled):not(:has(> input:disabled)):hover:not(
+      :active
+    ) {
+    --yct-material-interaction-scale: var(--yct-motion-scale-hover);
+    --yct-material-interaction-shadow-core: 8px;
+    --yct-material-interaction-shadow-halo: 18px;
+    --yct-material-interaction-shadow-offset: 2px;
+    background-image: linear-gradient(
+      var(--yct-material-hover-tint),
+      var(--yct-material-hover-tint)
+    );
+    text-shadow: var(--yct-material-text-shadow);
+  }
+}
+
+/* 只变换第一层内容，避免嵌套的图标和文字重复缩放；开关轨道不属于内容。 */
+:root
+  :is(button, a[href], summary, [role='button'], .map-layer-toggle)
+  > :where(span, strong, small, em, b, i, svg, img, .feed-item-copy):not(.sr-only) {
+  scale: var(--yct-material-interaction-scale);
+  transition:
+    scale var(--yct-motion-duration-state) var(--yct-motion-easing-standard),
+    text-shadow var(--yct-motion-duration-state) var(--yct-motion-easing-standard),
+    filter var(--yct-motion-duration-state) var(--yct-motion-easing-standard);
+}
+
+:root .operations-feed-item .feed-item-cover > .material-symbols-outlined {
+  scale: var(--yct-material-interaction-scale);
+  transition: scale var(--yct-motion-duration-state) var(--yct-motion-easing-standard);
+}
+
+:root :is(.map-marker-list-toggle, .map-marker-list-item) > span:nth-child(2),
+:root .operations-feed-item > .feed-item-copy {
+  max-width: calc(100% / var(--yct-motion-scale-hover));
+  transform-origin: left center;
+}
+
+/* 开关的悬停状态层在轨道（span）上基于其实际底色叠加；
+   label 本身只做定位容器，清空通用 tint，避免在轨道外再绘一层底色。
+   注意特异性必须压过 tint 定义处 :root :is(…, a[href], …) 的 (0,2,1)，
+   否则透明值不生效，悬停渐变会以方角画在 label 上，从胶囊轨道四角溢出。 */
+:root label.switch-control {
+  --yct-material-hover-tint: transparent;
+  border-radius: var(--yct-radius-pill);
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    [data-liquid-material]:is(button, a),
+    [data-liquid-material] :is(button, a, summary, [role='button'], .map-layer-toggle)
+  )
+  :where(img) {
+  filter: var(--yct-material-icon-filter);
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    [data-liquid-material]:is(button, a),
+    [data-liquid-material] :is(button, a, summary, [role='button'], .map-layer-toggle)
+  )
+  :where(span, strong, small, em, b, i) {
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+.material-interaction-label {
+  display: inline-block;
+}
+
+dialog.client-dialog {
+  width: min(
+    var(--yct-dialog-width-sm),
+    calc(100vw - var(--yct-space-6) - var(--yct-safe-area-left) - var(--yct-safe-area-right))
+  );
+  max-height: calc(
+    100dvh - var(--yct-space-6) - var(--yct-safe-area-top) - var(--yct-safe-area-bottom)
+  );
+  margin: auto;
+  padding: var(--yct-space-5);
+  border: 0;
+  /* 与 .modal-panel 共用同一套弹窗表面标准。 */
+  border-radius: var(--yct-dialog-radius);
+  box-shadow: var(--yct-shadow-floating);
+  /* 滚动下沉到正文区，标题栏与操作栏在 flex 布局中固定可见 */
+  overflow: hidden;
+  color: var(--yct-color-text);
+  background: var(--yct-color-surface-panel);
+}
+
+dialog.client-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--yct-space-4);
+}
+
+dialog.client-dialog:not([open]) {
+  display: none;
+}
+
+dialog.client-dialog::backdrop {
+  background: rgb(0 0 0 / 38%);
+  -webkit-backdrop-filter: blur(var(--yct-material-blur-soft));
+  backdrop-filter: blur(var(--yct-material-blur-soft));
+}
+
+.client-dialog-heading,
+.client-dialog-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.client-dialog-heading {
+  justify-content: space-between;
+}
+
+.client-dialog-heading > .icon-button {
+  flex: 0 0 auto;
+}
+
+.client-dialog-heading h2 {
+  /* 标题最多两行截断，把空间让给关闭按钮，避免窄屏下按钮被挤到标题下方 */
+  display: -webkit-box;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--yct-font-size-18);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.client-dialog p {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.client-dialog-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+dialog.client-dialog.is-page {
+  width: min(1100px, calc(100vw - var(--yct-space-6)));
+  height: calc(100dvh - var(--yct-space-6));
+}
+
+.client-dialog iframe {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: var(--yct-radius-md);
+}
+
+:root[data-material-mode='advanced'] dialog.client-dialog[data-liquid-material] {
+  background: var(--yct-material-neutral-surface);
+}
+

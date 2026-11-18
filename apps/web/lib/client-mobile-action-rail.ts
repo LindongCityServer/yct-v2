@@ -26,7 +26,9 @@ export const mobileActionRailTopOffsetMax = 240;
 export const mobileActionRailChangedEventName = 'yct:mobile-action-rail-changed';
 
 /** 与现有移动端布局断点保持一致，避免出现两套“移动端”定义。 */
-export const mobileActionRailMediaQuery = '(max-width: 760px)';
+import { MOBILE_NAV_MEDIA_QUERY } from './breakpoints';
+
+export const mobileActionRailMediaQuery = MOBILE_NAV_MEDIA_QUERY;
 
 const defaultMobileActionRailPreference: MobileActionRailPreference = {
   enabled: false,

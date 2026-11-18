@@ -65,6 +65,8 @@ export interface AssistantReference {
   color?: string;
   /** 后台为 POI 分类配置的语义色，只用于回答里的卡片着色。 */
   cardColor?: string;
+  /** 可直接展示的配图（目前来自运营内容封面），QQ 机器人可用于发送图片。 */
+  imageUrl?: string;
   /** 语义类型：line / station / place / operation / service / faq / wiki / social / page / schedule。 */
   tone?: string;
   /** 只给模型看的正文摘录，不进入前端引用 chip。 */
@@ -780,6 +782,7 @@ export async function buildAssistantRetrieval(
         href: `/operations/${encodeURIComponent(item.id)}`,
         asOf: item.publishedAt,
         snippet: item.excerpt,
+        imageUrl: item.coverImageUrl,
         tone: 'operation',
       });
     }

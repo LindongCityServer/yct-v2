@@ -15,6 +15,7 @@ import {
   type TransitLineTravelDirection,
 } from '../lib/transit-line-direction';
 import { TitleWithBreaks } from './title-with-breaks';
+import { EmptyState } from './ui/status';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
@@ -211,12 +212,9 @@ export function TransitLineDetailPanel({
             })}
           </ol>
         ) : (
-          <div className="empty-state">
-            <span className="material-symbols-outlined" aria-hidden="true">
-              route
-            </span>
+          <EmptyState icon="route">
             <p>{t('lineDetail.stationListEmpty')}</p>
-          </div>
+          </EmptyState>
         )}
       </section>
 

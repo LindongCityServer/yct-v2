@@ -1,6 +1,8 @@
 'use client';
 
 import { useI18n } from '../lib/client-i18n';
+import { ButtonLink } from './ui/button';
+import { StatusChip } from './ui/chip';
 
 export function OperationTagList({ tags }: Readonly<{ tags: string[] }>) {
   const { t } = useI18n();
@@ -8,9 +10,7 @@ export function OperationTagList({ tags }: Readonly<{ tags: string[] }>) {
   return (
     <div className="operation-tag-list" aria-label={t('operation.contentTagsAria')}>
       {tags.map((tag) => (
-        <span className="operation-tag" key={tag}>
-          {tag}
-        </span>
+        <StatusChip key={tag}>{tag}</StatusChip>
       ))}
     </div>
   );
@@ -57,12 +57,15 @@ export function LegacyBodyFallback({ legacyLink }: Readonly<{ legacyLink?: strin
         <p>{t('operation.legacyBodyDescription')}</p>
       </div>
       {legacyLink ? (
-        <a className="secondary-action-button" href={legacyLink} target="_blank" rel="noreferrer">
-          <span className="material-symbols-outlined" aria-hidden="true">
-            open_in_new
-          </span>
-          <span>{t('operation.openOriginal')}</span>
-        </a>
+        <ButtonLink
+          variant="secondary"
+          href={legacyLink}
+          target="_blank"
+          rel="noreferrer"
+          icon="open_in_new"
+        >
+          {t('operation.openOriginal')}
+        </ButtonLink>
       ) : null}
     </div>
   );
