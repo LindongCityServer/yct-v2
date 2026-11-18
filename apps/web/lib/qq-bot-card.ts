@@ -1301,9 +1301,13 @@ function getWordmarkDataUri(): string | null {
   if (wordmarkDataUri !== undefined) {
     return wordmarkDataUri;
   }
+  const configuredDir = process.env.QQ_BOT_CARD_ASSET_DIR?.trim();
   const candidates = [
+    ...(configuredDir ? [resolve(configuredDir, 'icons', 'yct-logo-wordmark.svg')] : []),
+    resolve(process.cwd(), 'assets', 'icons', 'yct-logo-wordmark.svg'),
     resolve(process.cwd(), 'public', 'icons', 'yct-logo-wordmark.svg'),
     resolve(process.cwd(), 'apps', 'web', 'public', 'icons', 'yct-logo-wordmark.svg'),
+    resolve(process.cwd(), '..', '..', 'apps', 'web', 'public', 'icons', 'yct-logo-wordmark.svg'),
   ];
   const logoPath = candidates.find((candidate) => existsSync(candidate));
   if (!logoPath) {
@@ -1324,9 +1328,13 @@ function getCardTemplateDataUri(fileName: string): string | null {
   if (templateCache.has(fileName)) {
     return templateCache.get(fileName) ?? null;
   }
+  const configuredDir = process.env.QQ_BOT_CARD_ASSET_DIR?.trim();
   const candidates = [
+    ...(configuredDir ? [resolve(configuredDir, 'card-templates', fileName)] : []),
+    resolve(process.cwd(), 'assets', 'card-templates', fileName),
     resolve(process.cwd(), 'public', 'card-templates', fileName),
     resolve(process.cwd(), 'apps', 'web', 'public', 'card-templates', fileName),
+    resolve(process.cwd(), '..', '..', 'apps', 'web', 'public', 'card-templates', fileName),
   ];
   const templatePath = candidates.find((candidate) => existsSync(candidate));
   if (!templatePath) {
@@ -1364,9 +1372,13 @@ function getBrandLogoDataUri(): string | null {
   if (brandLogoDataUri !== undefined) {
     return brandLogoDataUri;
   }
+  const configuredDir = process.env.QQ_BOT_CARD_ASSET_DIR?.trim();
   const candidates = [
+    ...(configuredDir ? [resolve(configuredDir, 'icons', 'yct-logo.svg')] : []),
+    resolve(process.cwd(), 'assets', 'icons', 'yct-logo.svg'),
     resolve(process.cwd(), 'public', 'icons', 'yct-logo.svg'),
     resolve(process.cwd(), 'apps', 'web', 'public', 'icons', 'yct-logo.svg'),
+    resolve(process.cwd(), '..', '..', 'apps', 'web', 'public', 'icons', 'yct-logo.svg'),
   ];
   const logoPath = candidates.find((candidate) => existsSync(candidate));
   if (!logoPath) {
@@ -1583,12 +1595,17 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
 function resolveCardFontFiles(): string[] {
   const names = ['HarmonyOS_Sans_SC_Regular.ttf', 'HarmonyOS_Sans_SC_Bold.ttf'];
   const files: string[] = [];
+  const configuredDir = process.env.QQ_BOT_CARD_FONT_DIR?.trim();
   for (const name of names) {
     const candidates = [
+      ...(configuredDir ? [resolve(configuredDir, name)] : []),
+      resolve(process.cwd(), 'assets', 'fonts', name),
       resolve(process.cwd(), 'public', 'fonts', 'harmonyos-sans', name),
       resolve(process.cwd(), 'apps', 'web', 'public', 'fonts', 'harmonyos-sans', name),
       resolve(process.cwd(), 'app', 'fonts', 'harmonyos-sans', name),
       resolve(process.cwd(), 'apps', 'web', 'app', 'fonts', 'harmonyos-sans', name),
+      resolve(process.cwd(), '..', '..', 'apps', 'web', 'app', 'fonts', 'harmonyos-sans', name),
+      resolve(process.cwd(), '..', 'apps', 'web', 'app', 'fonts', 'harmonyos-sans', name),
     ];
     const found = candidates.find((candidate) => existsSync(candidate));
     if (found) {

@@ -3,9 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "雨城通「问一问」的 QQ 官方机器人接入层（零运行时依赖）",
+  "description": "雨城通「问一问」的 QQ 官方机器人接入层（本地生图，独立进程）",
+  "files": [
+    "src/",
+    "data/",
+    "assets/",
+    "start-qq-bot.ps1",
+    "install-qq-bot-task.ps1",
+    "README.md",
+    ".env.example"
+  ],
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "qrcode": "^1.5.4"
   },
   "scripts": {
     "start": "node src/index.mjs",

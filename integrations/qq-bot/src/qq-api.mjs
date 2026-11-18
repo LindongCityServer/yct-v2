@@ -130,6 +130,52 @@ export class QQApi {
   }
 
   /** 群聊图片走“上传拿 file_info，再发 msg_type=7”两步。 */
+  async uploadGroupImageData(groupOpenid, buffer) {
+    return this.uploadGroupFileData(groupOpenid, buffer, 'card.png');
+  }
+
+  async uploadC2CImageData(userOpenid, buffer) {
+    return this.uploadC2CFileData(userOpenid, buffer, 'card.png');
+  }
+
+  async uploadGroupFileData(groupOpenid, buffer, fileName) {
+    const data = await this.request(`/v2/groups/${encodeURIComponent(groupOpenid)}/files`, {
+      method: 'POST',
+      body: {
+        file_type: 1,
+        file_data: Buffer.from(buffer).toString('base64'),
+        file_name: fileName,
+        srv_send_msg: false,
+      },
+    });
+    const fileInfo = data?.file_info;
+    if (typeof fileInfo !== 'string' || !fileInfo) {
+      throw new QQApiError('QQ 群图片数据上传没有返回 file_info。', {
+        path: '/v2/groups/.../files',
+      });
+    }
+    return fileInfo;
+  }
+
+  async uploadC2CFileData(userOpenid, buffer, fileName) {
+    const data = await this.request(`/v2/users/${encodeURIComponent(userOpenid)}/files`, {
+      method: 'POST',
+      body: {
+        file_type: 1,
+        file_data: Buffer.from(buffer).toString('base64'),
+        file_name: fileName,
+        srv_send_msg: false,
+      },
+    });
+    const fileInfo = data?.file_info;
+    if (typeof fileInfo !== 'string' || !fileInfo) {
+      throw new QQApiError('QQ 单聊图片数据上传没有返回 file_info。', {
+        path: '/v2/users/.../files',
+      });
+    }
+    return fileInfo;
+  }
+
   async uploadGroupImage(groupOpenid, url) {
     const data = await this.request(`/v2/groups/${encodeURIComponent(groupOpenid)}/files`, {
       method: 'POST',

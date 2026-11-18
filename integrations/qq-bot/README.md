@@ -3,7 +3,8 @@
 把雨城通「问一问」接到 QQ 官方机器人：群里 @ 机器人或单聊提问，回答仍由站内
 `/api/assistant/chat` 生成，检索、工具和引用与网页端完全一致。
 
-- **零运行时依赖**：只需要 Node.js 22 或更高版本（当前部署用 Node 24），不用 `pnpm install`，没有 `node_modules`。
+- **本地生图**：QQ 指令卡片在机器人进程内用 `@resvg/resvg-js` 渲染，再以 `file_data` 上传，
+  不再依赖网页的 `/api/qq-bot/card`。改卡片只需要重新同步 `card-renderer.mjs` 并重启机器人。
 - **独立进程**：不进入 Next.js 部署包，网页发版、重启都不影响机器人进程。
 - **只需出站网络**：通过 QQ 网关 WebSocket 收事件，不需要公网回调地址或证书。
 - **聊天式回复**：默认 `QQ_BOT_STYLE=chat`，请求会带 `channel` 让问一问按 QQ 语境缩短回答；
@@ -11,15 +12,14 @@
   需要网页版完整格式时改 `QQ_BOT_STYLE=full`。
 - **卡片转文字**：网页版的 `ui` 卡片指令会按引用还原成地点列表、线路站点和班次时间，不会丢内容或发 JSON。
 - **无链接、无表格**：URL（含 `www.`、裸域名）会被去掉，Markdown 表格会转成自然语言列表。
-- **快捷指令**：`/随机`、`/骰子`、`/算`、`/电码`、`/gb2312`、`/天气`、`/ip`、`/历史`、`/对联`；
+- **快捷指令**：`/随机`、`/掷骰子`、`/算`、`/电码`、`/gb2312`、`/天气`、`/ip`、`/历史`、`/对联`；
   也支持自然触发词（`计算 1+2`、`上海天气`、`历史上的今天`、`菜单`）。这些在本地处理，
   不经过问一问，详见 [快捷指令文档](../../docs/QQ_BOT_COMMANDS.md)。
   `/天气` 配置 `QQ_BOT_AMAP_KEY` 时走高德，未配置则回退 wttr.in。
 - **群互动**：`签到`、`签到榜`、`发言统计 [天数]`、`发言榜 [天数]`、`今日运势`、`重置运势`；
   状态保存在 `state/`，更新时保留。
-- **指令卡片**：除签到、帮助、关于、新对话外，本地指令会在文字后附一张 720px PNG，
-  版式对齐地图分享卡片（主题色渐变、Material Symbols 图标、胶囊 meta、列表和原始品牌图标）；
-  需 `YCT_PUBLIC_BASE_URL` 和 `QQ_BOT_CARDS=1`。
+- **指令卡片**：除签到、帮助、关于、新对话外，本地指令会附一张 720px PNG；
+  机器人在本地渲染后直接上传，不需要 `YCT_PUBLIC_BASE_URL`。
 - **回答配图**：运营内容引用带封面时，可在文字后补一张图片（需 `YCT_PUBLIC_BASE_URL` 和
   `QQ_BOT_IMAGES=1`），会占用一次被动回复。
 
@@ -36,6 +36,27 @@ YCT_ASSISTANT_KEY=模型服务商的 API Key
 ```
 
 `YCT_BASE_URL` 默认是 `http://127.0.0.1:3300`，即网页服务在本机的监听地址。
+
+## 1.1 安装本地生图依赖
+
+卡片渲染使用 `@resvg/resvg-js` 和字体资源。首次部署或升级后执行：
+
+```powershell
+pnpm install
+pnpm qqbot:card:assets
+pnpm qqbot:card:build
+```
+
+部署到服务器时，把 `integrations\qq-bot` 整个目录（包含 `node_modules` 和 `assets`）复制过去；
+如果服务器不能安装原生依赖，请在相同 Node 版本/操作系统上安装后再复制。
+
+更推荐用 pnpm 生成不含本地 `.env`、`test/` 的自包含目录：
+
+```powershell
+pnpm --filter yct-qq-bot deploy --prod --legacy C:\path\to\qq-bot-deploy
+```
+
+部署后把真实 `.env` 单独放进该目录，再运行启动脚本。
 
 ## 2. 三步自检
 
@@ -76,6 +97,9 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -NodePat
 | `src/answer.mjs`           | Markdown 转 QQ 纯文本、表格转列表、按句取舍、分段            |
 | `src/bot.mjs`              | 事件处理、去重、限流、被动回复序号、对话上下文               |
 | `src/commands.mjs`         | 本地快捷指令分发                                             |
+| `src/card-render.mjs`      | 卡片封面/二维码预处理和本地 PNG 渲染                         |
+| `src/card-renderer.mjs`    | 由网页卡片源码生成的本地渲染器，更新卡片后同步重建           |
+| `assets/`                  | 字体、品牌图标和格纸模板，由 `qqbot:card:assets` 同步        |
 | `src/community.mjs`        | 签到、发言统计、今日运势与本地状态                           |
 | `src/images.mjs`           | 从引用里挑选可发送的配图                                     |
 | `src/calc.mjs`             | 安全算式求值，不调用 eval                                    |

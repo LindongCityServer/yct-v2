@@ -6,7 +6,7 @@
 Windows 服务器怎么部署、出错时先看哪里，以及服务器上的 `codex` 能帮到什么程度。
 
 代码在 [`integrations/qq-bot`](../integrations/qq-bot/README.md)，是一个**独立的 Node.js 进程**，
-不进入 Next.js 部署包，也不需要 `pnpm install` 或 `node_modules`。
+不进入 Next.js 部署包；卡片在机器人本地渲染，网页发版不会改变机器人发出的卡片。
 
 随机数、算式、中文电码、GB2312、天气、IP 属地、历史上的今天、对对联、随机地点和服务器人数这些快捷指令不走问一问，
 它们的用法、外部接口和部署注意见 [QQ_BOT_COMMANDS.md](./QQ_BOT_COMMANDS.md)。
@@ -101,7 +101,7 @@ QQ 是聊天窗口，长回答会刷屏、Markdown 符号会原样显示、引�
 | `YCT_ASSISTANT_PROVIDER`     | `deepseek`                | `deepseek` / `glm` / `mimo`                                            |
 | `YCT_ASSISTANT_MODEL`        | `deepseek-v4-flash`       | 模型名，需与网页端支持的模型一致                                       |
 | `YCT_ASSISTANT_LOCALE`       | `zh-CN`                   | `zh-CN` / `zh-Hant` / `en`                                             |
-| `YCT_PUBLIC_BASE_URL`        | 空                        | 站点公网 HTTPS 地址；用于回答配图和指令卡片                            |
+| `YCT_PUBLIC_BASE_URL`        | 空                        | 站点公网 HTTPS 地址；用于回答配图，指令卡片不再需要                    |
 | `QQ_BOT_GROUP_ALLOWLIST`     | 空                        | 只响应这些群 openid，逗号或空格分隔；空表示不限制                      |
 | `QQ_BOT_USER_QPM`            | `6`                       | 每个用户每分钟最多提问次数                                             |
 | `QQ_BOT_GROUP_QPM`           | `20`                      | 每个群每分钟最多提问次数                                               |
@@ -119,7 +119,9 @@ QQ 是聊天窗口，长回答会刷屏、Markdown 符号会原样显示、引�
 | `QQ_BOT_AMAP_KEY`            | 空                        | 高德 Web 服务 Key；配置后天气优先走高德，否则回退 wttr.in              |
 | `QQ_BOT_STATE_PATH`          | `state/qq-bot-state.json` | 签到、发言统计和运势的本地状态文件；更新时保留该目录                   |
 | `QQ_BOT_IMAGES`              | `1`                       | 是否把回答引用里的运营封面作为主动图片发送；需要 `YCT_PUBLIC_BASE_URL` |
-| `QQ_BOT_CARDS`               | `1`                       | 除签到、帮助、关于、新对话外，本地指令是否发送结果卡片                 |
+| `QQ_BOT_CARDS`               | `1`                       | 是否在机器人本地渲染并发送指令结果卡片                                 |
+| `QQ_BOT_CARD_FONT_DIR`       | 空（使用 `assets/fonts`） | 卡片字体目录；部署时可由 `qqbot:card:assets` 生成                      |
+| `QQ_BOT_CARD_ASSET_DIR`      | 空（使用 `assets`）       | 卡片品牌图标和格纸模板目录                                             |
 | `QQ_BOT_BILIBILI`            | `1`                       | 识别消息里的 B 站视频链接，回复标题、UP 主、链接和封面                 |
 | `QQ_BOT_FORTUNE_TEXTS_PATH`  | `data/fortune-texts.txt`  | 今日运势文案，一行一条；修改后重启机器人                               |
 | `QQ_BOT_GROUP_NOTICES_PATH`  | `data/group-notices.json` | 按群配置的入群/被踢/退群文案                                           |
@@ -176,7 +178,7 @@ node src/index.mjs --probe
 
 ```text
 C:\wwwroot\yct-v2\   # 现有网页部署目录（不要动）
-C:\wwwroot\qq-bot\   # 机器人：把 integrations\qq-bot 整个目录复制过来
+C:\wwwroot\qq-bot\   # 机器人：把 integrations\qq-bot 整个目录复制过来（含 node_modules 和 assets）
 ├─ .env                       # 只放在服务器上，不要提交、不要放进网页部署包
 ├─ src\
 ├─ data\                      # 电码/GB2312 静态表，随代码更新
@@ -186,8 +188,11 @@ C:\wwwroot\qq-bot\   # 机器人：把 integrations\qq-bot 整个目录复制过
 └─ logs\                      # 运行时生成
 ```
 
-不需要构建、不需要 `pnpm install`，也不需要把机器人放进 `apps\web\.next`。
-机器人对网页只发起本机 HTTP 请求，不需要改 Nginx，也不需要开放入站端口。
+不需要构建 Next.js，也不需要把机器人放进 `apps\web\.next`。首次部署先在仓库根目录执行
+`pnpm install`、`pnpm qqbot:card:assets` 和 `pnpm qqbot:card:build`，再把包含
+`node_modules`、`assets` 的目录复制过去；机器人只对网页发起本机 HTTP 请求，不需要改 Nginx，
+也不需要开放入站端口。推荐用 `pnpm --filter yct-qq-bot deploy --prod --legacy <目录>` 生成
+不含 `.env` 和测试目录的自包含部署目录，再把真实 `.env` 单独放进去。
 
 ### 5.2 上传
 
@@ -201,9 +206,9 @@ C:\wwwroot\qq-bot\   # 机器人：把 integrations\qq-bot 整个目录复制过
 C:\node-v24\node.exe -v
 ```
 
-网页端部署时确认 `apps\web\public\card-templates\telegram-row.svg` 和
-`apps\web\public\card-templates\answer-sheet-row.svg` 已随 `public` 一起上传；卡片路由会直接读取
-这两个模板。如果网页端只更新了 `.next` 而没带 `public`，电码/GB2312 卡片会缺少格纸底图。
+机器人卡片直接读取 `integrations\qq-bot\assets\card-templates\telegram-row.svg` 和
+`answer-sheet-row.svg`，由 `pnpm qqbot:card:assets` 从网页同源资源同步；网页发版不再影响机器人卡片。
+如果模板或字体缺失，卡片仍可渲染，但电码/GB2312 格纸底图会退回无底图版本。
 
 ### 5.3 先跑自检
 
@@ -327,6 +332,8 @@ Content-Type: application/json
   字标，页脚显示来源、发送人和发送时间）；电码/GB2312 直接使用
   `apps/web/public/card-templates/` 里的 SVG 行模板；需要 `YCT_PUBLIC_BASE_URL` 和
   `QQ_BOT_CARDS=1`，会占用一次被动回复。
+- **指令卡片**：`QQ_BOT_CARDS=1` 时，机器人在本地渲染 PNG 并直接上传；不再需要网页卡片路由，
+  也不再依赖 `YCT_PUBLIC_BASE_URL`。卡片封面/二维码在机器人进程内预取。
 - **回答配图**：运营内容引用带封面时，可在文字后补一张图片（需 `YCT_PUBLIC_BASE_URL` 和
   `QQ_BOT_IMAGES=1`），会占用一次被动回复。
 - **路线优先公共交通**：问“怎么走”时先给一条公共交通方案，写明乘坐几路/几号线和换乘点；

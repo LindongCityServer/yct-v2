@@ -123,6 +123,16 @@ test('QQApi 上传群图片并发送富媒体消息', async () => {
     });
 
     assert.equal(await api.uploadC2CImage('u1', 'https://yct.example.com/b.png'), 'file-user');
+
+    const dataFileInfo = await api.uploadGroupImageData('g1', Buffer.from('png-bytes'));
+    assert.equal(dataFileInfo, 'file-group');
+    const dataUpload = requests.filter((item) => item.url === '/v2/groups/g1/files').at(-1);
+    assert.deepEqual(JSON.parse(dataUpload.body), {
+      file_type: 1,
+      file_data: Buffer.from('png-bytes').toString('base64'),
+      file_name: 'card.png',
+      srv_send_msg: false,
+    });
   } finally {
     server.close();
   }

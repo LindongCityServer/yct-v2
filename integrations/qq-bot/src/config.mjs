@@ -368,7 +368,7 @@ export function describeConfig(config) {
     `模型 Key：${maskSecret(config.yct.apiKey)}`,
     `公开站点：${config.yct.publicBaseUrl || '（未配置，回答里的图片不会发送）'}`,
     `回答配图：${config.reply.images && config.yct.publicBaseUrl ? '开' : '关'}`,
-    `指令结果卡片：${config.reply.cards && config.yct.publicBaseUrl ? '开' : '关'}`,
+    `指令结果卡片：${config.reply.cards ? '开（本地渲染）' : '关'}`,
     `天气城市：${config.weather.city || '（未配置，/天气 会提示先填 QQ_BOT_WEATHER_CITY）'}`,
     `高德天气 Key：${maskSecret(config.weather.amapKey)}`,
     `签到/统计状态：${config.statePath}`,

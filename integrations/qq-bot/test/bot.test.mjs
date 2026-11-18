@@ -45,9 +45,11 @@ function createConfig(overrides = {}) {
   };
 }
 
-function createSetup({ config = createConfig(), assistantImpl, condenseImpl } = {}) {
+function createSetup({ config = createConfig(), assistantImpl, condenseImpl, cardRenderer } = {}) {
   const sends = [];
   const uploads = [];
+  const imageData = [];
+  const renderedCards = [];
   const api = {
     async sendGroupMessage(openid, payload) {
       sends.push({ kind: 'group', openid, payload });
@@ -65,6 +67,14 @@ function createSetup({ config = createConfig(), assistantImpl, condenseImpl } = 
     async uploadC2CImage(openid, url) {
       uploads.push({ kind: 'c2c', openid, url });
       return 'file-info-c2c';
+    },
+    async uploadGroupImageData(openid, buffer) {
+      imageData.push({ kind: 'group', openid, buffer });
+      return 'file-data-group';
+    },
+    async uploadC2CImageData(openid, buffer) {
+      imageData.push({ kind: 'c2c', openid, buffer });
+      return 'file-data-c2c';
     },
     async sendGroupImage(openid, payload) {
       sends.push({ kind: 'image', openid, payload });
@@ -99,11 +109,27 @@ function createSetup({ config = createConfig(), assistantImpl, condenseImpl } = 
     };
   };
   const logger = { debug() {}, info() {}, warn() {}, error() {} };
-  const bot = new QQBot({ api, config, logger, assistant, condense: condenseImpl, queue });
+  const renderer =
+    cardRenderer ??
+    (async (card) => {
+      renderedCards.push(card);
+      return Buffer.from(`card:${card.type}`);
+    });
+  const bot = new QQBot({
+    api,
+    config,
+    logger,
+    assistant,
+    condense: condenseImpl,
+    queue,
+    cardRenderer: renderer,
+  });
   return {
     bot,
     sends,
     uploads,
+    imageData,
+    renderedCards,
     queue,
     getCalls: () => calls,
     getLastOptions: () => lastOptions,
@@ -451,12 +477,11 @@ test('事件桥补全群消息统计，并发送进退群和服务聊天', async
   assert.equal(sends.at(-1).payload.content, '💬 小明：晚上好');
 });
 
-test('指令结果会生成卡片图片', async () => {
+test('指令结果在机器人本地渲染并上传卡片图片', async () => {
   const config = createConfig({
     reply: { ack: false, cards: true, appendSources: false },
-    yct: { publicBaseUrl: 'https://yct.example.com' },
   });
-  const { bot, sends, uploads } = createSetup({ config });
+  const { bot, sends, imageData, renderedCards } = createSetup({ config });
 
   await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
     ...groupEvent,
@@ -470,13 +495,13 @@ test('指令结果会生成卡片图片', async () => {
   assert.equal(sends[1].kind, 'group');
   assert.equal(sends[1].payload.msg_seq, 1);
   assert.match(sends[1].payload.content, /随机数/);
-  assert.equal(uploads.length, 1);
-  assert.match(uploads[0].url, /^https:\/\/yct\.example\.com\/api\/qq-bot\/card\?d=/);
-  const payload = new URL(uploads[0].url).searchParams.get('d');
-  const card = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-  assert.equal(card.type, 'result');
-  assert.match(card.title, /随机数/);
-  assert.match(card.footer, /群成员｜\d{2}-\d{2} \d{2}:\d{2}/);
+  assert.equal(imageData.length, 1);
+  assert.equal(imageData[0].kind, 'group');
+  assert.equal(imageData[0].buffer.toString(), 'card:result');
+  assert.equal(renderedCards.length, 1);
+  assert.equal(renderedCards[0].type, 'result');
+  assert.match(renderedCards[0].title, /随机数/);
+  assert.match(renderedCards[0].footer, /群成员｜\d{2}-\d{2} \d{2}:\d{2}/);
 });
 
 test('单聊配图保持文字加图片，不走 Markdown', async () => {

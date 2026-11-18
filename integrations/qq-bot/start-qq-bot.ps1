@@ -3,7 +3,7 @@
   启动雨城通「问一问」QQ 机器人，并在进程退出后自动重启。
 
 .DESCRIPTION
-  机器人是独立的 Node.js 进程，不需要 pnpm、不需要 node_modules。
+  机器人是独立的 Node.js 进程，但本地生图需要同目录的 node_modules 和 assets。
   日志按天写入同目录 logs\qq-bot-yyyyMMdd.log（UTF-8），超过 10MB 时顺延为 .1.log。
   请用 PowerShell 7（pwsh）运行：Windows PowerShell 5.1 会把无 BOM 的 UTF-8 脚本读成乱码。
 
@@ -38,6 +38,9 @@ $OutputEncoding = $utf8
 $entry = Join-Path $root 'src\index.mjs'
 if (-not (Test-Path -LiteralPath $entry)) {
   throw "找不到入口文件：$entry"
+}
+if (-not (Test-Path -LiteralPath (Join-Path $root 'node_modules\@resvg\resvg-js'))) {
+  throw '缺少卡片渲染依赖 node_modules\@resvg\resvg-js，请先按 README 安装并复制 node_modules。'
 }
 
 $resolvedNode = $NodePath

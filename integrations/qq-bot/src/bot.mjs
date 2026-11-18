@@ -1,5 +1,6 @@
 import { askAssistant } from './assistant-client.mjs';
 import { composeAnswer, helpText, prepareAnswerText } from './answer.mjs';
+import { renderCardPng } from './card-render.mjs';
 import { extractBilibiliUrl, fetchBilibiliVideo, formatBilibiliVideo } from './bilibili.mjs';
 import { condenseWithModel } from './condense.mjs';
 import { handleCommand } from './commands.mjs';
@@ -32,6 +33,7 @@ export class QQBot {
     assistant = askAssistant,
     condense = condenseWithModel,
     command = handleCommand,
+    cardRenderer = renderCardPng,
     community,
     queue,
     store,
@@ -42,6 +44,7 @@ export class QQBot {
     this.assistant = assistant;
     this.condense = condense;
     this.command = command;
+    this.cardRenderer = cardRenderer;
     this.community =
       community ??
       new CommunityStore({
@@ -692,41 +695,41 @@ export class QQBot {
   }
 
   async sendCommandCard({ target, messageId, card, seq, active = false }) {
-    if (!this.config.reply.cards || !this.config.yct.publicBaseUrl) {
+    if (!this.config.reply.cards) {
       return false;
     }
-    let url;
-    try {
-      const payload = Buffer.from(JSON.stringify(card)).toString('base64url');
-      url = `${this.config.yct.publicBaseUrl}/api/qq-bot/card?d=${payload}`;
-    } catch (error) {
-      this.logger.warn('生成指令卡片地址失败：', error);
-      return false;
-    }
-    if (url.length > 3900) {
-      this.logger.warn(`指令卡片地址过长（${url.length}），已跳过。`);
+    if (typeof this.cardRenderer !== 'function') {
       return false;
     }
 
     try {
+      const png = await this.cardRenderer(card, {
+        allowedImageHosts: [this.config.yct.publicBaseUrl, ...this.config.reply.imageHosts].filter(
+          Boolean,
+        ),
+      });
+      if (!png || png.length === 0) {
+        this.logger.warn(`指令卡片渲染结果为空：${card.type}`);
+        return false;
+      }
       if (target.kind === 'group') {
-        const fileInfo = await this.api.uploadGroupImage(target.openid, url);
+        const fileInfo = await this.api.uploadGroupImageData(target.openid, png);
         await this.api.sendGroupImage(
           target.openid,
           active ? { fileInfo } : { fileInfo, msgId: messageId, msgSeq: seq },
         );
       } else {
-        const fileInfo = await this.api.uploadC2CImage(target.openid, url);
+        const fileInfo = await this.api.uploadC2CImageData(target.openid, png);
         await this.api.sendC2CImage(target.openid, {
           fileInfo,
           msgId: messageId,
           msgSeq: seq,
         });
       }
-      this.logger.info(`指令卡片已发送：${card.type}`);
+      this.logger.info(`指令卡片已在机器人本地渲染并发送：${card.type}`);
       return true;
     } catch (error) {
-      this.logger.warn('指令卡片发送失败：', error);
+      this.logger.warn('指令卡片本地渲染或发送失败：', error);
       return false;
     }
   }

@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - integrations/qq-bot
 allowBuilds:
   esbuild: true
   sharp: true
