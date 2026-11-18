@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { helpText } from '../src/answer.mjs';
 import { QQBot } from '../src/bot.mjs';
+import { shanghaiDateKey } from '../src/community.mjs';
 
 function createConfig(overrides = {}) {
   return {
@@ -33,6 +34,14 @@ function createConfig(overrides = {}) {
       model: 'deepseek-v4-flash',
       locale: 'zh-CN',
       ...overrides.yct,
+    },
+    events: {
+      port: 0,
+      bind: '127.0.0.1',
+      token: '',
+      groupMap: new Map(),
+      groups: new Set(),
+      ...overrides.events,
     },
   };
 }
@@ -415,6 +424,47 @@ test('配图上传失败时回退为纯文字消息', async () => {
   assert.equal(sends[0].kind, 'group');
   assert.equal(sends[0].payload.content, '站台临时调整，请留意公告。');
   assert.equal(sends[0].payload.msg_seq, 1);
+});
+
+test('事件桥补全群消息统计，并发送进退群和服务聊天', async () => {
+  const config = createConfig({
+    events: {
+      port: 0,
+      bind: '127.0.0.1',
+      token: '',
+      groupMap: new Map([['old-group', 'group-1']]),
+      groups: new Set(['group-1']),
+    },
+  });
+  const { bot, sends } = createSetup({ config });
+  bot.eventBridge = { close: async () => {} };
+  bot.groupNotices = { groups: { 'old-group': { welcome: '欢迎 {name}' } } };
+
+  await bot.handleOneBotEvent({
+    post_type: 'message',
+    message_type: 'group',
+    group_id: 'old-group',
+    user_id: 'u1',
+    sender: { nickname: '小明' },
+    message_id: 1001,
+    raw_message: '大家好',
+  });
+  assert.equal(
+    bot.community.messageStats({ groupId: 'group-1', date: shanghaiDateKey() }).total,
+    1,
+  );
+
+  await bot.handleOneBotEvent({
+    post_type: 'notice',
+    notice_type: 'group_increase',
+    group_id: 'old-group',
+    user_id: 'u2',
+    sender: { nickname: '小红' },
+  });
+  assert.match(sends.at(-1).payload.content, /欢迎 小红/);
+
+  await bot.handleServerEvent({ type: 'chat', player: '小明', message: '晚上好' });
+  assert.equal(sends.at(-1).payload.content, '💬 小明：晚上好');
 });
 
 test('指令结果会生成卡片图片', async () => {

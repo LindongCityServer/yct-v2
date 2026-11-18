@@ -322,6 +322,30 @@ test('内容指令都带卡片数据', async () => {
   assert.equal(couplet.card?.lower, '细雨润花');
 });
 
+test('服务器在线人数', async () => {
+  const result = await handleCommand({
+    ...base,
+    text: '/人数',
+    config: { ...config, yct: { ...config.yct, baseUrl: 'http://127.0.0.1:3300' } },
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          meta: { sourceStatus: 'ready', message: '正常' },
+          item: {
+            availability: 'online',
+            onlinePlayerCount: 12,
+            checkedAt: '2026-11-18T04:00:00.000Z',
+          },
+        };
+      },
+    }),
+  });
+  assert.match(result.reply, /服务器在线：12 人/);
+  assert.equal(result.card?.type, 'result');
+  assert.equal(result.card?.result, '12');
+});
+
 test('帮助里列出快捷指令', async () => {
   const result = await handleCommand({ ...base, text: '/帮助' });
   assert.match(result.reply, /快捷指令/);

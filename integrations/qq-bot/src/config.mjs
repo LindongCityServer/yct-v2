@@ -290,6 +290,13 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
       answerTimeoutMs,
     },
     logLevel: read('QQ_BOT_LOG_LEVEL') || 'info',
+    events: {
+      port: toInteger(read, 'QQ_BOT_EVENT_PORT', 0, problems, { min: 0, max: 65_535 }),
+      bind: read('QQ_BOT_EVENT_BIND') || '127.0.0.1',
+      token: read('QQ_BOT_EVENT_TOKEN'),
+      groupMap: splitPairs(read('QQ_BOT_EVENT_GROUP_MAP')),
+      groups: splitList(read('QQ_BOT_EVENT_GROUPS')),
+    },
   };
 
   if (
@@ -301,8 +308,24 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
   if (config.qq.groupAllowlist.size > 0) {
     warnings.push(`只响应 ${config.qq.groupAllowlist.size} 个白名单群，其他群会被忽略。`);
   }
+  if (config.events.port > 0 && !isLoopbackBind(config.events.bind) && !config.events.token) {
+    problems.push(
+      'QQ_BOT_EVENT_BIND 不是回环地址时必须设置 QQ_BOT_EVENT_TOKEN，否则事件桥会拒绝启动。',
+    );
+  }
+  if (
+    config.events.port > 0 &&
+    config.events.groupMap.size === 0 &&
+    config.events.groups.size === 0
+  ) {
+    warnings.push('事件桥已开启，但没有配置 QQ_BOT_EVENT_GROUP_MAP 或 QQ_BOT_EVENT_GROUPS。');
+  }
 
   return { config, problems, warnings };
+}
+
+function isLoopbackBind(value) {
+  return ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(String(value).toLowerCase());
 }
 
 function splitList(raw) {
@@ -356,6 +379,7 @@ export function describeConfig(config) {
     `运势文案：${config.fortuneTextsPath}`,
     `群进退群文案：${config.groupNoticesPath}`,
     `玩家进出同步：${config.reply.playerEvents && config.reply.playerEventGroups.length > 0 ? '开' : '关'}`,
+    `事件桥接：${config.events.port > 0 ? `http://${config.events.bind}:${config.events.port}` : '关'}`,
     `回答风格：${config.reply.style}（聊天模式上限 ${config.reply.chatMaxChars} 字）`,
     `二次精炼：${config.reply.condense ? `开，目标 ${config.reply.condenseChars} 字` : '关'}`,
     `单段字数：${config.reply.segmentChars}，回答超时：${config.reply.answerTimeoutMs} ms`,

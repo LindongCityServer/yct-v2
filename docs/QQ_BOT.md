@@ -128,6 +128,11 @@ QQ 是聊天窗口，长回答会刷屏、Markdown 符号会原样显示、引�
 | `QQ_BOT_PLAYER_POLL_MS`      | `30000`                   | 玩家位置轮询间隔，最小 10 秒                                         |
 | `QQ_BOT_PLAYER_JOIN_TEXT`    | `🟢 {name} 进入了服务器`  | 玩家进服文案，支持 `{name}`                                          |
 | `QQ_BOT_PLAYER_LEAVE_TEXT`   | `🔴 {name} 离开了服务器`  | 玩家退服文案，支持 `{name}`                                          |
+| `QQ_BOT_EVENT_PORT`          | `0`（关闭）               | 事件桥监听端口；开启后接 OneBot 群消息/进退群和游戏服务器事件        |
+| `QQ_BOT_EVENT_BIND`          | `127.0.0.1`               | 事件桥绑定地址；默认只允许本机插件访问                               |
+| `QQ_BOT_EVENT_TOKEN`         | 空                        | 事件桥 Bearer Token；绑定非回环地址时必须设置                        |
+| `QQ_BOT_EVENT_GROUP_MAP`     | 空                        | `旧群号=官方群openid` 映射，用于把 OneBot 群事件对到官方群           |
+| `QQ_BOT_EVENT_GROUPS`        | 空                        | 游戏服务器聊天/进服/退服广播到的官方群 openid                        |
 | `QQ_BOT_IMAGE_HOSTS`         | 空                        | 额外允许的配图域名，逗号分隔；默认只允许站点自己的域名               |
 | `QQ_BOT_LOG_LEVEL`           | `info`                    | `debug` / `info` / `warn` / `error`                                  |
 
@@ -281,6 +286,39 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -Uninsta
 - **群进退群文案**：`data/group-notices.json` 按群配置 `welcome` / `kick` / `leave`，
   支持 `{name}`、`{id}` 和旧文案占位符。官方 QQ 机器人不保证下发普通成员进退群事件；
   若平台不下发，需要由 OneBot/群管事件桥接后再调用对应事件处理。
+- **事件桥**：设置 `QQ_BOT_EVENT_PORT` 后监听 `POST /onebot` 和 `POST /server`。
+  OneBot 群消息会补全发言统计，进退群通知按 `data/group-notices.json` 发送；
+  游戏服务器可以把 `join`、`leave`、`chat` 事件 POST 到 `/server`，由机器人广播到
+  `QQ_BOT_EVENT_GROUPS`。事件桥默认只绑定 `127.0.0.1`，非本机访问请设置 Token。
+- **群消息统计范围**：官方机器人只收到 `GROUP_AT_MESSAGE_CREATE` 时，统计只能覆盖 @机器人 的消息；
+  需要在 QQ 开放平台开通“接收所有消息”，或用 OneBot 事件桥把全部群消息 POST 到 `/onebot`。
+  开启事件桥并配置 `QQ_BOT_EVENT_GROUP_MAP` 后，机器人会把该群的全部消息计入统计，并跳过重复的官方 @ 事件。
+- **服务器人数**：`/人数` / `/在线人数` 读取站内服务器状态；站内问一问也新增了
+  `get_server_status` 工具。状态未知时会明确说“无法确认”，不会把未知当成 0 人。
+
+事件桥请求示例：
+
+```http
+POST http://127.0.0.1:8765/server
+Authorization: Bearer <QQ_BOT_EVENT_TOKEN>
+Content-Type: application/json
+
+{"type":"chat","player":"小明","message":"晚上好"}
+```
+
+```json
+// POST /onebot
+{
+  "post_type": "message",
+  "message_type": "group",
+  "group_id": 1062878744,
+  "user_id": 10001,
+  "sender": { "nickname": "小明" },
+  "message_id": 123,
+  "raw_message": "大家好"
+}
+```
+
 - **指令卡片**：除签到、帮助、关于机器人和新对话外，本地指令会在文字后附一张 720px 宽的 PNG，
   版式对齐地图分享卡片（主题色淡面性色块、Material Symbols 图标、原始 `yct-logo-wordmark.svg`
   字标，页脚显示来源、发送人和发送时间）；电码/GB2312 直接使用

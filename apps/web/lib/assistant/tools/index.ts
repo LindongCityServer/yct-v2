@@ -3,6 +3,7 @@ import { poiNoticesTool, serviceNoticesTool } from './notices';
 import { alongLinePlacesTool, nearbyPlacesTool, searchPlacesTool } from './places';
 import { planRouteTool } from './routes';
 import { operationDetailTool, queryTravelSchedulesTool, searchSiteContentTool } from './site';
+import { serverStatusTool } from './server-status';
 import {
   journeyPlanTool,
   lineTimetableTool,
@@ -46,6 +47,7 @@ export const assistantTools: AssistantTool<never>[] = [
   searchSiteContentTool,
   operationDetailTool,
   queryTravelSchedulesTool,
+  serverStatusTool,
 ];
 
 const maximumSummaryLength = 4000;

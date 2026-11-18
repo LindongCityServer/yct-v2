@@ -6,6 +6,7 @@ import { handleCommand } from './commands.mjs';
 import { CommunityStore, shanghaiDateKey } from './community.mjs';
 import { pickReferenceImage } from './images.mjs';
 import { loadGroupNotices, resolveGroupNotice } from './notices.mjs';
+import { startEventBridge } from './event-bridge.mjs';
 import { PlayerEventMonitor } from './player-events.mjs';
 import {
   classifyCommand,
@@ -53,6 +54,9 @@ export class QQBot {
     this.userLimiter = new SlidingWindowLimiter({ limit: config.qq.userQpm });
     this.groupLimiter = new SlidingWindowLimiter({ limit: config.qq.groupQpm });
     this.groupNotices = loadGroupNotices(config.groupNoticesPath);
+    this.bridgeTargets = new Set(config.events?.groupMap?.values?.() ?? []);
+    this.bridgeSeen = new RecentSet();
+    this.eventBridge = null;
     this.playerEvents = new PlayerEventMonitor({
       baseUrl: config.yct.baseUrl,
       groups: config.reply.playerEventGroups,
@@ -71,10 +75,24 @@ export class QQBot {
     if (this.config.reply.playerEvents) {
       this.playerEvents.start();
     }
+    if (this.config.events?.port > 0) {
+      this.eventBridge = await startEventBridge({
+        port: this.config.events.port,
+        bind: this.config.events.bind,
+        token: this.config.events.token,
+        logger: this.logger,
+        onOneBotEvent: (event) => this.handleOneBotEvent(event),
+        onServerEvent: (event) => this.handleServerEvent(event),
+      });
+    }
   }
 
   async flush() {
     this.playerEvents.stop();
+    if (this.eventBridge) {
+      await this.eventBridge.close();
+      this.eventBridge = null;
+    }
     await this.community.flush();
   }
 
@@ -197,10 +215,125 @@ export class QQBot {
     }
   }
 
+  async handleOneBotEvent(event) {
+    if (!event || typeof event !== 'object') {
+      return;
+    }
+    if (event.self_id && String(event.user_id) === String(event.self_id)) {
+      return;
+    }
+    const sourceGroupId = String(event.group_id ?? '');
+    if (!sourceGroupId) {
+      return;
+    }
+    const targetGroupId =
+      this.config.events.groupMap.get(sourceGroupId) ??
+      (this.bridgeTargets.has(sourceGroupId) ? sourceGroupId : '');
+    if (!targetGroupId) {
+      return;
+    }
+
+    if (event.post_type === 'message' && event.message_type === 'group') {
+      const messageId = String(event.message_id ?? '');
+      if (messageId && !this.bridgeSeen.add(messageId)) {
+        return;
+      }
+      const userId = String(event.user_id ?? '');
+      if (!userId) {
+        return;
+      }
+      this.community.recordMessage({
+        groupId: targetGroupId,
+        userId,
+        name: event.sender?.card || event.sender?.nickname || userId,
+        date: shanghaiDateKey(),
+        source: 'all',
+      });
+      return;
+    }
+
+    if (event.post_type === 'notice') {
+      const kind =
+        event.notice_type === 'group_increase'
+          ? 'welcome'
+          : event.notice_type === 'group_decrease'
+            ? event.sub_type === 'kick'
+              ? 'kick'
+              : 'leave'
+            : '';
+      if (!kind) {
+        return;
+      }
+      const text = resolveGroupNotice(this.groupNotices, sourceGroupId, kind, {
+        name: event.sender?.card || event.sender?.nickname || String(event.user_id ?? ''),
+        id: String(event.user_id ?? ''),
+        group: this.groupNotices.groups[sourceGroupId]?.name ?? sourceGroupId,
+      });
+      if (text) {
+        await this.sendActiveText(targetGroupId, text);
+      }
+    }
+  }
+
+  async handleServerEvent(event) {
+    if (!event || typeof event !== 'object') {
+      return;
+    }
+    const configuredGroups = [...(this.config.events.groups ?? [])];
+    const groups =
+      configuredGroups.length > 0
+        ? configuredGroups
+        : [...(this.config.reply.playerEventGroups ?? [])];
+    if (groups.length === 0) {
+      return;
+    }
+    const type = String(event.type ?? '');
+    const player = String(event.player ?? event.name ?? '').trim();
+    const message = String(event.message ?? '').trim();
+    let content = '';
+    if (type === 'chat' || type === 'server_chat') {
+      if (!player || !message) {
+        return;
+      }
+      content = `💬 ${player}：${message.slice(0, 200)}`;
+    } else if (type === 'join' || type === 'player_join' || type === 'server_join') {
+      if (!player) {
+        return;
+      }
+      content = this.config.reply.playerJoinText.replaceAll('{name}', player);
+    } else if (type === 'leave' || type === 'player_leave' || type === 'server_leave') {
+      if (!player) {
+        return;
+      }
+      content = this.config.reply.playerLeaveText.replaceAll('{name}', player);
+    }
+    if (!content) {
+      return;
+    }
+    for (const groupId of groups) {
+      await this.sendActiveText(groupId, content);
+    }
+  }
+
+  async sendActiveText(groupId, content) {
+    try {
+      await this.api.sendGroupMessage(groupId, { content, msg_type: 0 });
+      this.logger.info(`事件消息已发送到群 ${groupId}。`);
+      return true;
+    } catch (error) {
+      this.logger.warn(`事件消息发送失败（群 ${groupId}）：`, error);
+      return false;
+    }
+  }
+
   recordGroupStats(data, source) {
     const groupId = typeof data.group_openid === 'string' ? data.group_openid : '';
     const userId = data.author?.member_openid ?? data.author?.id ?? '';
     if (!groupId || !userId || data.author?.bot) {
+      return;
+    }
+    // 事件桥接管了这些群的全部消息时，避免官方 @ 事件与 OneBot 事件重复计数。
+    if (this.eventBridge && this.bridgeTargets.has(groupId)) {
       return;
     }
     if (this.config.qq.groupAllowlist.size > 0 && !this.config.qq.groupAllowlist.has(groupId)) {

@@ -65,6 +65,10 @@ const commandAliases = new Map([
   ['发言统计', 'stats'],
   ['群统计', 'stats'],
   ['活跃统计', 'stats'],
+  ['人数', 'serverplayers'],
+  ['在线人数', 'serverplayers'],
+  ['服务器人数', 'serverplayers'],
+  ['服务器状态', 'serverplayers'],
   ['发言榜', 'board'],
   ['活跃榜', 'board'],
   ['水群榜', 'board'],
@@ -393,6 +397,71 @@ export async function handleCommand({
           },
         };
       }
+      case 'serverplayers': {
+        const baseUrl = config?.yct?.baseUrl;
+        if (!baseUrl) {
+          return { handled: true, reply: '服务器状态地址还没有配置。' };
+        }
+        let payload;
+        try {
+          const response = await fetchImpl(
+            `${baseUrl.replace(/\/+$/, '')}/api/operations/server-status`,
+            {
+              signal: AbortSignal.timeout(10_000),
+            },
+          );
+          payload = response.ok ? await response.json() : null;
+        } catch (error) {
+          logger?.warn(`${label} 查询失败：`, error);
+          payload = null;
+        }
+        const item = payload?.item;
+        const checked = formatCheckedAt(item?.checkedAt);
+        if (item?.availability === 'online' && Number.isFinite(item?.onlinePlayerCount)) {
+          return {
+            handled: true,
+            reply: `服务器在线：${item.onlinePlayerCount} 人\n检测时间：${checked}`,
+            card: {
+              type: 'result',
+              icon: 'public',
+              title: '服务器在线人数',
+              eyebrow: `服务器状态 · ${checked}`,
+              color: '#168F78',
+              result: String(item.onlinePlayerCount),
+              resultLabel: '当前在线',
+              note: '只显示人数，不公开玩家名单',
+              footer: '数据来自雨城通',
+            },
+          };
+        }
+        if (item?.availability === 'offline') {
+          return {
+            handled: true,
+            reply: `服务器当前离线。\n检测时间：${checked}`,
+            card: {
+              type: 'result',
+              icon: 'public',
+              title: '服务器状态',
+              eyebrow: `服务器状态 · ${checked}`,
+              color: '#C64255',
+              result: '离线',
+              resultLabel: '外网探测',
+              note: '网络波动可能导致误判，请稍后重试',
+              footer: '数据来自雨城通',
+            },
+          };
+        }
+        return {
+          handled: true,
+          reply: [
+            '服务器状态暂时无法确认。',
+            payload?.meta?.message || '网页地图或外网探测暂不可用，不能据此判断在线人数。',
+            checked ? `检测时间：${checked}` : '',
+          ]
+            .filter(Boolean)
+            .join('\n'),
+        };
+      }
       case 'fortune': {
         const userId = requireUser(context);
         const fortune = requireCommunity(community).getFortune({
@@ -528,6 +597,21 @@ function requireUser(context) {
   return context.userId;
 }
 
+function formatCheckedAt(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
 function contextDate(context) {
   return context?.date || shanghaiDateKey();
 }
@@ -594,6 +678,9 @@ function parseNaturalCommand(raw) {
   }
   if (/^(?:今日运势|运势|抽签)$/u.test(input)) {
     return { command: 'fortune', args: '', label: '今日运势' };
+  }
+  if (/^(?:服务器状态|服务器在线人数|服务器人数|在线人数|几个人在线|服务器几个人)$/u.test(input)) {
+    return { command: 'serverplayers', args: '', label: '服务器人数' };
   }
   if (/^(?:重置运势|重抽运势|重抽)$/u.test(input)) {
     return { command: 'fortunereset', args: '', label: '重置运势' };
