@@ -3,6 +3,20 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.21.5",
+      "releasedAt": "2026-11-18T06:05:34.162Z",
+      "sourceFingerprint": "89c0ce58c8090a49fe711ddd453b54875b7b0ba0e77e57bf1fdbeb407b30d764",
+      "themes": ["qqbot"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "QQ 机器人新增随机地点指令，调用公开 POI 随机接口并生成地点分享卡片"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.21.4",
       "releasedAt": "2026-11-18T05:41:21.498Z",
       "sourceFingerprint": "4cc5be70e306eedbafe9596643a0712ab502aed2c47e5e4bc247b75bcff45f59",
