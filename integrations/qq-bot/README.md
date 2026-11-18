@@ -53,9 +53,10 @@ pnpm qqbot:card:build
 更推荐用 pnpm 生成不含本地 `.env`、`test/` 的自包含目录：
 
 ```powershell
-pnpm --filter yct-qq-bot deploy --prod --legacy C:\path\to\qq-bot-deploy
+pnpm qqbot:package
 ```
 
+产物在 `artifacts/qq-bot-时间戳.zip`，内有真实 `node_modules`、`assets` 和启动脚本；
 部署后把真实 `.env` 单独放进该目录，再运行启动脚本。
 
 ## 2. 三步自检

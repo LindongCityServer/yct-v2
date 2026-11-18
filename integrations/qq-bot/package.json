@@ -1,6 +1,6 @@
 {
   "name": "yct-qq-bot",
-  "version": "0.1.0",
+  "version": "2.22.0",
   "private": true,
   "type": "module",
   "description": "雨城通「问一问」的 QQ 官方机器人接入层（本地生图，独立进程）",

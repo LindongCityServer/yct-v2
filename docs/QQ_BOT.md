@@ -191,8 +191,8 @@ C:\wwwroot\qq-bot\   # 机器人：把 integrations\qq-bot 整个目录复制过
 不需要构建 Next.js，也不需要把机器人放进 `apps\web\.next`。首次部署先在仓库根目录执行
 `pnpm install`、`pnpm qqbot:card:assets` 和 `pnpm qqbot:card:build`，再把包含
 `node_modules`、`assets` 的目录复制过去；机器人只对网页发起本机 HTTP 请求，不需要改 Nginx，
-也不需要开放入站端口。推荐用 `pnpm --filter yct-qq-bot deploy --prod --legacy <目录>` 生成
-不含 `.env` 和测试目录的自包含部署目录，再把真实 `.env` 单独放进去。
+也不需要开放入站端口。推荐运行 `pnpm qqbot:package` 生成 `artifacts/qq-bot-时间戳.zip`，
+再把真实 `.env` 单独放进解压后的目录。
 
 ### 5.2 上传
 
