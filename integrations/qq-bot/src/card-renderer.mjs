@@ -331,7 +331,10 @@ function buildResultCard(card) {
   });
 }
 function buildWeatherCard(card) {
-  const color = colors.secondary;
+  const color = weatherColor(
+    card.current.condition,
+    ...card.days.map((day) => day.condition ?? "")
+  );
   const details = [
     card.current.feels ? `\u4F53\u611F ${card.current.feels}\xB0` : "",
     card.current.humidity ? `\u6E7F\u5EA6 ${card.current.humidity}%` : "",
@@ -343,7 +346,13 @@ function buildWeatherCard(card) {
     return [
       `<g transform="translate(40,${y})">`,
       `<text x="0" y="28" font-size="22" font-weight="700" fill="${colors.text}">${escapeXml(day.label)}</text>`,
-      renderMaterialIconPath(weatherIconName(day.condition), 94, 0, 38, colors.secondary),
+      renderMaterialIconPath(
+        weatherIconName(day.condition),
+        94,
+        0,
+        38,
+        weatherColor(day.condition ?? "")
+      ),
       `<text x="146" y="28" font-size="24" font-weight="700" fill="${colors.text}">${escapeXml(day.low || "--")}\xB0 ~ ${escapeXml(day.high || "--")}\xB0</text>`,
       `<text x="300" y="28" font-size="18" fill="${colors.textSecondary}">${escapeXml(shortText(day.condition || "\u5929\u6C14\u672A\u77E5", 12))}</text>`,
       `<line x1="0" y1="48" x2="640" y2="48" stroke="${colors.borderSubtle}"/>`,
@@ -353,18 +362,12 @@ function buildWeatherCard(card) {
   const forecast = days || `<text x="40" y="466" font-size="16" fill="${colors.textMuted}">\u6682\u65E0\u9884\u62A5\u6570\u636E</text>`;
   const body = [
     `<g transform="translate(40,160)">`,
-    `<rect width="640" height="260" rx="22" fill="#EAF3FF"/>`,
+    `<rect width="640" height="260" rx="22" fill="${color}" fill-opacity="0.09"/>`,
     `<text x="28" y="42" font-size="14" font-weight="600" fill="${colors.textMuted}">\u73B0\u5728</text>`,
     `<text x="28" y="170" font-size="${tempSize}" font-weight="700" fill="${colors.text}">${escapeXml(card.current.temp)}\xB0</text>`,
     `<text x="250" y="122" font-size="30" font-weight="700" fill="${colors.text}">${escapeXml(card.current.condition)}</text>`,
     details ? `<text x="250" y="164" font-size="16" fill="${colors.textSecondary}">${escapeXml(details)}</text>` : "",
-    renderMaterialIconPath(
-      weatherIconName(card.current.condition),
-      520,
-      190,
-      104,
-      colors.secondary
-    ),
+    renderMaterialIconPath(weatherIconName(card.current.condition), 520, 190, 104, color),
     card.updated ? `<text x="612" y="42" text-anchor="end" font-size="13" fill="${colors.textMuted}">${escapeXml(card.updated)}</text>` : "",
     "</g>",
     `<text x="40" y="438" font-size="13" font-weight="700" letter-spacing="2" fill="${colors.textMuted}">\u5929\u6C14\u9884\u62A5</text>`,
@@ -694,13 +697,8 @@ function renderDiceFace(input) {
   };
   const polygon = diceFacePolygon(sides, size);
   const faces = sides === 6 && pips[roll] ? pips[roll].map(([cx, cy]) => `<circle cx="${cx}" cy="${cy}" r="${size * 0.075}" fill="${color}"/>`).join("") : `<text x="${center}" y="${center + size * 0.12}" text-anchor="middle" font-size="${size * (roll >= 10 ? 0.29 : 0.36)}" font-weight="700" fill="${color}">${roll}</text>`;
-  const shape = polygon ? `<polygon points="${polygon.map(([px, py]) => `${px},${py}`).join(" ")}" fill="${color}" fill-opacity="0.08" stroke="${color}" stroke-opacity="0.24"/>` : `<rect width="${size}" height="${size}" rx="${size * 0.22}" fill="${color}" fill-opacity="0.07" stroke="${color}" stroke-opacity="0.2"/>`;
-  return [
-    `<g transform="translate(${x},${y})">`,
-    shape,
-    faces,
-    "</g>"
-  ].join("");
+  const shape = polygon ? `<path d="${roundedPolygonPath(polygon, size * 0.14)}" fill="${color}" fill-opacity="0.08" stroke="${color}" stroke-opacity="0.24"/>` : `<rect width="${size}" height="${size}" rx="${size * 0.22}" fill="${color}" fill-opacity="0.07" stroke="${color}" stroke-opacity="0.2"/>`;
+  return [`<g transform="translate(${x},${y})">`, shape, faces, "</g>"].join("");
 }
 function diceFacePolygon(sides, size) {
   const center = size / 2;
@@ -727,6 +725,34 @@ function diceFacePolygon(sides, size) {
     });
   }
   return null;
+}
+function roundedPolygonPath(points, radius) {
+  if (points.length < 3) {
+    return "";
+  }
+  const parts = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const previous = points[(index - 1 + points.length) % points.length];
+    const next = points[(index + 1) % points.length];
+    const start = pointTowards(current, previous, radius);
+    const end = pointTowards(current, next, radius);
+    parts.push(
+      `${index === 0 ? "M" : "L"} ${start[0].toFixed(2)} ${start[1].toFixed(2)}`,
+      `Q ${current[0].toFixed(2)} ${current[1].toFixed(2)} ${end[0].toFixed(2)} ${end[1].toFixed(2)}`
+    );
+  }
+  return `${parts.join(" ")} Z`;
+}
+function pointTowards(from, to, radius) {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const length = Math.hypot(dx, dy);
+  if (length === 0) {
+    return from;
+  }
+  const distance = Math.min(radius, length / 2);
+  return [from[0] + dx / length * distance, from[1] + dy / length * distance];
 }
 function buildCoupletCard(card) {
   const color = "#C64255";
@@ -1136,6 +1162,31 @@ function weatherIconName(condition) {
     return "sunny";
   }
   return "partly_cloudy_day";
+}
+function weatherColor(...conditions) {
+  const text = conditions.join(" ");
+  if (/雷/u.test(text)) {
+    return "#6A5ACD";
+  }
+  if (/雪|冰|冻/u.test(text)) {
+    return "#3E91B5";
+  }
+  if (/雨/u.test(text)) {
+    return "#2F6FCB";
+  }
+  if (/雾|霾|沙|尘/u.test(text)) {
+    return "#6F7775";
+  }
+  if (/阴/u.test(text)) {
+    return "#5D7186";
+  }
+  if (/云/u.test(text)) {
+    return "#4B82C4";
+  }
+  if (/晴/u.test(text)) {
+    return "#D98A1E";
+  }
+  return "#2584E8";
 }
 function wrapDescription(description) {
   const lines = [];

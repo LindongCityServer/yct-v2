@@ -545,7 +545,10 @@ function buildResultCard(card: ResultCard): string {
 }
 
 function buildWeatherCard(card: WeatherCard): string {
-  const color = colors.secondary;
+  const color = weatherColor(
+    card.current.condition,
+    ...card.days.map((day) => day.condition ?? ''),
+  );
   const details = [
     card.current.feels ? `体感 ${card.current.feels}°` : '',
     card.current.humidity ? `湿度 ${card.current.humidity}%` : '',
@@ -561,7 +564,13 @@ function buildWeatherCard(card: WeatherCard): string {
       return [
         `<g transform="translate(40,${y})">`,
         `<text x="0" y="28" font-size="22" font-weight="700" fill="${colors.text}">${escapeXml(day.label)}</text>`,
-        renderMaterialIconPath(weatherIconName(day.condition), 94, 0, 38, colors.secondary),
+        renderMaterialIconPath(
+          weatherIconName(day.condition),
+          94,
+          0,
+          38,
+          weatherColor(day.condition ?? ''),
+        ),
         `<text x="146" y="28" font-size="24" font-weight="700" fill="${colors.text}">${escapeXml(day.low || '--')}° ~ ${escapeXml(day.high || '--')}°</text>`,
         `<text x="300" y="28" font-size="18" fill="${colors.textSecondary}">${escapeXml(shortText(day.condition || '天气未知', 12))}</text>`,
         `<line x1="0" y1="48" x2="640" y2="48" stroke="${colors.borderSubtle}"/>`,
@@ -570,25 +579,18 @@ function buildWeatherCard(card: WeatherCard): string {
     })
     .join('');
   const forecast =
-    days ||
-    `<text x="40" y="466" font-size="16" fill="${colors.textMuted}">暂无预报数据</text>`;
+    days || `<text x="40" y="466" font-size="16" fill="${colors.textMuted}">暂无预报数据</text>`;
 
   const body = [
     `<g transform="translate(40,160)">`,
-    `<rect width="640" height="260" rx="22" fill="#EAF3FF"/>`,
+    `<rect width="640" height="260" rx="22" fill="${color}" fill-opacity="0.09"/>`,
     `<text x="28" y="42" font-size="14" font-weight="600" fill="${colors.textMuted}">现在</text>`,
     `<text x="28" y="170" font-size="${tempSize}" font-weight="700" fill="${colors.text}">${escapeXml(card.current.temp)}°</text>`,
     `<text x="250" y="122" font-size="30" font-weight="700" fill="${colors.text}">${escapeXml(card.current.condition)}</text>`,
     details
       ? `<text x="250" y="164" font-size="16" fill="${colors.textSecondary}">${escapeXml(details)}</text>`
       : '',
-    renderMaterialIconPath(
-      weatherIconName(card.current.condition),
-      520,
-      190,
-      104,
-      colors.secondary,
-    ),
+    renderMaterialIconPath(weatherIconName(card.current.condition), 520, 190, 104, color),
     card.updated
       ? `<text x="612" y="42" text-anchor="end" font-size="13" fill="${colors.textMuted}">${escapeXml(card.updated)}</text>`
       : '',
@@ -875,8 +877,7 @@ function buildPoiCard(card: PoiCard): string {
 
 function buildDiceCard(card: DiceCard): string {
   const color = '#168F78';
-  const diceSize =
-    card.rolls.length === 1 ? 160 : card.rolls.length <= 3 ? 108 : 84;
+  const diceSize = card.rolls.length === 1 ? 160 : card.rolls.length <= 3 ? 108 : 84;
   const gap = 16;
   const perRow = 5;
   const columns = Math.min(perRow, Math.max(1, card.rolls.length));
@@ -977,15 +978,10 @@ function renderDiceFace(input: {
       : `<text x="${center}" y="${center + size * 0.12}" text-anchor="middle" font-size="${size * (roll >= 10 ? 0.29 : 0.36)}" font-weight="700" fill="${color}">${roll}</text>`;
 
   const shape = polygon
-    ? `<polygon points="${polygon.map(([px, py]) => `${px},${py}`).join(' ')}" fill="${color}" fill-opacity="0.08" stroke="${color}" stroke-opacity="0.24"/>`
+    ? `<path d="${roundedPolygonPath(polygon, size * 0.14)}" fill="${color}" fill-opacity="0.08" stroke="${color}" stroke-opacity="0.24"/>`
     : `<rect width="${size}" height="${size}" rx="${size * 0.22}" fill="${color}" fill-opacity="0.07" stroke="${color}" stroke-opacity="0.2"/>`;
 
-  return [
-    `<g transform="translate(${x},${y})">`,
-    shape,
-    faces,
-    '</g>',
-  ].join('');
+  return [`<g transform="translate(${x},${y})">`, shape, faces, '</g>'].join('');
 }
 
 /** 4/8/20 面用三角形，12/10 面用五边形，6 面保持正方形点数。 */
@@ -1014,6 +1010,41 @@ function diceFacePolygon(sides: number, size: number): Array<[number, number]> |
     });
   }
   return null;
+}
+
+/** 给多边形顶点做二次贝塞尔圆角，避免三角/菱形/五边形显得太尖。 */
+function roundedPolygonPath(points: Array<[number, number]>, radius: number): string {
+  if (points.length < 3) {
+    return '';
+  }
+  const parts: string[] = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index]!;
+    const previous = points[(index - 1 + points.length) % points.length]!;
+    const next = points[(index + 1) % points.length]!;
+    const start = pointTowards(current, previous, radius);
+    const end = pointTowards(current, next, radius);
+    parts.push(
+      `${index === 0 ? 'M' : 'L'} ${start[0].toFixed(2)} ${start[1].toFixed(2)}`,
+      `Q ${current[0].toFixed(2)} ${current[1].toFixed(2)} ${end[0].toFixed(2)} ${end[1].toFixed(2)}`,
+    );
+  }
+  return `${parts.join(' ')} Z`;
+}
+
+function pointTowards(
+  from: [number, number],
+  to: [number, number],
+  radius: number,
+): [number, number] {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const length = Math.hypot(dx, dy);
+  if (length === 0) {
+    return from;
+  }
+  const distance = Math.min(radius, length / 2);
+  return [from[0] + (dx / length) * distance, from[1] + (dy / length) * distance];
 }
 
 function buildCoupletCard(card: CoupletCard): string {
@@ -1500,6 +1531,32 @@ function weatherIconName(condition?: string): string {
     return 'sunny';
   }
   return 'partly_cloudy_day';
+}
+
+function weatherColor(...conditions: string[]): string {
+  const text = conditions.join(' ');
+  if (/雷/u.test(text)) {
+    return '#6A5ACD';
+  }
+  if (/雪|冰|冻/u.test(text)) {
+    return '#3E91B5';
+  }
+  if (/雨/u.test(text)) {
+    return '#2F6FCB';
+  }
+  if (/雾|霾|沙|尘/u.test(text)) {
+    return '#6F7775';
+  }
+  if (/阴/u.test(text)) {
+    return '#5D7186';
+  }
+  if (/云/u.test(text)) {
+    return '#4B82C4';
+  }
+  if (/晴/u.test(text)) {
+    return '#D98A1E';
+  }
+  return '#2584E8';
 }
 
 function wrapDescription(description: string[]): string[] {
