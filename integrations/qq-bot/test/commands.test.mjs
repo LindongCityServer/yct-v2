@@ -98,6 +98,16 @@ test('天气指令使用配置中的城市', async () => {
   assert.equal(forecast.card?.type, 'weather');
   assert.equal(forecast.card?.days?.length, 2);
   assert.equal(forecast.card?.days?.[1].condition, '多云');
+
+  const belowZero = await handleCommand({
+    ...base,
+    text: '/天气 北京',
+    context: { kind: 'group', groupId: 'g1', userId: 'u1', userName: '测试' },
+    weather: async () =>
+      '北京市天气：\n现在 4℃、晴。\n今天 -1~7℃、白天晴、西北风 1-3级。\n明天 -3~6℃、白天晴、西北风 1-3级。',
+  });
+  assert.equal(belowZero.card?.days?.[0].low, '-1');
+  assert.equal(belowZero.card?.days?.[0].condition, '晴');
 });
 
 test('IP 属地与历史上的今天指令', async () => {

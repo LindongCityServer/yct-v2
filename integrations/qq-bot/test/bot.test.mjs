@@ -504,6 +504,27 @@ test('指令结果在机器人本地渲染并上传卡片图片', async () => {
   assert.match(renderedCards[0].footer, /群成员｜\d{2}-\d{2} \d{2}:\d{2}/);
 });
 
+test('群聊主动卡片失败时改发单张被动卡片，不重复 @', async () => {
+  const config = createConfig({ reply: { ack: false, cards: true } });
+  const { bot, sends } = createSetup({ config });
+  bot.api.sendGroupImage = async (openid, payload) => {
+    if (payload.msgId === undefined) {
+      throw new Error('active message not allowed');
+    }
+    sends.push({ kind: 'image', openid, payload });
+  };
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    ...groupEvent,
+    id: 'msg-card-fallback',
+    content: '随机数 1-10',
+  });
+
+  assert.equal(sends.length, 1);
+  assert.equal(sends[0].kind, 'image');
+  assert.equal(sends[0].payload.msgSeq, 1);
+});
+
 test('单聊配图保持文字加图片，不走 Markdown', async () => {
   const config = createConfig({
     reply: { ack: false, images: true, appendSources: false },

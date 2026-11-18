@@ -461,7 +461,28 @@ export class QQBot {
       // 手机 QQ 不渲染 Markdown 图片。群聊先主动发卡片、再发被动文字：
       // 卡片不带 msg_id，不会 @ 发起者；文字只 @ 一次。
       if (card && target.kind === 'group') {
-        await this.sendCommandCard({ target, messageId, card, seq: 1, active: true });
+        const activeSent = await this.sendCommandCard({
+          target,
+          messageId,
+          card,
+          seq: 1,
+          active: true,
+        });
+        if (activeSent) {
+          await this.safeReply(target, messageId, 1, reply);
+          return;
+        }
+        // 主动消息不可用时退回“只发一张被动卡片”：卡面已包含结果，
+        // 比文字后补图少一次 @，也比只发文字更不容易丢图。
+        const passiveSent = await this.sendCommandCard({
+          target,
+          messageId,
+          card,
+          seq: 1,
+        });
+        if (passiveSent) {
+          return;
+        }
         await this.safeReply(target, messageId, 1, reply);
         return;
       }

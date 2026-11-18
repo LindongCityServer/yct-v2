@@ -1062,7 +1062,7 @@ function parseWeatherCurrent(line) {
 
 function parseWeatherDay(line) {
   const match =
-    /^(今天|明天)\s*([\d.]+)\s*[~～/]\s*([\d.]+)\s*(?:℃|°C|C)?\s*[、,，]?\s*(.+?)[。.]?$/u.exec(
+    /^(今天|明天)\s*(-?[\d.]+)\s*[~～/]\s*(-?[\d.]+)\s*(?:℃|°C|C)?\s*[、,，]?\s*([^、。]+)(?:、[^。]*)?[。.]?$/u.exec(
       line,
     );
   if (!match) {

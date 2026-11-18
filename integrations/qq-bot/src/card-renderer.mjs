@@ -345,11 +345,12 @@ function buildWeatherCard(card) {
       `<text x="0" y="28" font-size="22" font-weight="700" fill="${colors.text}">${escapeXml(day.label)}</text>`,
       renderMaterialIconPath(weatherIconName(day.condition), 94, 0, 38, colors.secondary),
       `<text x="146" y="28" font-size="24" font-weight="700" fill="${colors.text}">${escapeXml(day.low || "--")}\xB0 ~ ${escapeXml(day.high || "--")}\xB0</text>`,
-      `<text x="300" y="28" font-size="18" fill="${colors.textSecondary}">${escapeXml(day.condition || "\u5929\u6C14\u672A\u77E5")}</text>`,
+      `<text x="300" y="28" font-size="18" fill="${colors.textSecondary}">${escapeXml(shortText(day.condition || "\u5929\u6C14\u672A\u77E5", 12))}</text>`,
       `<line x1="0" y1="48" x2="640" y2="48" stroke="${colors.borderSubtle}"/>`,
       "</g>"
     ].join("");
   }).join("");
+  const forecast = days || `<text x="40" y="466" font-size="16" fill="${colors.textMuted}">\u6682\u65E0\u9884\u62A5\u6570\u636E</text>`;
   const body = [
     `<g transform="translate(40,160)">`,
     `<rect width="640" height="260" rx="22" fill="#EAF3FF"/>`,
@@ -367,7 +368,7 @@ function buildWeatherCard(card) {
     card.updated ? `<text x="612" y="42" text-anchor="end" font-size="13" fill="${colors.textMuted}">${escapeXml(card.updated)}</text>` : "",
     "</g>",
     `<text x="40" y="438" font-size="13" font-weight="700" letter-spacing="2" fill="${colors.textMuted}">\u5929\u6C14\u9884\u62A5</text>`,
-    days
+    forecast
   ].join("");
   return buildFrame({
     height: 700,
@@ -612,10 +613,11 @@ function buildPoiCard(card) {
 }
 function buildDiceCard(card) {
   const color = "#168F78";
-  const diceSize = 84;
+  const diceSize = card.rolls.length === 1 ? 160 : card.rolls.length <= 3 ? 108 : 84;
   const gap = 16;
   const perRow = 5;
-  const gridWidth = perRow * diceSize + (perRow - 1) * gap;
+  const columns = Math.min(perRow, Math.max(1, card.rolls.length));
+  const gridWidth = columns * diceSize + (columns - 1) * gap;
   const startX = 40 + (640 - gridWidth) / 2;
   const rows = Math.max(1, Math.ceil(card.rolls.length / perRow));
   const gridTop = 180;
@@ -690,13 +692,41 @@ function renderDiceFace(input) {
       [high, high]
     ]
   };
-  const faces = sides === 6 && pips[roll] ? pips[roll].map(([cx, cy]) => `<circle cx="${cx}" cy="${cy}" r="${size * 0.075}" fill="${color}"/>`).join("") : `<text x="${center}" y="${center + size * 0.12}" text-anchor="middle" font-size="${size * 0.38}" font-weight="700" fill="${color}">${roll}</text>`;
+  const polygon = diceFacePolygon(sides, size);
+  const faces = sides === 6 && pips[roll] ? pips[roll].map(([cx, cy]) => `<circle cx="${cx}" cy="${cy}" r="${size * 0.075}" fill="${color}"/>`).join("") : `<text x="${center}" y="${center + size * 0.12}" text-anchor="middle" font-size="${size * (roll >= 10 ? 0.29 : 0.36)}" font-weight="700" fill="${color}">${roll}</text>`;
+  const shape = polygon ? `<polygon points="${polygon.map(([px, py]) => `${px},${py}`).join(" ")}" fill="${color}" fill-opacity="0.08" stroke="${color}" stroke-opacity="0.24"/>` : `<rect width="${size}" height="${size}" rx="${size * 0.22}" fill="${color}" fill-opacity="0.07" stroke="${color}" stroke-opacity="0.2"/>`;
   return [
     `<g transform="translate(${x},${y})">`,
-    `<rect width="${size}" height="${size}" rx="${size * 0.22}" fill="${color}" fill-opacity="0.07" stroke="${color}" stroke-opacity="0.2"/>`,
+    shape,
     faces,
     "</g>"
   ].join("");
+}
+function diceFacePolygon(sides, size) {
+  const center = size / 2;
+  const radius = size * 0.46;
+  if (sides === 4 || sides === 20) {
+    return [
+      [center, size * 0.06],
+      [size * 0.08, size * 0.9],
+      [size * 0.92, size * 0.9]
+    ];
+  }
+  if (sides === 8) {
+    return [
+      [center, size * 0.04],
+      [size * 0.96, center],
+      [center, size * 0.96],
+      [size * 0.04, center]
+    ];
+  }
+  if (sides === 10 || sides === 12) {
+    return Array.from({ length: 5 }, (_, index) => {
+      const angle = -Math.PI / 2 + index * Math.PI * 2 / 5;
+      return [center + Math.cos(angle) * radius, center + Math.sin(angle) * radius];
+    });
+  }
+  return null;
 }
 function buildCoupletCard(card) {
   const color = "#C64255";
