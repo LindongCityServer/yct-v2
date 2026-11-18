@@ -472,6 +472,7 @@ export class QQBot {
           await this.safeReply(target, messageId, 1, reply);
           return;
         }
+        this.logger.warn('群聊主动卡片发送失败，改用单张被动卡片。');
         // 主动消息不可用时退回“只发一张被动卡片”：卡面已包含结果，
         // 比文字后补图少一次 @，也比只发文字更不容易丢图。
         const passiveSent = await this.sendCommandCard({
@@ -752,7 +753,9 @@ export class QQBot {
           msgSeq: seq,
         });
       }
-      this.logger.info(`指令卡片已在机器人本地渲染并发送：${card.type}`);
+      this.logger.info(
+        `指令卡片已在机器人本地渲染并发送（${active ? '主动' : '被动'}）：${card.type}`,
+      );
       return true;
     } catch (error) {
       this.logger.warn('指令卡片本地渲染或发送失败：', error);
