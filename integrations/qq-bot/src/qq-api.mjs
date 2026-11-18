@@ -129,6 +129,25 @@ export class QQApi {
     });
   }
 
+  /** Markdown 消息可以把文字和公网图片放在同一条消息里。 */
+  sendGroupMarkdown(groupOpenid, { content, msgId, msgSeq }) {
+    return this.sendGroupMessage(groupOpenid, {
+      msg_type: 2,
+      markdown: { content },
+      msg_id: msgId,
+      msg_seq: msgSeq,
+    });
+  }
+
+  sendC2CMarkdown(userOpenid, { content, msgId, msgSeq }) {
+    return this.sendC2CMessage(userOpenid, {
+      msg_type: 2,
+      markdown: { content },
+      msg_id: msgId,
+      msg_seq: msgSeq,
+    });
+  }
+
   /** 群聊图片走“上传拿 file_info，再发 msg_type=7”两步。 */
   async uploadGroupImage(groupOpenid, url) {
     const data = await this.request(`/v2/groups/${encodeURIComponent(groupOpenid)}/files`, {

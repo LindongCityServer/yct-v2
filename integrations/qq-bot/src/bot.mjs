@@ -1,10 +1,6 @@
 import { askAssistant } from './assistant-client.mjs';
 import { composeAnswer, helpText, prepareAnswerText } from './answer.mjs';
-import {
-  extractBilibiliUrl,
-  fetchBilibiliVideo,
-  formatBilibiliVideo,
-} from './bilibili.mjs';
+import { extractBilibiliUrl, fetchBilibiliVideo, formatBilibiliVideo } from './bilibili.mjs';
 import { condenseWithModel } from './condense.mjs';
 import { handleCommand } from './commands.mjs';
 import { CommunityStore, shanghaiDateKey } from './community.mjs';
@@ -128,10 +124,7 @@ export class QQBot {
             : typeof data.operator_id === 'string'
               ? data.operator_id
               : '';
-        await this.sendMemberNotice(
-          operatorId && operatorId !== memberId ? 'kick' : 'leave',
-          data,
-        );
+        await this.sendMemberNotice(operatorId && operatorId !== memberId ? 'kick' : 'leave', data);
         return;
       }
       case 'GROUP_DEL_ROBOT':
@@ -147,14 +140,14 @@ export class QQBot {
 
   async broadcastPlayerEvent(event) {
     const template =
-      event.type === 'join'
-        ? this.config.reply.playerJoinText
-        : this.config.reply.playerLeaveText;
+      event.type === 'join' ? this.config.reply.playerJoinText : this.config.reply.playerLeaveText;
     const content = template.replaceAll('{name}', event.name);
     for (const groupId of this.config.reply.playerEventGroups) {
       try {
         await this.api.sendGroupMessage(groupId, { content, msg_type: 0 });
-        this.logger.info(`玩家${event.type === 'join' ? '进服' : '退服'}提示已发送到群 ${groupId}。`);
+        this.logger.info(
+          `玩家${event.type === 'join' ? '进服' : '退服'}提示已发送到群 ${groupId}。`,
+        );
       } catch (error) {
         this.logger.warn(`玩家${event.type === 'join' ? '进服' : '退服'}提示发送失败：`, error);
       }
@@ -461,7 +454,7 @@ export class QQBot {
       appendSources: this.config.reply.appendSources,
       followupSuggestions: this.config.reply.followups,
       links: this.config.reply.links,
-      maxSegments: Math.max(1, maxReplies - (this.config.reply.ack ? 1 : 0) - (imageUrl ? 1 : 0)),
+      maxSegments: Math.max(1, maxReplies - (this.config.reply.ack ? 1 : 0)),
     });
     if (segments.length === 0) {
       await send('问一问没有返回可读内容，请换个问法再试。');
@@ -469,40 +462,47 @@ export class QQBot {
     }
 
     let sent = 0;
-    for (const segment of segments) {
-      try {
-        const ok = await send(segment);
-        if (!ok) {
-          break;
+    let combined = false;
+    if (imageUrl) {
+      const uploaded = await this.uploadAnswerImage(target, imageUrl);
+      if (uploaded) {
+        const caption =
+          composeAnswer({
+            text: answerText,
+            references: result.references,
+            segmentChars: this.config.reply.segmentChars,
+            maxChars: this.config.reply.imageCaptionChars,
+            appendSources: false,
+            followupSuggestions: false,
+            links: this.config.reply.links,
+            maxSegments: 1,
+          })[0] ?? segments[0];
+        const markdown = `![封面](${imageUrl})\n\n${caption}`;
+        if (seq < maxReplies) {
+          seq += 1;
+          if (await this.sendMarkdown(target, messageId, seq, markdown)) {
+            combined = true;
+            sent = segments.length;
+            this.logger.info(`图文合并消息已发送：${imageUrl}`);
+          }
         }
-        sent += 1;
-      } catch (error) {
-        this.logger.error('发送 QQ 消息失败：', error);
-        break;
+      } else {
+        this.logger.warn(`回答配图上传失败，改发纯文字：${imageUrl}`);
       }
     }
 
-    if (imageUrl && sent > 0 && seq < maxReplies) {
-      seq += 1;
-      try {
-        if (target.kind === 'group') {
-          const fileInfo = await this.api.uploadGroupImage(target.openid, imageUrl);
-          await this.api.sendGroupImage(target.openid, {
-            fileInfo,
-            msgId: messageId,
-            msgSeq: seq,
-          });
-        } else {
-          const fileInfo = await this.api.uploadC2CImage(target.openid, imageUrl);
-          await this.api.sendC2CImage(target.openid, {
-            fileInfo,
-            msgId: messageId,
-            msgSeq: seq,
-          });
+    if (!combined) {
+      for (const segment of segments) {
+        try {
+          const ok = await send(segment);
+          if (!ok) {
+            break;
+          }
+          sent += 1;
+        } catch (error) {
+          this.logger.error('发送 QQ 消息失败：', error);
+          break;
         }
-        this.logger.info(`回答配图已发送：${imageUrl}`);
-      } catch (error) {
-        this.logger.warn('回答配图发送失败：', error);
       }
     }
 
@@ -510,9 +510,43 @@ export class QQBot {
       this.store.append(conversationKey, 'user', question);
       this.store.append(conversationKey, 'assistant', segments.join('\n'));
       this.logger.info(
-        `回答完成：${result.text.length} 字，发送 ${sent}/${segments.length} 段，` +
+        `回答完成${combined ? '（图文合并）' : ''}：${result.text.length} 字，发送 ${sent}/${segments.length} 段，` +
           `用时 ${Date.now() - startedAt}ms。`,
       );
+    }
+  }
+
+  async uploadAnswerImage(target, url) {
+    try {
+      if (target.kind === 'group') {
+        return await this.api.uploadGroupImage(target.openid, url);
+      }
+      return await this.api.uploadC2CImage(target.openid, url);
+    } catch (error) {
+      this.logger.warn('回答配图上传失败：', error);
+      return null;
+    }
+  }
+
+  async sendMarkdown(target, messageId, seq, content) {
+    try {
+      if (target.kind === 'group') {
+        await this.api.sendGroupMarkdown(target.openid, {
+          content,
+          msgId: messageId,
+          msgSeq: seq,
+        });
+      } else {
+        await this.api.sendC2CMarkdown(target.openid, {
+          content,
+          msgId: messageId,
+          msgSeq: seq,
+        });
+      }
+      return true;
+    } catch (error) {
+      this.logger.warn('图文合并消息发送失败，回退纯文字：', error);
+      return false;
     }
   }
 

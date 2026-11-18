@@ -266,6 +266,10 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
       appendSources: toBoolean(read, 'QQ_BOT_APPEND_SOURCES', !chatStyle),
       links: toBoolean(read, 'QQ_BOT_LINKS', false),
       images: toBoolean(read, 'QQ_BOT_IMAGES', true),
+      imageCaptionChars: toInteger(read, 'QQ_BOT_IMAGE_CAPTION_CHARS', 120, problems, {
+        min: 40,
+        max: 500,
+      }),
       cards: toBoolean(read, 'QQ_BOT_CARDS', true),
       bilibili: toBoolean(read, 'QQ_BOT_BILIBILI', true),
       playerEvents: toBoolean(read, 'QQ_BOT_PLAYER_EVENTS', false),

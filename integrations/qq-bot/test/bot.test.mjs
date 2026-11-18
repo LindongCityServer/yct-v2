@@ -16,6 +16,7 @@ function createConfig(overrides = {}) {
       appendSources: true,
       links: false,
       images: false,
+      imageCaptionChars: 120,
       cards: false,
       imageHosts: new Set(),
       followups: false,
@@ -48,6 +49,20 @@ function createSetup({ config = createConfig(), assistantImpl, condenseImpl } = 
     },
     async sendC2CTyping(openid, payload) {
       sends.push({ kind: 'typing', openid, payload });
+    },
+    async sendGroupMarkdown(openid, { content, msgId, msgSeq }) {
+      sends.push({
+        kind: 'markdown',
+        openid,
+        payload: { content, msg_id: msgId, msg_seq: msgSeq },
+      });
+    },
+    async sendC2CMarkdown(openid, { content, msgId, msgSeq }) {
+      sends.push({
+        kind: 'markdown',
+        openid,
+        payload: { content, msg_id: msgId, msg_seq: msgSeq },
+      });
     },
     async uploadGroupImage(openid, url) {
       uploads.push({ kind: 'group', openid, url });
@@ -331,7 +346,7 @@ test('群消息计入发言统计，签到与运势走本地状态', async () =>
   assert.match(sends[3].payload.content, /今日运势：\d+\/100/);
 });
 
-test('回答引用有配图时上传并发送图片', async () => {
+test('回答引用有配图时合并为一条图文消息', async () => {
   const config = createConfig({
     reply: { ack: false, images: true, appendSources: false },
     yct: { publicBaseUrl: 'https://yct.example.com' },
@@ -358,10 +373,48 @@ test('回答引用有配图时上传并发送图片', async () => {
 
   assert.equal(uploads.length, 1);
   assert.equal(uploads[0].url, 'https://yct.example.com/content-assets/cover.png');
-  assert.equal(sends.length, 2);
-  assert.equal(sends[1].kind, 'image');
-  assert.equal(sends[1].payload.msgSeq, 2);
-  assert.equal(sends[1].payload.fileInfo, 'file-info-group');
+  assert.equal(sends.length, 1);
+  assert.equal(sends[0].kind, 'markdown');
+  assert.match(
+    sends[0].payload.content,
+    /!\[封面\]\(https:\/\/yct\.example\.com\/content-assets\/cover\.png\)/,
+  );
+  assert.match(sends[0].payload.content, /站台临时调整，请留意公告。/);
+  assert.equal(sends[0].payload.msg_seq, 1);
+});
+
+test('配图上传失败时回退为纯文字消息', async () => {
+  const config = createConfig({
+    reply: { ack: false, images: true, appendSources: false },
+    yct: { publicBaseUrl: 'https://yct.example.com' },
+  });
+  const { bot, sends, queue } = createSetup({
+    config,
+    assistantImpl: async () => ({
+      text: '站台临时调整，请留意公告。',
+      references: [
+        {
+          id: 1,
+          title: '站台临时调整',
+          source: '运营',
+          imageUrl: '/content-assets/cover.png',
+        },
+      ],
+      followups: [],
+      error: '',
+    }),
+  });
+  bot.api.uploadGroupImage = async () => {
+    throw new Error('upload failed');
+  };
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', { ...groupEvent, id: 'msg-image-fail' });
+  await queue.settle();
+
+  assert.equal(sends.length, 1);
+  assert.equal(sends[0].kind, 'group');
+  assert.equal(sends[0].payload.content, '站台临时调整，请留意公告。');
+  assert.equal(sends[0].payload.msg_seq, 1);
 });
 
 test('指令结果会生成卡片图片', async () => {
