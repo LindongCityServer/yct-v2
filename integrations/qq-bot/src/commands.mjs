@@ -427,6 +427,15 @@ export async function handleCommand({
         }
         const publicBase = config?.yct?.publicBaseUrl || baseUrl;
         const shareUrl = `${publicBase.replace(/\/+$/, '')}${poi.sharePath || `/map?m=${encodeURIComponent(poi.id)}`}`;
+        const imagePath = poi.imageUrls?.[0] ?? poi.imageUrl;
+        let imageUrl;
+        if (typeof imagePath === 'string' && imagePath.trim()) {
+          try {
+            imageUrl = new URL(imagePath, publicBase).toString();
+          } catch {
+            imageUrl = undefined;
+          }
+        }
         const category = randomPlaceCategoryLabel(poi.categoryId);
         return {
           handled: true,
@@ -445,6 +454,7 @@ export async function handleCommand({
             description: poi.description,
             address: poi.address,
             openingHours: poi.openingHours,
+            imageUrl,
             coordinates:
               Array.isArray(poi.coordinates) && poi.coordinates.length >= 2
                 ? [Number(poi.coordinates[0]), Number(poi.coordinates[1])]

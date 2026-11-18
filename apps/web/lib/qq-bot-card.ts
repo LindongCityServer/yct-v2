@@ -204,6 +204,10 @@ export interface PoiCard {
   address?: string;
   openingHours?: string;
   coordinates?: [number, number];
+  imageUrl?: string;
+  /** 卡片路由预取后内嵌的图片，避免 resvg 访问外网。 */
+  imageDataUri?: string;
+  qrDataUrl?: string;
   shareUrl: string;
   date: string;
   footer?: string;
@@ -407,6 +411,7 @@ export function normalizeCard(input: unknown): QqBotCard | null {
         address: cleanText(card.address, 80),
         openingHours: cleanText(card.openingHours, 60),
         coordinates,
+        imageUrl: normalizeOptionalImageUrl(card.imageUrl),
         shareUrl: cleanText(card.shareUrl, 500),
         date,
         footer: cleanText(card.footer, 80),
@@ -785,35 +790,45 @@ function buildFortuneCard(card: FortuneCard): string {
 
 function buildPoiCard(card: PoiCard): string {
   const color = '#2584E8';
+  const hasImage = Boolean(card.imageDataUri);
   const description = card.description || '在雨城通地图上发现的一个地点。';
-  const lines = wrapPlainText(description, 26, 3);
+  const lines = wrapPlainText(description, 30, 3);
+  const contentY = hasImage ? 410 : 180;
+  const height = hasImage ? 790 : 650;
   const coordinates = card.coordinates ? `X ${card.coordinates[0]} · Z ${card.coordinates[1]}` : '';
+  const qrY = height - 190;
   const body = [
-    `<g transform="translate(40,160)">`,
-    `<rect width="640" height="300" rx="24" fill="${color}" fill-opacity="0.065"/>`,
-    `<path d="M24 212H616 M24 276H616" stroke="${color}" stroke-opacity="0.08" stroke-width="1"/>`,
-    `<g opacity="0.12">${renderMaterialIconPath('location_on', 516, 112, 128, color)}</g>`,
-    `<text x="24" y="38" font-size="13" font-weight="700" letter-spacing="2" fill="${color}">${escapeXml(card.category || '地点')}</text>`,
-    `<text x="24" y="88" font-size="34" font-weight="700" fill="${colors.text}">${escapeXml(shortText(card.label, 20))}</text>`,
+    hasImage
+      ? [
+          `<defs><clipPath id="poi-cover-clip"><rect x="40" y="160" width="640" height="220" rx="20"/></clipPath></defs>`,
+          `<image x="40" y="160" width="640" height="220" href="${card.imageDataUri}" preserveAspectRatio="xMidYMid slice" clip-path="url(#poi-cover-clip)"/>`,
+        ].join('')
+      : '',
+    `<g transform="translate(40,${contentY})">`,
+    `<text x="0" y="0" font-size="13" font-weight="700" letter-spacing="2" fill="${color}">${escapeXml(card.category || '地点')}</text>`,
     ...lines.map(
       (line, index) =>
-        `<text x="24" y="${128 + index * 28}" font-size="18" fill="${colors.textSecondary}">${escapeXml(line)}</text>`,
+        `<text x="0" y="${38 + index * 28}" font-size="18" fill="${colors.textSecondary}">${escapeXml(line)}</text>`,
     ),
     card.address
-      ? `<text x="24" y="244" font-size="14" fill="${colors.textMuted}">地址：${escapeXml(shortText(card.address, 32))}</text>`
+      ? `<text x="0" y="148" font-size="14" fill="${colors.textMuted}">地址：${escapeXml(shortText(card.address, 36))}</text>`
       : '',
     card.openingHours
-      ? `<text x="24" y="270" font-size="14" fill="${colors.textMuted}">营业：${escapeXml(shortText(card.openingHours, 30))}</text>`
+      ? `<text x="0" y="176" font-size="14" fill="${colors.textMuted}">营业：${escapeXml(shortText(card.openingHours, 32))}</text>`
       : '',
     coordinates
-      ? `<text x="24" y="296" font-size="14" fill="${colors.textMuted}">坐标：${escapeXml(coordinates)}</text>`
+      ? `<text x="0" y="204" font-size="14" fill="${colors.textMuted}">坐标：${escapeXml(coordinates)}</text>`
       : '',
     '</g>',
-    `<text x="40" y="510" font-size="13" fill="${colors.textMuted}">${escapeXml(shortText(card.shareUrl, 74))}</text>`,
+    card.qrDataUrl
+      ? `<image x="600" y="${qrY}" width="72" height="72" href="${card.qrDataUrl}"/>`
+      : `<rect x="600" y="${qrY}" width="72" height="72" rx="4" fill="${colors.surfaceMuted}" stroke="${colors.borderSubtle}"/>`,
+    `<text x="40" y="${qrY + 36}" font-size="14" fill="${colors.textSecondary}">扫码在雨城通地图查看</text>`,
+    `<text x="40" y="${qrY + 60}" font-size="12" fill="${colors.textMuted}">${escapeXml(shortText(card.shareUrl, 64))}</text>`,
   ].join('');
 
   return buildFrame({
-    height: 620,
+    height,
     color,
     icon: 'explore',
     title: shortText(card.label, 18),
@@ -1352,6 +1367,11 @@ function displayDate(value: string): string {
 function normalizeColor(value: unknown): string {
   const text = String(value ?? '');
   return /^#[0-9a-f]{6}$/i.test(text) ? text : colors.primary;
+}
+
+function normalizeOptionalImageUrl(value: unknown): string | undefined {
+  const text = cleanText(value, 500);
+  return /^https:\/\//iu.test(text) ? text : undefined;
 }
 
 function materialIconName(value: unknown): string {
