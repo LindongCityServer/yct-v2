@@ -67,7 +67,9 @@ QQ 是聊天窗口，长回答会刷屏、Markdown 符号会原样显示、引�
    先用沙箱把流程跑通，再提交上线审核。
 4. **把机器人拉进群**：由群主或管理员在群设置里添加机器人；单聊则由用户从机器人资料卡发起。
    机器人不在群里时发消息会报 `40034101/40054003`。
-5. **不需要 Markdown / URL 权限**：本适配只发纯文本，且默认去掉回答里的链接，避免 `40054010`。
+5. **不需要 Markdown / URL 权限**：本适配只发纯文本和图片消息，且默认去掉回答里的链接，避免 `40054010`。
+   手机 QQ 对 Markdown 图片兼容性差，回答配图和指令卡片都改为独立图片消息；群聊里图片走主动消息，
+   不占用 `msg_seq`，因此文字仍然只 @ 发起者一次。
 
 官方文档：
 
@@ -93,48 +95,47 @@ QQ 是聊天窗口，长回答会刷屏、Markdown 符号会原样显示、引�
 
 ### 常用
 
-| 配置项                       | 默认值                    | 说明                                                                 |
-| ---------------------------- | ------------------------- | -------------------------------------------------------------------- |
-| `YCT_BASE_URL`               | `http://127.0.0.1:3300`   | 网页服务地址；同机部署用本机端口，跨机用公网 `https://` 地址         |
-| `YCT_ASSISTANT_PROVIDER`     | `deepseek`                | `deepseek` / `glm` / `mimo`                                          |
-| `YCT_ASSISTANT_MODEL`        | `deepseek-v4-flash`       | 模型名，需与网页端支持的模型一致                                     |
-| `YCT_ASSISTANT_LOCALE`       | `zh-CN`                   | `zh-CN` / `zh-Hant` / `en`                                           |
-| `YCT_PUBLIC_BASE_URL`        | 空                        | 站点公网 HTTPS 地址；用于回答配图和指令卡片                          |
-| `QQ_BOT_GROUP_ALLOWLIST`     | 空                        | 只响应这些群 openid，逗号或空格分隔；空表示不限制                    |
-| `QQ_BOT_USER_QPM`            | `6`                       | 每个用户每分钟最多提问次数                                           |
-| `QQ_BOT_GROUP_QPM`           | `20`                      | 每个群每分钟最多提问次数                                             |
-| `QQ_BOT_STYLE`               | `chat`                    | `chat` 为简短聊天风格；`full` 使用网页版完整格式                     |
-| `QQ_BOT_CHAT_MAX_CHARS`      | `360`                     | chat 模式下客户端兜底上限；提示词已经要求更短                        |
-| `QQ_BOT_CONDENSE`            | `1`                       | 长回答超过阈值时再调用一次模型精炼，关掉可省一次调用                 |
-| `QQ_BOT_CONDENSE_CHARS`      | `180`                     | 精炼目标字数；触发阈值约为该值 + 60 字                               |
-| `QQ_BOT_SEGMENT_CHARS`       | `900`                     | 单条 QQ 消息的字数上限，超长会切段                                   |
-| `QQ_BOT_ACK`                 | `1`                       | 先发「正在查资料」提示；群聊占一次被动回复，单聊用输入中状态         |
-| `QQ_BOT_APPEND_SOURCES`      | `0`（chat）/ `1`（full）  | 在回答末尾附上参考标题（不带链接）                                   |
-| `QQ_BOT_LINKS`               | `0`                       | 是否保留回答里的 URL；没申请到 URL 权限时保持关闭                    |
-| `QQ_BOT_FOLLOWUPS`           | `0`                       | 是否附上模型生成的追问建议                                           |
-| `QQ_BOT_ANSWER_TIMEOUT_MS`   | `120000`                  | 单次问一问请求超时                                                   |
-| `QQ_BOT_WEATHER_CITY`        | 空                        | `/天气` 默认城市；填真实城市名，例如 `上海`                          |
-| `QQ_BOT_AMAP_KEY`            | 空                        | 高德 Web 服务 Key；配置后天气优先走高德，否则回退 wttr.in            |
-| `QQ_BOT_STATE_PATH`          | `state/qq-bot-state.json` | 签到、发言统计和运势的本地状态文件；更新时保留该目录                 |
-| `QQ_BOT_IMAGES`              | `1`                       | 是否把回答引用里的运营封面合并进回答消息；需要 `YCT_PUBLIC_BASE_URL` |
-| `QQ_BOT_IMAGE_CAPTION_CHARS` | `120`                     | 图文合并时附带的简化文字上限；图片上传失败才发送完整纯文字版         |
-| `QQ_BOT_CARDS`               | `1`                       | 除签到、帮助、关于、新对话外，本地指令是否发送结果卡片               |
-| `QQ_BOT_BILIBILI`            | `1`                       | 识别消息里的 B 站视频链接，回复标题、UP 主、链接和封面               |
-| `QQ_BOT_FORTUNE_TEXTS_PATH`  | `data/fortune-texts.txt`  | 今日运势文案，一行一条；修改后重启机器人                             |
-| `QQ_BOT_GROUP_NOTICES_PATH`  | `data/group-notices.json` | 按群配置的入群/被踢/退群文案                                         |
-| `QQ_BOT_GROUP_ALIASES`       | 空                        | `群openid=旧群号` 映射，把官方 openid 对应到文案配置里的群号         |
-| `QQ_BOT_PLAYER_EVENTS`       | `0`                       | 是否轮询站内玩家位置，自动播报玩家进服/退服                          |
-| `QQ_BOT_PLAYER_EVENT_GROUPS` | 空                        | 玩家进服/退服播报的群 openid，逗号或空格分隔                         |
-| `QQ_BOT_PLAYER_POLL_MS`      | `30000`                   | 玩家位置轮询间隔，最小 10 秒                                         |
-| `QQ_BOT_PLAYER_JOIN_TEXT`    | `🟢 {name} 进入了服务器`  | 玩家进服文案，支持 `{name}`                                          |
-| `QQ_BOT_PLAYER_LEAVE_TEXT`   | `🔴 {name} 离开了服务器`  | 玩家退服文案，支持 `{name}`                                          |
-| `QQ_BOT_EVENT_PORT`          | `0`（关闭）               | 事件桥监听端口；开启后接 OneBot 群消息/进退群和游戏服务器事件        |
-| `QQ_BOT_EVENT_BIND`          | `127.0.0.1`               | 事件桥绑定地址；默认只允许本机插件访问                               |
-| `QQ_BOT_EVENT_TOKEN`         | 空                        | 事件桥 Bearer Token；绑定非回环地址时必须设置                        |
-| `QQ_BOT_EVENT_GROUP_MAP`     | 空                        | `旧群号=官方群openid` 映射，用于把 OneBot 群事件对到官方群           |
-| `QQ_BOT_EVENT_GROUPS`        | 空                        | 游戏服务器聊天/进服/退服广播到的官方群 openid                        |
-| `QQ_BOT_IMAGE_HOSTS`         | 空                        | 额外允许的配图域名，逗号分隔；默认只允许站点自己的域名               |
-| `QQ_BOT_LOG_LEVEL`           | `info`                    | `debug` / `info` / `warn` / `error`                                  |
+| 配置项                       | 默认值                    | 说明                                                                   |
+| ---------------------------- | ------------------------- | ---------------------------------------------------------------------- |
+| `YCT_BASE_URL`               | `http://127.0.0.1:3300`   | 网页服务地址；同机部署用本机端口，跨机用公网 `https://` 地址           |
+| `YCT_ASSISTANT_PROVIDER`     | `deepseek`                | `deepseek` / `glm` / `mimo`                                            |
+| `YCT_ASSISTANT_MODEL`        | `deepseek-v4-flash`       | 模型名，需与网页端支持的模型一致                                       |
+| `YCT_ASSISTANT_LOCALE`       | `zh-CN`                   | `zh-CN` / `zh-Hant` / `en`                                             |
+| `YCT_PUBLIC_BASE_URL`        | 空                        | 站点公网 HTTPS 地址；用于回答配图和指令卡片                            |
+| `QQ_BOT_GROUP_ALLOWLIST`     | 空                        | 只响应这些群 openid，逗号或空格分隔；空表示不限制                      |
+| `QQ_BOT_USER_QPM`            | `6`                       | 每个用户每分钟最多提问次数                                             |
+| `QQ_BOT_GROUP_QPM`           | `20`                      | 每个群每分钟最多提问次数                                               |
+| `QQ_BOT_STYLE`               | `chat`                    | `chat` 为简短聊天风格；`full` 使用网页版完整格式                       |
+| `QQ_BOT_CHAT_MAX_CHARS`      | `360`                     | chat 模式下客户端兜底上限；提示词已经要求更短                          |
+| `QQ_BOT_CONDENSE`            | `1`                       | 长回答超过阈值时再调用一次模型精炼，关掉可省一次调用                   |
+| `QQ_BOT_CONDENSE_CHARS`      | `180`                     | 精炼目标字数；触发阈值约为该值 + 60 字                                 |
+| `QQ_BOT_SEGMENT_CHARS`       | `900`                     | 单条 QQ 消息的字数上限，超长会切段                                     |
+| `QQ_BOT_ACK`                 | `1`                       | 先发「正在查资料」提示；群聊占一次被动回复，单聊用输入中状态           |
+| `QQ_BOT_APPEND_SOURCES`      | `0`（chat）/ `1`（full）  | 在回答末尾附上参考标题（不带链接）                                     |
+| `QQ_BOT_LINKS`               | `0`                       | 是否保留回答里的 URL；没申请到 URL 权限时保持关闭                      |
+| `QQ_BOT_FOLLOWUPS`           | `0`                       | 是否附上模型生成的追问建议                                             |
+| `QQ_BOT_ANSWER_TIMEOUT_MS`   | `120000`                  | 单次问一问请求超时                                                     |
+| `QQ_BOT_WEATHER_CITY`        | 空                        | `/天气` 默认城市；填真实城市名，例如 `上海`                            |
+| `QQ_BOT_AMAP_KEY`            | 空                        | 高德 Web 服务 Key；配置后天气优先走高德，否则回退 wttr.in              |
+| `QQ_BOT_STATE_PATH`          | `state/qq-bot-state.json` | 签到、发言统计和运势的本地状态文件；更新时保留该目录                   |
+| `QQ_BOT_IMAGES`              | `1`                       | 是否把回答引用里的运营封面作为主动图片发送；需要 `YCT_PUBLIC_BASE_URL` |
+| `QQ_BOT_CARDS`               | `1`                       | 除签到、帮助、关于、新对话外，本地指令是否发送结果卡片                 |
+| `QQ_BOT_BILIBILI`            | `1`                       | 识别消息里的 B 站视频链接，回复标题、UP 主、链接和封面                 |
+| `QQ_BOT_FORTUNE_TEXTS_PATH`  | `data/fortune-texts.txt`  | 今日运势文案，一行一条；修改后重启机器人                               |
+| `QQ_BOT_GROUP_NOTICES_PATH`  | `data/group-notices.json` | 按群配置的入群/被踢/退群文案                                           |
+| `QQ_BOT_GROUP_ALIASES`       | 空                        | `群openid=旧群号` 映射，把官方 openid 对应到文案配置里的群号           |
+| `QQ_BOT_PLAYER_EVENTS`       | `0`                       | 是否轮询站内玩家位置，自动播报玩家进服/退服                            |
+| `QQ_BOT_PLAYER_EVENT_GROUPS` | 空                        | 玩家进服/退服播报的群 openid，逗号或空格分隔                           |
+| `QQ_BOT_PLAYER_POLL_MS`      | `30000`                   | 玩家位置轮询间隔，最小 10 秒                                           |
+| `QQ_BOT_PLAYER_JOIN_TEXT`    | `🟢 {name} 进入了服务器`  | 玩家进服文案，支持 `{name}`                                            |
+| `QQ_BOT_PLAYER_LEAVE_TEXT`   | `🔴 {name} 离开了服务器`  | 玩家退服文案，支持 `{name}`                                            |
+| `QQ_BOT_EVENT_PORT`          | `0`（关闭）               | 事件桥监听端口；开启后接 OneBot 群消息/进退群和游戏服务器事件          |
+| `QQ_BOT_EVENT_BIND`          | `127.0.0.1`               | 事件桥绑定地址；默认只允许本机插件访问                                 |
+| `QQ_BOT_EVENT_TOKEN`         | 空                        | 事件桥 Bearer Token；绑定非回环地址时必须设置                          |
+| `QQ_BOT_EVENT_GROUP_MAP`     | 空                        | `旧群号=官方群openid` 映射，用于把 OneBot 群事件对到官方群             |
+| `QQ_BOT_EVENT_GROUPS`        | 空                        | 游戏服务器聊天/进服/退服广播到的官方群 openid                          |
+| `QQ_BOT_IMAGE_HOSTS`         | 空                        | 额外允许的配图域名，逗号分隔；默认只允许站点自己的域名                 |
+| `QQ_BOT_LOG_LEVEL`           | `info`                    | `debug` / `info` / `warn` / `error`                                    |
 
 `QQ_BOT_API_BASE`、`QQ_BOT_INTENTS`、`QQ_BOT_MAX_QUESTION_CHARS` 一般不用改。
 `QQ_BOT_API_BASE` 默认 `https://api.bot.qq.com`，只有平台域名调整时才需要改。

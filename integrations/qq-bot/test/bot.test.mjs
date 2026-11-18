@@ -17,7 +17,6 @@ function createConfig(overrides = {}) {
       appendSources: true,
       links: false,
       images: false,
-      imageCaptionChars: 120,
       cards: false,
       imageHosts: new Set(),
       followups: false,
@@ -58,20 +57,6 @@ function createSetup({ config = createConfig(), assistantImpl, condenseImpl } = 
     },
     async sendC2CTyping(openid, payload) {
       sends.push({ kind: 'typing', openid, payload });
-    },
-    async sendGroupMarkdown(openid, { content, msgId, msgSeq }) {
-      sends.push({
-        kind: 'markdown',
-        openid,
-        payload: { content, msg_id: msgId, msg_seq: msgSeq },
-      });
-    },
-    async sendC2CMarkdown(openid, { content, msgId, msgSeq }) {
-      sends.push({
-        kind: 'markdown',
-        openid,
-        payload: { content, msg_id: msgId, msg_seq: msgSeq },
-      });
     },
     async uploadGroupImage(openid, url) {
       uploads.push({ kind: 'group', openid, url });
@@ -355,7 +340,7 @@ test('群消息计入发言统计，签到与运势走本地状态', async () =>
   assert.match(sends[3].payload.content, /今日运势：\d+\/100/);
 });
 
-test('回答引用有配图时合并为一条图文消息', async () => {
+test('群聊回答配图改为文字加主动图片，避免重复 at', async () => {
   const config = createConfig({
     reply: { ack: false, images: true, appendSources: false },
     yct: { publicBaseUrl: 'https://yct.example.com' },
@@ -382,14 +367,13 @@ test('回答引用有配图时合并为一条图文消息', async () => {
 
   assert.equal(uploads.length, 1);
   assert.equal(uploads[0].url, 'https://yct.example.com/content-assets/cover.png');
-  assert.equal(sends.length, 1);
-  assert.equal(sends[0].kind, 'markdown');
-  assert.match(
-    sends[0].payload.content,
-    /!\[封面\]\(https:\/\/yct\.example\.com\/content-assets\/cover\.png\)/,
-  );
-  assert.match(sends[0].payload.content, /站台临时调整，请留意公告。/);
+  assert.equal(sends.length, 2);
+  assert.equal(sends[0].kind, 'group');
   assert.equal(sends[0].payload.msg_seq, 1);
+  assert.equal(sends[1].kind, 'image');
+  assert.equal(sends[1].payload.fileInfo, 'file-info-group');
+  assert.equal(sends[1].payload.msgId, undefined);
+  assert.equal(sends[1].payload.msgSeq, undefined);
 });
 
 test('配图上传失败时回退为纯文字消息', async () => {
@@ -481,8 +465,11 @@ test('指令结果会生成卡片图片', async () => {
   });
 
   assert.equal(sends.length, 2);
-  assert.equal(sends[0].payload.msg_type, 0);
-  assert.equal(sends[1].kind, 'image');
+  assert.equal(sends[0].kind, 'image');
+  assert.equal(sends[0].payload.msg_id, undefined);
+  assert.equal(sends[1].kind, 'group');
+  assert.equal(sends[1].payload.msg_seq, 1);
+  assert.match(sends[1].payload.content, /随机数/);
   assert.equal(uploads.length, 1);
   assert.match(uploads[0].url, /^https:\/\/yct\.example\.com\/api\/qq-bot\/card\?d=/);
   const payload = new URL(uploads[0].url).searchParams.get('d');
@@ -490,6 +477,36 @@ test('指令结果会生成卡片图片', async () => {
   assert.equal(card.type, 'result');
   assert.match(card.title, /随机数/);
   assert.match(card.footer, /群成员｜\d{2}-\d{2} \d{2}:\d{2}/);
+});
+
+test('单聊配图保持文字加图片，不走 Markdown', async () => {
+  const config = createConfig({
+    reply: { ack: false, images: true, appendSources: false },
+    yct: { publicBaseUrl: 'https://yct.example.com' },
+  });
+  const { bot, sends, uploads, queue } = createSetup({
+    config,
+    assistantImpl: async () => ({
+      text: '站台临时调整，请留意公告。',
+      references: [{ id: 1, title: '站台临时调整', imageUrl: '/content-assets/cover.png' }],
+      followups: [],
+      error: '',
+    }),
+  });
+
+  await bot.handleEvent('C2C_MESSAGE_CREATE', {
+    id: 'msg-c2c-image',
+    author: { user_openid: 'user-9' },
+    content: '有什么公告',
+  });
+  await queue.settle();
+
+  assert.equal(uploads.length, 1);
+  assert.equal(sends.length, 2);
+  assert.equal(sends[0].kind, 'c2c');
+  assert.equal(sends[0].payload.content, '站台临时调整，请留意公告。');
+  assert.equal(sends[1].kind, 'image');
+  assert.equal(sends[1].payload.msgSeq, 2);
 });
 
 test('模型报错时把可读提示发回 QQ', async () => {

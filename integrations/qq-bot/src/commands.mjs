@@ -964,7 +964,10 @@ function parseWeatherCurrent(line) {
 }
 
 function parseWeatherDay(line) {
-  const match = /^(今天|明天)\s*([\d.]+)~([\d.]+)℃、([^、。]+)/u.exec(line);
+  const match =
+    /^(今天|明天)\s*([\d.]+)\s*[~～/]\s*([\d.]+)\s*(?:℃|°C|C)?\s*[、,，]?\s*(.+?)[。.]?$/u.exec(
+      line,
+    );
   if (!match) {
     return null;
   }
@@ -972,7 +975,7 @@ function parseWeatherDay(line) {
     label: match[1],
     low: match[2],
     high: match[3],
-    condition: match[4].replace(/^白天/u, ''),
+    condition: match[4].replace(/^白天/u, '').trim(),
   };
 }
 

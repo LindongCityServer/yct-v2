@@ -60,6 +60,16 @@ test('天气指令使用配置中的城市', async () => {
     weather: async ({ city }) => `${city}天气：多云。`,
   });
   assert.equal(override.reply, '北京天气：多云。');
+
+  const forecast = await handleCommand({
+    ...base,
+    text: '/天气 上海',
+    context: { kind: 'group', groupId: 'g1', userId: 'u1', userName: '测试' },
+    weather: async () => '上海市天气：\n现在 15℃、晴。\n今天 13~18℃、晴。\n明天 12~17℃、多云。',
+  });
+  assert.equal(forecast.card?.type, 'weather');
+  assert.equal(forecast.card?.days?.length, 2);
+  assert.equal(forecast.card?.days?.[1].condition, '多云');
 });
 
 test('IP 属地与历史上的今天指令', async () => {

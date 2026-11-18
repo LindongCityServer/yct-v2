@@ -531,7 +531,7 @@ function buildWeatherCard(card: WeatherCard): string {
         `<g transform="translate(40,${y})">`,
         `<text x="0" y="28" font-size="22" font-weight="700" fill="${colors.text}">${escapeXml(day.label)}</text>`,
         renderMaterialIconPath(weatherIconName(day.condition), 94, 0, 38, colors.secondary),
-        `<text x="146" y="28" font-size="24" font-weight="700" fill="${colors.text}">${escapeXml(day.low || '--')}° / ${escapeXml(day.high || '--')}°</text>`,
+        `<text x="146" y="28" font-size="24" font-weight="700" fill="${colors.text}">${escapeXml(day.low || '--')}° ~ ${escapeXml(day.high || '--')}°</text>`,
         `<text x="300" y="28" font-size="18" fill="${colors.textSecondary}">${escapeXml(day.condition || '天气未知')}</text>`,
         `<line x1="0" y1="48" x2="640" y2="48" stroke="${colors.borderSubtle}"/>`,
         '</g>',
@@ -559,6 +559,7 @@ function buildWeatherCard(card: WeatherCard): string {
       ? `<text x="612" y="42" text-anchor="end" font-size="13" fill="${colors.textMuted}">${escapeXml(card.updated)}</text>`
       : '',
     '</g>',
+    `<text x="40" y="438" font-size="13" font-weight="700" letter-spacing="2" fill="${colors.textMuted}">天气预报</text>`,
     days,
   ].join('');
 

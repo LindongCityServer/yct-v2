@@ -420,7 +420,9 @@ export class QQBot {
       if (video) {
         await this.safeReply(target, messageId, 1, formatBilibiliVideo(video));
         if (video.cover && maxReplies > 1) {
-          await this.sendImageUrl(target, messageId, 2, video.cover);
+          await this.sendImageUrl(target, messageId, 2, video.cover, {
+            active: target.kind === 'group',
+          });
         }
         return;
       }
@@ -446,14 +448,18 @@ export class QQBot {
       context,
     });
     if (local?.handled) {
-      await this.safeReply(target, messageId, 1, clipCommandReply(local.reply));
-      if (local.card) {
-        await this.sendCommandCard({
-          target,
-          messageId,
-          card: decorateCommandCard(local.card, context, target),
-          seq: 2,
-        });
+      const reply = clipCommandReply(local.reply);
+      const card = local.card ? decorateCommandCard(local.card, context, target) : null;
+      // 手机 QQ 不渲染 Markdown 图片。群聊先主动发卡片、再发被动文字：
+      // 卡片不带 msg_id，不会 @ 发起者；文字只 @ 一次。
+      if (card && target.kind === 'group') {
+        await this.sendCommandCard({ target, messageId, card, seq: 1, active: true });
+        await this.safeReply(target, messageId, 1, reply);
+        return;
+      }
+      await this.safeReply(target, messageId, 1, reply);
+      if (card) {
+        await this.sendCommandCard({ target, messageId, card, seq: 2 });
       }
       return;
     }
@@ -595,47 +601,34 @@ export class QQBot {
     }
 
     let sent = 0;
-    let combined = false;
-    if (imageUrl) {
-      const uploaded = await this.uploadAnswerImage(target, imageUrl);
-      if (uploaded) {
-        const caption =
-          composeAnswer({
-            text: answerText,
-            references: result.references,
-            segmentChars: this.config.reply.segmentChars,
-            maxChars: this.config.reply.imageCaptionChars,
-            appendSources: false,
-            followupSuggestions: false,
-            links: this.config.reply.links,
-            maxSegments: 1,
-          })[0] ?? segments[0];
-        const markdown = `![封面](${imageUrl})\n\n${caption}`;
-        if (seq < maxReplies) {
-          seq += 1;
-          if (await this.sendMarkdown(target, messageId, seq, markdown)) {
-            combined = true;
-            sent = segments.length;
-            this.logger.info(`图文合并消息已发送：${imageUrl}`);
-          }
+    const answerImage = imageUrl ? await this.uploadAnswerImage(target, imageUrl) : null;
+    if (imageUrl && !answerImage) {
+      this.logger.warn(`回答配图上传失败，改发纯文字：${imageUrl}`);
+    }
+
+    for (const segment of segments) {
+      try {
+        const ok = await send(segment);
+        if (!ok) {
+          break;
         }
-      } else {
-        this.logger.warn(`回答配图上传失败，改发纯文字：${imageUrl}`);
+        sent += 1;
+      } catch (error) {
+        this.logger.error('发送 QQ 消息失败：', error);
+        break;
       }
     }
 
-    if (!combined) {
-      for (const segment of segments) {
-        try {
-          const ok = await send(segment);
-          if (!ok) {
-            break;
-          }
-          sent += 1;
-        } catch (error) {
-          this.logger.error('发送 QQ 消息失败：', error);
-          break;
+    if (sent > 0 && answerImage) {
+      if (target.kind === 'group') {
+        // 手机 QQ 对 Markdown 图片兼容性差；配图改走主动图片，不再 @ 第二次。
+        const ok = await this.sendImageFile(target, messageId, 1, answerImage, { active: true });
+        if (!ok) {
+          this.logger.warn('主动配图发送失败，保留已发送的文字回答。');
         }
+      } else if (seq < maxReplies) {
+        seq += 1;
+        await this.sendImageFile(target, messageId, seq, answerImage);
       }
     }
 
@@ -643,7 +636,7 @@ export class QQBot {
       this.store.append(conversationKey, 'user', question);
       this.store.append(conversationKey, 'assistant', segments.join('\n'));
       this.logger.info(
-        `回答完成${combined ? '（图文合并）' : ''}：${result.text.length} 字，发送 ${sent}/${segments.length} 段，` +
+        `回答完成${answerImage ? '（含配图）' : ''}：${result.text.length} 字，发送 ${sent}/${segments.length} 段，` +
           `用时 ${Date.now() - startedAt}ms。`,
       );
     }
@@ -661,33 +654,31 @@ export class QQBot {
     }
   }
 
-  async sendMarkdown(target, messageId, seq, content) {
+  async sendImageFile(target, messageId, seq, fileInfo, { active = false } = {}) {
     try {
       if (target.kind === 'group') {
-        await this.api.sendGroupMarkdown(target.openid, {
-          content,
-          msgId: messageId,
-          msgSeq: seq,
-        });
+        await this.api.sendGroupImage(
+          target.openid,
+          active ? { fileInfo } : { fileInfo, msgId: messageId, msgSeq: seq },
+        );
       } else {
-        await this.api.sendC2CMarkdown(target.openid, {
-          content,
-          msgId: messageId,
-          msgSeq: seq,
-        });
+        await this.api.sendC2CImage(target.openid, { fileInfo, msgId: messageId, msgSeq: seq });
       }
       return true;
     } catch (error) {
-      this.logger.warn('图文合并消息发送失败，回退纯文字：', error);
+      this.logger.warn('图片发送失败：', error);
       return false;
     }
   }
 
-  async sendImageUrl(target, messageId, seq, url) {
+  async sendImageUrl(target, messageId, seq, url, { active = false } = {}) {
     try {
       if (target.kind === 'group') {
         const fileInfo = await this.api.uploadGroupImage(target.openid, url);
-        await this.api.sendGroupImage(target.openid, { fileInfo, msgId: messageId, msgSeq: seq });
+        await this.api.sendGroupImage(
+          target.openid,
+          active ? { fileInfo } : { fileInfo, msgId: messageId, msgSeq: seq },
+        );
       } else {
         const fileInfo = await this.api.uploadC2CImage(target.openid, url);
         await this.api.sendC2CImage(target.openid, { fileInfo, msgId: messageId, msgSeq: seq });
@@ -700,9 +691,9 @@ export class QQBot {
     }
   }
 
-  async sendCommandCard({ target, messageId, card, seq }) {
+  async sendCommandCard({ target, messageId, card, seq, active = false }) {
     if (!this.config.reply.cards || !this.config.yct.publicBaseUrl) {
-      return;
+      return false;
     }
     let url;
     try {
@@ -710,21 +701,20 @@ export class QQBot {
       url = `${this.config.yct.publicBaseUrl}/api/qq-bot/card?d=${payload}`;
     } catch (error) {
       this.logger.warn('生成指令卡片地址失败：', error);
-      return;
+      return false;
     }
     if (url.length > 3900) {
       this.logger.warn(`指令卡片地址过长（${url.length}），已跳过。`);
-      return;
+      return false;
     }
 
     try {
       if (target.kind === 'group') {
         const fileInfo = await this.api.uploadGroupImage(target.openid, url);
-        await this.api.sendGroupImage(target.openid, {
-          fileInfo,
-          msgId: messageId,
-          msgSeq: seq,
-        });
+        await this.api.sendGroupImage(
+          target.openid,
+          active ? { fileInfo } : { fileInfo, msgId: messageId, msgSeq: seq },
+        );
       } else {
         const fileInfo = await this.api.uploadC2CImage(target.openid, url);
         await this.api.sendC2CImage(target.openid, {
@@ -734,8 +724,10 @@ export class QQBot {
         });
       }
       this.logger.info(`指令卡片已发送：${card.type}`);
+      return true;
     } catch (error) {
       this.logger.warn('指令卡片发送失败：', error);
+      return false;
     }
   }
 
