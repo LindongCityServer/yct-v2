@@ -69,6 +69,11 @@ const commandAliases = new Map([
   ['在线人数', 'serverplayers'],
   ['服务器人数', 'serverplayers'],
   ['服务器状态', 'serverplayers'],
+  ['随机地点', 'randomplace'],
+  ['随机poi', 'randomplace'],
+  ['手气不错', 'randomplace'],
+  ['随便逛逛', 'randomplace'],
+  ['逛一逛', 'randomplace'],
   ['发言榜', 'board'],
   ['活跃榜', 'board'],
   ['水群榜', 'board'],
@@ -397,6 +402,59 @@ export async function handleCommand({
           },
         };
       }
+      case 'randomplace': {
+        const baseUrl = config?.yct?.baseUrl;
+        if (!baseUrl) {
+          return { handled: true, reply: '随机地点接口还没有配置。' };
+        }
+        let payload;
+        let responseOk = false;
+        try {
+          const response = await fetchImpl(`${baseUrl.replace(/\/+$/, '')}/api/map/random-poi`, {
+            signal: AbortSignal.timeout(10_000),
+          });
+          responseOk = response.ok;
+          payload = response.ok ? await response.json() : null;
+        } catch (error) {
+          logger?.warn(`${label} 查询失败：`, error);
+        }
+        const poi = payload?.poi;
+        if (!responseOk || !poi?.label) {
+          return {
+            handled: true,
+            reply: payload?.message || '暂时没有抽到可分享的地点，请稍后再试。',
+          };
+        }
+        const publicBase = config?.yct?.publicBaseUrl || baseUrl;
+        const shareUrl = `${publicBase.replace(/\/+$/, '')}${poi.sharePath || `/map?m=${encodeURIComponent(poi.id)}`}`;
+        const category = randomPlaceCategoryLabel(poi.categoryId);
+        return {
+          handled: true,
+          reply: [
+            `随机地点：${poi.label}`,
+            category ? `类型：${category}` : '',
+            poi.address ? `地址：${poi.address}` : '',
+            shareUrl,
+          ]
+            .filter(Boolean)
+            .join('\n'),
+          card: {
+            type: 'poi',
+            label: poi.label,
+            category,
+            description: poi.description,
+            address: poi.address,
+            openingHours: poi.openingHours,
+            coordinates:
+              Array.isArray(poi.coordinates) && poi.coordinates.length >= 2
+                ? [Number(poi.coordinates[0]), Number(poi.coordinates[1])]
+                : undefined,
+            shareUrl,
+            date: contextDate(context),
+            footer: '在雨城通地图查看',
+          },
+        };
+      }
       case 'serverplayers': {
         const baseUrl = config?.yct?.baseUrl;
         if (!baseUrl) {
@@ -597,6 +655,31 @@ function requireUser(context) {
   return context.userId;
 }
 
+function randomPlaceCategoryLabel(categoryId) {
+  const labels = {
+    food: '餐饮',
+    restaurant: '餐饮',
+    dining: '餐饮',
+    shop: '商店',
+    shopping: '商店',
+    scenic: '景点',
+    attraction: '景点',
+    tourism: '景点',
+    station: '交通',
+    transit: '交通',
+    transport: '交通',
+    service: '公共服务',
+    education: '教育',
+    school: '教育',
+    medical: '医疗',
+    hospital: '医疗',
+    hotel: '住宿',
+    accommodation: '住宿',
+    culture: '文化',
+  };
+  return labels[String(categoryId ?? '')] ?? '';
+}
+
 function formatCheckedAt(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -681,6 +764,9 @@ function parseNaturalCommand(raw) {
   }
   if (/^(?:服务器状态|服务器在线人数|服务器人数|在线人数|几个人在线|服务器几个人)$/u.test(input)) {
     return { command: 'serverplayers', args: '', label: '服务器人数' };
+  }
+  if (/^(?:随机地点|随机poi|手气不错|随便逛逛|逛一逛)$/u.test(input)) {
+    return { command: 'randomplace', args: '', label: '随机地点' };
   }
   if (/^(?:重置运势|重抽运势|重抽)$/u.test(input)) {
     return { command: 'fortunereset', args: '', label: '重置运势' };

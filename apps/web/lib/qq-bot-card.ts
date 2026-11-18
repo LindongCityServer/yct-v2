@@ -48,6 +48,10 @@ const materialIconPaths: Record<string, string> = {
   casino:
     'M342.5-257.5Q360-275 360-300t-17.5-42.5Q325-360 300-360t-42.5 17.5Q240-325 240-300t17.5 42.5Q275-240 300-240t42.5-17.5Zm0-360Q360-635 360-660t-17.5-42.5Q325-720 300-720t-42.5 17.5Q240-685 240-660t17.5 42.5Q275-600 300-600t42.5-17.5Zm180 180Q540-455 540-480t-17.5-42.5Q505-540 480-540t-42.5 17.5Q420-505 420-480t17.5 42.5Q455-420 480-420t42.5-17.5Zm180 180Q720-275 720-300t-17.5-42.5Q685-360 660-360t-42.5 17.5Q600-325 600-300t17.5 42.5Q635-240 660-240t42.5-17.5Zm0-360Q720-635 720-660t-17.5-42.5Q685-720 660-720t-42.5 17.5Q600-685 600-660t17.5 42.5Q635-600 660-600t42.5-17.5ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Z',
   code: 'M320-240 80-480l240-240 57 57-184 184 183 183-56 56Zm320 0-57-57 184-184-183-183 56-56 240 240-240 240Z',
+  explore:
+    'm300-300 280-80 80-280-280 80-80 280Zm180-120q-25 0-42.5-17.5T420-480q0-25 17.5-42.5T480-540q25 0 42.5 17.5T540-480q0 25-17.5 42.5T480-420Zm0 340q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q133 0 226.5-93.5T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160Zm0-320Z',
+  location_on:
+    'M536.5-503.5Q560-527 560-560t-23.5-56.5Q513-640 480-640t-56.5 23.5Q400-593 400-560t23.5 56.5Q447-480 480-480t56.5-23.5ZM480-186q122-112 181-203.5T720-552q0-109-69.5-178.5T480-800q-101 0-170.5 69.5T240-552q0 71 59 162.5T480-186Zm0 106Q319-217 239.5-334.5T160-552q0-150 96.5-239T480-880q127 0 223.5 89T800-552q0 100-79.5 217.5T480-80Zm0-480Z',
   edit_note:
     'M160-400v-80h280v80H160Zm0-160v-80h440v80H160Zm0-160v-80h440v80H160Zm360 560v-123l221-220q9-9 20-13t22-4q12 0 23 4.5t20 13.5l37 37q8 9 12.5 20t4.5 22q0 11-4 22.5T863-380L643-160H520Zm300-263-37-37 37 37ZM580-220h38l121-122-18-19-19-18-122 121v38Zm141-141-19-18 37 37-18-19Z',
   format_quote:
@@ -192,6 +196,19 @@ export interface CoupletCard {
   footer?: string;
 }
 
+export interface PoiCard {
+  type: 'poi';
+  label: string;
+  category?: string;
+  description?: string;
+  address?: string;
+  openingHours?: string;
+  coordinates?: [number, number];
+  shareUrl: string;
+  date: string;
+  footer?: string;
+}
+
 export type QqBotCard =
   | SigninCard
   | SigninBoardCard
@@ -203,7 +220,8 @@ export type QqBotCard =
   | WeatherCard
   | TelegraphCard
   | Gb2312Card
-  | CoupletCard;
+  | CoupletCard
+  | PoiCard;
 
 export function parseQqBotCardPayload(payload: string): QqBotCard | null {
   if (!payload || payload.length > 4096) {
@@ -374,6 +392,26 @@ export function normalizeCard(input: unknown): QqBotCard | null {
         date,
         footer: cleanText(card.footer, 80),
       };
+    case 'poi': {
+      const coordinates = Array.isArray(card.coordinates)
+        ? ([
+            clampInt(card.coordinates[0], -30_000_000, 30_000_000, 0),
+            clampInt(card.coordinates[1], -30_000_000, 30_000_000, 0),
+          ] as [number, number])
+        : undefined;
+      return {
+        type: 'poi',
+        label: cleanText(card.label, 40) || '随机地点',
+        category: cleanText(card.category, 24),
+        description: cleanText(card.description, 220),
+        address: cleanText(card.address, 80),
+        openingHours: cleanText(card.openingHours, 60),
+        coordinates,
+        shareUrl: cleanText(card.shareUrl, 500),
+        date,
+        footer: cleanText(card.footer, 80),
+      };
+    }
     default:
       return null;
   }
@@ -395,6 +433,8 @@ export function buildQqBotCardSvg(card: QqBotCard): string {
       return buildFortuneCard(card);
     case 'couplet':
       return buildCoupletCard(card);
+    case 'poi':
+      return buildPoiCard(card);
     default:
       return buildGenericCard(card);
   }
@@ -739,6 +779,46 @@ function buildFortuneCard(card: FortuneCard): string {
     title: '今日运势',
     eyebrow: `${card.name} · ${displayDate(card.date)}`,
     footer: card.footer || '仅供娱乐',
+    body,
+  });
+}
+
+function buildPoiCard(card: PoiCard): string {
+  const color = '#2584E8';
+  const description = card.description || '在雨城通地图上发现的一个地点。';
+  const lines = wrapPlainText(description, 26, 3);
+  const coordinates = card.coordinates ? `X ${card.coordinates[0]} · Z ${card.coordinates[1]}` : '';
+  const body = [
+    `<g transform="translate(40,160)">`,
+    `<rect width="640" height="300" rx="24" fill="${color}" fill-opacity="0.065"/>`,
+    `<path d="M24 212H616 M24 276H616" stroke="${color}" stroke-opacity="0.08" stroke-width="1"/>`,
+    `<g opacity="0.12">${renderMaterialIconPath('location_on', 516, 112, 128, color)}</g>`,
+    `<text x="24" y="38" font-size="13" font-weight="700" letter-spacing="2" fill="${color}">${escapeXml(card.category || '地点')}</text>`,
+    `<text x="24" y="88" font-size="34" font-weight="700" fill="${colors.text}">${escapeXml(shortText(card.label, 20))}</text>`,
+    ...lines.map(
+      (line, index) =>
+        `<text x="24" y="${128 + index * 28}" font-size="18" fill="${colors.textSecondary}">${escapeXml(line)}</text>`,
+    ),
+    card.address
+      ? `<text x="24" y="244" font-size="14" fill="${colors.textMuted}">地址：${escapeXml(shortText(card.address, 32))}</text>`
+      : '',
+    card.openingHours
+      ? `<text x="24" y="270" font-size="14" fill="${colors.textMuted}">营业：${escapeXml(shortText(card.openingHours, 30))}</text>`
+      : '',
+    coordinates
+      ? `<text x="24" y="296" font-size="14" fill="${colors.textMuted}">坐标：${escapeXml(coordinates)}</text>`
+      : '',
+    '</g>',
+    `<text x="40" y="510" font-size="13" fill="${colors.textMuted}">${escapeXml(shortText(card.shareUrl, 74))}</text>`,
+  ].join('');
+
+  return buildFrame({
+    height: 620,
+    color,
+    icon: 'explore',
+    title: shortText(card.label, 18),
+    eyebrow: `随机地点 · ${displayDate(card.date)}`,
+    footer: card.footer || '在雨城通地图查看',
     body,
   });
 }

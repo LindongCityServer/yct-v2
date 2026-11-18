@@ -8,7 +8,7 @@ Windows 服务器怎么部署、出错时先看哪里，以及服务器上的 `c
 代码在 [`integrations/qq-bot`](../integrations/qq-bot/README.md)，是一个**独立的 Node.js 进程**，
 不进入 Next.js 部署包，也不需要 `pnpm install` 或 `node_modules`。
 
-随机数、算式、中文电码、GB2312、天气、IP 属地、历史上的今天和对对联这些快捷指令不走问一问，
+随机数、算式、中文电码、GB2312、天气、IP 属地、历史上的今天、对对联、随机地点和服务器人数这些快捷指令不走问一问，
 它们的用法、外部接口和部署注意见 [QQ_BOT_COMMANDS.md](./QQ_BOT_COMMANDS.md)。
 
 ## 1. 接入方式
@@ -272,7 +272,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -Uninsta
 | QQ 单聊 | 60 分钟      | 4 次                 | 输入中状态占 1 次，答案最多 3 段 |
 
 - **只做被动回复**：不依赖主动消息配额，也不会在没有人提问时推送。
-- **快捷指令**：`/随机`、`/算`、`/电码`、`/gb2312`、`/天气`、`/ip`、`/历史`、`/对联` 在本地处理，
+- **快捷指令**：`/随机`、`/算`、`/电码`、`/gb2312`、`/天气`、`/ip`、`/历史`、`/对联`、`/随机地点`、`/人数` 在本地处理，
   也支持“计算 1+2”“上海天气”“历史上的今天”“菜单”等自然触发词；完整说明见
   [QQ_BOT_COMMANDS.md](./QQ_BOT_COMMANDS.md)。
 - **群互动**：签到、签到榜、发言统计/发言榜、今日运势；状态在 `state/`，更新时保留。
@@ -295,6 +295,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -Uninsta
   开启事件桥并配置 `QQ_BOT_EVENT_GROUP_MAP` 后，机器人会把该群的全部消息计入统计，并跳过重复的官方 @ 事件。
 - **服务器人数**：`/人数` / `/在线人数` 读取站内服务器状态；站内问一问也新增了
   `get_server_status` 工具。状态未知时会明确说“无法确认”，不会把未知当成 0 人。
+- **随机地点**：`/随机地点` / `手气不错` 调用站内 `/api/map/random-poi`，返回 POI 文字和分享卡片；
+  卡片带地点名、类型、描述、地址、营业时间、坐标和地图链接。
 
 事件桥请求示例：
 

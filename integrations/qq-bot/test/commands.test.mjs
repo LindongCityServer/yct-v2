@@ -346,6 +346,42 @@ test('服务器在线人数', async () => {
   assert.equal(result.card?.result, '12');
 });
 
+test('随机地点返回 POI 分享卡片', async () => {
+  const result = await handleCommand({
+    ...base,
+    text: '/随机地点',
+    context: { kind: 'group', groupId: 'g1', userId: 'u1', userName: '测试' },
+    config: {
+      ...config,
+      yct: {
+        ...config.yct,
+        baseUrl: 'http://127.0.0.1:3300',
+        publicBaseUrl: 'https://yct.example.com',
+      },
+    },
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          poi: {
+            id: 'poi-1',
+            label: '临东茶话会',
+            categoryId: 'food',
+            description: '一个适合坐下来聊天的地方。',
+            address: '临东市中区',
+            coordinates: [120.5, -340.2],
+            sharePath: '/map?m=poi-1',
+          },
+        };
+      },
+    }),
+  });
+  assert.match(result.reply, /随机地点：临东茶话会/);
+  assert.match(result.reply, /https:\/\/yct\.example\.com\/map\?m=poi-1/);
+  assert.equal(result.card?.type, 'poi');
+  assert.equal(result.card?.category, '餐饮');
+});
+
 test('帮助里列出快捷指令', async () => {
   const result = await handleCommand({ ...base, text: '/帮助' });
   assert.match(result.reply, /快捷指令/);
