@@ -22,8 +22,8 @@ async function enrichCard(card, allowedImageHosts) {
   ]);
   return {
     ...card,
-    imageDataUri: imageDataUri ?? undefined,
-    qrDataUrl: qrDataUrl ?? undefined,
+    imageDataUri: imageDataUri ?? card.imageDataUri,
+    qrDataUrl: qrDataUrl ?? card.qrDataUrl,
   };
 }
 

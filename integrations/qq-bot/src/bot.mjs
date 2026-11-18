@@ -9,6 +9,7 @@ import { pickReferenceImage } from './images.mjs';
 import { loadGroupNotices, resolveGroupNotice } from './notices.mjs';
 import { startEventBridge } from './event-bridge.mjs';
 import { PlayerEventMonitor } from './player-events.mjs';
+import { getBotVersion } from './version.mjs';
 import {
   classifyCommand,
   ConversationQueue,
@@ -83,6 +84,10 @@ export class QQBot {
         port: this.config.events.port,
         bind: this.config.events.bind,
         token: this.config.events.token,
+        info: {
+          version: getBotVersion(),
+          startedAt: new Date().toISOString(),
+        },
         logger: this.logger,
         onOneBotEvent: (event) => this.handleOneBotEvent(event),
         onServerEvent: (event) => this.handleServerEvent(event),

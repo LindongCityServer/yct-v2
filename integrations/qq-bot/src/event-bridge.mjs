@@ -12,6 +12,7 @@ export function startEventBridge({
   port,
   bind = '127.0.0.1',
   token = '',
+  info = {},
   onOneBotEvent,
   onServerEvent,
   logger,
@@ -19,7 +20,7 @@ export function startEventBridge({
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? '127.0.0.1'}`);
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json(response, 200, { ok: true });
+      return json(response, 200, { ok: true, ...info });
     }
     if (request.method !== 'POST') {
       return json(response, 405, { error: 'method_not_allowed' });

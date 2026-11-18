@@ -9,6 +9,7 @@ import { fetchTodayHistory } from './history.mjs';
 import { lookupIp } from './ip.mjs';
 import { randomInteger, rollDice } from './random.mjs';
 import { fetchWeather } from './weather.mjs';
+import { getBotVersion } from './version.mjs';
 
 const dataDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'data');
 const dataCache = new Map();
@@ -59,6 +60,9 @@ const commandAliases = new Map([
   ['help', 'help'],
   ['菜单', 'help'],
   ['功能', 'help'],
+  ['版本', 'version'],
+  ['机器人版本', 'version'],
+  ['version', 'version'],
   ['关于', 'about'],
   ['关于机器人', 'about'],
   ['about', 'about'],
@@ -126,6 +130,28 @@ export async function handleCommand({
         return { handled: true, reply: helpText };
       case 'about':
         return { handled: true, reply: aboutText };
+      case 'version': {
+        const botVersion = getBotVersion();
+        let webLine = '网页：暂时无法获取版本';
+        try {
+          const response = await fetchImpl(
+            `${String(config?.yct?.baseUrl ?? '').replace(/\/+$/, '')}/api/health`,
+            { signal: AbortSignal.timeout(5_000) },
+          );
+          if (response.ok) {
+            const data = await response.json();
+            const version = data?.releaseVersion ?? '未知';
+            const buildId = data?.buildId ?? '未知';
+            webLine = `网页：${version}（${buildId}）`;
+          }
+        } catch {
+          // 版本查询失败不影响机器人自身的版本回答。
+        }
+        return {
+          handled: true,
+          reply: [`雨城通机器人：${botVersion}`, '卡片渲染：机器人本地', webLine].join('\n'),
+        };
+      }
       case 'random': {
         const reply = randomReply(args);
         const match = /^随机数：(\d+)（(.+)）$/u.exec(reply);
@@ -760,6 +786,9 @@ function parseNaturalCommand(raw) {
   }
   if (/^关于(?:机器人|问一问|这个机器人)?$/u.test(input)) {
     return { command: 'about', args: '', label: '关于机器人' };
+  }
+  if (/^(?:版本|机器人版本|当前版本|你是什么版本)$/u.test(input)) {
+    return { command: 'version', args: '', label: '版本' };
   }
   if (/^(?:历史上的今天|历史今天|今天历史)$/u.test(input)) {
     return { command: 'history', args: '', label: '历史上的今天' };

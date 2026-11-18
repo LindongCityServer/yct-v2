@@ -420,6 +420,34 @@ test('随机地点返回 POI 分享卡片', async () => {
   assert.equal(result.card?.category, '餐饮');
 });
 
+test('版本指令返回机器人和网页版本', async () => {
+  const result = await handleCommand({
+    ...base,
+    text: '/版本',
+    config: { ...config, yct: { ...config.yct, baseUrl: 'http://127.0.0.1:3300' } },
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return { releaseVersion: '2.22.0', buildId: '20261118-172945' };
+      },
+    }),
+  });
+  assert.match(result.reply, /雨城通机器人：\d+\.\d+\.\d+/);
+  assert.match(result.reply, /网页：2\.22\.0（20261118-172945）/);
+  assert.match(result.reply, /卡片渲染：机器人本地/);
+});
+
+test('掷骰子支持无参数和中文写法', async () => {
+  const plain = await handleCommand({ ...base, text: '/掷骰子' });
+  assert.equal(plain.card?.type, 'dice');
+  assert.equal(plain.card?.count, 1);
+  assert.equal(plain.card?.sides, 6);
+
+  const chinese = await handleCommand({ ...base, text: '掷 2个6面骰' });
+  assert.equal(chinese.card?.type, 'dice');
+  assert.equal(chinese.card?.count, 2);
+});
+
 test('帮助里列出快捷指令', async () => {
   const result = await handleCommand({ ...base, text: '/帮助' });
   assert.match(result.reply, /快捷指令/);

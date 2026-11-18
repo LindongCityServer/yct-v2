@@ -5,6 +5,7 @@ import { defaultEnvPath, describeConfig, loadConfig } from './config.mjs';
 import { QQGateway } from './gateway.mjs';
 import { createLogger } from './log.mjs';
 import { QQApi } from './qq-api.mjs';
+import { getBotVersion } from './version.mjs';
 
 const USAGE = `雨城通问一问 QQ 机器人
 
@@ -178,6 +179,7 @@ async function runAsk({ config, problems, warnings, question, logger }) {
 }
 
 async function runBot({ config, logger }) {
+  logger.info(`机器人版本：${getBotVersion()}（卡片本地渲染）`);
   const api = new QQApi({ ...config.qq, logger });
   const bot = new QQBot({ api, config, logger });
   await bot.init();
