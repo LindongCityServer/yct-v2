@@ -3,6 +3,25 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.21.6",
+      "releasedAt": "2026-11-18T07:38:20.613Z",
+      "sourceFingerprint": "7d5da6a6a912d5b7aeb451c5d1620573cb979a5e4f333d3c28b668fde1c7640f",
+      "themes": ["qqbot"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "手机 QQ 兼容性：回答配图、B 站封面和指令卡片改用主动图片，群聊不再重复 at"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "天气卡片补齐天气预报标题、温度区间和更稳的预报解析"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.21.5",
       "releasedAt": "2026-11-18T06:05:34.162Z",
       "sourceFingerprint": "7d5da6a6a912d5b7aeb451c5d1620573cb979a5e4f333d3c28b668fde1c7640f",
