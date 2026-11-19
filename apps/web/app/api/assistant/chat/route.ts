@@ -12,7 +12,10 @@ import {
   type AssistantProviderMessage,
   type AssistantToolCall,
 } from '../../../../lib/assistant/chat';
-import { resolveCurrentPlayerLocation } from '../../../../lib/assistant/current-location';
+import {
+  buildCurrentLocationPrompt,
+  resolveCurrentPlayerLocation,
+} from '../../../../lib/assistant/current-location';
 import { readQqAccountContext } from '../../../../lib/assistant/qq-account-context';
 import { buildViewerPrompt, resolveViewerProfile } from '../../../../lib/assistant/viewer-role';
 import { getAssistantProvider } from '../../../../lib/assistant/providers';
@@ -122,7 +125,9 @@ export async function POST(request: NextRequest) {
   const contextBlock = buildAssistantContextBlock({
     retrieval,
     page,
-    viewerPrompt: buildViewerPrompt(viewer),
+    viewerPrompt: [buildViewerPrompt(viewer), buildCurrentLocationPrompt(currentLocation)]
+      .filter(Boolean)
+      .join('\n'),
   });
   const encoder = new TextEncoder();
   const abortController = new AbortController();

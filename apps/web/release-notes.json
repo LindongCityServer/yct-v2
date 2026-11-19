@@ -3,6 +3,20 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.22.2",
+      "releasedAt": "2026-11-19T06:41:05.236Z",
+      "sourceFingerprint": "0a0271d2b0ca43aa3bfa19ed4f1fa22b72f3da24411e7a04ef8bce8ebe1ba3a4",
+      "themes": ["web"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "问一问在离我最近、附近等问法下正确带入当前账号位置，并把账号最后位置放入系统上下文"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.22.1",
       "releasedAt": "2026-11-19T04:28:01.638Z",
       "sourceFingerprint": "b5c1671af8a9c189ddf2be03ab4438e839be0f35b44b814d1d415fb4b1ad5810",

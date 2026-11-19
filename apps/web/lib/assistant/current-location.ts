@@ -17,6 +17,21 @@ export interface CurrentPlayerLocation {
   lastSeenAt: string;
 }
 
+/** 把当前账号位置写进系统提示词；不依赖用户是否命中某个检索句式。 */
+export function buildCurrentLocationPrompt(
+  currentLocation: CurrentPlayerLocation | undefined,
+): string {
+  if (!currentLocation) {
+    return '';
+  }
+  return [
+    `当前账号最后记录位置：${currentLocation.playerName}`,
+    `X ${currentLocation.x}，Z ${currentLocation.z}`,
+    `最后更新：${currentLocation.lastSeenAt}`,
+    '这是服务器记录的最后位置，不是实时定位；只在用户询问当前位置、附近地点或路线起点时使用，不要主动复述坐标。',
+  ].join('；');
+}
+
 /**
  * 读取当前登录账号绑定的服务器账号，以及它在玩家位置快照里的最后记录位置。
  * 只用于当前账号本人：未登录、未验证服务器账号或没有位置记录时返回 undefined。
