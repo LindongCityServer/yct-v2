@@ -979,17 +979,17 @@ function renderDiceFace(input: {
       : `<text x="${center}" y="${center + size * 0.12}" text-anchor="middle" font-size="${size * (roll >= 10 ? 0.29 : 0.36)}" font-weight="700" fill="${color}">${roll}</text>`;
 
   const shape = polygon
-    ? `<path d="${roundedPolygonPath(polygon, size * 0.14)}" fill="${color}" fill-opacity="0.08" stroke="${color}" stroke-opacity="0.24"/>`
+    ? `<path d="${roundedPolygonPath(polygon, size * (sides === 20 ? 0.08 : sides === 12 ? 0.11 : 0.14))}" fill="${color}" fill-opacity="0.08" stroke="${color}" stroke-opacity="0.24"/>`
     : `<rect width="${size}" height="${size}" rx="${size * 0.22}" fill="${color}" fill-opacity="0.07" stroke="${color}" stroke-opacity="0.2"/>`;
 
   return [`<g transform="translate(${x},${y})">`, shape, faces, '</g>'].join('');
 }
 
-/** 4/8/20 面用三角形，12/10 面用五边形，6 面保持正方形点数。 */
+/** 常见桌面骰子的轮廓：D4 三角、D6 方形、D8 菱形、D10 风筝形、D12 五边形、D20 六边形。 */
 function diceFacePolygon(sides: number, size: number): Array<[number, number]> | null {
   const center = size / 2;
   const radius = size * 0.46;
-  if (sides === 4 || sides === 20) {
+  if (sides === 4) {
     return [
       [center, size * 0.13],
       [size * 0.07, size * 0.875],
@@ -1004,9 +1004,23 @@ function diceFacePolygon(sides: number, size: number): Array<[number, number]> |
       [size * 0.04, center],
     ];
   }
-  if (sides === 10 || sides === 12) {
+  if (sides === 10) {
+    return [
+      [center, size * 0.03],
+      [size * 0.94, size * 0.42],
+      [center, size * 0.97],
+      [size * 0.06, size * 0.42],
+    ];
+  }
+  if (sides === 12) {
     return Array.from({ length: 5 }, (_, index) => {
       const angle = -Math.PI / 2 + (index * Math.PI * 2) / 5;
+      return [center + Math.cos(angle) * radius, center + Math.sin(angle) * radius];
+    });
+  }
+  if (sides === 20) {
+    return Array.from({ length: 6 }, (_, index) => {
+      const angle = -Math.PI / 2 + (index * Math.PI * 2) / 6;
       return [center + Math.cos(angle) * radius, center + Math.sin(angle) * radius];
     });
   }
