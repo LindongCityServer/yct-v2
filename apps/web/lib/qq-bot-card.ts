@@ -1354,7 +1354,7 @@ function renderFooter(footer: string, height: number): string {
   return [
     `<line x1="40" y1="${height - 104}" x2="680" y2="${height - 104}" stroke="${colors.borderSubtle}" stroke-width="1"/>`,
     wordmark
-      ? `<image x="40" y="${height - 94}" width="132" height="33.94" href="${wordmark}" preserveAspectRatio="xMinYMid meet"/>`
+      ? `<image x="40" y="${height - 94}" width="160" height="34" href="${wordmark}" preserveAspectRatio="xMinYMid meet"/>`
       : renderBrandLogo(40, height - 86, 30),
     wordmark
       ? ''
@@ -1373,6 +1373,10 @@ function getWordmarkDataUri(): string | null {
   }
   const configuredDir = process.env.QQ_BOT_CARD_ASSET_DIR?.trim();
   const candidates = [
+    ...(configuredDir ? [resolve(configuredDir, 'icons', 'qq-bot-wordmark.svg')] : []),
+    resolve(process.cwd(), 'assets', 'icons', 'qq-bot-wordmark.svg'),
+    resolve(process.cwd(), 'public', 'icons', 'qq-bot-wordmark.svg'),
+    resolve(process.cwd(), 'apps', 'web', 'public', 'icons', 'qq-bot-wordmark.svg'),
     ...(configuredDir ? [resolve(configuredDir, 'icons', 'yct-logo-wordmark.svg')] : []),
     resolve(process.cwd(), 'assets', 'icons', 'yct-logo-wordmark.svg'),
     resolve(process.cwd(), 'public', 'icons', 'yct-logo-wordmark.svg'),

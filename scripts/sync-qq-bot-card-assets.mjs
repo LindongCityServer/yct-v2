@@ -14,6 +14,7 @@ const copies = [
   ['app/fonts/harmonyos-sans/HarmonyOS_Sans_SC_Regular.ttf', 'fonts/HarmonyOS_Sans_SC_Regular.ttf'],
   ['app/fonts/harmonyos-sans/HarmonyOS_Sans_SC_Bold.ttf', 'fonts/HarmonyOS_Sans_SC_Bold.ttf'],
   ['public/icons/yct-logo.svg', 'icons/yct-logo.svg'],
+  ['public/icons/qq-bot-wordmark.svg', 'icons/qq-bot-wordmark.svg'],
   ['public/icons/yct-logo-wordmark.svg', 'icons/yct-logo-wordmark.svg'],
 ];
 

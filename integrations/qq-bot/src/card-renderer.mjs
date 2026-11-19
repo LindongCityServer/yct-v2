@@ -998,7 +998,7 @@ function renderFooter(footer, height) {
   const meta = sender ? `\u53D1\u9001\u4EBA\uFF1A${sender}${sentAt ? ` \xB7 ${sentAt}` : ""}` : "\u96E8\u57CE\u901A \xB7 \u95EE\u4E00\u95EE";
   return [
     `<line x1="40" y1="${height - 104}" x2="680" y2="${height - 104}" stroke="${colors.borderSubtle}" stroke-width="1"/>`,
-    wordmark ? `<image x="40" y="${height - 94}" width="132" height="33.94" href="${wordmark}" preserveAspectRatio="xMinYMid meet"/>` : renderBrandLogo(40, height - 86, 30),
+    wordmark ? `<image x="40" y="${height - 94}" width="160" height="34" href="${wordmark}" preserveAspectRatio="xMinYMid meet"/>` : renderBrandLogo(40, height - 86, 30),
     wordmark ? "" : `<text x="78" y="${height - 72}" font-size="15" font-weight="700" fill="${colors.text}">\u96E8\u57CE\u901A</text>
          <text x="78" y="${height - 48}" font-size="12" fill="${colors.textMuted}">${escapeXml(meta)}</text>`,
     `<text x="680" y="${height - 76}" text-anchor="end" font-size="16" fill="${colors.textSecondary}">${escapeXml(shortText(source || "\u96E8\u57CE\u901A \xB7 \u95EE\u4E00\u95EE", 30))}</text>`,
@@ -1012,6 +1012,10 @@ function getWordmarkDataUri() {
   }
   const configuredDir = process.env.QQ_BOT_CARD_ASSET_DIR?.trim();
   const candidates = [
+    ...configuredDir ? [resolve(configuredDir, "icons", "qq-bot-wordmark.svg")] : [],
+    resolve(process.cwd(), "assets", "icons", "qq-bot-wordmark.svg"),
+    resolve(process.cwd(), "public", "icons", "qq-bot-wordmark.svg"),
+    resolve(process.cwd(), "apps", "web", "public", "icons", "qq-bot-wordmark.svg"),
     ...configuredDir ? [resolve(configuredDir, "icons", "yct-logo-wordmark.svg")] : [],
     resolve(process.cwd(), "assets", "icons", "yct-logo-wordmark.svg"),
     resolve(process.cwd(), "public", "icons", "yct-logo-wordmark.svg"),
