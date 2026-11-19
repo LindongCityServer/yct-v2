@@ -24,6 +24,8 @@
   `QQ_BOT_IMAGES=1`），会占用一次被动回复。
 - **临东通绑定**：私聊 `/绑定` 生成一次性链接，`/我的绑定` 查询，`/解绑 确认` 解除；
   群聊只提示私聊。需要 `LDPASS_API_BASE_URL` 和 `QQ_BOT_LINK_SECRET`。
+- **账号上下文**：配置 `QQ_BOT_CONTEXT_SECRET`（与网页 `YCT_QQ_CONTEXT_SECRET` 一致）后，
+  私聊问一问会自动带入绑定的临东通账号，用于当前位置和 Wiki 玩家资料。
 
 完整接入步骤、平台配置和排障见 [docs/QQ_BOT.md](../../docs/QQ_BOT.md)。
 

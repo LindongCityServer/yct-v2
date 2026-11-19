@@ -221,6 +221,7 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
     problems,
   );
   const linkSecret = read('QQ_BOT_LINK_SECRET');
+  const contextSecret = read('QQ_BOT_CONTEXT_SECRET');
 
   const config = {
     envPath: file.source,
@@ -257,6 +258,7 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
     link: {
       baseUrl: linkBaseUrl,
       secret: linkSecret,
+      contextSecret,
     },
     weather: {
       city: read('QQ_BOT_WEATHER_CITY'),
@@ -319,6 +321,9 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
     warnings.push(
       'LDPASS_API_BASE_URL 和 QQ_BOT_LINK_SECRET 需要同时配置，否则 /绑定 会提示功能未配置。',
     );
+  }
+  if (config.link.secret && !config.link.contextSecret) {
+    warnings.push('QQ_BOT_CONTEXT_SECRET 未配置：绑定可用，但问一问不会自动带入账号上下文。');
   }
   if (config.events.port > 0 && !isLoopbackBind(config.events.bind) && !config.events.token) {
     problems.push(
@@ -384,6 +389,7 @@ export function describeConfig(config) {
     `模型 Key：${maskSecret(config.yct.apiKey)}`,
     `公开站点：${config.yct.publicBaseUrl || '（未配置，回答里的图片不会发送）'}`,
     `QQ 绑定：${config.link.baseUrl && config.link.secret ? '开' : '关'}`,
+    `账号上下文：${config.link.contextSecret ? '开' : '关'}`,
     `回答配图：${config.reply.images && config.yct.publicBaseUrl ? '开' : '关'}`,
     `指令结果卡片：${config.reply.cards ? '开（本地渲染）' : '关'}`,
     `天气城市：${config.weather.city || '（未配置，/天气 会提示先填 QQ_BOT_WEATHER_CITY）'}`,

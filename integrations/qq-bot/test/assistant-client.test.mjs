@@ -53,6 +53,8 @@ test('askAssistant 消费完整 SSE 流并返回最终文本', async () => {
       locale: 'zh-CN',
       channel: 'qq-group',
       messages: [{ role: 'user', content: '中华路有哪些公交站' }],
+      accountContext: { ldpassUserId: 'ldpass-user-1', openId: 'qq-openid-1' },
+      accountContextSecret: 'context-secret',
     });
 
     assert.equal(result.error, '');
@@ -60,6 +62,7 @@ test('askAssistant 消费完整 SSE 流并返回最终文本', async () => {
     assert.deepEqual(result.references, [{ id: 1, title: '中华路站' }]);
     assert.deepEqual(result.followups, ['末班几点']);
     assert.equal(captured.headers['x-yct-provider-key'], 'sk-test');
+    assert.ok(captured.headers['x-yct-qq-account-context']);
     assert.equal(captured.body.channel, 'qq-group');
     assert.deepEqual(captured.body.messages, [{ role: 'user', content: '中华路有哪些公交站' }]);
   } finally {

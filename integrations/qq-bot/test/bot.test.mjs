@@ -42,6 +42,12 @@ function createConfig(overrides = {}) {
       groups: new Set(),
       ...overrides.events,
     },
+    link: {
+      baseUrl: '',
+      secret: '',
+      contextSecret: '',
+      ...overrides.link,
+    },
   };
 }
 
@@ -197,6 +203,55 @@ test('不在白名单的群不响应', async () => {
   const { bot, sends } = createSetup({ config });
   await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', groupEvent);
   assert.equal(sends.length, 0);
+});
+
+test('单聊绑定后自动把账号上下文带进问一问', async () => {
+  const config = createConfig({
+    reply: { ack: false },
+    link: {
+      baseUrl: 'https://ldpass.example.com',
+      secret: 'link-secret',
+      contextSecret: 'context-secret',
+    },
+  });
+  const { bot, queue, getLastOptions } = createSetup({ config });
+  bot.linkClient.resolve = async () => ({ ldpassUserId: 'ldpass-user-1' });
+
+  await bot.handleEvent('C2C_MESSAGE_CREATE', {
+    id: 'msg-account-context',
+    author: { user_openid: 'qq-openid-1' },
+    content: '我现在在哪里',
+  });
+  await queue.settle();
+
+  assert.deepEqual(getLastOptions().accountContext, {
+    ldpassUserId: 'ldpass-user-1',
+    openId: 'qq-openid-1',
+  });
+  assert.equal(getLastOptions().accountContextSecret, 'context-secret');
+});
+
+test('群聊不会带入账号上下文', async () => {
+  const config = createConfig({
+    reply: { ack: false },
+    link: {
+      baseUrl: 'https://ldpass.example.com',
+      secret: 'link-secret',
+      contextSecret: 'context-secret',
+    },
+  });
+  const { bot, queue, getLastOptions } = createSetup({ config });
+  let called = false;
+  bot.linkClient.resolve = async () => {
+    called = true;
+    return { ldpassUserId: 'ldpass-user-1' };
+  };
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', groupEvent);
+  await queue.settle();
+
+  assert.equal(called, false);
+  assert.equal(getLastOptions().accountContext, undefined);
 });
 
 test('回答里的 ui 卡片会还原成文字而不是 JSON', async () => {

@@ -1,11 +1,13 @@
 import type { NextRequest } from 'next/server';
 import { normalizePlayerKey, readPlayerLocationSnapshot } from '../player-location-store';
+import { findYctUserLinkByLdpassUserId } from '../yct-user-link-store';
 import { readYctServerSession } from '../yct-server-session-store';
 import {
   resolveYctSessionCookie,
   yctEmbedSessionCookieName,
   yctSessionCookieName,
 } from '../yct-session';
+import type { QqAccountContext } from './qq-account-context';
 
 export interface CurrentPlayerLocation {
   playerName: string;
@@ -21,8 +23,9 @@ export interface CurrentPlayerLocation {
  */
 export async function resolveCurrentPlayerLocation(
   request: NextRequest,
+  accountContext?: QqAccountContext,
 ): Promise<CurrentPlayerLocation | undefined> {
-  const serverAccountName = await resolveVerifiedServerAccount(request);
+  const serverAccountName = await resolveVerifiedServerAccount(request, accountContext);
   if (!serverAccountName) {
     return undefined;
   }
@@ -49,7 +52,21 @@ export async function resolveCurrentPlayerLocation(
 
 export async function resolveVerifiedServerAccount(
   request: NextRequest,
+  accountContext?: QqAccountContext,
 ): Promise<string | undefined> {
+  if (accountContext) {
+    try {
+      const link = await findYctUserLinkByLdpassUserId(accountContext.ldpassUserId);
+      const serverAccountName = link?.serverAccountNameSnapshot?.trim();
+      if (link?.serverAccountVerifiedSnapshot && serverAccountName) {
+        return serverAccountName;
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   try {
     const { sessionId } = resolveYctSessionCookie({
       standardSessionId: request.cookies.get(yctSessionCookieName)?.value,

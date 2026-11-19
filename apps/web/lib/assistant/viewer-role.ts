@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { normalizePlayerKey } from '../player-location-store';
 import { readWikiPlayerProfiles } from '../wiki-player-aliases';
 import { resolveVerifiedServerAccount } from './current-location';
+import type { QqAccountContext } from './qq-account-context';
 
 export type ViewerRole = 'owner' | 'staff' | 'resident' | 'guest';
 
@@ -16,8 +17,11 @@ export interface ViewerProfile {
  * 反查当前提问者的服务器账号在 Wiki「玩家列表」里的备注角色。
  * 未绑定/未验证服务器账号按游客；已绑定但查不到备注按一般居民。
  */
-export async function resolveViewerProfile(request: NextRequest): Promise<ViewerProfile> {
-  const serverAccountName = await resolveVerifiedServerAccount(request);
+export async function resolveViewerProfile(
+  request: NextRequest,
+  accountContext?: QqAccountContext,
+): Promise<ViewerProfile> {
+  const serverAccountName = await resolveVerifiedServerAccount(request, accountContext);
   if (!serverAccountName) {
     return { role: 'guest' };
   }

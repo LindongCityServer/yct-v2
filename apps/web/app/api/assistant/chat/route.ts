@@ -13,6 +13,7 @@ import {
   type AssistantToolCall,
 } from '../../../../lib/assistant/chat';
 import { resolveCurrentPlayerLocation } from '../../../../lib/assistant/current-location';
+import { readQqAccountContext } from '../../../../lib/assistant/qq-account-context';
 import { buildViewerPrompt, resolveViewerProfile } from '../../../../lib/assistant/viewer-role';
 import { getAssistantProvider } from '../../../../lib/assistant/providers';
 import {
@@ -90,9 +91,10 @@ export async function POST(request: NextRequest) {
     .slice(-2)
     .map((message) => message.content)
     .join(' ');
+  const accountContext = readQqAccountContext(request);
   const [currentLocation, viewer] = await Promise.all([
-    resolveCurrentPlayerLocation(request),
-    resolveViewerProfile(request),
+    resolveCurrentPlayerLocation(request, accountContext),
+    resolveViewerProfile(request, accountContext),
   ]);
   const retrieval = await buildAssistantRetrieval(retrievalQuery, locale, {
     pathname: page?.pathname,

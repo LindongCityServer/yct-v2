@@ -206,10 +206,12 @@ QQ 开放平台的机器人指令入口只接受**以 `/` 开头、中间没有�
 - 兜底：临东通账号设置生成绑定码 → 私聊 `/绑定 绑定码`。
 - 群聊不生成链接、不消费绑定码，只提示私聊。
 - token/绑定码不写日志；链接使用临东通返回的 `url`，不自行拼接。
+- 私聊绑定后，问一问自动带入账号上下文；群聊不带。
 - 需要配置：
   ```dotenv
   LDPASS_API_BASE_URL=https://ldpass.example.com
   QQ_BOT_LINK_SECRET=与临东通一致的随机串
+  QQ_BOT_CONTEXT_SECRET=与网页 YCT_QQ_CONTEXT_SECRET 一致
   ```
 
 ### 随机地点

@@ -103,7 +103,9 @@ QQ 是聊天窗口，长回答会刷屏、Markdown 符号会原样显示、引�
 | `YCT_ASSISTANT_LOCALE`       | `zh-CN`                   | `zh-CN` / `zh-Hant` / `en`                                             |
 | `YCT_PUBLIC_BASE_URL`        | 空                        | 站点公网 HTTPS 地址；用于回答配图，指令卡片不再需要                    |
 | `LDPASS_API_BASE_URL`        | 空                        | 临东通 API 根地址；QQ 绑定功能需要                                     |
-| `QQ_BOT_LINK_SECRET`         | 空                        | 临东通内部 QQ 绑定接口的 Bearer secret，必须与临东通一致               |     | `QQ_BOT_GROUP_ALLOWLIST` | 空  | 只响应这些群 openid，逗号或空格分隔；空表示不限制 |
+| `QQ_BOT_LINK_SECRET`         | 空                        | 临东通内部 QQ 绑定接口的 Bearer secret，必须与临东通一致               |
+| `QQ_BOT_CONTEXT_SECRET`      | 空                        | 问一问账号上下文签名 secret，必须与网页 `YCT_QQ_CONTEXT_SECRET` 一致   |
+| `QQ_BOT_GROUP_ALLOWLIST`     | 空                        | 只响应这些群 openid，逗号或空格分隔；空表示不限制                      |
 | `QQ_BOT_USER_QPM`            | `6`                       | 每个用户每分钟最多提问次数                                             |
 | `QQ_BOT_GROUP_QPM`           | `20`                      | 每个群每分钟最多提问次数                                               |
 | `QQ_BOT_STYLE`               | `chat`                    | `chat` 为简短聊天风格；`full` 使用网页版完整格式                       |
@@ -304,6 +306,10 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -Uninsta
   `get_server_status` 工具。状态未知时会明确说“无法确认”，不会把未知当成 0 人。
 - **随机地点**：`/随机地点` / `手气不错` 调用站内 `/api/map/random-poi`，返回 POI 文字和分享卡片；
   卡片带地点名、类型、描述、地址、营业时间、坐标和地图链接。
+- **账号上下文**：私聊绑定临东通后，机器人用 LDPASS openid 反查绑定，再以短期 HMAC 头把
+  `ldpassUserId` 传给问一问；问一问据此找到已验证的服务器账号，复用当前位置和 Wiki 玩家资料。
+  群聊不带账号上下文。网页侧需要 `YCT_QQ_CONTEXT_SECRET`，机器人侧 `QQ_BOT_CONTEXT_SECRET`
+  必须与它一致。
 
 事件桥请求示例：
 

@@ -9,6 +9,7 @@ import { pickReferenceImage } from './images.mjs';
 import { loadGroupNotices, resolveGroupNotice } from './notices.mjs';
 import { startEventBridge } from './event-bridge.mjs';
 import { PlayerEventMonitor } from './player-events.mjs';
+import { QqLinkClient } from './ldpass-link.mjs';
 import { getBotVersion } from './version.mjs';
 import {
   classifyCommand,
@@ -46,6 +47,12 @@ export class QQBot {
     this.condense = condense;
     this.command = command;
     this.cardRenderer = cardRenderer;
+    this.linkClient = new QqLinkClient({
+      baseUrl: config.link?.baseUrl,
+      secret: config.link?.secret,
+      logger,
+    });
+    this.accountContextCache = new Map();
     this.community =
       community ??
       new CommunityStore({
@@ -552,6 +559,8 @@ export class QQBot {
       `回答问题（${target.kind}，${question.length} 字，历史 ${history.length} 条）。`,
     );
 
+    const accountContext = await this.resolveAccountContext(target, userId);
+
     let result;
     try {
       result = await this.assistant({
@@ -567,6 +576,8 @@ export class QQBot {
               : 'qq-c2c'
             : undefined,
         messages: [...history, { role: 'user', content: question }],
+        accountContext,
+        accountContextSecret: this.config.link?.contextSecret,
         timeoutMs: this.config.reply.answerTimeoutMs,
         logger: this.logger,
       });
@@ -670,6 +681,41 @@ export class QQBot {
           `用时 ${Date.now() - startedAt}ms。`,
       );
     }
+  }
+
+  async resolveAccountContext(target, userId) {
+    if (
+      target.kind !== 'c2c' ||
+      !userId ||
+      !this.config.link?.contextSecret ||
+      !this.linkClient.enabled
+    ) {
+      return undefined;
+    }
+    const now = Date.now();
+    const cached = this.accountContextCache.get(userId);
+    if (cached && cached.expiresAt > now) {
+      return cached.context;
+    }
+
+    let context;
+    try {
+      const link = await this.linkClient.resolve(userId);
+      if (link?.ldpassUserId) {
+        context = { ldpassUserId: link.ldpassUserId, openId: userId };
+      }
+    } catch (error) {
+      this.logger.warn('读取临东通 QQ 绑定失败，本次按未绑定回答：', error);
+    }
+
+    this.accountContextCache.set(userId, {
+      context,
+      expiresAt: now + 60_000,
+    });
+    if (this.accountContextCache.size > 500) {
+      this.accountContextCache.delete(this.accountContextCache.keys().next().value);
+    }
+    return context;
   }
 
   async uploadAnswerImage(target, url) {

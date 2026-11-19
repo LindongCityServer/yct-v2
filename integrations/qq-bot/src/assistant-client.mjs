@@ -5,6 +5,8 @@
  * 提示词和引用编号都与站内问一问保持一致；QQ 机器人只负责把最终文本发出去。
  */
 
+import { createAccountContextToken } from './account-context.mjs';
+
 export class AssistantError extends Error {
   constructor(message, { status = 0, code = '' } = {}) {
     super(message);
@@ -111,12 +113,19 @@ export async function askAssistant({
   locale,
   channel,
   messages,
+  accountContext,
+  accountContextSecret,
   timeoutMs = 120_000,
   fetchImpl = fetch,
   logger,
 }) {
   const startedAt = Date.now();
   const endpoint = `${baseUrl.replace(/\/+$/, '')}/api/assistant/chat`;
+  const contextToken = createAccountContextToken({
+    ldpassUserId: accountContext?.ldpassUserId,
+    openId: accountContext?.openId,
+    secret: accountContextSecret,
+  });
   let response;
   try {
     response = await fetchImpl(endpoint, {
@@ -125,6 +134,7 @@ export async function askAssistant({
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
         'x-yct-provider-key': apiKey,
+        ...(contextToken ? { 'x-yct-qq-account-context': contextToken } : {}),
       },
       body: JSON.stringify({ providerId, model, locale, channel, messages }),
       signal: AbortSignal.timeout(timeoutMs),
