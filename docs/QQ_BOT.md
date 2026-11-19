@@ -102,7 +102,8 @@ QQ 是聊天窗口，长回答会刷屏、Markdown 符号会原样显示、引�
 | `YCT_ASSISTANT_MODEL`        | `deepseek-v4-flash`       | 模型名，需与网页端支持的模型一致                                       |
 | `YCT_ASSISTANT_LOCALE`       | `zh-CN`                   | `zh-CN` / `zh-Hant` / `en`                                             |
 | `YCT_PUBLIC_BASE_URL`        | 空                        | 站点公网 HTTPS 地址；用于回答配图，指令卡片不再需要                    |
-| `QQ_BOT_GROUP_ALLOWLIST`     | 空                        | 只响应这些群 openid，逗号或空格分隔；空表示不限制                      |
+| `LDPASS_API_BASE_URL`        | 空                        | 临东通 API 根地址；QQ 绑定功能需要                                     |
+| `QQ_BOT_LINK_SECRET`         | 空                        | 临东通内部 QQ 绑定接口的 Bearer secret，必须与临东通一致               |     | `QQ_BOT_GROUP_ALLOWLIST` | 空  | 只响应这些群 openid，逗号或空格分隔；空表示不限制 |
 | `QQ_BOT_USER_QPM`            | `6`                       | 每个用户每分钟最多提问次数                                             |
 | `QQ_BOT_GROUP_QPM`           | `20`                      | 每个群每分钟最多提问次数                                               |
 | `QQ_BOT_STYLE`               | `chat`                    | `chat` 为简短聊天风格；`full` 使用网页版完整格式                       |

@@ -215,6 +215,13 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
       ? baseUrl
       : '';
 
+  const linkBaseUrl = normalizeOptionalUrl(
+    read('LDPASS_API_BASE_URL'),
+    'LDPASS_API_BASE_URL',
+    problems,
+  );
+  const linkSecret = read('QQ_BOT_LINK_SECRET');
+
   const config = {
     envPath: file.source,
     statePath: resolve(botRoot, read('QQ_BOT_STATE_PATH') || 'state/qq-bot-state.json'),
@@ -246,6 +253,10 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
       providerId,
       model: normalizeModelName(read, problems),
       locale,
+    },
+    link: {
+      baseUrl: linkBaseUrl,
+      secret: linkSecret,
     },
     weather: {
       city: read('QQ_BOT_WEATHER_CITY'),
@@ -303,6 +314,11 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
   }
   if (config.qq.groupAllowlist.size > 0) {
     warnings.push(`只响应 ${config.qq.groupAllowlist.size} 个白名单群，其他群会被忽略。`);
+  }
+  if (Boolean(config.link.baseUrl) !== Boolean(config.link.secret)) {
+    warnings.push(
+      'LDPASS_API_BASE_URL 和 QQ_BOT_LINK_SECRET 需要同时配置，否则 /绑定 会提示功能未配置。',
+    );
   }
   if (config.events.port > 0 && !isLoopbackBind(config.events.bind) && !config.events.token) {
     problems.push(
@@ -367,6 +383,7 @@ export function describeConfig(config) {
     `模型：${config.yct.providerId} / ${config.yct.model}`,
     `模型 Key：${maskSecret(config.yct.apiKey)}`,
     `公开站点：${config.yct.publicBaseUrl || '（未配置，回答里的图片不会发送）'}`,
+    `QQ 绑定：${config.link.baseUrl && config.link.secret ? '开' : '关'}`,
     `回答配图：${config.reply.images && config.yct.publicBaseUrl ? '开' : '关'}`,
     `指令结果卡片：${config.reply.cards ? '开（本地渲染）' : '关'}`,
     `天气城市：${config.weather.city || '（未配置，/天气 会提示先填 QQ_BOT_WEATHER_CITY）'}`,

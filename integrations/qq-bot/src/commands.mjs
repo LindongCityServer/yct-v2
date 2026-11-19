@@ -10,6 +10,7 @@ import { lookupIp } from './ip.mjs';
 import { randomInteger, rollDice } from './random.mjs';
 import { fetchWeather } from './weather.mjs';
 import { getBotVersion } from './version.mjs';
+import { QqLinkClient } from './ldpass-link.mjs';
 
 const dataDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'data');
 const dataCache = new Map();
@@ -63,6 +64,11 @@ const commandAliases = new Map([
   ['版本', 'version'],
   ['机器人版本', 'version'],
   ['version', 'version'],
+  ['绑定', 'bind'],
+  ['绑定qq', 'bind'],
+  ['我的绑定', 'mylink'],
+  ['解绑', 'unlink'],
+  ['解除绑定', 'unlink'],
   ['关于', 'about'],
   ['关于机器人', 'about'],
   ['about', 'about'],
@@ -151,6 +157,81 @@ export async function handleCommand({
           handled: true,
           reply: [`雨城通机器人：${botVersion}`, '卡片渲染：机器人本地', webLine].join('\n'),
         };
+      }
+      case 'bind': {
+        if (context?.kind !== 'c2c') {
+          return {
+            handled: true,
+            reply: 'QQ 绑定只能在私聊完成，请私聊机器人发送 /绑定。',
+          };
+        }
+        const client = createLinkClient(config, fetchImpl, logger);
+        if (!client.enabled) {
+          return {
+            handled: true,
+            reply: 'QQ 绑定功能还没有配置完成，请联系管理员。',
+          };
+        }
+        const openId = context.userId;
+        if (!openId) {
+          return { handled: true, reply: '无法识别当前 QQ 身份，请稍后再试。' };
+        }
+        const code = normalizeLinkCode(args);
+        if (code) {
+          const link = await client.consumeCode(code, openId);
+          return {
+            handled: true,
+            reply: `已绑定到临东通账号：@${link.username || '当前账号'}。`,
+          };
+        }
+        const token = await client.createToken(openId);
+        return {
+          handled: true,
+          reply: [
+            '请点击下面的链接完成 QQ 绑定（5 分钟内有效）：',
+            token.url,
+            '如果链接无法打开，请到临东通账号设置生成绑定码，再发送 /绑定 绑定码。',
+          ].join('\n'),
+        };
+      }
+      case 'mylink': {
+        if (context?.kind !== 'c2c') {
+          return {
+            handled: true,
+            reply: '请私聊机器人发送 /我的绑定。',
+          };
+        }
+        const client = createLinkClient(config, fetchImpl, logger);
+        if (!client.enabled) {
+          return { handled: true, reply: 'QQ 绑定功能还没有配置完成，请联系管理员。' };
+        }
+        const link = await client.resolve(context.userId);
+        return {
+          handled: true,
+          reply: link
+            ? `当前 QQ 已绑定临东通账号：@${link.username || '当前账号'}。`
+            : '当前 QQ 还没有绑定临东通账号。私聊发送 /绑定 获取绑定链接。',
+        };
+      }
+      case 'unlink': {
+        if (context?.kind !== 'c2c') {
+          return {
+            handled: true,
+            reply: '请在私聊中发送 /解绑 确认。',
+          };
+        }
+        if (String(args ?? '').trim() !== '确认') {
+          return {
+            handled: true,
+            reply: '解绑会断开 QQ 和临东通账号的关联。确认请发送：/解绑 确认',
+          };
+        }
+        const client = createLinkClient(config, fetchImpl, logger);
+        if (!client.enabled) {
+          return { handled: true, reply: 'QQ 绑定功能还没有配置完成，请联系管理员。' };
+        }
+        await client.unlink(context.userId);
+        return { handled: true, reply: '已解除当前 QQ 与临东通账号的绑定。' };
       }
       case 'random': {
         const reply = randomReply(args);
@@ -696,6 +777,22 @@ function requireUser(context) {
   return context.userId;
 }
 
+function createLinkClient(config, fetchImpl, logger) {
+  return new QqLinkClient({
+    baseUrl: config?.link?.baseUrl,
+    secret: config?.link?.secret,
+    fetchImpl,
+    logger,
+  });
+}
+
+function normalizeLinkCode(value) {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '');
+}
+
 function randomPlaceCategoryLabel(categoryId) {
   const labels = {
     food: '餐饮',
@@ -789,6 +886,15 @@ function parseNaturalCommand(raw) {
   }
   if (/^(?:版本|机器人版本|当前版本|你是什么版本)$/u.test(input)) {
     return { command: 'version', args: '', label: '版本' };
+  }
+  if (/^(?:绑定|绑定qq|绑定QQ)$/u.test(input)) {
+    return { command: 'bind', args: '', label: '绑定 QQ' };
+  }
+  if (/^(?:我的绑定|查看绑定)$/u.test(input)) {
+    return { command: 'mylink', args: '', label: '我的绑定' };
+  }
+  if (/^(?:解绑|解除绑定)$/u.test(input)) {
+    return { command: 'unlink', args: '', label: '解绑' };
   }
   if (/^(?:历史上的今天|历史今天|今天历史)$/u.test(input)) {
     return { command: 'history', args: '', label: '历史上的今天' };

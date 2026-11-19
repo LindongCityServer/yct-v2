@@ -22,6 +22,8 @@
   机器人在本地渲染后直接上传，不需要 `YCT_PUBLIC_BASE_URL`。
 - **回答配图**：运营内容引用带封面时，可在文字后补一张图片（需 `YCT_PUBLIC_BASE_URL` 和
   `QQ_BOT_IMAGES=1`），会占用一次被动回复。
+- **临东通绑定**：私聊 `/绑定` 生成一次性链接，`/我的绑定` 查询，`/解绑 确认` 解除；
+  群聊只提示私聊。需要 `LDPASS_API_BASE_URL` 和 `QQ_BOT_LINK_SECRET`。
 
 完整接入步骤、平台配置和排障见 [docs/QQ_BOT.md](../../docs/QQ_BOT.md)。
 
