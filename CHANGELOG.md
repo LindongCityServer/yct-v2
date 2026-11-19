@@ -6,20 +6,41 @@
 ## Unreleased
 
 <!-- changelog:unreleased:start -->
-区间：2026-11-04T09:48:32.417Z → 当前时间；已合并 PR 0 个。
+
+区间：2026-11-19T08:29:03.819Z → 当前时间；已合并 PR 0 个。
 
 本区间无经 PR 合并的改动（直接推送到 main 的提交按体例不收录）。
 <!-- changelog:unreleased:end -->
+
+## 2.23.0 — 2026-11-19
+
+> 本版本为直接推送发布，没有可关联的合并 PR，因此没有自动生成区段。
+> 面向用户的完整清单以 `apps/web/release-notes.json` 为准，下面只列主要改动。
+
+### 新功能
+
+- 问一问新增确定性意图路由：先判断是否需要本人位置、Wiki 资料或工具，再决定检索与上下文；群聊不再读取账号数据
+- 问一问支持“离我最近/我附近”等问法使用最后记录位置并返回周边地点，没有位置时提示手动定位
+- 问一问对订单、车票、乘车码、收藏、提醒等未接入账号数据直接提示“暂未接入”
+- QQ 机器人支持群聊绑定临东通：群内 `/绑定` 生成群专属链接，登录后回群 `/确认` 6 位码完成绑定；`/我的绑定`、`/解绑` 仅作用于当前群
+- 公共交通导视支持导入 NaL 墙面标志、站名站牌和 v2 格式工程，并按竖向版式转换
+- 常见问题新增“问一问与 QQ 机器人”分组，补充回答准确性、账号数据范围、群聊隐私和群绑定说明
+
+### 修复
+
+- QQ 机器人日志对群/用户 openid、绑定 token 和确认码打码
 
 ## 2.21.1 — 2026-11-15
 
 > 本版本为直接推送发布，没有可关联的合并 PR，因此没有自动生成区段。
 
 ### 性能
+
 - 地图或瓦片源无响应时接口按超时快速失败，工作台不再长时间停在加载状态
 - 线路编辑工作台缓存道路点排序，拖动与缩放更流畅
 
 ### 样式
+
 - 旧版地铁线路图本站换乘标记调整：竖版保留换乘线路文字，横版保留胶囊形标记并把本站圆圈箭头移到标签外侧
 
 ## 2.21.0 — 2026-11-13
@@ -28,6 +49,7 @@
 > 面向用户的完整清单以 `apps/web/release-notes.json` 为准，下面只列主要改动。
 
 ### 新功能
+
 - 模板库支持跨模板映射套用线路与站点，地铁导视牌与公交模板可直接互切并保留各自草稿
 - 新增行政区划编辑工作台，可独立绘制边界并设置标签位置、语义色或线路色
 - 运营内容编辑器升级为可视化 Markdown 工作台，支持区块大纲、区块属性、封面色与素材选择
@@ -38,18 +60,21 @@
 - 高级材质新增「反转调色」开关
 
 ### 修复
+
 - 修复导视牌主副文本在中文输入法下重复上屏
 - 修复中等宽度下工作台全局属性没有返回入口
 - 门牌物料数据源只列出能解析出道路名称的地点
 - 本地管理员登录支持通过环境变量放行局域网主机
 
 ### 性能
+
 - 套用版式先本地切换，再在后台补全服务端线网字段
 - 工作台首屏不再等待瓦片区域索引，地图源不可用时按超时快速降级
 
 ## 2.20.0 — 2026-11-04
 
 <!-- changelog:release:2.20.0:start -->
+
 区间：2.19.0（2026-11-03T12:28:38.743Z） → 2.20.0（2026-11-04T09:48:32.417Z）；已合并 PR 0 个。
 
 本区间无经 PR 合并的改动（直接推送到 main 的提交按体例不收录）。
@@ -58,9 +83,11 @@
 ## 2.19.0 — 2026-11-03
 
 <!-- changelog:release:2.19.0:start -->
+
 区间：2.18.0（2026-11-02T12:23:26.518Z） → 2.19.0（2026-11-03T12:28:38.743Z）；已合并 PR 13 个。
 
 ### 新功能
+
 - 概览指标块改为可点击跳转（[#30](https://github.com/LindongCityServer/yct-v2/pull/30)，@wangkai8787）
 - 新增测距/测面积工具并拦截自交边界（[#32](https://github.com/LindongCityServer/yct-v2/pull/32)，@wangkai8787）
 - 在线玩家胶囊可点击跳转玩家板块（[#47](https://github.com/LindongCityServer/yct-v2/pull/47)，@beepingflijo）
@@ -68,6 +95,7 @@
 - 历史瓦片版本选择、前后切换与视图分享（重建）（[#50](https://github.com/LindongCityServer/yct-v2/pull/50)，@beepingflijo，关闭 [#2](https://github.com/LindongCityServer/yct-v2/issues/2)）
 
 ### 修复
+
 - 兜底关闭 POI 详情的 Esc（修复 #33 回归）（[#34](https://github.com/LindongCityServer/yct-v2/pull/34)，@wangkai8787）
 - 限制相册主图尺寸并预取相邻图片（[#25](https://github.com/LindongCityServer/yct-v2/pull/25)，@wangkai8787）
 - 分享卡片补充简介与固定比例配图（[#29](https://github.com/LindongCityServer/yct-v2/pull/29)，@wangkai8787）
@@ -76,15 +104,19 @@
 - 进入工作台前确认未保存修改（[#51](https://github.com/LindongCityServer/yct-v2/pull/51)，@beepingflijo）
 
 ### 重构
+
 - 「班次」页签更名为「运营配置」（[#31](https://github.com/LindongCityServer/yct-v2/pull/31)，@wangkai8787）
 
 ### 维护
+
 - 变更日志只收录合并 PR 并加入覆盖率校验（重建）（[#49](https://github.com/LindongCityServer/yct-v2/pull/49)，@beepingflijo）
+
 <!-- changelog:release:2.19.0:end -->
 
 ## 2.18.0 — 2026-11-02
 
 <!-- changelog:release:2.18.0:start -->
+
 区间：2.17.1（2026-10-31T14:17:40.765Z） → 2.18.0（2026-11-02T12:23:26.518Z）；已合并 PR 0 个。
 
 本区间无经 PR 合并的改动（直接推送到 main 的提交按体例不收录）。
@@ -93,6 +125,7 @@
 ## 2.17.1 — 2026-10-31
 
 <!-- changelog:release:2.17.1:start -->
+
 区间：2.17.0（2026-10-30T09:24:58.633Z） → 2.17.1（2026-10-31T14:17:40.765Z）；已合并 PR 0 个。
 
 本区间无经 PR 合并的改动（直接推送到 main 的提交按体例不收录）。
@@ -101,19 +134,24 @@
 ## 2.17.0 — 2026-10-30
 
 <!-- changelog:release:2.17.0:start -->
+
 区间：2.16.1（2026-10-29T16:38:27.367Z） → 2.17.0（2026-10-30T09:24:58.633Z）；已合并 PR 3 个。
 
 ### 新功能
+
 - 顶栏隐藏探索彩蛋与问一问随机推荐（[#19](https://github.com/LindongCityServer/yct-v2/pull/19)，@WangKai878787，关闭 [#6](https://github.com/LindongCityServer/yct-v2/issues/6)）
 - 线路运营公司名称支持外链（[#18](https://github.com/LindongCityServer/yct-v2/pull/18)，@WangKai878787，关闭 [#7](https://github.com/LindongCityServer/yct-v2/issues/7)）
 
 ### 修复
+
 - 后台长简介默认收起并支持展开（[#17](https://github.com/LindongCityServer/yct-v2/pull/17)，@WangKai878787，关闭 [#13](https://github.com/LindongCityServer/yct-v2/issues/13)）
+
 <!-- changelog:release:2.17.0:end -->
 
 ## 2.16.1 — 2026-10-29
 
 <!-- changelog:release:2.16.1:start -->
+
 区间：2.16.0（2026-10-29T15:01:09.949Z） → 2.16.1（2026-10-29T16:38:27.367Z）；已合并 PR 0 个。
 
 本区间无经 PR 合并的改动（直接推送到 main 的提交按体例不收录）。
@@ -122,15 +160,19 @@
 ## 2.16.0 — 2026-10-29
 
 <!-- changelog:release:2.16.0:start -->
+
 区间：2.15.0（2026-10-27T22:39:47.221Z） → 2.16.0（2026-10-29T15:01:09.949Z）；已合并 PR 1 个。
 
 ### 修复
+
 - 防止单向线路发车时刻被回填到另一侧（[#9](https://github.com/LindongCityServer/yct-v2/pull/9)，@WangKai878787，关闭 [#8](https://github.com/LindongCityServer/yct-v2/issues/8)）
+
 <!-- changelog:release:2.16.0:end -->
 
 ## 历史区间（2.0.0 – 2.15.0）未回溯
 
 <!-- changelog:history:start -->
+
 这些版本的更新内容仍以 `apps/web/release-notes.json` 的人工摘要为准。
 当时仓库没有走 PR 流程，GitHub 上没有可回溯的关联编号，因此不在此重复。
 <!-- changelog:history:end -->

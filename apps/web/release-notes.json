@@ -3,6 +3,55 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.23.0",
+      "releasedAt": "2026-11-19T08:29:03.819Z",
+      "sourceFingerprint": "3383d78ecf62e42cc1d1ade26a2904e11dbaae4e2eada9a68421ee4effbd42f5",
+      "themes": ["assistant", "qqbot", "materials"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "问一问新增确定性意图路由：先判断是否需要本人位置、Wiki 资料或工具，再决定检索与上下文；群聊不再读取账号数据"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "问一问支持「离我最近/我附近」等问法使用最后记录位置并返回周边地点，没有位置时提示手动定位"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "问一问对订单、车票、乘车码、收藏、提醒等未接入账号数据直接提示「暂未接入」"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "QQ 机器人支持群聊绑定临东通：群内 /绑定 生成群专属链接，登录后回群 /确认 6 位码完成绑定；/我的绑定、/解绑 仅作用于当前群"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "公共交通导视支持导入 NaL 墙面标志、站名站牌和 v2 格式工程，并按竖向版式转换"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "常见问题新增「问一问与 QQ 机器人」分组，补充回答准确性、账号数据范围、群聊隐私和群绑定说明"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "问一问彩蛋与回答质量提示补充「守门员把球送进自家门」的自嘲文案"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "QQ 机器人日志对群/用户 openid、绑定 token 和确认码打码"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.22.2",
       "releasedAt": "2026-11-19T06:41:05.236Z",
       "sourceFingerprint": "0a0271d2b0ca43aa3bfa19ed4f1fa22b72f3da24411e7a04ef8bce8ebe1ba3a4",
