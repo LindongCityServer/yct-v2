@@ -30,6 +30,18 @@ export function describeError(error) {
   return `${message}${code}`;
 }
 
+/** 日志里只露 openid 的前后几位，完整值请从平台或配置里核对。 */
+export function maskOpenId(value) {
+  const text = String(value ?? '').trim();
+  if (!text) {
+    return '（未知）';
+  }
+  if (text.length <= 6) {
+    return `${text.slice(0, 1)}***`;
+  }
+  return `${text.slice(0, 4)}…${text.slice(-2)}`;
+}
+
 export function createLogger(level = 'info') {
   const threshold = levels[level] ?? levels.info;
 

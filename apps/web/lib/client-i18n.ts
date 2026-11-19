@@ -922,6 +922,7 @@ export type CommonMessageKey =
   | 'metroWayfindingEditor.import.fileLimitsDescription'
   | 'metroWayfindingEditor.import.selectFiles'
   | 'metroWayfindingEditor.import.sourceExternalHint'
+  | 'metroWayfindingEditor.import.sourceNalHint'
   | 'metroWayfindingEditor.import.sourceYct'
   | 'metroWayfindingEditor.import.sourceYctHint'
   | 'metroWayfindingEditor.import.supportedSources'

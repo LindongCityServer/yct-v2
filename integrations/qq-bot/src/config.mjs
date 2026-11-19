@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { maskOpenId } from './log.mjs';
 
 /** 机器人目录下的 .env，既可以用编辑器填写，也可以由进程管理器注入同名环境变量。 */
 export const botRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -30,6 +31,9 @@ const defaults = {
   QQ_BOT_IMAGE_HOSTS: '',
   QQ_BOT_CARDS: '1',
   QQ_BOT_LOG_LEVEL: 'info',
+  QQ_GROUP_LINK_ENABLED: '1',
+  QQ_BOT_GROUP_LINK_TTL_MS: '300000',
+  QQ_BOT_GROUP_LINK_CACHE_MAX: '10000',
   YCT_BASE_URL: 'http://127.0.0.1:3300',
   YCT_PUBLIC_BASE_URL: '',
   YCT_ASSISTANT_PROVIDER: 'deepseek',
@@ -259,6 +263,15 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
       baseUrl: linkBaseUrl,
       secret: linkSecret,
       contextSecret,
+      groupEnabled: toBoolean(read, 'QQ_GROUP_LINK_ENABLED', true),
+      groupTokenTtlMs: toInteger(read, 'QQ_BOT_GROUP_LINK_TTL_MS', 300_000, problems, {
+        min: 60_000,
+        max: 600_000,
+      }),
+      groupTokenCacheMax: toInteger(read, 'QQ_BOT_GROUP_LINK_CACHE_MAX', 10_000, problems, {
+        min: 100,
+        max: 100_000,
+      }),
     },
     weather: {
       city: read('QQ_BOT_WEATHER_CITY'),
@@ -319,7 +332,7 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
   }
   if (Boolean(config.link.baseUrl) !== Boolean(config.link.secret)) {
     warnings.push(
-      'LDPASS_API_BASE_URL 和 QQ_BOT_LINK_SECRET 需要同时配置，否则 /绑定 会提示功能未配置。',
+      'LDPASS_API_BASE_URL 和 QQ_BOT_LINK_SECRET 需要同时配置，否则 /绑定（含群聊）会提示功能未配置。',
     );
   }
   if (config.link.secret && !config.link.contextSecret) {
@@ -383,12 +396,13 @@ export function describeConfig(config) {
     `QQ AppSecret：${maskSecret(config.qq.appSecret)}`,
     `QQ API：${config.qq.apiBase}`,
     `Intents：${config.qq.intents}`,
-    `群白名单：${config.qq.groupAllowlist.size > 0 ? [...config.qq.groupAllowlist].join(',') : '不限制'}`,
+    `群白名单：${config.qq.groupAllowlist.size > 0 ? [...config.qq.groupAllowlist].map(maskOpenId).join(',') : '不限制'}`,
     `问一问地址：${config.yct.baseUrl}/api/assistant/chat`,
     `模型：${config.yct.providerId} / ${config.yct.model}`,
     `模型 Key：${maskSecret(config.yct.apiKey)}`,
     `公开站点：${config.yct.publicBaseUrl || '（未配置，回答里的图片不会发送）'}`,
     `QQ 绑定：${config.link.baseUrl && config.link.secret ? '开' : '关'}`,
+    `群聊绑定：${config.link.groupEnabled ? `开（缓存 ${Math.round(config.link.groupTokenTtlMs / 60_000)} 分钟，最多 ${config.link.groupTokenCacheMax} 条）` : '关'}`,
     `账号上下文：${config.link.contextSecret ? '开' : '关'}`,
     `回答配图：${config.reply.images && config.yct.publicBaseUrl ? '开' : '关'}`,
     `指令结果卡片：${config.reply.cards ? '开（本地渲染）' : '关'}`,

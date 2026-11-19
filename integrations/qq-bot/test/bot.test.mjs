@@ -46,6 +46,9 @@ function createConfig(overrides = {}) {
       baseUrl: '',
       secret: '',
       contextSecret: '',
+      groupEnabled: true,
+      groupTokenTtlMs: 300_000,
+      groupTokenCacheMax: 10_000,
       ...overrides.link,
     },
   };
@@ -626,4 +629,157 @@ test('模型报错时把可读提示发回 QQ', async () => {
 
   assert.equal(sends.length, 1);
   assert.equal(sends[0].payload.content, '问一问暂时不可用，请稍后再试。');
+});
+
+test('群聊 /绑定 只用 member_openid + group_openid，并写入群缓存', async () => {
+  const config = createConfig({
+    link: { baseUrl: 'https://ldpass.example.com', secret: 'link-secret' },
+  });
+  const { bot, sends } = createSetup({ config });
+  let groupArgs;
+  let c2cCalled = false;
+  bot.linkClient.createGroupToken = async (args) => {
+    groupArgs = args;
+    return {
+      url: 'https://ldpass.example.com/account/link/qq?token=group-token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    };
+  };
+  bot.linkClient.createToken = async () => {
+    c2cCalled = true;
+    return { url: 'https://ldpass.example.com/link?token=c2c-token' };
+  };
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    id: 'msg-group-bind',
+    group_openid: 'group-1',
+    author: { member_openid: 'user-1', user_openid: 'c2c-user-1' },
+    content: '/绑定',
+  });
+
+  assert.deepEqual(groupArgs, { openId: 'user-1', groupOpenId: 'group-1' });
+  assert.equal(c2cCalled, false);
+  assert.equal(sends.length, 1);
+  assert.match(sends[0].payload.content, /token=group-token/);
+  assert.equal(bot.groupLinkTokens.get('group-1', 'user-1').token, 'group-token');
+});
+
+test('单聊 /绑定 只用 user_openid，不读群缓存', async () => {
+  const config = createConfig({
+    link: { baseUrl: 'https://ldpass.example.com', secret: 'link-secret' },
+  });
+  const { bot, sends } = createSetup({ config });
+  let openId;
+  let groupCalled = false;
+  bot.linkClient.createToken = async (id) => {
+    openId = id;
+    return {
+      url: 'https://ldpass.example.com/account/link/qq?token=c2c-token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    };
+  };
+  bot.linkClient.createGroupToken = async () => {
+    groupCalled = true;
+    return {
+      url: 'https://ldpass.example.com/link?token=group-token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    };
+  };
+
+  await bot.handleEvent('C2C_MESSAGE_CREATE', {
+    id: 'msg-c2c-bind',
+    author: { user_openid: 'user-9', member_openid: 'member-x' },
+    content: '/绑定',
+  });
+
+  assert.equal(openId, 'user-9');
+  assert.equal(groupCalled, false);
+  assert.equal(sends.length, 1);
+  assert.match(sends[0].payload.content, /token=c2c-token/);
+});
+
+test('群聊 /确认 使用当前事件的 member_openid 和 group_openid', async () => {
+  const config = createConfig({
+    link: { baseUrl: 'https://ldpass.example.com', secret: 'link-secret' },
+  });
+  const { bot, sends } = createSetup({ config });
+  bot.groupLinkTokens.set({
+    groupOpenId: 'group-1',
+    memberOpenId: 'user-1',
+    token: 'group-token',
+    expiresAt: '2099-01-01T00:00:00.000Z',
+  });
+  let captured;
+  bot.linkClient.confirmGroup = async (args) => {
+    captured = args;
+    return { id: 'link-1', username: '小明', scope: 'group' };
+  };
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    id: 'msg-group-confirm',
+    group_openid: 'group-1',
+    author: { member_openid: 'user-1', user_openid: 'someone-else' },
+    content: '/确认 482913',
+  });
+
+  assert.deepEqual(captured, {
+    token: 'group-token',
+    openId: 'user-1',
+    groupOpenId: 'group-1',
+    code: '482913',
+  });
+  assert.equal(sends.length, 1);
+  assert.match(sends[0].payload.content, /@小明/);
+  assert.equal(bot.groupLinkTokens.get('group-1', 'user-1'), null);
+});
+
+test('群聊 /确认 不会拿其他成员的缓存 token', async () => {
+  const config = createConfig({
+    link: { baseUrl: 'https://ldpass.example.com', secret: 'link-secret' },
+  });
+  const { bot, sends } = createSetup({ config });
+  bot.groupLinkTokens.set({
+    groupOpenId: 'group-1',
+    memberOpenId: 'user-1',
+    token: 'group-token',
+    expiresAt: '2099-01-01T00:00:00.000Z',
+  });
+  let called = false;
+  bot.linkClient.confirmGroup = async () => {
+    called = true;
+    return { username: '小明' };
+  };
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    id: 'msg-group-confirm-other',
+    group_openid: 'group-1',
+    author: { member_openid: 'user-2' },
+    content: '/确认 482913',
+  });
+
+  assert.equal(called, false);
+  assert.equal(sends.length, 1);
+  assert.match(sends[0].payload.content, /请先 @我 发送 \/绑定/);
+});
+
+test('群聊首次消息日志只打印打码后的 openid', async () => {
+  const lines = [];
+  const logger = {
+    debug: (...args) => lines.push(args.map(String).join(' ')),
+    info: (...args) => lines.push(args.map(String).join(' ')),
+    warn: (...args) => lines.push(args.map(String).join(' ')),
+    error: (...args) => lines.push(args.map(String).join(' ')),
+  };
+  const { bot } = createSetup();
+  bot.logger = logger;
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    ...groupEvent,
+    id: 'msg-log-mask',
+    content: '帮助',
+  });
+
+  const text = lines.join('\n');
+  assert.match(text, /首次收到群 grou…-1 的消息/);
+  assert.equal(text.includes('group-1'), false);
 });

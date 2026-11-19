@@ -948,6 +948,7 @@ export const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       '最多选择 {count} 个文件，单个文件不超过 {size} MB；不同编辑器的工程不能混合导入。',
     'metroWayfindingEditor.import.selectFiles': '选择工程文件',
     'metroWayfindingEditor.import.sourceExternalHint': '外部编辑器',
+    'metroWayfindingEditor.import.sourceNalHint': '导向标志 / 墙面标志 / 站名站牌 · 支持 v1 / v2',
     'metroWayfindingEditor.import.sourceYct': 'YCT 地铁导视工程',
     'metroWayfindingEditor.import.sourceYctHint': '本站工程',
     'metroWayfindingEditor.import.supportedSources': '支持来源',
@@ -1200,7 +1201,7 @@ export const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       '站内资料暂时没有直接答案，可以换个说法，或查看帮助与常见问题。',
     'globalSearch.easterEgg.close': '关闭',
     'globalSearch.easterEgg.description':
-      '图标里的小人是新光 2019 年 12 月手绘的，后来被照着画成表情包，又被重画成问一问的线描和填充两版。',
+      '图标里的小人是新光 2019 年 12 月手绘的，后来被照着画成表情包，又被重画成问一问的线描和填充两版。新光还画过一个守门员小人，配文是“咱伙球进啦！”“咱守门员干的！”“进的咱伙门！”——问一问偶尔也会这样：想帮忙，却把答案送进自家门。',
     'globalSearch.easterEgg.hint': '想找原帖，可以在 B 站和酷安搜新光和题海散人。',
     'globalSearch.easterEgg.title': '关于问一问',
     'globalSearch.emptyHint': '输入地点、班次、公告，或直接说出你的需求',
@@ -1835,8 +1836,7 @@ export const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'transitNetworkSource.notice.lineNamesSampleLocalOnly': '示例项目的线路名称调整仅在本页有效。',
     'transitNetworkSource.notice.lineNamesPendingPersist':
       '线路名称仅在本页有效；项目尚未成功暂存。',
-    'transitNetworkSource.notice.loginToReadProjects':
-      '登录后可读取项目线网，当前使用示例线网。',
+    'transitNetworkSource.notice.loginToReadProjects': '登录后可读取项目线网，当前使用示例线网。',
     'transitNetworkSource.notice.stationNamesSampleLocalOnly':
       '示例项目的站点名称调整仅在本页有效。',
     'transitNetworkSource.notice.stationNamesPendingPersist':
@@ -3139,6 +3139,7 @@ export const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       '最多選擇 {count} 個檔案，單一檔案不超過 {size} MB；不同編輯器的專案不能混合匯入。',
     'metroWayfindingEditor.import.selectFiles': '選擇專案檔案',
     'metroWayfindingEditor.import.sourceExternalHint': '外部編輯器',
+    'metroWayfindingEditor.import.sourceNalHint': '導向標誌 / 牆面標誌 / 站名站牌 · 支援 v1 / v2',
     'metroWayfindingEditor.import.sourceYct': 'YCT 地鐵導視專案',
     'metroWayfindingEditor.import.sourceYctHint': '本站專案',
     'metroWayfindingEditor.import.supportedSources': '支援來源',
@@ -3391,7 +3392,7 @@ export const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       '站內資料暫時沒有直接答案，可以換個說法，或查看說明與常見問題。',
     'globalSearch.easterEgg.close': '關閉',
     'globalSearch.easterEgg.description':
-      '圖示裡的小人是新光 2019 年 12 月手繪的，後來被照著畫成表情包，又被重畫成問一問的線描和填充兩版。',
+      '圖示裡的小人是新光 2019 年 12 月手繪的，後來被照著畫成表情包，又被重畫成問一問的線描和填充兩版。新光還畫過一個守門員小人，配文是「咱伙球進啦！」「咱守門員幹的！」「進的咱伙門！」——問一問偶爾也會這樣：想幫忙，卻把答案送進自家門。',
     'globalSearch.easterEgg.hint': '想找原帖，可以在 B 站和酷安搜新光和題海散人。',
     'globalSearch.easterEgg.title': '關於問一問',
     'globalSearch.emptyHint': '輸入地點、班次、公告，或直接說出你的需求',
@@ -4026,8 +4027,7 @@ export const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'transitNetworkSource.notice.lineNamesSampleLocalOnly': '範例專案的線路名稱調整僅在本頁有效。',
     'transitNetworkSource.notice.lineNamesPendingPersist':
       '線路名稱僅在本頁有效；專案尚未成功暫存。',
-    'transitNetworkSource.notice.loginToReadProjects':
-      '登入後可讀取專案線網，目前使用範例線網。',
+    'transitNetworkSource.notice.loginToReadProjects': '登入後可讀取專案線網，目前使用範例線網。',
     'transitNetworkSource.notice.stationNamesSampleLocalOnly':
       '範例專案的站點名稱調整僅在本頁有效。',
     'transitNetworkSource.notice.stationNamesPendingPersist':
@@ -5372,6 +5372,8 @@ export const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       'Up to {count} files, {size} MB each. Projects from different editors cannot be imported together.',
     'metroWayfindingEditor.import.selectFiles': 'Choose project files',
     'metroWayfindingEditor.import.sourceExternalHint': 'External editor',
+    'metroWayfindingEditor.import.sourceNalHint':
+      'Wayfinding / wall / station-name designs · v1 / v2',
     'metroWayfindingEditor.import.sourceYct': 'YCT metro wayfinding project',
     'metroWayfindingEditor.import.sourceYctHint': 'Local project',
     'metroWayfindingEditor.import.supportedSources': 'Supported sources',
@@ -5628,7 +5630,7 @@ export const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       'The site documentation has no direct answer yet. Try different wording or view the help and FAQ.',
     'globalSearch.easterEgg.close': 'Close',
     'globalSearch.easterEgg.description':
-      'The little figure in the icon was hand-drawn by Xinguang in December 2019, later redrawn as stickers, and then redrawn again as the outline and filled versions used by Ask.',
+      'The little figure in the icon was hand-drawn by Xinguang in December 2019, later redrawn as stickers, and then redrawn again as the outline and filled versions used by Ask. Xinguang also drew a goalkeeper character captioned “Our team scored!” “Our goalkeeper did it!” “It went into our own goal!” — Ask sometimes does the same: it means to help, but sends the answer into its own net.',
     'globalSearch.easterEgg.hint':
       'The original posts are still on Bilibili and Coolapk if you search for Xinguang and Tihai Sanren.',
     'globalSearch.easterEgg.title': 'About Ask',

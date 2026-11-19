@@ -307,7 +307,13 @@ export function MetroWayfindingEditor({
       subscribeMetroWayfindingImportLifecycleEvents(editorId, (event) => {
         if (event.type === 'ExternalWayfindingProjectParsed') {
           setImportPreview(event.payload.preview);
-          setImportMode(event.payload.preview.source === 'yct' ? 'source-style' : 'semantic');
+          // 站名站牌只有一组固定内容，不存在「仅语义 / 保留源样式」的差别；墙面标志与
+          // 导向标志则默认走语义适配。
+          setImportMode(
+            event.payload.preview.source === 'yct' || event.payload.preview.source === 'nal-stasign'
+              ? 'source-style'
+              : 'semantic',
+          );
           setImportError('');
           setIsProjectDialogOpen(false);
           return;
@@ -1223,7 +1229,7 @@ export function MetroWayfindingEditor({
                             open_in_new
                           </span>
                         </a>
-                        <small>{t('metroWayfindingEditor.import.sourceExternalHint')}</small>
+                        <small>{t('metroWayfindingEditor.import.sourceNalHint')}</small>
                       </li>
                       <li>
                         <a href="https://signmaker.chitose.city/" target="_blank" rel="noreferrer">
@@ -1313,7 +1319,7 @@ export function MetroWayfindingEditor({
               footer 不再 sticky，内容滚到底也不会被底栏遮挡。
             */}
             <div className="metro-wayfinding-import-scroll">
-              {importPreview.source !== 'yct' ? (
+              {importPreview.source !== 'yct' && importPreview.source !== 'nal-stasign' ? (
                 <SegmentedControl
                   label={t('metroWayfindingEditor.importPreview.mode')}
                   value={importMode}

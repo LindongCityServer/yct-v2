@@ -11,9 +11,9 @@
  *   - 分段控件统一走共享组件：每个按钮 `flex: 1 1 0` + `min-width: 0`，
  *     标签用省略号兜底，图标固定 20px 不压缩——不再维护 `.is-compact` 分支。
  */
-import { readFileSync } from 'node:fs';
+import { readAppStyles } from './app-styles';
 
-const CSS = readFileSync(new URL('../../apps/web/app/globals.css', import.meta.url), 'utf8');
+const CSS = readAppStyles();
 
 let passed = 0;
 let failed = 0;
@@ -83,7 +83,7 @@ check(
 );
 check(
   '色块固定 40px 不参与压缩',
-  /\.metro-wayfinding-color-control input\[type='color'\] \{\s*flex: 0 0 40px;\s*width: 40px;/.test(
+  /\.metro-wayfinding-color-control input\[type='color'\] \{\s*flex: 0 0 40px;\s*width: (?:40px|var\(--yct-control-size-md\));/.test(
     CSS,
   ),
 );

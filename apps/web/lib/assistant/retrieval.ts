@@ -25,7 +25,7 @@ import {
 import { buildPlaceQueryCandidates } from './place-synonyms';
 import { stripAdministrativeAreaScope } from './administrative-areas';
 import { buildPlayerLocationReferences } from './player-retrieval';
-import { buildEasterEggContext, isEasterEggQuery } from './easter-egg';
+import { buildEasterEggContext, shouldIncludeEasterEggContext } from './easter-egg';
 import type { CurrentPlayerLocation } from './current-location';
 import { matchUiGuideEntries } from './ui-guide';
 import {
@@ -81,11 +81,30 @@ export interface AssistantRetrieval {
   generatedAt: string;
 }
 
+/** 意图层确认不需要检索时使用，避免为寒暄或服务器状态读取站内数据源。 */
+export function createEmptyAssistantRetrieval(): AssistantRetrieval {
+  return {
+    references: [],
+    contextText: '',
+    sourceStatus: 'ready',
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 export interface AssistantRetrievalOptions {
   pathname?: string;
   highlights?: Array<{ kind: string; title: string; detail?: string }>;
-  /** 当前登录账号绑定的玩家最后记录位置，只用于本人相关的位置与路线问题。 */
+  /**
+   * 当前登录账号绑定的玩家最后记录位置。
+   * 只有 currentLocationIntent 为 true 时才会注入；意图层确认这是本人位置问题后，
+   * 同时传入 currentLocation 和 currentLocationIntent。这样普通问答不会因为
+   * 调用方多传了一个位置对象就暴露位置。
+   */
   currentLocation?: CurrentPlayerLocation;
+  /** 调用方已确认这是本人位置问题；没有 currentLocation 时给出地图手动定位入口。 */
+  currentLocationIntent?: boolean;
+  /** 调用方已确认这是“我附近/离我最近”类问题，即使问句里没有“附近”也按周边检索。 */
+  nearbyIntent?: boolean;
 }
 
 const maximumReferences = 10;
@@ -111,11 +130,6 @@ const pageReferencePattern =
   /这个页面|這頁|这页|当前页面|當前頁面|本页|本頁|此页|此頁|怎么用|怎麼用|能做什么|能做什麼|this page|what can i do/i;
 const highlightReferencePattern =
   /这条|這條|这个|這個|这里|這裡|当前|當前|选中|選中|上面|刚才|剛才|它|this\b|current/i;
-
-/** 只有这些问法才会带上“当前账号位置”，避免普通问答暴露位置。 */
-const currentLocationQuestionPattern =
-  /我在哪|我在哪里|我现在在哪|我的位置|我的坐标|当前位置|我这|我这里|离我最近|我最近|离我|我附近|我这附近|附近.*我|怎么去|怎么到|怎么走|如何到|如何前往|路线/u;
-const askingWhereAmI = /我在哪|我在哪里|我现在在哪|我的位置|我的坐标|当前位置/u;
 
 /** 反馈、报错与建议类问法，需要额外给一个可直接提交的 Issue 入口。 */
 const feedbackIntentPattern =
@@ -323,11 +337,13 @@ export async function buildAssistantRetrieval(
   }
 
   // 问一问形象的彩蛋：只进入模型上下文，不在界面上生成引用来源。
-  const easterEggContext = isEasterEggQuery(query) ? buildEasterEggContext() : '';
+  const easterEggContext = shouldIncludeEasterEggContext(query) ? buildEasterEggContext() : '';
 
-  // 当前账号绑定的玩家位置：只在问位置或路线时出现，路线入口用这份位置作为起点。
+  // 当前账号绑定的玩家位置：是否注入由问一问意图层决定，这里只负责生成资料。
+  // 没有位置记录时，只有意图层确认是本人位置问题才给手动定位入口。
   const currentLocation = options.currentLocation;
-  if (currentLocation && currentLocationQuestionPattern.test(query)) {
+  const wantsCurrentLocation = Boolean(currentLocation && options.currentLocationIntent);
+  if (currentLocation && wantsCurrentLocation) {
     addReference({
       title: `${currentLocation.playerName}（当前位置）`,
       source: '当前位置',
@@ -344,7 +360,7 @@ export async function buildAssistantRetrieval(
     markersResult.status === 'fulfilled' && markersResult.value
       ? markersResult.value.snapshot.markers
       : [];
-  if (currentLocation) {
+  if (currentLocation && wantsCurrentLocation) {
     for (const reference of buildCurrentLocationRouteReferences(
       query,
       markerPoints,
@@ -357,7 +373,7 @@ export async function buildAssistantRetrieval(
     for (const reference of buildDestinationRouteReference(query, markerPoints)) {
       addReference(reference);
     }
-    if (askingWhereAmI.test(query)) {
+    if (options.currentLocationIntent) {
       addReference({
         title: '在地图上查看当前位置',
         source: '当前位置',
@@ -396,6 +412,7 @@ export async function buildAssistantRetrieval(
 
   // 周边/沿线问题优先用空间数据，社交动态和 Wiki 会挤占引用名额。
   const spatialQueryIntent =
+    options.nearbyIntent ||
     spatialNearbyPattern.test(query) ||
     spatialAlongLinePattern.test(query) ||
     /(经过|途经|路过)/u.test(query) ||
@@ -556,7 +573,7 @@ export async function buildAssistantRetrieval(
     const roadLabel =
       alongIntent && !lineLabel ? findRoadLabel(query, spatialContext.markers) : undefined;
     const wantsAlong = Boolean(lineLabel || roadLabel) && alongIntent;
-    const wantsNearby = spatialNearbyPattern.test(query);
+    const wantsNearby = spatialNearbyPattern.test(query) || Boolean(options.nearbyIntent);
     const lineMarker =
       wantsAlong && lineLabel
         ? findTransitLineMarker(spatialContext.markers, {
@@ -569,7 +586,7 @@ export async function buildAssistantRetrieval(
         ? buildRoadAlongMarker(spatialContext.markers, roadLabel)
         : undefined;
     const alongTarget = lineMarker ?? roadMarker;
-    const anchor = wantsNearby
+    const explicitNearbyAnchor = wantsNearby
       ? ([...new Set(highlights.filter((item) => item.kind === 'marker').map((item) => item.title))]
           .map((title) => findSpatialMarker(spatialContext.markers, { label: title }))
           .find(Boolean) ??
@@ -582,6 +599,25 @@ export async function buildAssistantRetrieval(
           )
           .sort((left, right) => right.label.length - left.label.length)[0])
       : undefined;
+    // “离我最近/我附近”的锚点就是本人最后记录位置。意图层已确认这是本人位置问题，
+    // 这里把坐标转成一个临时锚点，复用地图同一套周边计算；它不会写回任何数据。
+    const currentLocationAnchor: SpatialMarker | undefined =
+      wantsNearby && currentLocation && options.currentLocationIntent
+        ? {
+            id: 'current-location',
+            label: '我的位置',
+            categoryId: 'player',
+            geometry: {
+              type: 'Point',
+              coordinates: [currentLocation.x, currentLocation.z],
+            },
+          }
+        : undefined;
+    // 分类为 nearby 时以本人位置为准，避免多轮上下文里的旧地名抢走锚点。
+    const anchor =
+      options.nearbyIntent && currentLocationAnchor
+        ? currentLocationAnchor
+        : (explicitNearbyAnchor ?? currentLocationAnchor);
     // 锚点名称本身可能带“超市/医院”等词，判断分类前先把它去掉。
     const anchorLabel = alongTarget?.label ?? anchor?.label;
     const placeCategories = buildPlaceQueryCandidates(
@@ -654,7 +690,8 @@ export async function buildAssistantRetrieval(
       });
       if (nearby) {
         spatialApplied = true;
-        if (anchor.id) {
+        // 临时锚点不是站内 POI，不能拿它去查地点公告。
+        if (anchor.id && anchor.id !== 'current-location') {
           focusPlace = { id: anchor.id, label: anchor.label };
         }
         addReference({

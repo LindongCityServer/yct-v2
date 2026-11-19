@@ -18,9 +18,9 @@
  * 断言一律先在**剥离注释**后的 CSS 上匹配——中文注释里会反引号引用类名字面量
  * （例如 `.topbar:not(.secondary-topbar)`），直接在原文上匹配会误伤反向哨兵。
  */
-import { readFileSync } from 'node:fs';
+import { readAppStyles } from './app-styles';
 
-const rawCss = readFileSync(new URL('../../apps/web/app/globals.css', import.meta.url), 'utf8');
+const rawCss = readAppStyles();
 const CSS = rawCss.replace(/\/\*[\s\S]*?\*\//g, '');
 
 let passed = 0;

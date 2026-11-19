@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleCommand } from '../src/commands.mjs';
+import { GroupLinkTokenStore } from '../src/group-link.mjs';
 
 const config = {
   weather: { city: '上海' },
@@ -17,7 +18,13 @@ const config = {
 };
 const logger = { warn() {} };
 const c2c = { kind: 'c2c', userId: 'qq-open-id', userName: '测试' };
-const group = { kind: 'group', groupId: 'group-1', userId: 'member-open-id', userName: '测试' };
+const group = {
+  kind: 'group',
+  groupId: 'group-1',
+  userId: 'member-open-id',
+  memberOpenId: 'member-open-id',
+  userName: '测试',
+};
 
 test('私聊 /绑定 生成一次性网页链接', async () => {
   let request;
@@ -51,20 +58,37 @@ test('私聊 /绑定 生成一次性网页链接', async () => {
   assert.match(result.reply, /account\/link\/qq\?token=abc/);
 });
 
-test('群聊不会请求绑定链接', async () => {
-  let called = false;
+test('群聊 /绑定 使用 member_openid 和 group_openid 生成链接', async () => {
+  let request;
   const result = await handleCommand({
     text: '/绑定',
     config,
     logger,
     context: group,
-    fetchImpl: async () => {
-      called = true;
-      return { ok: true, json: async () => ({}) };
+    groupTokens: new GroupLinkTokenStore(),
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            url: 'https://ldpass.example.com/account/link/qq?token=group-token',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+          };
+        },
+      };
     },
   });
-  assert.equal(called, false);
-  assert.match(result.reply, /私聊/);
+
+  assert.equal(request.url, 'https://ldpass.example.com/api/internal/qq-link/token');
+  assert.equal(request.options.headers.Authorization, 'Bearer link-secret');
+  assert.deepEqual(JSON.parse(request.options.body), {
+    openId: 'member-open-id',
+    scope: 'group',
+    groupOpenId: 'group-1',
+  });
+  assert.match(result.reply, /account\/link\/qq\?token=group-token/);
 });
 
 test('私聊 /绑定 绑定码', async () => {

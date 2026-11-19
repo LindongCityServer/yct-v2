@@ -103,9 +103,13 @@ export async function runAssistantTool(
   }
 }
 
-/** OpenAI 兼容的 function calling 定义。 */
-export function buildOpenAiToolDefinitions() {
-  return assistantTools.map((tool) => ({
+/** OpenAI 兼容的 function calling 定义；意图层给出的工具优先排在前面，但不裁剪能力。 */
+export function buildOpenAiToolDefinitions(preferredNames: string[] = []) {
+  const preferred = new Set(preferredNames);
+  const ordered = [...assistantTools].sort(
+    (left, right) => Number(preferred.has(right.name)) - Number(preferred.has(left.name)),
+  );
+  return ordered.map((tool) => ({
     type: 'function' as const,
     function: {
       name: tool.name,

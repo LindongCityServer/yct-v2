@@ -7,6 +7,7 @@
  * 但一旦漂移就会产生两个控件外观/交互不一致的契约。
  */
 import { readFileSync } from 'node:fs';
+import { readAppStyles } from './app-styles';
 
 const EDITOR = readFileSync(
   new URL('../../apps/web/components/metro-wayfinding-editor.tsx', import.meta.url),
@@ -16,7 +17,7 @@ const PANEL = readFileSync(
   new URL('../../apps/web/components/material-studio-panel.tsx', import.meta.url),
   'utf8',
 );
-const CSS = readFileSync(new URL('../../apps/web/app/globals.css', import.meta.url), 'utf8');
+const CSS = readAppStyles();
 
 let passed = 0;
 let failed = 0;

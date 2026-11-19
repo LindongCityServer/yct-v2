@@ -4,6 +4,8 @@
 
 本文只盘点“站内已经有、但问一问拿不到”的信息。问一问的检索和工具清单在
 `apps/web/lib/assistant/retrieval.ts` 与 `apps/web/lib/assistant/tools/`，MCP 复用同一份工具。
+账号位置、群聊隐私与“暂未接入”的账号数据路由见
+[ASSISTANT_INTENT_ROUTING.md](./ASSISTANT_INTENT_ROUTING.md)。
 
 ## 已经覆盖
 

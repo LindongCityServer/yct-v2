@@ -6,9 +6,12 @@ import {
   resolveMetroLargeTextSuffixes,
   METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE,
   METRO_WAYFINDING_COMBINATION_MAX_SCALE,
+  METRO_WAYFINDING_COMBINATION_MIN_SCALE,
   METRO_WAYFINDING_BACKGROUND,
   METRO_WAYFINDING_FOREGROUND,
   METRO_WAYFINDING_GAP,
+  METRO_WAYFINDING_HEIGHT,
+  METRO_WAYFINDING_PADDING,
   METRO_WAYFINDING_PROJECT_FORMAT,
   METRO_WAYFINDING_PROJECT_SCHEMA_VERSION,
   METRO_WAYFINDING_WARNING_FOREGROUND,
@@ -25,19 +28,38 @@ import {
   type MetroWayfindingIconVariant,
   type MetroWayfindingLargeTextElement,
   type MetroWayfindingLayout,
+  type MetroWayfindingLayoutMode,
   type MetroWayfindingMainSegment,
   type MetroWayfindingProjectCanvas,
   type MetroWayfindingTextElement,
   type MetroWayfindingTextRow,
   type MetroWayfindingTextAlign,
 } from './metro-wayfinding';
+import {
+  NAL_DESIGN_SCHEMA_VERSION,
+  NAL_DESIGN_TOOL_LABELS,
+  assertNalDesignVersionSupported,
+  isNalDesignSingleColumnLayout,
+  parseNalStasignDesign,
+  parseNalVitoolDesignV2,
+  parseNalWallDesignV2,
+  readNalDesignToolType,
+  type NalDesignElement,
+  type NalDesignGroup,
+  type NalDesignTextElement,
+  type NalDesignTheme,
+  type NalDesignTransform,
+  type NalDesignWallDocument,
+  type NalDesignWallLayer,
+  type NalTextAlign,
+} from './nal-design-format';
 
 export const METRO_WAYFINDING_IMPORT_MAX_FILES = 2;
 export const METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES = 2 * 1024 * 1024;
 export const METRO_WAYFINDING_SEMANTIC_TARGET_STYLE = 'DB21/T 2573-2023 语义适配';
 
 export type MetroWayfindingImportSource =
-  'yct' | 'nal-vitool' | 'chitose-signmaker' | 'moert-guidegen';
+  'yct' | 'nal-vitool' | 'nal-wall' | 'nal-stasign' | 'chitose-signmaker' | 'moert-guidegen';
 export type MetroWayfindingImportMode = 'semantic' | 'source-style';
 
 export interface MetroWayfindingImportFile {
@@ -89,6 +111,12 @@ interface ParsedImportDocument {
   projectName: string;
   fileName: string;
   canvasLength: number;
+  /**
+   * 版式模式。缺省按 `rows` 数量推断（1 行单行、2 行双行）；
+   * 墙面标志 / 站名站牌的 v2 导入固定为 `vertical`（竖向单列）。
+   */
+  layoutMode?: MetroWayfindingLayoutMode;
+  /** 显式画布：竖向导入需要自己决定宽高，不能再按横向长度推算。 */
   canvas?: MetroWayfindingProjectCanvas;
   layout?: MetroWayfindingLayout;
   backgroundColor: string;
@@ -941,9 +969,11 @@ export function parseMetroWayfindingImportFiles(
   if (parsed.some((document) => document.source !== source)) {
     throw new Error('不能在一次导入中混合不同生成器的工程文件。');
   }
-  if ((source === 'yct' || source === 'nal-vitool') && parsed.length > 1) {
+  if ((source === 'yct' || source.startsWith('nal-')) && parsed.length > 1) {
     throw new Error(
-      source === 'yct' ? 'YCT 工程文件请逐个导入。' : 'NaL 工程本身已包含全部层，请逐个导入。',
+      source === 'yct'
+        ? 'YCT 工程文件请逐个导入。'
+        : 'NaL 工程本身已包含全部层与画板，请逐个导入。',
     );
   }
 
@@ -968,21 +998,35 @@ export function parseMetroWayfindingImportFiles(
     };
   }
 
-  const flattenedRows = parsed.flatMap((document) =>
-    document.rows.map((row, index) => ({
-      row,
-      fileName: document.fileName,
-      label:
-        document.rows.length > 1 ? `${document.fileName} · 第 ${index + 1} 行` : document.fileName,
-    })),
-  );
+  const vertical = parsed[0]!.layoutMode === 'vertical';
+  const flattenedRows = vertical
+    ? []
+    : parsed.flatMap((document) =>
+        document.rows.map((row, index) => ({
+          row,
+          fileName: document.fileName,
+          label:
+            document.rows.length > 1
+              ? `${document.fileName} · 第 ${index + 1} 行`
+              : document.fileName,
+        })),
+      );
   if (flattenedRows.length > 2) {
     warningCollector.add(
       'row-limit',
       `当前模板最多保留两行，已忽略其余 ${flattenedRows.length - 2} 行。`,
     );
   }
-  const retainedRows = flattenedRows.slice(0, 2);
+  // 竖向导入（墙面标志 / 站名站牌）只有一个「竖向内容」列表，不受两行上限约束。
+  const retainedRows = vertical
+    ? [
+        {
+          row: parsed[0]!.rows[0] ?? [],
+          fileName: parsed[0]!.fileName,
+          label: parsed[0]!.fileName,
+        },
+      ]
+    : flattenedRows.slice(0, 2);
   if (!retainedRows.length) {
     throw new Error('工程文件中没有可转换的导视元素。');
   }
@@ -1007,14 +1051,21 @@ export function parseMetroWayfindingImportFiles(
   const layout: MetroWayfindingLayout = {
     backgroundColor,
     foregroundColor,
-    mode: retainedRows.length > 1 ? 'double' : 'single',
+    mode: vertical ? 'vertical' : retainedRows.length > 1 ? 'double' : 'single',
     dividerBetweenRows:
-      retainedRows.length > 1 && parsed.some((document) => document.dividerBetweenRows),
+      !vertical &&
+      retainedRows.length > 1 &&
+      parsed.some((document) => document.dividerBetweenRows),
     rows: retainedRows.map((item) => item.row),
   };
-  const canvas: MetroWayfindingProjectCanvas = {
-    widthM: canvasLength,
-    heightM: retainedRows.length > 1 ? 2 : 1,
+  // 竖向导入由解析阶段决定画布宽高（模块层数），横向才按「长度 × 行数」推算。
+  const canvas: MetroWayfindingProjectCanvas = parsed[0]!.canvas ?? {
+    widthM: vertical ? 4 : canvasLength,
+    heightM: vertical
+      ? Math.max(1, retainedRows[0]?.row.length ?? 1)
+      : retainedRows.length > 1
+        ? 2
+        : 1,
     pxPerMeter: 128,
     alignToTile: false,
     tileSizePx: 128,
@@ -1065,6 +1116,9 @@ export function resolveMetroWayfindingImportPreview(
   mode: MetroWayfindingImportMode,
 ): MetroWayfindingImportPreview {
   if (mode === 'source-style' || preview.source === 'yct') return preview;
+  // 站名站牌只有「站名 + 英文名 + 线路色 + 下一站」这一组内容，语义归一化会把
+  // 线路色与站名框样式抹掉，反而丢失源工程信息，因此不参与「仅语义」转换。
+  if (preview.source === 'nal-stasign') return preview;
 
   const styleOnlyWarnings = new Set([
     'nal-style-approximation',
@@ -1165,8 +1219,15 @@ function parseImportDocument(file: MetroWayfindingImportFile): ParsedImportDocum
   if (value.format === METRO_WAYFINDING_PROJECT_FORMAT) {
     return parseYctDocument(file.name, value);
   }
-  if (value.type === 'nalvitool') {
+  if (readNalDesignToolType(value)) {
     return parseNalDocument(file.name, value);
+  }
+  // 未来 NaL 工具按 `nal<工具名>` 命名（v2 文档 §1）：认得出是 NaL 家族，
+  // 但当前没有对应转换器，给出比「不支持的格式」更准确的提示。
+  if (typeof value.type === 'string' && /^nal[a-z]/iu.test(value.type)) {
+    throw new Error(
+      `${file.name} 使用了暂不支持的 NaL 设计器类型（${value.type}），当前支持导向标志、墙面标志与站名站牌。`,
+    );
   }
   if (isMoertGuideGenDocument(value)) {
     return parseMoertDocument(file.name, value);
@@ -1214,7 +1275,38 @@ function parseYctDocument(fileName: string, root: JsonObject): ParsedImportDocum
   };
 }
 
+/**
+ * NaL 三个设计器（导向标志 / 墙面标志 / 站名站牌）的导入入口。
+ *
+ * 版本判定完全交给 `nal-design-format.ts`：`schemaVersion` 缺省 = v1（仅 vitool
+ * 有可转换的 v1 结构），`2` = v2，`> 2` 直接拒绝并提示升级。
+ */
 function parseNalDocument(fileName: string, root: JsonObject): ParsedImportDocument {
+  const toolType = readNalDesignToolType(root) ?? 'nalvitool';
+  const schemaVersion = assertNalDesignVersionSupported(fileName, root);
+  if (toolType === 'nalstasign') {
+    // 站名站牌 v1（`version: 1`）与 v2 都是「design + state」，共用一条转换路径。
+    return parseNalStasignDocument(fileName, root);
+  }
+  if (toolType === 'nalwall') {
+    if (schemaVersion !== NAL_DESIGN_SCHEMA_VERSION) {
+      throw new Error(
+        `${fileName} 是旧版 NaL 墙面标志工程（schemaVersion ${schemaVersion ?? '缺失'}），当前只支持 v2 格式，请在 NaL 设计器中升级格式后重新导出。`,
+      );
+    }
+    return parseNalWallDocumentV2(fileName, root);
+  }
+  if (schemaVersion === undefined || schemaVersion === 1) {
+    return parseNalV1Document(fileName, root);
+  }
+  if (schemaVersion !== NAL_DESIGN_SCHEMA_VERSION) {
+    throw new Error(`${fileName} 的 NaL 格式版本 ${schemaVersion} 暂不支持，当前只支持 v2。`);
+  }
+  return parseNalVitoolDocumentV2(fileName, root);
+}
+
+/** v1：`type: nalvitool` + `layers` + `definitions`（内置模板 `assets/template/*.json` 仍是这一版）。 */
+function parseNalV1Document(fileName: string, root: JsonObject): ParsedImportDocument {
   const warningCollector = createWarningCollector();
   const definitions = isObject(root.definitions) ? root.definitions : {};
   const layers = isObject(root.layers) ? root.layers : {};
@@ -1230,29 +1322,7 @@ function parseNalDocument(fileName: string, root: JsonObject): ParsedImportDocum
           : [],
       ),
   );
-  const hasExperimentalStyle = importedAssetNames.some(
-    (assetName) => assetName.startsWith('line@') || nalExperimentalStyleAssets.has(assetName),
-  );
-  const hasClassicStyle = importedAssetNames.some(
-    (assetName) =>
-      assetName.startsWith('cls@') ||
-      assetName.startsWith('clss@') ||
-      nalClassicStyleAssets.has(assetName),
-  );
-  const styleLabel =
-    hasExperimentalStyle && hasClassicStyle
-      ? '北京地铁混合系列（经典 / 实验）'
-      : hasExperimentalStyle
-        ? '北京地铁实验系列（线路号色带）'
-        : hasClassicStyle
-          ? '北京地铁经典系列（车头标）'
-          : '北京地铁系列（未检测到系列特征）';
-  if (hasExperimentalStyle && hasClassicStyle) {
-    warningCollector.add(
-      'nal-mixed-series',
-      '工程同时包含经典系列与实验系列组件，已逐元素保留可识别的系列样式。',
-    );
-  }
+  const styleLabel = resolveNalStyleLabel(importedAssetNames, warningCollector);
   const rows = layerEntries.map(([, rawGroups]) =>
     parseNalGroups(rawGroups as unknown[], definitions, warningCollector),
   );
@@ -1262,7 +1332,7 @@ function parseNalDocument(fileName: string, root: JsonObject): ParsedImportDocum
   );
   return {
     source: 'nal-vitool',
-    sourceLabel: 'NaL 导向标志设计器',
+    sourceLabel: NAL_DESIGN_TOOL_LABELS.vitool,
     styleLabel,
     projectName: stripJsonExtension(fileName),
     fileName,
@@ -1275,6 +1345,719 @@ function parseNalDocument(fileName: string, root: JsonObject): ParsedImportDocum
     rows,
     warnings: warningCollector.values(),
   };
+}
+
+/** 由素材名判断 NaL 的「经典 / 实验」系列（v1 按 `elements` 字符串收集，v2 递归收集）。 */
+function resolveNalStyleLabel(
+  assetNames: readonly string[],
+  warnings: ReturnType<typeof createWarningCollector>,
+): string {
+  const hasExperimentalStyle = assetNames.some(
+    (assetName) => assetName.startsWith('line@') || nalExperimentalStyleAssets.has(assetName),
+  );
+  const hasClassicStyle = assetNames.some(
+    (assetName) =>
+      assetName.startsWith('cls@') ||
+      assetName.startsWith('clss@') ||
+      nalClassicStyleAssets.has(assetName),
+  );
+  if (hasExperimentalStyle && hasClassicStyle) {
+    warnings.add(
+      'nal-mixed-series',
+      '工程同时包含经典系列与实验系列组件，已逐元素保留可识别的系列样式。',
+    );
+  }
+  return hasExperimentalStyle && hasClassicStyle
+    ? '北京地铁混合系列（经典 / 实验）'
+    : hasExperimentalStyle
+      ? '北京地铁实验系列（线路号色带）'
+      : hasClassicStyle
+        ? '北京地铁经典系列（车头标）'
+        : '北京地铁系列（未检测到系列特征）';
+}
+
+// ---------------------------------------------------------------------------
+// NaL v2：导向标志 / 墙面标志 / 站名站牌
+// ---------------------------------------------------------------------------
+
+/**
+ * v2 的 `theme` → 本模板底色。
+ *
+ * A / B 是基础配色（A 深蓝底、B 深灰底，与 v1 的 `mode` 口径一致）；
+ * C / D 是需要启元权限的扩展配色，按 NaL 的降级规则落到 A / B 并提示。
+ */
+const NAL_V2_THEME_BACKGROUNDS: Record<NalDesignTheme, string> = {
+  A: NAL_BACKGROUND,
+  B: METRO_WAYFINDING_BACKGROUND,
+  C: NAL_BACKGROUND,
+  D: METRO_WAYFINDING_BACKGROUND,
+};
+
+const NAL_WALL_SIZE_LABELS: Record<NalDesignWallDocument['size'], string> = {
+  long: '长标志牌',
+  short: '短牌（白色底）',
+  short_colored: '短牌（彩色底）',
+};
+
+/** 墙面标志 / 站名站牌转换成竖向画布时的固定宽度（与竖向导视牌的模板默认值一致）。 */
+const NAL_V2_VERTICAL_WIDTH_M = 4;
+
+/**
+ * 墙面模块的缩放：让「模块高度 × 模块数 + 模块间距」正好放进竖向画布。
+ *
+ * 竖向版式里画布高度按「1 米 / 模块」推算，上下各有内边距；若模块保持满倍高，
+ * 最后一块会被底部裁掉。这里按模块数反算单模块可用高度，并按两位小数向下取整
+ * （与模型里组合框缩放的归一化口径一致）。
+ */
+function resolveNalWallModuleScale(moduleCount: number): number {
+  const availableHeight = METRO_WAYFINDING_HEIGHT * moduleCount - METRO_WAYFINDING_PADDING * 2;
+  const perModuleHeight =
+    (availableHeight - METRO_WAYFINDING_GAP * (moduleCount - 1)) / moduleCount;
+  const scale = Math.floor((perModuleHeight / METRO_WAYFINDING_HEIGHT) * 100) / 100;
+  return Math.max(
+    METRO_WAYFINDING_COMBINATION_MIN_SCALE,
+    Math.min(METRO_WAYFINDING_COMBINATION_MAX_SCALE, scale),
+  );
+}
+
+/** 箭头素材的水平 / 垂直镜像表（与 `metroWayfindingArrowReverseMap` 同口径，垂直镜像单列）。 */
+const NAL_ARROW_FLIP_H: Record<string, MetroWayfindingArrowElement['iconId']> = {
+  east: 'west',
+  west: 'east',
+  'north-east': 'north-west',
+  'north-west': 'north-east',
+  'south-east': 'south-west',
+  'south-west': 'south-east',
+  'turn-left-up': 'turn-right-up',
+  'turn-right-up': 'turn-left-up',
+  'turn-left-down': 'turn-right-down',
+  'turn-right-down': 'turn-left-down',
+  'u-turn-left': 'u-turn-right',
+  'u-turn-right': 'u-turn-left',
+};
+
+const NAL_ARROW_FLIP_V: Record<string, MetroWayfindingArrowElement['iconId']> = {
+  north: 'south',
+  south: 'north',
+  'north-east': 'south-east',
+  'south-east': 'north-east',
+  'north-west': 'south-west',
+  'south-west': 'north-west',
+  'turn-left-up': 'turn-left-down',
+  'turn-left-down': 'turn-left-up',
+  'turn-right-up': 'turn-right-down',
+  'turn-right-down': 'turn-right-up',
+};
+
+/** v2 导向标志：`boards` → 本模板的行（最多 2 行）。 */
+function parseNalVitoolDocumentV2(fileName: string, root: JsonObject): ParsedImportDocument {
+  const document = parseNalVitoolDesignV2(root, fileName);
+  const warnings = createWarningCollector();
+  if (document.theme === 'C' || document.theme === 'D') {
+    warnings.add(
+      'nal-theme-downgraded',
+      `配色模式 ${document.theme} 需要启元权限，已降级为 ${document.theme === 'C' ? 'A' : 'B'} 的底色。`,
+    );
+  }
+  if (document.boards.length > 1) {
+    warnings.add(
+      'nal-dual-board',
+      `工程包含 ${document.boards.length} 个画板，当前模板只能容纳一块导视牌，已只导入第一个画板。`,
+    );
+  }
+  const sourceRows = document.boards[0]?.rows ?? [];
+  if (sourceRows.length !== document.canvas.rows) {
+    warnings.add(
+      'nal-row-count-mismatch',
+      `画板声明 ${document.canvas.rows} 层，实际有 ${sourceRows.length} 层，已按声明层数补齐或截断。`,
+    );
+  }
+  const rows = Array.from({ length: document.canvas.rows }, (_unused, index) =>
+    convertNalV2Groups(sourceRows[index]?.groups ?? [], warnings),
+  );
+  const styleLabel = resolveNalStyleLabel(
+    // 只看实际导入的画板（双画板时第二个画板被忽略）。
+    collectNalV2ElementAssetNames(
+      (document.boards[0]?.rows ?? []).flatMap((row) =>
+        row.groups.flatMap((group) => group.elements),
+      ),
+    ),
+    warnings,
+  );
+  warnings.add(
+    'nal-style-approximation',
+    '字体、双色图标和分组间距已按当前模板近似转换；自定义 SVG、旋转和嵌套分栏无法完整还原。',
+  );
+  if (document.canvas.length === null) {
+    warnings.add(
+      'nal-auto-size',
+      '画板使用自动尺寸（没有固定长度），已按 8 格画布导入，可在画布设置中调整。',
+    );
+  }
+  return {
+    source: 'nal-vitool',
+    sourceLabel: NAL_DESIGN_TOOL_LABELS.vitool,
+    styleLabel,
+    projectName: stripJsonExtension(fileName),
+    fileName,
+    canvasLength: document.canvas.length ?? 8,
+    backgroundColor: NAL_V2_THEME_BACKGROUNDS[document.theme],
+    foregroundColor: METRO_WAYFINDING_FOREGROUND,
+    // v2 的 `grouping` 与 v1 的 `group` 是同一个「分组」开关，沿用 v1 的口径映射到行间分割线。
+    dividerBetweenRows: document.grouping,
+    rows,
+    warnings: warnings.values(),
+  };
+}
+
+function convertNalV2Groups(
+  groups: readonly NalDesignGroup[],
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  const result: MetroWayfindingElement[] = [];
+  groups.forEach((group, index) => {
+    // 分组之间用弹性空白拉开，近似 NaL 的「分组」间距（与 v1 行为一致）。
+    if (index > 0) result.push(createSpaceElement('flex'));
+    group.elements.forEach((element) => {
+      result.push(...convertNalV2Element(element, group.align, warnings));
+    });
+  });
+  return collapseAdjacentDuplicateFacilities(result);
+}
+
+function convertNalV2Element(
+  element: NalDesignElement,
+  groupAlign: NalGroupAlign,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  const converted = convertNalV2ElementBase(element, groupAlign, warnings);
+  return applyNalV2TransformToList(converted, element.transform, warnings);
+}
+
+function convertNalV2ElementBase(
+  element: NalDesignElement,
+  groupAlign: NalGroupAlign,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  switch (element.kind) {
+    case 'asset':
+      return parseNalAsset(element.file, {}, warnings).map((item) =>
+        applyNalGroupAlign(item, groupAlign),
+      );
+    case 'text':
+      return [applyNalGroupAlign(createNalV2TextElement(element), groupAlign)];
+    case 'ribbonText': {
+      const color = element.color ?? NAL_LINE_10_COLOR;
+      if (!element.color) {
+        warnings.add('nal-missing-color', `色带文本缺少颜色，已使用默认线路色。`);
+      }
+      return [
+        applyNalGroupAlign(
+          createMultilineTextElement(
+            [element.cn],
+            [element.en],
+            resolveNalV2TextAlign(element.align),
+            {
+              backgroundColor: color,
+              foregroundColor: resolveReadableForeground(color),
+            },
+          ),
+          groupAlign,
+        ),
+      ];
+    }
+    case 'exit': {
+      const color = element.color ?? NAL_EXIT_COLOR;
+      if (element.base === NAL_SUB_BAND_DIVIDER) {
+        return [
+          createLargeTextElement('·', 'none', {
+            backgroundColor: color,
+            foregroundColor: resolveReadableForeground(color),
+          }),
+        ];
+      }
+      if (element.base === 'sub@01.svg' || element.base === 'sub@02.svg') {
+        // 左 / 右站位在导视牌里没有对应概念，统一转成向上的出口图标（与 v1 一致）。
+        return [
+          createFacilityElement('exit', {
+            direction: 'up',
+            frameShape: 'rectangle',
+            frameFillMode: 'color',
+            frameFillColor: color,
+            foregroundColor: resolveReadableForeground(color),
+            backgroundColor: color,
+          }),
+        ];
+      }
+      warnings.add('nal-unknown-exit', `色带出口素材 ${element.base} 未能识别，已按普通素材转换。`);
+      return parseNalAsset(element.base, {}, warnings);
+    }
+    case 'tinted':
+      return parseNalAsset(element.base, {}, warnings).map((item) =>
+        applyNalV2Tint(item, element.color, element.content, warnings),
+      );
+    case 'lineBadge':
+      return [createNalV2LineBadgeElement(element, warnings)];
+    case 'column':
+      return convertNalV2ColumnElement(element, warnings);
+    case 'customSvg':
+      warnings.add(
+        'nal-custom-svg-skipped',
+        '自定义 SVG 素材无法参数化，已跳过；导入后可手动放置等价的图标或文本。',
+      );
+      return [];
+  }
+}
+
+function createNalV2TextElement(
+  element: NalDesignTextElement,
+): Extract<MetroWayfindingElement, { type: 'text' }> {
+  return createMultilineTextElement(element.cn, element.en, resolveNalV2TextAlign(element.align));
+}
+
+function resolveNalV2TextAlign(align: NalTextAlign): MetroWayfindingTextAlign {
+  return align === 'middle' ? 'center' : align === 'end' ? 'right' : 'left';
+}
+
+/** 着色素材：有 `content` 视为「彩色底 + 浅色/深色内容」，没有则只给图标本身着色。 */
+function applyNalV2Tint(
+  element: MetroWayfindingElement,
+  color: string | undefined,
+  content: 'light' | 'dark' | undefined,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement {
+  if (!color) {
+    warnings.add('nal-missing-color', '着色素材缺少颜色，已按当前模板的默认前景色转换。');
+    return element;
+  }
+  const contentColor =
+    content === 'light'
+      ? METRO_WAYFINDING_FOREGROUND
+      : content === 'dark'
+        ? CHITOSE_FOREGROUND
+        : resolveReadableForeground(color);
+  if (element.type === 'combination') {
+    return {
+      ...element,
+      frameFillMode: 'color',
+      frameFillColor: color,
+      backgroundColor: color,
+      foregroundColor: contentColor,
+    };
+  }
+  if (!content) return { ...element, foregroundColor: color };
+  return { ...element, backgroundColor: color, foregroundColor: contentColor };
+}
+
+function createNalV2LineBadgeElement(
+  element: Extract<NalDesignElement, { kind: 'lineBadge' }>,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingCombinationElement {
+  const color = element.color ?? NAL_LINE_10_COLOR;
+  if (!element.color) {
+    warnings.add('nal-missing-color', '自定义文字线路标缺少颜色，已使用默认线路色。');
+  }
+  const contentColor =
+    element.content === 'dark'
+      ? CHITOSE_FOREGROUND
+      : element.content === 'light'
+        ? METRO_WAYFINDING_FOREGROUND
+        : resolveReadableForeground(color);
+  return {
+    id: createMetroWayfindingId('combination-import'),
+    type: 'combination',
+    scale: METRO_WAYFINDING_COMBINATION_MAX_SCALE,
+    children: [
+      createMultilineTextElement([element.cn], [element.en], 'center', {
+        foregroundColor: contentColor,
+      }),
+    ],
+    // 用「背景填充 + 无外框」而不是「外框填充」：既保住整块线路色，
+    // 又不会被语义模式当成「色带组合框」拆成裸文本（见 isNalBandCombinationShape）。
+    frameFillMode: 'none',
+    frameStroke: false,
+    stripePosition: 'left',
+    backgroundColor: color,
+    foregroundColor: contentColor,
+  };
+}
+
+/**
+ * 纵向分栏 / 单层缩放：本模板没有「竖向容器」，只能把 `top` / `bottom` 按顺序摊平成一行，
+ * 上下分栏之间插一条分割线保持可读；`single-*`（单层缩放）只有 `top`。
+ */
+function convertNalV2ColumnElement(
+  element: Extract<NalDesignElement, { kind: 'column' }>,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  const convertChildren = (children: readonly NalDesignElement[]) =>
+    children.flatMap((child) => convertNalV2Element(child, element.align, warnings));
+  if (isNalDesignSingleColumnLayout(element.layout)) {
+    warnings.add(
+      'nal-column-flattened',
+      '单层缩放（single-*）没有对应的纵向容器，已按横向顺序摊平。',
+    );
+    return convertChildren(element.top);
+  }
+  warnings.add(
+    'nal-column-flattened',
+    '纵向分栏没有对应的竖向容器，已按「上半栏 → 分割线 → 下半栏」横向近似。',
+  );
+  const top = convertChildren(element.top);
+  const bottom = convertChildren(element.bottom);
+  // 只有一侧有内容时不必插入分割线（否则会出现首尾悬空的分隔）。
+  if (!top.length) return bottom;
+  if (!bottom.length) return top;
+  return [...top, createDividerElement(), ...bottom];
+}
+
+/** 收集元素引用到的素材文件名（用于判断经典 / 实验系列）。 */
+function collectNalV2ElementAssetNames(elements: readonly NalDesignElement[]): string[] {
+  const names: string[] = [];
+  const visit = (list: readonly NalDesignElement[]) => {
+    list.forEach((element) => {
+      switch (element.kind) {
+        case 'asset':
+          names.push(element.file);
+          break;
+        case 'exit':
+        case 'tinted':
+          names.push(element.base);
+          break;
+        case 'column':
+          visit(element.top);
+          visit(element.bottom);
+          break;
+        default:
+          break;
+      }
+    });
+  };
+  visit(elements);
+  return names;
+}
+
+function applyNalV2TransformToList(
+  elements: MetroWayfindingElement[],
+  transform: NalDesignTransform | undefined,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  if (!transform) return elements;
+  let applied = false;
+  const mapped = elements.map((element) => {
+    const next = applyNalV2TransformToElement(element, transform);
+    if (next) applied = true;
+    return next ?? element;
+  });
+  if (!applied) {
+    warnings.add(
+      'nal-transform-ignored',
+      '素材的翻转 / 旋转在本模板里没有对应表达（只有箭头与带方向的图标会跟着翻转），已忽略。',
+    );
+  }
+  return mapped;
+}
+
+function applyNalV2TransformToElement(
+  element: MetroWayfindingElement,
+  transform: NalDesignTransform,
+): MetroWayfindingElement | undefined {
+  if (transform.rotate) return undefined;
+  if (element.type === 'arrow') {
+    let iconId = element.iconId;
+    if (transform.flipH) iconId = NAL_ARROW_FLIP_H[iconId] ?? iconId;
+    if (transform.flipV) iconId = NAL_ARROW_FLIP_V[iconId] ?? iconId;
+    return iconId === element.iconId ? undefined : { ...element, iconId };
+  }
+  if (element.type === 'facility') {
+    if (!transform.flipH) return undefined;
+    if (element.direction !== 'left' && element.direction !== 'right') return undefined;
+    return {
+      ...element,
+      direction: element.direction === 'left' ? 'right' : 'left',
+    };
+  }
+  return undefined;
+}
+
+/**
+ * v2 墙面标志：整体视作**竖向导视牌**——`top` / `middle.layers` / `bottom` 按从上到下
+ * 叠放成竖向的一列，每个模块内部仍是一组横向元素（用组合框承载）。
+ */
+function parseNalWallDocumentV2(fileName: string, root: JsonObject): ParsedImportDocument {
+  const document = parseNalWallDesignV2(root, fileName);
+  const warnings = createWarningCollector();
+  if (document.boards.length > 1) {
+    warnings.add(
+      'nal-dual-board',
+      `工程包含 ${document.boards.length} 组模块，当前模板只能容纳一块导视牌，已只导入第一组。`,
+    );
+  }
+  const board = document.boards[0]!;
+  const modules: Array<{ elements: readonly NalDesignElement[]; scale: number }> = [
+    { elements: board.top, scale: 1 },
+    ...board.middle.layers.map((layer: NalDesignWallLayer) => ({
+      elements: layer.elements,
+      scale: layer.scale,
+    })),
+    { elements: board.bottom.elements, scale: board.bottom.scale },
+  ];
+  // 先把每个模块转换成「子元素列表」，拿到模块数之后再统一计算模块缩放，
+  // 保证「模块高度 × 模块数 + 模块间距」能放进竖向画布。
+  const convertedModules: Array<
+    | { kind: 'single'; element: MetroWayfindingCombinationElement }
+    | { kind: 'children'; children: MetroWayfindingCombinationChild[] }
+  > = [];
+  modules.forEach(({ elements, scale }) => {
+    // 逐元素按墙面模块的对齐方式转换；墙面标志只使用 asset / text，
+    // 转换出的组合框（着色线路标、嵌套分栏）在这里摊平成模块内的子元素。
+    const converted = elements.flatMap((element) =>
+      convertNalV2Element(element, board.align, warnings),
+    );
+    if (!converted.length) return;
+    if (scale > 1) {
+      warnings.add(
+        'nal-wall-scale',
+        '墙面标志的放大层级（scale 2 / 3）没有对应的高度倍数，已按单层高度导入。',
+      );
+    }
+    // 模块只有一个组合框时直接沿用（保留线路标的填充样式），否则包一层模块组合框。
+    if (converted.length === 1 && converted[0]!.type === 'combination') {
+      convertedModules.push({ kind: 'single', element: converted[0]! });
+      return;
+    }
+    const children = toNalWallCombinationChildren(converted);
+    if (children.length) convertedModules.push({ kind: 'children', children });
+  });
+  if (!convertedModules.length) {
+    throw new Error(`${fileName} 中没有可转换的墙面标志元素。`);
+  }
+  const moduleScale = resolveNalWallModuleScale(convertedModules.length);
+  const column: MetroWayfindingElement[] = convertedModules.map((module) =>
+    module.kind === 'single'
+      ? // 单个内层组合框：直接沿用，但把缩放压到模块缩放，避免底部被裁掉。
+        { ...module.element, scale: Math.min(module.element.scale, moduleScale) }
+      : createNalWallModuleElement(module.children, board.colors, moduleScale),
+  );
+  const canvasHeight = Math.max(1, column.length);
+  warnings.add(
+    'nal-wall-vertical',
+    '墙面标志已按竖向导视牌导入：模块从上到下叠放，模块底色取主色近似还原。',
+  );
+  return {
+    source: 'nal-wall',
+    sourceLabel: NAL_DESIGN_TOOL_LABELS.wall,
+    styleLabel: `墙面标志 · ${NAL_WALL_SIZE_LABELS[document.size]}`,
+    projectName: stripJsonExtension(fileName),
+    fileName,
+    canvasLength: canvasHeight,
+    canvas: {
+      widthM: NAL_V2_VERTICAL_WIDTH_M,
+      heightM: canvasHeight,
+      pxPerMeter: 128,
+      alignToTile: false,
+      tileSizePx: 128,
+    },
+    layoutMode: 'vertical',
+    rows: [column],
+    backgroundColor: board.colors.primary,
+    foregroundColor: resolveNalWallForeground(board.colors),
+    dividerBetweenRows: false,
+    warnings: warnings.values(),
+  };
+}
+
+/**
+ * 把模块内元素转成组合框子元素：组合框不能嵌套组合框，因此内层组合框摊平；
+ * 分割线在组合框里没有对应词表，直接略过（墙面标志本身不会产生分割线）。
+ */
+function toNalWallCombinationChildren(
+  elements: readonly MetroWayfindingElement[],
+): MetroWayfindingCombinationChild[] {
+  const children: MetroWayfindingCombinationChild[] = [];
+  for (const element of elements) {
+    if (element.type === 'divider') continue;
+    if (element.type === 'combination') {
+      children.push(...element.children);
+      continue;
+    }
+    children.push(element);
+  }
+  return children;
+}
+
+/** 一个墙面模块 = 组合框（横向元素组），底色取模块主色。 */
+function createNalWallModuleElement(
+  children: MetroWayfindingCombinationChild[],
+  colors: NalDesignWallDocument['boards'][number]['colors'],
+  scale: number,
+): MetroWayfindingCombinationElement {
+  return {
+    id: createMetroWayfindingId('combination-import'),
+    type: 'combination',
+    scale,
+    children,
+    frameFillMode: 'none',
+    frameStroke: false,
+    stripePosition: 'left',
+    backgroundColor: colors.primary,
+    foregroundColor: resolveNalWallForeground(colors),
+  };
+}
+
+/** 主色作底时，辅色对比度足够就用辅色作文本色，否则用黑白反差色。 */
+function resolveNalWallForeground(
+  colors: NalDesignWallDocument['boards'][number]['colors'],
+): string {
+  return contrastRatio(colors.secondary, colors.primary) >= 3
+    ? colors.secondary
+    : resolveReadableForeground(colors.primary);
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  if (foregroundLuminance === undefined || backgroundLuminance === undefined) return 0;
+  const lighter = Math.max(foregroundLuminance, backgroundLuminance);
+  const darker = Math.min(foregroundLuminance, backgroundLuminance);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function relativeLuminance(color: string): number | undefined {
+  const hex = color.trim().replace(/^#/u, '');
+  if (!/^[0-9a-f]{6}$/iu.test(hex)) return undefined;
+  const channels = [0, 2, 4].map(
+    (offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255,
+  );
+  const [red, green, blue] = channels.map((channel) =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  ) as [number, number, number];
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+/**
+ * v2 站名站牌：只有 `design` + `state`（与 URL 参数同名），没有可复用的元素列表。
+ * 按「站台站名标志」的内容结构还原：站名大文字 → 英文名 → 线路标 → 下一站。
+ */
+function parseNalStasignDocument(fileName: string, root: JsonObject): ParsedImportDocument {
+  const document = parseNalStasignDesign(root, fileName);
+  const warnings = createWarningCollector();
+  if (document.schemaVersion < NAL_DESIGN_SCHEMA_VERSION) {
+    warnings.add('nal-stasign-v1', '旧版（v1）站名站牌配置已按 v2 口径导入。');
+  }
+  const cn = pickNalStateString(document.state, ['cn', 'stationCn', 'station', 'name']);
+  const en = pickNalStateString(document.state, ['en', 'stationEn', 'pinyin', 'nameEn']);
+  const nextCn = pickNalStateString(document.state, ['nextCn', 'nextStation']);
+  const nextEn = pickNalStateString(document.state, ['nextEn', 'nextStationEn']);
+  const lineCode = pickNalStateString(document.state, ['lineColor', 'line', 'lineName']);
+  const secondLineCode = pickNalStateString(document.state, ['lineColor2']);
+  const isTerminus = document.state.isTerminus === true;
+  const column: MetroWayfindingElement[] = [];
+  if (cn) column.push(createLargeTextElement(cn, 'none'));
+  if (en) column.push(createTextElement('', en, 'center'));
+  if (lineCode) column.push(createNalStasignLineElement(lineCode, warnings));
+  if (secondLineCode && document.state.multiLine === true) {
+    column.push(createNalStasignLineElement(secondLineCode, warnings));
+  }
+  if (!isTerminus && (nextCn || nextEn)) {
+    column.push(createTextElement(nextCn || '下一站', nextEn || 'Next Station', 'center'));
+  }
+  if (!column.length) {
+    throw new Error(`${fileName} 中没有可转换的站名或线路信息。`);
+  }
+  warnings.add(
+    'nal-stasign-approximation',
+    '站名站牌只能还原站名、英文名、线路色与下一站信息；底版、字体和徽标等设计版式无法复现。',
+  );
+  return {
+    source: 'nal-stasign',
+    sourceLabel: NAL_DESIGN_TOOL_LABELS.stasign,
+    styleLabel: `站名站牌 · ${document.design}`,
+    projectName: stripJsonExtension(fileName),
+    fileName,
+    canvasLength: NAL_V2_VERTICAL_WIDTH_M,
+    canvas: {
+      widthM: NAL_V2_VERTICAL_WIDTH_M,
+      heightM: NAL_V2_VERTICAL_WIDTH_M,
+      pxPerMeter: 128,
+      alignToTile: false,
+      tileSizePx: 128,
+    },
+    layoutMode: 'vertical',
+    rows: [column],
+    backgroundColor: NAL_BACKGROUND,
+    foregroundColor: METRO_WAYFINDING_FOREGROUND,
+    dividerBetweenRows: false,
+    warnings: warnings.values(),
+  };
+}
+
+function pickNalStateString(
+  state: Readonly<Record<string, string | boolean>>,
+  keys: readonly string[],
+): string {
+  for (const key of keys) {
+    const value = state[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
+/**
+ * 站名站牌的线路标：`state.lineColor` 是线路色卡编号（`01`–`32`，与 `clss@NN` 同号段），
+ * 也接受 `#RRGGBB` 形式的直接色值。编号走已确证的 `nalRouteAssetMap`，不在这里另立映射。
+ */
+function createNalStasignLineElement(
+  code: string,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement {
+  const color = normalizeDirectNalColor(code);
+  if (color) {
+    // 直接给色值时没有线路名，还原成一条线路色带。
+    return {
+      id: createMetroWayfindingId('combination-import'),
+      type: 'combination',
+      scale: METRO_WAYFINDING_COMBINATION_MAX_SCALE,
+      children: [createSpaceElement('flex')],
+      frameFillMode: 'color',
+      frameFillColor: color,
+      frameStroke: false,
+      stripePosition: 'left',
+      backgroundColor: color,
+      foregroundColor: resolveReadableForeground(color),
+    };
+  }
+  const digitMatch = code.match(/^0*(\d{1,2})$/u);
+  if (digitMatch) {
+    const index = Number(digitMatch[1]);
+    const lineName = nalRouteAssetMap[`clss@${String(index).padStart(2, '0')}.svg`];
+    if (lineName) return scaleNalStasignLineBadge(createNalRouteElement(lineName, true));
+  }
+  const namedLine = nalLineColorMap[code] ? code : `${code}号线`;
+  if (nalLineColorMap[namedLine]) {
+    return scaleNalStasignLineBadge(createNalRouteElement(namedLine, true));
+  }
+  warnings.add(
+    'nal-unconfirmed-line',
+    `站名站牌的线路标识 ${code} 未能确证，已生成待确认的线路组合框，请在编辑器中补全线路号。`,
+  );
+  return createRouteCombinationElement('', '', '', NAL_LINE_10_COLOR, 'classic');
+}
+
+/** 站名牌上的线路标放大到满倍高，读起来更像站名牌上的线路色条。 */
+function scaleNalStasignLineBadge(element: MetroWayfindingElement): MetroWayfindingElement {
+  return element.type === 'combination'
+    ? {
+        ...element,
+        scale: METRO_WAYFINDING_COMBINATION_MAX_SCALE,
+        frameStroke: false,
+      }
+    : element;
+}
+
+function normalizeDirectNalColor(value: string): string | undefined {
+  const match = value.trim().match(/^#([0-9a-f]{6})$/iu);
+  return match ? `#${match[1]!.toUpperCase()}` : undefined;
 }
 
 function parseNalGroups(

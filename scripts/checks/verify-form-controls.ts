@@ -13,8 +13,9 @@
  *   3. 行布局类是否有单选语义版本，且标签侧能收缩。
  */
 import { readFileSync } from 'node:fs';
+import { readAppStyles } from './app-styles';
 
-const CSS = readFileSync(new URL('../../apps/web/app/globals.css', import.meta.url), 'utf8');
+const CSS = readAppStyles();
 const PANEL = readFileSync(
   new URL('../../apps/web/components/material-studio-panel.tsx', import.meta.url),
   'utf8',
@@ -96,10 +97,8 @@ check('字段集内单选行同样跨整行', /\.material-canvas-editor \.materi
 console.log('── 5. 使用方已改过来 ───────────────────────────');
 
 check(
-  '线路选择在单选模式下用 material-radio-row（不是永远 checkbox 行）',
-  /className=\{\s*usesSingleTransitLineSelection\s*\?\s*'material-radio-row'\s*:\s*'material-checkbox-row'\s*\}/.test(
-    PANEL,
-  ),
+  '线路选择在单选模式下用 RadioRow（不是永远 CheckboxRow）',
+  /const Row = usesSingleTransitLineSelection \? RadioRow : CheckboxRow;/.test(PANEL),
 );
 check(
   'dev/controls 有单选框回归场景（字段集内 + 超长标签）',

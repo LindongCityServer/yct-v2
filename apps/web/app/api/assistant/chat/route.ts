@@ -16,11 +16,24 @@ import {
   buildCurrentLocationPrompt,
   resolveCurrentPlayerLocation,
 } from '../../../../lib/assistant/current-location';
+import { isEasterEggQuery } from '../../../../lib/assistant/easter-egg';
+import {
+  buildAssistantIntentPrecheck,
+  classifyAssistantIntent,
+  isNearbyIntent,
+  shouldEnableTools,
+  shouldInjectCurrentLocation,
+  shouldInjectPageContext,
+  shouldInjectViewerProfile,
+  shouldRunAssistantRetrieval,
+  type AssistantIntentReference,
+} from '../../../../lib/assistant/intent';
 import { readQqAccountContext } from '../../../../lib/assistant/qq-account-context';
 import { buildViewerPrompt, resolveViewerProfile } from '../../../../lib/assistant/viewer-role';
 import { getAssistantProvider } from '../../../../lib/assistant/providers';
 import {
   buildAssistantRetrieval,
+  createEmptyAssistantRetrieval,
   type AssistantReference,
 } from '../../../../lib/assistant/retrieval';
 import { createAssistantTextFilter } from '../../../../lib/assistant/tool-syntax-filter';
@@ -44,6 +57,14 @@ const maximumToolRounds = 2;
 const maximumReferences = 12;
 /** 模型在回答末尾输出追问建议的标记；这里剥离后单独下发给前端。 */
 const followUpMarker = '[[followups]]';
+
+/** 正常流式回答与意图预检直出共用同一组 SSE 响应头。 */
+const assistantSseHeaders = {
+  'Content-Type': 'text/event-stream; charset=utf-8',
+  'Cache-Control': 'no-store, no-transform',
+  'X-Accel-Buffering': 'no',
+  'X-Robots-Tag': 'noindex',
+};
 
 interface ChatRequestBody {
   providerId?: unknown;
@@ -88,22 +109,56 @@ export async function POST(request: NextRequest) {
 
   const page = normalizePageContext(body.page);
   const channel = normalizeChannel(body.channel);
+  const isGroupChannel = channel === 'qq-group';
+  // 群聊请求当前不携带账号上下文；这里不读取网页登录态，也不解析账号位置。
+  const accountContext = isGroupChannel ? undefined : readQqAccountContext(request);
+  const [currentLocation, viewer] = isGroupChannel
+    ? [undefined, { role: 'guest' as const }]
+    : await Promise.all([
+        resolveCurrentPlayerLocation(request, accountContext),
+        resolveViewerProfile(request, accountContext),
+      ]);
+  const hasVerifiedAccount = viewer.role !== 'guest';
+  const hasAccountContext = Boolean(accountContext) || hasVerifiedAccount;
+  // 第 0 轮意图分类：只读当前问题，不读历史、不读账号对象，也不用于授权。
+  const intent = classifyAssistantIntent({
+    query: latestUserMessage.content,
+    channel,
+    hasAccountContext,
+    page,
+    highlights: page?.highlights,
+  });
+  const precheck = buildAssistantIntentPrecheck({
+    result: intent,
+    channel,
+    hasAccountContext,
+    hasVerifiedAccount,
+    hasLocation: Boolean(currentLocation),
+  });
+  if (precheck) {
+    return buildDirectAssistantReply(precheck.text, precheck.references, precheck.reasonCode);
+  }
+
   // 页面标题只用于提示词，不参与检索，避免“这个页面怎么用”召回同名的无关地点。
   const retrievalQuery = messages
     .filter((message) => message.role === 'user')
     .slice(-2)
     .map((message) => message.content)
     .join(' ');
-  const accountContext = readQqAccountContext(request);
-  const [currentLocation, viewer] = await Promise.all([
-    resolveCurrentPlayerLocation(request, accountContext),
-    resolveViewerProfile(request, accountContext),
-  ]);
-  const retrieval = await buildAssistantRetrieval(retrievalQuery, locale, {
-    pathname: page?.pathname,
-    highlights: page?.highlights,
-    currentLocation,
-  });
+  const includeCurrentLocation = shouldInjectCurrentLocation(intent, channel);
+  const includePageContext = shouldInjectPageContext(intent);
+  // 寒暄、服务器状态和身份问题不检索；彩蛋问法例外，保留原有的彩蛋资料。
+  const runRetrieval =
+    shouldRunAssistantRetrieval(intent) || isEasterEggQuery(latestUserMessage.content);
+  const retrieval = runRetrieval
+    ? await buildAssistantRetrieval(retrievalQuery, locale, {
+        pathname: includePageContext ? page?.pathname : undefined,
+        highlights: includePageContext ? page?.highlights : undefined,
+        currentLocation: includeCurrentLocation ? currentLocation : undefined,
+        currentLocationIntent: includeCurrentLocation,
+        nearbyIntent: isNearbyIntent(intent),
+      })
+    : createEmptyAssistantRetrieval();
   const baseSystemPrompt = buildAssistantSystemPrompt(locale);
   // 渠道提示放在工具规则之后，用来覆盖网页专属的 Markdown、引用编号和卡片格式。
   const channelPrompt = channel ? buildAssistantChannelPrompt(channel) : '';
@@ -122,12 +177,14 @@ export async function POST(request: NextRequest) {
     .trimEnd();
   // 时间、身份、页面与检索资料都属于会变化的内容，只拼进最后一条用户消息，
   // 系统提示与历史记录保持不变，模型的前缀缓存才能持续命中。
+  const viewerPrompt = shouldInjectViewerProfile(intent) ? buildViewerPrompt(viewer) : '';
+  const currentLocationPrompt = includeCurrentLocation
+    ? buildCurrentLocationPrompt(currentLocation)
+    : '';
   const contextBlock = buildAssistantContextBlock({
     retrieval,
-    page,
-    viewerPrompt: [buildViewerPrompt(viewer), buildCurrentLocationPrompt(currentLocation)]
-      .filter(Boolean)
-      .join('\n'),
+    page: includePageContext ? page : undefined,
+    viewerPrompt: [viewerPrompt, currentLocationPrompt].filter(Boolean).join('\n'),
   });
   const encoder = new TextEncoder();
   const abortController = new AbortController();
@@ -182,6 +239,11 @@ export async function POST(request: NextRequest) {
         generatedAt: retrieval.generatedAt,
         provider: provider.id,
         model,
+        routing: {
+          intent: intent.intent,
+          confidence: intent.confidence,
+          reasonCode: intent.reasonCode,
+        },
       });
 
       const providerMessages: AssistantProviderMessage[] = messages.map((message) => ({
@@ -200,8 +262,8 @@ export async function POST(request: NextRequest) {
         };
         break;
       }
-      const toolDefinitions = buildOpenAiToolDefinitions();
-      let toolsEnabled = true;
+      const toolDefinitions = buildOpenAiToolDefinitions(intent.toolHints);
+      let toolsEnabled = shouldEnableTools(intent);
       let round = 0;
       let finalFollowUps: string[] = [];
 
@@ -340,12 +402,43 @@ export async function POST(request: NextRequest) {
   });
 
   return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-store, no-transform',
-      'X-Accel-Buffering': 'no',
-      'X-Robots-Tag': 'noindex',
+    headers: assistantSseHeaders,
+  });
+}
+
+/**
+ * 意图预检的直出回答：仍然走 SSE，网页和 QQ 机器人不需要区分普通回答与预检。
+ * 这些句子是确定性文案，不调用模型，也不会编造账号数据。
+ */
+function buildDirectAssistantReply(
+  text: string,
+  references: AssistantIntentReference[],
+  reasonCode: string,
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (event: string, data: unknown) => {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      };
+      send('meta', {
+        references: references.map((reference, index) => ({ ...reference, id: index + 1 })),
+        sourceStatus: 'ready',
+        generatedAt: new Date().toISOString(),
+        routing: {
+          intent: 'precheck',
+          confidence: 'high',
+          reasonCode,
+        },
+      });
+      send('delta', { text });
+      send('done', { ok: true });
+      controller.close();
     },
+  });
+
+  return new Response(stream, {
+    headers: assistantSseHeaders,
   });
 }
 

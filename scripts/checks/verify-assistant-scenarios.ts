@@ -18,6 +18,12 @@ import {
 } from '../../apps/web/lib/assistant/chat';
 import { buildPlaceQueryCandidates } from '../../apps/web/lib/assistant/place-synonyms';
 import {
+  buildEasterEggContext,
+  isAssistantTeasingQuery,
+  isEasterEggQuery,
+  shouldIncludeEasterEggContext,
+} from '../../apps/web/lib/assistant/easter-egg';
+import {
   getMaterialWorkspaceGuide,
   resolveMaterialWorkspace,
   shouldStayInWorkspace,
@@ -919,6 +925,87 @@ console.log('── 15. QQ 聊天渠道提示 ───────────�
       !/https?:\/\//.test(groupPrompt) &&
       !/https?:\/\//.test(directPrompt),
   );
+}
+
+console.log('── 16. 意图层与位置资料衔接 ─────────────────────────');
+
+{
+  const fakeLocation = {
+    playerName: '测试玩家',
+    x: 12,
+    z: 34,
+    observedAt: '2026-11-19T00:00:00.000Z',
+    lastSeenAt: '2026-11-19T00:00:00.000Z',
+  };
+  const result = await buildAssistantRetrieval('离我最近的公交站有哪些', 'zh-CN', {
+    currentLocation: fakeLocation,
+    currentLocationIntent: true,
+    nearbyIntent: true,
+  });
+  const locationReference = result.references.find((reference) => reference.source === '当前位置');
+  check(
+    '意图层确认位置问题后，当前位置资料会进入检索结果',
+    Boolean(locationReference) && (locationReference?.snippet ?? '').includes('坐标 12, 34'),
+    JSON.stringify(locationReference),
+  );
+
+  const withoutLocation = await buildAssistantRetrieval('我在哪', 'zh-CN', {
+    currentLocationIntent: true,
+  });
+  const manualReference = withoutLocation.references.find(
+    (reference) => reference.source === '当前位置',
+  );
+  check(
+    '没有位置记录时给出地图手动定位入口',
+    manualReference?.href === '/map' && Boolean(manualReference?.snippet),
+    JSON.stringify(manualReference),
+  );
+
+  const withoutIntent = await buildAssistantRetrieval('离我最近的公交站有哪些', 'zh-CN', {
+    currentLocation: fakeLocation,
+    nearbyIntent: true,
+  });
+  check(
+    '没有意图确认时即使传入位置也不注入',
+    !withoutIntent.references.some((reference) => reference.source === '当前位置'),
+    JSON.stringify(withoutIntent.references.map((reference) => reference.source)),
+  );
+}
+
+console.log('── 17. 彩蛋与“守门员”自嘲 ─────────────────────────');
+
+{
+  const context = buildEasterEggContext();
+  check(
+    '彩蛋资料保留守门员原话',
+    context.includes('咱守门员干的') && context.includes('进的咱伙门'),
+  );
+  check('彩蛋资料给出自嘲边界', context.includes('不要拿玩笑当答错的借口'));
+
+  check(
+    '“你是谁”仍触发网页彩蛋',
+    isEasterEggQuery('你是谁') && shouldIncludeEasterEggContext('你是谁'),
+  );
+  check(
+    '回答质量玩笑不会弹出网页彩蛋',
+    !isEasterEggQuery('你答错了') && !isEasterEggQuery('你不太聪明'),
+  );
+  check(
+    '回答质量玩笑会进入服务端自嘲资料',
+    isAssistantTeasingQuery('你不太聪明') &&
+      isAssistantTeasingQuery('你答错了') &&
+      isAssistantTeasingQuery('这个回答有点离谱') &&
+      shouldIncludeEasterEggContext('你答错了'),
+  );
+  check(
+    '普通问题不误触发自嘲',
+    !isAssistantTeasingQuery('页面打不开') &&
+      !isAssistantTeasingQuery('170路末班几点') &&
+      !isAssistantTeasingQuery('你觉得我笨吗'),
+  );
+
+  const teaseResult = await buildAssistantRetrieval('你答错了', 'zh-CN');
+  check('检索层会把守门员资料带进回答质量玩笑的上下文', teaseResult.contextText.includes('守门员'));
 }
 
 console.log('');

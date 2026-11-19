@@ -2,6 +2,7 @@
  * 校验「工程转换预览 + 后台物料审核」的图形化预览契约。
  */
 import { readFileSync } from 'node:fs';
+import { readAppStyles } from './app-styles';
 const IMPORT_LIB = readFileSync(
   new URL('../../apps/web/lib/metro-wayfinding-import.ts', import.meta.url),
   'utf8',
@@ -14,7 +15,7 @@ const ADMIN = readFileSync(
   new URL('../../apps/web/components/admin-materials-panel.tsx', import.meta.url),
   'utf8',
 );
-const CSS = readFileSync(new URL('../../apps/web/app/globals.css', import.meta.url), 'utf8');
+const CSS = readAppStyles();
 let passed = 0;
 let failed = 0;
 function check(name: string, ok: boolean) {

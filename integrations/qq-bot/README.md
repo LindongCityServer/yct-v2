@@ -23,7 +23,9 @@
 - **回答配图**：运营内容引用带封面时，可在文字后补一张图片（需 `YCT_PUBLIC_BASE_URL` 和
   `QQ_BOT_IMAGES=1`），会占用一次被动回复。
 - **临东通绑定**：私聊 `/绑定` 生成一次性链接，`/我的绑定` 查询，`/解绑 确认` 解除；
-  群聊只提示私聊。需要 `LDPASS_API_BASE_URL` 和 `QQ_BOT_LINK_SECRET`。
+  群里 @机器人 `/绑定` 生成群专属链接，网页显示 6 位确认码后回群 `/确认 482913`；
+  群内也支持 `/我的绑定`、`/解绑 确认`，只影响当前群。需要 `LDPASS_API_BASE_URL` 和
+  `QQ_BOT_LINK_SECRET`；群绑定链接需要 QQ 开放平台的链接/URL 权限，否则可能报 `40054010`。
 - **账号上下文**：配置 `QQ_BOT_CONTEXT_SECRET`（与网页 `YCT_QQ_CONTEXT_SECRET` 一致）后，
   私聊问一问会自动带入绑定的临东通账号，用于当前位置和 Wiki 玩家资料。
 
@@ -102,6 +104,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -NodePat
 | `src/answer.mjs`           | Markdown 转 QQ 纯文本、表格转列表、按句取舍、分段            |
 | `src/bot.mjs`              | 事件处理、去重、限流、被动回复序号、对话上下文               |
 | `src/commands.mjs`         | 本地快捷指令分发                                             |
+| `src/group-link.mjs`       | 群绑定 token 内存缓存、URL token 与确认码解析                |
 | `src/card-render.mjs`      | 卡片封面/二维码预处理和本地 PNG 渲染                         |
 | `src/card-renderer.mjs`    | 由网页卡片源码生成的本地渲染器，更新卡片后同步重建           |
 | `assets/`                  | 字体、品牌图标和格纸模板，由 `qqbot:card:assets` 同步        |

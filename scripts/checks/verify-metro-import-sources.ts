@@ -63,6 +63,7 @@ import {
 } from '../../apps/web/lib/metro-wayfinding-import';
 import {
   resolveMetroLargeTextSuffixes,
+  resolveMetroWayfindingVerticalLayoutSizing,
   splitMetroLargeTextRuns,
 } from '../../apps/web/lib/metro-wayfinding';
 
@@ -1408,6 +1409,616 @@ for (const asset of ['clss@10.svg', 'line@12.svg']) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// 15. NaL v2（schemaVersion 2）：导向标志 / 墙面标志 / 站名站牌
+// ---------------------------------------------------------------------------
+console.log('\n── 15. NaL v2 格式 ────────────────────────────');
+
+function previewNalV2(value: unknown) {
+  return parseMetroWayfindingImportFiles([
+    { name: 'nal-v2.json', size: JSON.stringify(value).length, text: JSON.stringify(value) },
+  ]);
+}
+
+function expectThrow(run: () => unknown): string {
+  try {
+    run();
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  return '';
+}
+
+function elementRowValues(element: unknown): string[] {
+  if (typeof element !== 'object' || element === null) return [];
+  const rows = (element as { rows?: unknown }).rows;
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row) => {
+    const record = row as { kind?: string; value?: string; segments?: Array<{ value?: string }> };
+    return record.kind === 'main'
+      ? (record.segments ?? []).map((segment) => segment.value ?? '').join('')
+      : (record.value ?? '');
+  });
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Vitool({ groups: [[nalV2Group([nalV2Text('西直门', 'Xizhimen')])]] }),
+  );
+  check(
+    'v2 导向标志：识别来源并保留画布长度',
+    preview.source === 'nal-vitool' &&
+      preview.canvas.widthM === 6 &&
+      preview.canvas.heightM === 1 &&
+      preview.layout.mode === 'single',
+    preview.canvas,
+  );
+  check(
+    'v2 导向标志：文本框按 layout 生成中文主行 + 英文副行',
+    JSON.stringify(elementRowValues(preview.layout.rows[0]![0])) ===
+      JSON.stringify(['西直门', 'Xizhimen']),
+    preview.layout.rows[0]![0],
+  );
+}
+
+{
+  const layoutA = previewNalV2(
+    createNalV2Vitool({
+      groups: [
+        [
+          nalV2Group([
+            {
+              kind: 'text',
+              layout: 'A',
+              align: 'middle',
+              cn: ['西直门'],
+              en: ['Xizhimen', 'Xizhimen Stn'],
+            },
+          ]),
+        ],
+      ],
+    }),
+  );
+  const element = layoutA.layout.rows[0]![0];
+  check(
+    'v2 文本 A 版式：1 中 + 2 英共 3 行，middle 转居中',
+    JSON.stringify(elementRowValues(element)) ===
+      JSON.stringify(['西直门', 'Xizhimen', 'Xizhimen Stn']) &&
+      element?.type === 'text' &&
+      element.align === 'center',
+    element,
+  );
+}
+
+{
+  const layoutC = previewNalV2(
+    createNalV2Vitool({
+      groups: [
+        [
+          nalV2Group([
+            {
+              kind: 'text',
+              layout: 'C',
+              align: 'end',
+              cn: ['西直门', '西直门站'],
+              en: ['Xizhimen', 'Xizhimen Station'],
+            },
+          ]),
+        ],
+      ],
+    }),
+  );
+  const element = layoutC.layout.rows[0]![0];
+  check(
+    'v2 文本 C 版式：2 中 + 2 英共 4 行，end 转右对齐',
+    JSON.stringify(elementRowValues(element)) ===
+      JSON.stringify(['西直门', '西直门站', 'Xizhimen', 'Xizhimen Station']) &&
+      element?.type === 'text' &&
+      element.align === 'right',
+    element,
+  );
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Vitool({
+      rows: 2,
+      grouping: true,
+      groups: [
+        [nalV2Group([nalV2Text('第一层', 'Level 1')])],
+        [nalV2Group([nalV2Text('第二层', 'Level 2')])],
+      ],
+    }),
+  );
+  check(
+    'v2 双层画板：导入为双行 + 行间分割线',
+    preview.layout.mode === 'double' &&
+      preview.layout.dividerBetweenRows === true &&
+      preview.canvas.heightM === 2 &&
+      preview.layout.rows.length === 2,
+    preview.layout,
+  );
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Vitool({
+      groups: [[nalV2Group([nalV2Text('第一画板', 'First')])]],
+      boards: [
+        { rows: [{ groups: [nalV2Group([nalV2Text('第一画板', 'First')])] }] },
+        { rows: [{ groups: [nalV2Group([nalV2Text('第二画板', 'Second')])] }] },
+      ],
+    }),
+  );
+  check(
+    'v2 双画板：只导入第一个画板并提示',
+    elementRowValues(preview.layout.rows[0]![0])[0] === '第一画板' &&
+      preview.warnings.some((warning) => warning.code === 'nal-dual-board'),
+    preview.warnings,
+  );
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Vitool({
+      groups: [
+        [
+          nalV2Group([
+            nalV2Asset('way@03.svg'),
+            nalV2Asset('way@05.svg', { transform: { flipV: true } }),
+            nalV2Asset('way@04.svg', { transform: { flipH: true } }),
+          ]),
+        ],
+      ],
+    }),
+  );
+  const row = preview.layout.rows[0]!;
+  check(
+    'v2 素材 + 变换：way@03 → 西、way@05 + flipV → 南、way@04 + flipH → 西',
+    row[0]?.type === 'arrow' &&
+      row[0].iconId === 'west' &&
+      row[1]?.type === 'arrow' &&
+      row[1].iconId === 'south' &&
+      row[2]?.type === 'arrow' &&
+      row[2].iconId === 'west',
+    row,
+  );
+  check(
+    'v2 素材 + 变换：箭头翻转不产生「无法还原」告警',
+    !preview.warnings.some((warning) => warning.code === 'nal-transform-ignored'),
+    preview.warnings,
+  );
+}
+
+{
+  const document = createNalV2Vitool({
+    groups: [
+      [
+        nalV2Group([
+          {
+            kind: 'lineBadge',
+            cn: '机场线',
+            en: 'Airport Express',
+            color: '#a29bbb',
+            content: 'light',
+          },
+        ]),
+      ],
+    ],
+  });
+  const preview = previewNalV2(document);
+  const badge = preview.layout.rows[0]![0];
+  check(
+    'v2 自定义文字线路标：彩色组合框 + 浅色文本',
+    badge?.type === 'combination' &&
+      badge.backgroundColor === '#A29BBB' &&
+      badge.foregroundColor === '#FFFFFF' &&
+      badge.children.length === 1,
+    badge,
+  );
+  const semantic = resolveMetroWayfindingImportPreview(preview, 'semantic').layout.rows[0]![0];
+  check(
+    'v2 自定义文字线路标：仅语义模式仍保留组合框与底色',
+    semantic?.type === 'combination' && semantic.backgroundColor === '#A29BBB',
+    semantic,
+  );
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Vitool({
+      groups: [
+        [
+          nalV2Group([
+            { kind: 'exit', base: 'sub@01.svg', color: '#009f3c' },
+            { kind: 'exit', base: 'sub@03.svg', color: '#78848b' },
+          ]),
+        ],
+      ],
+    }),
+  );
+  const row = preview.layout.rows[0]!;
+  check(
+    'v2 色带出口：sub@01 → 出口图标，sub@03 → 分隔点',
+    row[0]?.type === 'facility' &&
+      row[0].iconId === 'exit' &&
+      row[0].backgroundColor === '#009F3C' &&
+      row[1]?.type === 'largeText' &&
+      row[1].value === '·',
+    row,
+  );
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Vitool({
+      groups: [
+        [
+          nalV2Group([
+            { kind: 'tinted', base: 'stn@01.svg', color: '#00a0e9', content: 'light' },
+            { kind: 'tinted', base: 'way@05.svg', color: '#e6007e' },
+          ]),
+        ],
+      ],
+    }),
+  );
+  const row = preview.layout.rows[0]!;
+  check(
+    'v2 着色图标：彩色底 + 浅色内容 / 仅着色前景',
+    row[0]?.type === 'facility' &&
+      row[0].backgroundColor === '#00A0E9' &&
+      row[0].foregroundColor === '#FFFFFF' &&
+      row[1]?.type === 'arrow' &&
+      row[1].foregroundColor === '#E6007E' &&
+      row[1].backgroundColor === undefined,
+    row,
+  );
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Vitool({
+      groups: [
+        [
+          nalV2Group([
+            {
+              kind: 'ribbonText',
+              cn: '2号线',
+              en: 'Line 2',
+              align: 'middle',
+              color: '#006098',
+            },
+          ]),
+        ],
+      ],
+    }),
+  );
+  const element = preview.layout.rows[0]![0];
+  check(
+    'v2 色带文本：色带色作背景、文本居中',
+    element?.type === 'text' &&
+      element.backgroundColor === '#006098' &&
+      element.align === 'center' &&
+      JSON.stringify(elementRowValues(element)) === JSON.stringify(['2号线', 'Line 2']),
+    element,
+  );
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Vitool({
+      groups: [
+        [
+          nalV2Group([
+            {
+              kind: 'column',
+              layout: 'equal',
+              align: 'left',
+              top: [nalV2Text('上栏', 'Top')],
+              bottom: [nalV2Text('下栏', 'Bottom')],
+            },
+          ]),
+        ],
+      ],
+    }),
+  );
+  const row = preview.layout.rows[0]!;
+  check(
+    'v2 纵向分栏：摊平为「上栏 → 分割线 → 下栏」并提示',
+    row.map((element) => element.type).join(',') === 'text,divider,text' &&
+      preview.warnings.some((warning) => warning.code === 'nal-column-flattened'),
+    row,
+  );
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Vitool({
+      groups: [
+        [nalV2Group([nalV2Text('保留', 'Keep'), { kind: 'customSvg', asset: 'svg-60137a19' }])],
+      ],
+      assets: { 'svg-60137a19': { mime: 'image/svg+xml', content: '<svg/>' } },
+    }),
+  );
+  check(
+    'v2 自定义 SVG：跳过并提示，其余元素照常导入',
+    preview.layout.rows[0]!.length === 1 &&
+      preview.warnings.some((warning) => warning.code === 'nal-custom-svg-skipped'),
+    preview.warnings,
+  );
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Vitool({
+      theme: 'C',
+      groups: [[nalV2Group([nalV2Text('配色', 'Theme')])]],
+    }),
+  );
+  check(
+    'v2 配色 C / D：降级为 A / B 底色并提示',
+    preview.layout.backgroundColor === '#092F52' &&
+      preview.warnings.some((warning) => warning.code === 'nal-theme-downgraded'),
+    preview.layout.backgroundColor,
+  );
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Vitool({
+      length: null,
+      groups: [[nalV2Group([nalV2Text('自动', 'Auto')])]],
+    }),
+  );
+  check(
+    'v2 自动尺寸（length: null）：按 8 格画布导入并提示',
+    preview.canvas.widthM === 8 &&
+      preview.warnings.some((warning) => warning.code === 'nal-auto-size'),
+    preview.canvas,
+  );
+}
+
+{
+  const message = expectThrow(() => previewNalV2({ ...createNalV2Vitool({}), schemaVersion: 3 }));
+  check(
+    'v2 版本闸门：schemaVersion 3 拒绝并提示升级',
+    message.includes('v3') && message.includes('升级'),
+    message,
+  );
+}
+
+{
+  const colorMessage = expectThrow(() =>
+    previewNalV2(
+      createNalV2Vitool({
+        groups: [
+          [nalV2Group([{ kind: 'ribbonText', cn: 'A', en: 'B', align: 'start', color: 'red' }])],
+        ],
+      }),
+    ),
+  );
+  check(
+    'v2 校验：颜色错误带元素路径',
+    colorMessage.includes('boards[0].rows[0].groups[0].elements[0].color') &&
+      colorMessage.includes('#RRGGBB'),
+    colorMessage,
+  );
+
+  const assetMessage = expectThrow(() =>
+    previewNalV2(
+      createNalV2Vitool({
+        groups: [[nalV2Group([nalV2Asset('../way@01.svg')])]],
+      }),
+    ),
+  );
+  check(
+    'v2 校验：素材文件名无效带元素路径',
+    assetMessage.includes('boards[0].rows[0].groups[0].elements[0].file') &&
+      assetMessage.includes('素材文件名无效'),
+    assetMessage,
+  );
+
+  const kindMessage = expectThrow(() =>
+    previewNalV2(createNalV2Vitool({ groups: [[nalV2Group([{ kind: 'unknown-kind' }])]] })),
+  );
+  check(
+    'v2 校验：未知元素类型带元素路径',
+    kindMessage.includes('boards[0].rows[0].groups[0].elements[0].kind') &&
+      kindMessage.includes('未知的元素类型'),
+    kindMessage,
+  );
+
+  const snapshotMessage = expectThrow(() =>
+    previewNalV2(
+      createNalV2Vitool({
+        groups: [[nalV2Group([{ kind: 'customSvg', asset: 'missing-snapshot' }])]],
+      }),
+    ),
+  );
+  check(
+    'v2 校验：customSvg 引用不存在的快照',
+    snapshotMessage.includes('boards[0].rows[0].groups[0].elements[0].asset') &&
+      snapshotMessage.includes('不存在'),
+    snapshotMessage,
+  );
+}
+
+{
+  const message = expectThrow(() =>
+    previewNalV2({ type: 'nalstaline', schemaVersion: 2, boards: [] }),
+  );
+  check(
+    '未支持的 NaL 工具类型：给出专属提示而不是「格式不支持」',
+    message.includes('nalstaline') && message.includes('站名站牌'),
+    message,
+  );
+}
+
+{
+  const doc = createNalV2Vitool({ groups: [[nalV2Group([nalV2Text('A', 'B')])]] });
+  const message = expectThrow(() =>
+    parseMetroWayfindingImportFiles([
+      { name: 'a.json', size: JSON.stringify(doc).length, text: JSON.stringify(doc) },
+      { name: 'b.json', size: JSON.stringify(doc).length, text: JSON.stringify(doc) },
+    ]),
+  );
+  check('NaL v2 一次只能导入一个工程文件', message.includes('逐个导入'), message);
+}
+
+console.log('\n── 15.1 墙面标志 v2（竖向导视牌）──────────────');
+
+{
+  const preview = previewNalV2(createNalV2Wall());
+  check(
+    '墙面标志：按竖向版式导入，宽度 4 米',
+    preview.source === 'nal-wall' &&
+      preview.layout.mode === 'vertical' &&
+      preview.canvas.widthM === 4 &&
+      preview.layout.rows.length === 1,
+    preview.canvas,
+  );
+  const column = preview.layout.rows[0]!;
+  check(
+    '墙面标志：模块从上到下叠放为组合框',
+    column.length === 2 && column.every((element) => element.type === 'combination'),
+    column.map((element) => element.type),
+  );
+  const module = column[0];
+  check(
+    '墙面标志：模块底色取主色、辅色对比度不足时用反差色作文本',
+    module?.type === 'combination' &&
+      module.backgroundColor === '#0C2F54' &&
+      module.foregroundColor === '#FFFFFF',
+    module,
+  );
+  check(
+    '墙面标志：画布高度 = 非空模块数',
+    preview.canvas.heightM === column.length && preview.canvas.heightM === 2,
+    preview.canvas,
+  );
+  const sizing = resolveMetroWayfindingVerticalLayoutSizing(
+    column,
+    preview.canvas.heightM * preview.canvas.pxPerMeter,
+  );
+  check(
+    '墙面标志：模块高度 + 间距不超过竖向画布（底部不被裁切）',
+    !sizing.isHeightInsufficient && sizing.totalDisplayHeight <= preview.canvas.heightM * 128,
+    sizing,
+  );
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Wall({
+      boards: [
+        createNalV2WallBoard({
+          middle: {
+            layers: [
+              { scale: 2, align: 'center', elements: [nalV2Text('放大', 'Scale')] },
+              { scale: 1, align: 'auto', elements: [] },
+            ],
+          },
+        }),
+      ],
+    }),
+  );
+  check(
+    '墙面标志：放大层级（scale 2）提示按单层高度导入',
+    preview.warnings.some((warning) => warning.code === 'nal-wall-scale'),
+    preview.warnings,
+  );
+}
+
+{
+  const preview = previewNalV2(
+    createNalV2Wall({ boards: [createNalV2WallBoard(), createNalV2WallBoard()] }),
+  );
+  check(
+    '墙面标志双模块：只导入第一组并提示',
+    preview.warnings.some((warning) => warning.code === 'nal-dual-board'),
+    preview.warnings,
+  );
+}
+
+{
+  const message = expectThrow(() =>
+    previewNalV2({
+      type: 'nalwall',
+      sizeMode: 'long',
+      mode: 'A',
+      dualBoard: false,
+      canvases: {},
+      definitions: {},
+    }),
+  );
+  check(
+    '旧版墙面标志（无 schemaVersion）：提示改用 v2 重新导出',
+    message.includes('墙面标志') && message.includes('v2'),
+    message,
+  );
+}
+
+console.log('\n── 15.2 站名站牌 v2（竖向还原）───────────────');
+
+{
+  const preview = previewNalV2(
+    createNalV2Stasign({
+      cn: '西直门',
+      en: 'Xizhimen',
+      lineColor: '02',
+      nextCn: '积水潭',
+      nextEn: 'Jishuitan',
+    }),
+  );
+  const column = preview.layout.rows[0]!;
+  check(
+    '站名站牌：竖向导入「站名 / 英文名 / 线路标 / 下一站」',
+    preview.source === 'nal-stasign' &&
+      preview.layout.mode === 'vertical' &&
+      column.map((element) => element.type).join(',') === 'largeText,text,combination,text',
+    column.map((element) => element.type),
+  );
+  const lineBadge = column[2];
+  check(
+    '站名站牌：lineColor = 02 按 clss@02 → 2 号线路标',
+    lineBadge?.type === 'combination' &&
+      lineBadge.children.some((child) => child.type === 'largeText' && child.value === '2'),
+    lineBadge,
+  );
+  check(
+    '站名站牌：站名进入大文字、英文名进入副文本',
+    column[0]?.type === 'largeText' &&
+      column[0].value === '西直门' &&
+      JSON.stringify(elementRowValues(column[1])) === JSON.stringify(['', 'Xizhimen']),
+    column,
+  );
+  check(
+    '站名站牌：仅语义模式不抹掉线路色',
+    resolveMetroWayfindingImportPreview(preview, 'semantic').layout.rows[0]![2]?.type ===
+      'combination',
+  );
+}
+
+{
+  const preview = previewNalV2({
+    type: 'nalstasign',
+    version: 1,
+    design: 'beijing',
+    state: { cn: '西直门', en: 'Xizhimen' },
+  });
+  check(
+    '站名站牌 v1（version: 1）可导入并提示已按 v2 口径处理',
+    preview.layout.rows[0]![0]?.type === 'largeText' &&
+      preview.warnings.some((warning) => warning.code === 'nal-stasign-v1'),
+    preview.warnings,
+  );
+}
+
+{
+  const message = expectThrow(() => previewNalV2(createNalV2Stasign({})));
+  check('站名站牌：没有任何站名 / 线路信息时拒绝导入', message.includes('没有可转换'), message);
+}
+
 console.log(`\n${passed}/${passed + failed} 通过`);
 if (failed) process.exit(1);
 
@@ -1485,5 +2096,105 @@ function createTextDefinition(input: {
     flipV: false,
     type: 'text',
     ...(input.extra ?? {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// NaL v2 夹具：严格按 `docs/json-format-v2.md` 的结构构造。
+// ---------------------------------------------------------------------------
+
+function nalV2Group(elements: unknown[], align = 'left') {
+  return { align, elements };
+}
+
+function nalV2Text(cn: string, en: string, extra: Record<string, unknown> = {}) {
+  return { kind: 'text', layout: 'single', align: 'start', cn: [cn], en: [en], ...extra };
+}
+
+function nalV2Asset(file: string, extra: Record<string, unknown> = {}) {
+  return { kind: 'asset', file, ...extra };
+}
+
+interface NalV2VitoolOptions {
+  theme?: string;
+  rows?: 1 | 2;
+  length?: number | null;
+  grouping?: boolean;
+  groups?: Array<Array<{ align: string; elements: unknown[] }>>;
+  boards?: unknown[];
+  assets?: Record<string, unknown>;
+}
+
+/** 按 v2 导向标志结构（theme/canvas/grouping/boards/assets）构造工程。 */
+function createNalV2Vitool(options: NalV2VitoolOptions = {}) {
+  const groups = options.groups ?? [[nalV2Group([])]];
+  const boards = options.boards ?? [
+    {
+      rows: groups.map((rowGroups) => ({ groups: rowGroups })),
+    },
+  ];
+  return {
+    type: 'nalvitool',
+    schemaVersion: 2,
+    exportedAt: '2026-11-19T06:35:38.000Z',
+    app: { name: 'NaL Vitool', version: '4.0.0' },
+    theme: options.theme ?? 'A',
+    canvas: {
+      rows: options.rows ?? 1,
+      length: options.length === undefined ? 6 : options.length,
+    },
+    grouping: options.grouping ?? false,
+    boards,
+    ...(options.assets ? { assets: options.assets } : {}),
+  };
+}
+
+interface NalV2WallBoardOptions {
+  colors?: { primary: string; secondary: string };
+  align?: string;
+  top?: { elements: unknown[] };
+  middle?: { layers: Array<{ scale: number; align: string; elements: unknown[] }> };
+  bottom?: { scale: number; elements: unknown[] };
+}
+
+/** 按 v2 墙面标志的单个「模块组」结构构造（top / middle.layers / bottom）。 */
+function createNalV2WallBoard(options: NalV2WallBoardOptions = {}) {
+  return {
+    colors: options.colors ?? { primary: '#0C2F54', secondary: '#1D5784' },
+    align: options.align ?? 'left',
+    top: options.top ?? { elements: [nalV2Asset('way@03.svg')] },
+    middle: options.middle ?? {
+      layers: [
+        { scale: 1, align: 'auto', elements: [nalV2Text('西直门', 'Xizhimen')] },
+        { scale: 1, align: 'auto', elements: [] },
+        { scale: 1, align: 'auto', elements: [] },
+        { scale: 1, align: 'auto', elements: [] },
+        { scale: 1, align: 'auto', elements: [] },
+      ],
+    },
+    bottom: options.bottom ?? { scale: 1, elements: [] },
+  };
+}
+
+function createNalV2Wall(options: { size?: string; boards?: unknown[] } = {}) {
+  return {
+    type: 'nalwall',
+    schemaVersion: 2,
+    exportedAt: '2026-11-19T06:35:38.000Z',
+    app: { name: 'NaL Vitool', version: '4.0.0' },
+    size: options.size ?? 'long',
+    boards: options.boards ?? [createNalV2WallBoard()],
+  };
+}
+
+function createNalV2Stasign(state: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+  return {
+    type: 'nalstasign',
+    schemaVersion: 2,
+    exportedAt: '2026-11-19T06:35:38.000Z',
+    app: { name: 'NaL Vitool', version: '4.0.0' },
+    design: 'beijing-outer1',
+    state,
+    ...extra,
   };
 }

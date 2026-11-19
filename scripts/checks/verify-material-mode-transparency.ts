@@ -19,9 +19,9 @@
  *     ——本修复因此不会被打回去；反过来，若有人把 `.module-panel` 塞进那条退路，
  *     修复就会静默失效，所以脚本里留了反向哨兵。
  */
-import { readFileSync } from 'node:fs';
+import { readAppStyles } from './app-styles';
 
-const CSS = readFileSync(new URL('../../apps/web/app/globals.css', import.meta.url), 'utf8');
+const CSS = readAppStyles();
 
 let passed = 0;
 let failed = 0;

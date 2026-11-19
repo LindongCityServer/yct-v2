@@ -11,9 +11,17 @@ import { randomInteger, rollDice } from './random.mjs';
 import { fetchWeather } from './weather.mjs';
 import { getBotVersion } from './version.mjs';
 import { QqLinkClient } from './ldpass-link.mjs';
+import {
+  extractTokenFromUrl,
+  GroupLinkTokenStore,
+  isConfirmCode,
+  normalizeConfirmCode,
+} from './group-link.mjs';
 
 const dataDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'data');
 const dataCache = new Map();
+const groupTokenStores = new WeakMap();
+let fallbackGroupTokenStore = null;
 
 function loadMap(name) {
   if (!dataCache.has(name)) {
@@ -67,6 +75,7 @@ const commandAliases = new Map([
   ['绑定', 'bind'],
   ['绑定qq', 'bind'],
   ['我的绑定', 'mylink'],
+  ['确认', 'confirm'],
   ['解绑', 'unlink'],
   ['解除绑定', 'unlink'],
   ['关于', 'about'],
@@ -116,8 +125,10 @@ export async function handleCommand({
   couplet = makeCouplet,
   ipLookup = lookupIp,
   history = fetchTodayHistory,
+  groupTokens,
+  linkClient,
 }) {
-  const raw = String(text ?? '').trim();
+  const raw = normalizeCommandText(text);
   const parsed = raw.startsWith('/') ? parseSlashCommand(raw) : parseNaturalCommand(raw);
   if (!parsed) {
     return { handled: false };
@@ -159,13 +170,24 @@ export async function handleCommand({
         };
       }
       case 'bind': {
+        if (context?.kind === 'group') {
+          return handleGroupBind({
+            config,
+            fetchImpl,
+            logger,
+            context,
+            args,
+            groupTokens,
+            linkClient,
+          });
+        }
         if (context?.kind !== 'c2c') {
           return {
             handled: true,
             reply: 'QQ 绑定只能在私聊完成，请私聊机器人发送 /绑定。',
           };
         }
-        const client = createLinkClient(config, fetchImpl, logger);
+        const client = linkClient ?? createLinkClient(config, fetchImpl, logger);
         if (!client.enabled) {
           return {
             handled: true,
@@ -194,14 +216,41 @@ export async function handleCommand({
           ].join('\n'),
         };
       }
+      case 'confirm': {
+        if (context?.kind === 'group') {
+          return handleGroupConfirm({
+            config,
+            fetchImpl,
+            logger,
+            context,
+            args,
+            groupTokens,
+            linkClient,
+          });
+        }
+        return {
+          handled: true,
+          reply: '群绑定确认需要在群里 @我 发送 /确认 6 位确认码。',
+        };
+      }
       case 'mylink': {
+        if (context?.kind === 'group') {
+          return handleGroupMyLink({
+            config,
+            fetchImpl,
+            logger,
+            context,
+            groupTokens,
+            linkClient,
+          });
+        }
         if (context?.kind !== 'c2c') {
           return {
             handled: true,
             reply: '请私聊机器人发送 /我的绑定。',
           };
         }
-        const client = createLinkClient(config, fetchImpl, logger);
+        const client = linkClient ?? createLinkClient(config, fetchImpl, logger);
         if (!client.enabled) {
           return { handled: true, reply: 'QQ 绑定功能还没有配置完成，请联系管理员。' };
         }
@@ -214,6 +263,16 @@ export async function handleCommand({
         };
       }
       case 'unlink': {
+        if (context?.kind === 'group') {
+          return handleGroupUnlink({
+            config,
+            fetchImpl,
+            logger,
+            context,
+            args,
+            linkClient,
+          });
+        }
         if (context?.kind !== 'c2c') {
           return {
             handled: true,
@@ -226,7 +285,7 @@ export async function handleCommand({
             reply: '解绑会断开 QQ 和临东通账号的关联。确认请发送：/解绑 确认',
           };
         }
-        const client = createLinkClient(config, fetchImpl, logger);
+        const client = linkClient ?? createLinkClient(config, fetchImpl, logger);
         if (!client.enabled) {
           return { handled: true, reply: 'QQ 绑定功能还没有配置完成，请联系管理员。' };
         }
@@ -786,6 +845,315 @@ function createLinkClient(config, fetchImpl, logger) {
   });
 }
 
+function groupLinkClient(config, fetchImpl, logger, linkClient) {
+  return linkClient ?? createLinkClient(config, fetchImpl, logger);
+}
+
+/** bot 进程只创建一个缓存；直接调用 handleCommand 时按 config 复用，避免测试互相污染。 */
+function groupLinkStore(config, groupTokens) {
+  if (groupTokens) {
+    return groupTokens;
+  }
+  if (config && typeof config === 'object') {
+    let store = groupTokenStores.get(config);
+    if (!store) {
+      store = new GroupLinkTokenStore({
+        ttlMs: config?.link?.groupTokenTtlMs,
+        maxEntries: config?.link?.groupTokenCacheMax,
+      });
+      groupTokenStores.set(config, store);
+    }
+    return store;
+  }
+  fallbackGroupTokenStore ??= new GroupLinkTokenStore();
+  return fallbackGroupTokenStore;
+}
+
+function groupLinkEnabled(config) {
+  return config?.link?.groupEnabled !== false;
+}
+
+/**
+ * 群绑定身份只取事件里的 group_openid 和 author.member_openid。
+ * 这里故意不回退 context.userId，也不解析命令文本里的任何 openid。
+ */
+function groupLinkIdentity(context) {
+  return {
+    groupOpenId: firstString(context?.groupId, context?.groupOpenId, context?.groupOpenid),
+    memberOpenId: firstString(context?.memberOpenId, context?.memberOpenid, context?.member_openid),
+  };
+}
+
+function firstString(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return '';
+}
+
+function groupLinkDisabledReply() {
+  return { handled: true, reply: '群聊绑定功能暂未开启，请私聊机器人发送 /绑定。' };
+}
+
+function groupLinkNotConfiguredReply() {
+  return { handled: true, reply: 'QQ 绑定功能还没有配置完成，请联系管理员。' };
+}
+
+function groupLinkIdentityReply() {
+  return { handled: true, reply: '无法识别当前群或成员身份，请稍后再试。' };
+}
+
+function safeLinkErrorCode(error) {
+  const code = String(error?.code ?? '')
+    .trim()
+    .toLowerCase();
+  return code || 'unknown';
+}
+
+function isRetryableLinkError(error) {
+  const code = safeLinkErrorCode(error);
+  return (
+    code === 'network_error' ||
+    code === 'timeout' ||
+    /^http_5\d\d$/u.test(code) ||
+    Number(error?.status) >= 500
+  );
+}
+
+async function handleGroupBind({
+  config,
+  fetchImpl,
+  logger,
+  context,
+  args,
+  groupTokens,
+  linkClient,
+}) {
+  if (!groupLinkEnabled(config)) {
+    return groupLinkDisabledReply();
+  }
+  if (String(args ?? '').trim()) {
+    return {
+      handled: true,
+      reply: '群里绑定不需要绑定码。请直接 @我 发送 /绑定 获取一次性链接。',
+    };
+  }
+  const client = groupLinkClient(config, fetchImpl, logger, linkClient);
+  if (!client.enabled) {
+    return groupLinkNotConfiguredReply();
+  }
+  const { groupOpenId, memberOpenId } = groupLinkIdentity(context);
+  if (!groupOpenId || !memberOpenId) {
+    return groupLinkIdentityReply();
+  }
+
+  let created;
+  try {
+    created = await client.createGroupToken({ openId: memberOpenId, groupOpenId });
+  } catch (error) {
+    logger?.warn('群聊绑定链接生成失败：', safeLinkErrorCode(error));
+    return { handled: true, reply: groupBindErrorReply(error) };
+  }
+
+  const url = typeof created?.url === 'string' ? created.url : '';
+  const token = extractTokenFromUrl(url);
+  if (!url || !token) {
+    logger?.warn('群聊绑定链接缺少 token。');
+    return { handled: true, reply: '绑定链接生成失败，请稍后再试。' };
+  }
+
+  const store = groupLinkStore(config, groupTokens);
+  if (!store.set({ groupOpenId, memberOpenId, token, expiresAt: created?.expiresAt })) {
+    return { handled: true, reply: '绑定链接已失效，请稍后再试。' };
+  }
+
+  return {
+    handled: true,
+    reply: [
+      `请打开这个一次性链接登录临东通：${url}`,
+      '网页会显示 6 位确认码；回到本群 @我 发送 /确认 确认码。',
+    ].join('\n'),
+  };
+}
+
+function groupBindErrorReply(error) {
+  const code = safeLinkErrorCode(error);
+  if (code === 'not_configured') {
+    return 'QQ 绑定功能还没有配置完成，请联系管理员。';
+  }
+  if (code === 'rate_limited' || code === 'http_429') {
+    return '操作有点频繁，请稍后再试。';
+  }
+  if (isRetryableLinkError(error)) {
+    return '临时无法连接临东通绑定服务，请稍后重试。';
+  }
+  return '生成绑定链接失败，请稍后再试。';
+}
+
+async function handleGroupConfirm({
+  config,
+  fetchImpl,
+  logger,
+  context,
+  args,
+  groupTokens,
+  linkClient,
+}) {
+  if (!groupLinkEnabled(config)) {
+    return groupLinkDisabledReply();
+  }
+  const code = normalizeConfirmCode(args);
+  if (!code) {
+    return { handled: true, reply: '请发送 /确认 加网页显示的 6 位确认码。' };
+  }
+  if (!isConfirmCode(code)) {
+    return { handled: true, reply: '确认码应为 6 位数字。' };
+  }
+  const client = groupLinkClient(config, fetchImpl, logger, linkClient);
+  if (!client.enabled) {
+    return groupLinkNotConfiguredReply();
+  }
+  const { groupOpenId, memberOpenId } = groupLinkIdentity(context);
+  if (!groupOpenId || !memberOpenId) {
+    return groupLinkIdentityReply();
+  }
+
+  const store = groupLinkStore(config, groupTokens);
+  const cached = store.get(groupOpenId, memberOpenId);
+  if (!cached) {
+    return { handled: true, reply: '请先 @我 发送 /绑定 获取新的绑定链接。' };
+  }
+
+  let link;
+  try {
+    link = await client.confirmGroup({
+      token: cached.token,
+      openId: memberOpenId,
+      groupOpenId,
+      code,
+    });
+  } catch (error) {
+    return handleGroupConfirmError(error, { store, groupOpenId, memberOpenId, logger });
+  }
+
+  store.delete(groupOpenId, memberOpenId);
+  return { handled: true, reply: groupConfirmSuccess(link) };
+}
+
+function handleGroupConfirmError(error, { store, groupOpenId, memberOpenId, logger }) {
+  const code = safeLinkErrorCode(error);
+  logger?.warn('群聊绑定确认失败：', code);
+  if (
+    ['token_used', 'token_expired', 'token_invalid', 'token_claimed', 'http_409'].includes(code)
+  ) {
+    store.delete(groupOpenId, memberOpenId);
+  }
+  return { handled: true, reply: groupConfirmErrorReply(code, error) };
+}
+
+function groupConfirmErrorReply(code, error) {
+  switch (code) {
+    case 'token_used':
+    case 'http_409':
+      return '这个确认已经处理过了，当前群绑定可能已经完成。发送 /我的绑定 查看；如果仍未绑定，请重新 /绑定。';
+    case 'token_expired':
+    case 'token_invalid':
+      return '绑定链接已失效，请重新 @我 发送 /绑定 获取新链接。';
+    case 'token_not_claimed':
+      return '网页还没有登录确认。请先打开绑定链接登录临东通并查看确认码，再回来发送 /确认 确认码。';
+    case 'confirm_code_invalid':
+      return '确认码不对，请回到网页查看最新的 6 位确认码后再试。';
+    case 'openid_mismatch':
+    case 'group_mismatch':
+      return '这个绑定链接不是当前成员发起的，请由最初 @我 发送 /绑定 的成员完成确认。';
+    case 'token_claimed':
+      return '这个绑定链接已被其他临东通账号打开，请重新 @我 发送 /绑定 获取新链接。';
+    case 'openid_already_linked':
+    case 'link_conflict':
+      return '当前 QQ 身份已绑定其他临东通账号或存在绑定冲突。请发送 /我的绑定 查看，或 /解绑 确认 后再申请绑定。';
+    case 'account_inactive':
+      return '打开链接的临东通账号不可用，请换一个临东通账号或联系管理员。';
+    case 'rate_limited':
+    case 'http_429':
+      return '操作有点频繁，请稍后再试。';
+    case 'not_configured':
+      return 'QQ 绑定功能还没有配置完成，请联系管理员。';
+    default:
+      if (isRetryableLinkError(error) || code === 'invalid_response') {
+        return '临东通暂时无法完成确认，请稍后重试。';
+      }
+      return '绑定确认没有成功，请稍后重试。';
+  }
+}
+
+function groupConfirmSuccess(link) {
+  const username = link?.username || '当前账号';
+  return `群绑定成功：本群已绑定到临东通账号：@${username}。\n只影响本群，不影响单聊和其他群。`;
+}
+
+async function handleGroupMyLink({ config, fetchImpl, logger, context, linkClient }) {
+  if (!groupLinkEnabled(config)) {
+    return groupLinkDisabledReply();
+  }
+  const client = groupLinkClient(config, fetchImpl, logger, linkClient);
+  if (!client.enabled) {
+    return groupLinkNotConfiguredReply();
+  }
+  const { groupOpenId, memberOpenId } = groupLinkIdentity(context);
+  if (!groupOpenId || !memberOpenId) {
+    return groupLinkIdentityReply();
+  }
+
+  let link;
+  try {
+    link = await client.resolveGroup({ openId: memberOpenId, groupOpenId });
+  } catch (error) {
+    logger?.warn('群聊绑定查询失败：', safeLinkErrorCode(error));
+    return { handled: true, reply: '暂时无法查询本群绑定，请稍后再试。' };
+  }
+
+  return {
+    handled: true,
+    reply: link
+      ? `当前 QQ 在本群已绑定临东通账号：@${link.username || '当前账号'}。`
+      : '当前 QQ 在本群还没有绑定临东通账号。@我 发送 /绑定 获取绑定链接。',
+  };
+}
+
+async function handleGroupUnlink({ config, fetchImpl, logger, context, args, linkClient }) {
+  if (!groupLinkEnabled(config)) {
+    return groupLinkDisabledReply();
+  }
+  if (String(args ?? '').trim() !== '确认') {
+    return {
+      handled: true,
+      reply: '解绑只会解除本群绑定，不影响单聊和其他群。确认请发送：/解绑 确认',
+    };
+  }
+  const client = groupLinkClient(config, fetchImpl, logger, linkClient);
+  if (!client.enabled) {
+    return groupLinkNotConfiguredReply();
+  }
+  const { groupOpenId, memberOpenId } = groupLinkIdentity(context);
+  if (!groupOpenId || !memberOpenId) {
+    return groupLinkIdentityReply();
+  }
+
+  try {
+    await client.unlinkGroup({ openId: memberOpenId, groupOpenId });
+  } catch (error) {
+    logger?.warn('群聊解绑失败：', safeLinkErrorCode(error));
+    return { handled: true, reply: '解绑没有成功，请稍后再试。' };
+  }
+
+  return {
+    handled: true,
+    reply: '已解除当前 QQ 在本群的临东通绑定，不影响单聊和其他群。',
+  };
+}
+
 function normalizeLinkCode(value) {
   return String(value ?? '')
     .trim()
@@ -844,6 +1212,24 @@ function parseDays(value, fallback = 1) {
   }
   const days = Number(match[1]);
   return days >= 1 && days <= 90 ? days : fallback;
+}
+
+/**
+ * 命令文本先做轻量归一化：兼容 @机器人 前缀、全角斜杠/数字/空格和零宽字符。
+ * 只归一化命令入口，不改变普通问答的原文。
+ */
+function normalizeCommandText(value) {
+  let text = String(value ?? '')
+    .replace(/[\u200b-\u200d\ufeff\u2060]/gu, '')
+    .replace(/[０-９]/gu, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/／/gu, '/')
+    .replace(/＠/gu, '@')
+    .replace(/\u3000/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  text = text.replace(/^(?:<@[^>]*>\s*)+/u, '');
+  text = text.replace(/^(?:(?:<@[^>]*>|@[^\s/]+)\s*)+(?=\/)/u, '');
+  return text.trim();
 }
 
 function parseSlashCommand(raw) {

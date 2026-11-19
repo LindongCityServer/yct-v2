@@ -10,6 +10,8 @@ import { loadGroupNotices, resolveGroupNotice } from './notices.mjs';
 import { startEventBridge } from './event-bridge.mjs';
 import { PlayerEventMonitor } from './player-events.mjs';
 import { QqLinkClient } from './ldpass-link.mjs';
+import { GroupLinkTokenStore } from './group-link.mjs';
+import { maskOpenId } from './log.mjs';
 import { getBotVersion } from './version.mjs';
 import {
   classifyCommand,
@@ -39,6 +41,7 @@ export class QQBot {
     community,
     queue,
     store,
+    groupLinkTokens,
   } = {}) {
     this.api = api;
     this.config = config;
@@ -52,6 +55,12 @@ export class QQBot {
       secret: config.link?.secret,
       logger,
     });
+    this.groupLinkTokens =
+      groupLinkTokens ??
+      new GroupLinkTokenStore({
+        ttlMs: config.link?.groupTokenTtlMs,
+        maxEntries: config.link?.groupTokenCacheMax,
+      });
     this.accountContextCache = new Map();
     this.community =
       community ??
@@ -142,8 +151,8 @@ export class QQBot {
         return;
       case 'GROUP_ADD_ROBOT':
         this.logger.info(
-          `机器人被添加到群 ${data.group_openid ?? '（未知）'}；` +
-            '如需限制范围，可把该 openid 写入 QQ_BOT_GROUP_ALLOWLIST。',
+          `机器人被添加到群 ${maskOpenId(data.group_openid)}；` +
+            '如需限制范围，请从开放平台复制该群 group_openid 写入 QQ_BOT_GROUP_ALLOWLIST。',
         );
         return;
       case 'GROUP_MEMBER_ADD':
@@ -161,10 +170,10 @@ export class QQBot {
         return;
       }
       case 'GROUP_DEL_ROBOT':
-        this.logger.info(`机器人被移出群 ${data.group_openid ?? '（未知）'}。`);
+        this.logger.info(`机器人被移出群 ${maskOpenId(data.group_openid)}。`);
         return;
       case 'FRIEND_ADD':
-        this.logger.info(`用户 ${data.openid ?? data.user_openid ?? '（未知）'} 添加了机器人。`);
+        this.logger.info(`用户 ${maskOpenId(data.openid ?? data.user_openid)} 添加了机器人。`);
         return;
       default:
         this.logger.debug(`忽略事件 ${type}。`);
@@ -179,7 +188,7 @@ export class QQBot {
       try {
         await this.api.sendGroupMessage(groupId, { content, msg_type: 0 });
         this.logger.info(
-          `玩家${event.type === 'join' ? '进服' : '退服'}提示已发送到群 ${groupId}。`,
+          `玩家${event.type === 'join' ? '进服' : '退服'}提示已发送到群 ${maskOpenId(groupId)}。`,
         );
       } catch (error) {
         this.logger.warn(`玩家${event.type === 'join' ? '进服' : '退服'}提示发送失败：`, error);
@@ -224,9 +233,9 @@ export class QQBot {
     }
     try {
       await this.api.sendGroupMessage(groupId, { content: aliasedText, msg_type: 0 });
-      this.logger.info(`已发送群 ${groupId} 的 ${kind} 提示。`);
+      this.logger.info(`已发送群 ${maskOpenId(groupId)} 的 ${kind} 提示。`);
     } catch (error) {
-      this.logger.warn(`发送群 ${groupId} 的 ${kind} 提示失败：`, error);
+      this.logger.warn(`发送群 ${maskOpenId(groupId)} 的 ${kind} 提示失败：`, error);
     }
   }
 
@@ -333,10 +342,10 @@ export class QQBot {
   async sendActiveText(groupId, content) {
     try {
       await this.api.sendGroupMessage(groupId, { content, msg_type: 0 });
-      this.logger.info(`事件消息已发送到群 ${groupId}。`);
+      this.logger.info(`事件消息已发送到群 ${maskOpenId(groupId)}。`);
       return true;
     } catch (error) {
-      this.logger.warn(`事件消息发送失败（群 ${groupId}）：`, error);
+      this.logger.warn(`事件消息发送失败（群 ${maskOpenId(groupId)}）：`, error);
       return false;
     }
   }
@@ -368,18 +377,22 @@ export class QQBot {
 
   async handleGroupMessage(data) {
     const groupOpenid = typeof data.group_openid === 'string' ? data.group_openid : '';
-    const userId = data.author?.member_openid ?? data.author?.id ?? '';
+    // 群绑定只认事件里的 member_openid；这里单独保留严格值，不回退 user_openid。
+    const memberOpenId =
+      typeof data.author?.member_openid === 'string' ? data.author.member_openid : '';
+    const userId = memberOpenId || data.author?.id || '';
     if (!groupOpenid || !userId) {
       return;
     }
     if (!this.seenGroups.has(groupOpenid)) {
       this.seenGroups.add(groupOpenid);
       this.logger.info(
-        `首次收到群 ${groupOpenid} 的消息；如需限制范围，把它写入 QQ_BOT_GROUP_ALLOWLIST。`,
+        `首次收到群 ${maskOpenId(groupOpenid)} 的消息；` +
+          '如需限制范围，请从开放平台复制该群 group_openid 写入 QQ_BOT_GROUP_ALLOWLIST。',
       );
     }
     if (this.config.qq.groupAllowlist.size > 0 && !this.config.qq.groupAllowlist.has(groupOpenid)) {
-      this.logger.debug(`群 ${groupOpenid} 不在白名单，忽略。`);
+      this.logger.debug(`群 ${maskOpenId(groupOpenid)} 不在白名单，忽略。`);
       return;
     }
 
@@ -394,6 +407,7 @@ export class QQBot {
         kind: 'group',
         groupId: groupOpenid,
         userId,
+        memberOpenId,
         userName: userDisplayName(data),
         date: shanghaiDateKey(),
       },
@@ -461,6 +475,8 @@ export class QQBot {
       logger: this.logger,
       community: this.community,
       context,
+      groupTokens: this.groupLinkTokens,
+      linkClient: this.linkClient,
     });
     if (local?.handled) {
       const reply = clipCommandReply(local.reply);

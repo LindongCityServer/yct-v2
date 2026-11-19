@@ -12,12 +12,13 @@ import {
   matchTextContinuation,
   expandSuggestionVariants,
 } from '../../apps/web/lib/text-continuation';
+import { readAppStyles } from './app-styles';
 
 const SOURCE = readFileSync(
   new URL('../../apps/web/components/metro-wayfinding-editor.tsx', import.meta.url),
   'utf8',
 );
-const CSS = readFileSync(new URL('../../apps/web/app/globals.css', import.meta.url), 'utf8');
+const CSS = readAppStyles();
 
 let passed = 0;
 let failed = 0;

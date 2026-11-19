@@ -139,3 +139,38 @@ test('非法数值和 URL 会报错', () => {
   assert.match(text, /YCT_BASE_URL/);
   assert.match(text, /YCT_ASSISTANT_PROVIDER/);
 });
+
+test('群聊绑定默认开启，TTL 和缓存容量可配置', () => {
+  const envPath = join(tmpdir(), 'no-such-qq-bot.env');
+  const defaults = loadConfig({ env: completeEnv, envPath });
+  assert.deepEqual(defaults.problems, []);
+  assert.equal(defaults.config.link.groupEnabled, true);
+  assert.equal(defaults.config.link.groupTokenTtlMs, 300_000);
+  assert.equal(defaults.config.link.groupTokenCacheMax, 10_000);
+
+  const custom = loadConfig({
+    env: {
+      ...completeEnv,
+      QQ_GROUP_LINK_ENABLED: '0',
+      QQ_BOT_GROUP_LINK_TTL_MS: '120000',
+      QQ_BOT_GROUP_LINK_CACHE_MAX: '200',
+    },
+    envPath,
+  });
+  assert.deepEqual(custom.problems, []);
+  assert.equal(custom.config.link.groupEnabled, false);
+  assert.equal(custom.config.link.groupTokenTtlMs, 120_000);
+  assert.equal(custom.config.link.groupTokenCacheMax, 200);
+
+  const invalid = loadConfig({
+    env: {
+      ...completeEnv,
+      QQ_BOT_GROUP_LINK_TTL_MS: '5',
+      QQ_BOT_GROUP_LINK_CACHE_MAX: '0',
+    },
+    envPath,
+  });
+  const text = invalid.problems.join('\n');
+  assert.match(text, /QQ_BOT_GROUP_LINK_TTL_MS/);
+  assert.match(text, /QQ_BOT_GROUP_LINK_CACHE_MAX/);
+});

@@ -3933,6 +3933,8 @@
   background: color-mix(in srgb, var(--yct-color-error) 8%, transparent);
   color: var(--yct-color-error);
   font-size: var(--yct-font-size-12);
+  /* NaL v2 校验会按「位置：原因」逐行列出，保留换行才能读。 */
+  white-space: pre-line;
   overflow-wrap: anywhere;
 }
 

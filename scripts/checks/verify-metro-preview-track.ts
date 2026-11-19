@@ -12,6 +12,7 @@
  *   - 顺序契约（预览在上、警告在建议之上）靠肉眼 review 极易漂移。
  */
 import { readFileSync } from 'node:fs';
+import { readAppStyles } from './app-styles';
 
 const PANEL = readFileSync(
   new URL('../../apps/web/components/material-studio-panel.tsx', import.meta.url),
@@ -25,7 +26,11 @@ const EDITOR = readFileSync(
   new URL('../../apps/web/components/metro-wayfinding-editor.tsx', import.meta.url),
   'utf8',
 );
-const CSS = readFileSync(new URL('../../apps/web/app/globals.css', import.meta.url), 'utf8');
+const CSS = readAppStyles();
+const BREAKPOINTS = readFileSync(
+  new URL('../../apps/web/lib/breakpoints.ts', import.meta.url),
+  'utf8',
+);
 
 let passed = 0;
 let failed = 0;
@@ -39,9 +44,9 @@ function check(name: string, ok: boolean) {
   }
 }
 
-const trackIndex = PANEL.indexOf('material-studio-preview-track');
-const previewIndex = PANEL.indexOf('className="material-preview"');
-const inspectorIndex = PANEL.indexOf('<MetroWayfindingInspector');
+const trackIndex = PANEL.indexOf('className={`material-studio-preview-track');
+const previewIndex = PANEL.indexOf('<section className="material-preview"', trackIndex);
+const inspectorIndex = PANEL.indexOf('<MetroWayfindingInspector', previewIndex);
 
 console.log('── C1. 宽屏：预览与辅助面板同列 ────────────────');
 
@@ -82,7 +87,8 @@ console.log('\n── C2. 断点由 JS 单点驱动 ─────────�
 
 check(
   '断点常量为 (max-width: 959px)，与「宽屏 ≥960px」互补',
-  /const MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY = '\(max-width: 959px\)'/.test(PANEL),
+  /export const PREVIEW_DIALOG_MAX = 959;/.test(BREAKPOINTS) &&
+    /const MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY = PREVIEW_DIALOG_MEDIA_QUERY;/.test(PANEL),
 );
 check(
   '轨道容器用 is-stacked 条件类切换（不再由 CSS 媒体查询切）',

@@ -1,9 +1,10 @@
-/** 临东通 QQ 绑定内部接口客户端。只负责 c2c openid，不接触 QQ 号。 */
+/** 临东通 QQ 绑定内部接口客户端。只负责事件里的 openid，不接触 QQ 号。 */
 export class QqLinkError extends Error {
-  constructor(message, code = 'link_failed') {
+  constructor(message, code = 'link_failed', status = 0) {
     super(message);
     this.name = 'QqLinkError';
     this.code = code;
+    this.status = status;
   }
 }
 
@@ -42,6 +43,44 @@ export class QqLinkClient {
     return payload.link;
   }
 
+  async createGroupToken({ openId, groupOpenId }) {
+    const payload = await this.request('/api/internal/qq-link/token', {
+      method: 'POST',
+      body: { openId, scope: 'group', groupOpenId },
+    });
+    if (typeof payload?.url !== 'string' || !payload.url) {
+      throw new QqLinkError('临东通没有返回可用的绑定链接。', 'invalid_response');
+    }
+    return { url: payload.url, expiresAt: payload.expiresAt };
+  }
+
+  async confirmGroup({ token, openId, groupOpenId, code }) {
+    const payload = await this.request('/api/internal/qq-link/confirm-group', {
+      method: 'POST',
+      body: { token, openId, groupOpenId, code },
+    });
+    if (!payload?.link) {
+      throw new QqLinkError('绑定确认没有返回结果。', 'invalid_response');
+    }
+    return payload.link;
+  }
+
+  async resolveGroup({ openId, groupOpenId }) {
+    const query = new URLSearchParams({ openId, scope: 'group', groupOpenId });
+    const payload = await this.request(`/api/internal/qq-link/resolve?${query.toString()}`, {
+      method: 'GET',
+    });
+    return payload?.link ?? null;
+  }
+
+  async unlinkGroup({ openId, groupOpenId }) {
+    await this.request('/api/internal/qq-link/unlink', {
+      method: 'POST',
+      body: { openId, scope: 'group', groupOpenId },
+    });
+    return true;
+  }
+
   async resolve(openId) {
     const payload = await this.request(
       `/api/internal/qq-link/resolve?openId=${encodeURIComponent(openId)}&scope=c2c`,
@@ -74,7 +113,8 @@ export class QqLinkClient {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
-      this.logger?.warn(`临东通 QQ 绑定接口请求失败（${path}）：`, error);
+      // 只记录接口路由，不记录 query（resolve 的 query 里有完整 openid）。
+      this.logger?.warn(`临东通 QQ 绑定接口请求失败（${path.split('?')[0]}）：`, error);
       throw new QqLinkError('临时无法连接临东通绑定服务，请稍后再试。', 'network_error');
     }
 
@@ -89,7 +129,7 @@ export class QqLinkClient {
         typeof payload?.message === 'string' && payload.message
           ? payload.message
           : '临东通暂时无法完成 QQ 绑定。';
-      throw new QqLinkError(message, payload?.error ?? `http_${response.status}`);
+      throw new QqLinkError(message, payload?.error ?? `http_${response.status}`, response.status);
     }
     return payload ?? {};
   }
