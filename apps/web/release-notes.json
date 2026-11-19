@@ -5,7 +5,7 @@
     {
       "version": "2.23.0",
       "releasedAt": "2026-11-19T08:29:03.819Z",
-      "sourceFingerprint": "3383d78ecf62e42cc1d1ade26a2904e11dbaae4e2eada9a68421ee4effbd42f5",
+      "sourceFingerprint": "14a72123a1d614f1d0f12ba65a697ad31e66851c1982154fd34c7d0862047df1",
       "themes": ["assistant", "qqbot", "materials"],
       "changes": [
         {
@@ -36,7 +36,7 @@
         {
           "category": "feat",
           "breaking": false,
-          "summary": "常见问题新增「问一问与 QQ 机器人」分组，补充回答准确性、账号数据范围、群聊隐私和群绑定说明"
+          "summary": "常见问题新增「问一问与 QQ 机器人」分组，补充回答准确性、账号数据范围、群聊隐私、群绑定和机器人指令说明"
         },
         {
           "category": "style",

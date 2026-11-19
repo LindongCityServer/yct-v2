@@ -122,7 +122,7 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             question: '問一問的回答為什麼有時不準確？',
             answer:
               '問一問的回答由你設定的模型產生，只能依據當次注入的站內資料和工具結果；資料不足時應回答「站內資料暫時沒有」，而不是猜測。回答下方的引用與入口可以核對來源；發現不對時可以用「重新回答」，或透過問題回饋提交說明。模型 Key 只保存在目前瀏覽器工作階段，不會上傳到雨城通伺服器，回答品質也取決於你選擇的模型。',
-            keywords: ['回答不準', '幻覺', '編造', '模型', '引用核對', '重新回答', '守門員'],
+            keywords: ['回答不準', '幻覺', '編造', '模型', '引用核對', '重新回答'],
           },
           'assistant-account-data': {
             question: '問一問能查我的訂單、車票或乘車碼嗎？',
@@ -151,11 +151,22 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               '群綁定',
             ],
           },
-          'assistant-goalkeeper': {
-            question: '問一問說的「守門員把球送進自家門」是什麼梗？',
+          'qq-bot-commands': {
+            question: 'QQ 機器人支援哪些指令？',
             answer:
-              '這是問一問內部的自嘲，不是答錯的藉口。新光 2019-12-24 在 B 站發過一則球場生活記錄：「咱伙球進啦！」「咱守門員幹的！」「進的咱伙門！」後來大家拿這個守門員段子調侃問一問偶爾也會把答案送進自家門。回答不對時，仍以回答下方的站內引用為準，或點「重新回答」。',
-            keywords: ['守門員', '彩蛋', '問一問', '不太聰明', '自嘲'],
+              '群聊需先 @機器人；快捷指令加不加 / 都可以。常用：/随机、/骰子、/算 1+2、/电码 临东、/gb2312 临东、/天气 上海、/ip 8.8.8.8、/历史、/对联 春风拂柳、/随机地点、/人数。群互動：/签到、/签到榜、/发言统计 [天數]、/发言榜 [天數]、/运势、/重置运势。問一問與帳號：/帮助、/关于、/版本、/绑定 [綁定碼]、/确认 6 位碼、/我的绑定、/解绑 确认、/新对话。也支援「计算 1+2」「上海天气」「历史上的今天」「菜单」等自然觸發詞；未知的 /xxx 會提示傳送「菜单」。',
+            keywords: [
+              'QQ 機器人',
+              '指令',
+              '選單',
+              '/随机',
+              '/骰子',
+              '/天气',
+              '/绑定',
+              '/确认',
+              '/签到',
+              '/发言统计',
+            ],
           },
         },
       },
@@ -944,11 +955,22 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               'group link',
             ],
           },
-          'assistant-goalkeeper': {
-            question: 'What is the “goalkeeper scored an own goal” joke in Ask?',
+          'qq-bot-commands': {
+            question: 'Which commands does the QQ bot support?',
             answer:
-              'It is an internal self-deprecating joke, not an excuse for wrong answers. On 2019-12-24, Xinguang posted a football-life note on Bilibili: “Our team scored!” “Our goalkeeper did it!” “It went into our own goal!” People later used the goalkeeper to tease Ask for occasionally sending an answer into its own net. When an answer is wrong, trust the site references below it or choose “Regenerate answer”.',
-            keywords: ['goalkeeper', 'easter egg', 'Ask', 'not smart', 'self-deprecating'],
+              'Mention the bot first in a group; commands work with or without a leading /. Common: /随机, /骰子, /算 1+2, /电码 临东, /gb2312 临东, /天气 上海, /ip 8.8.8.8, /历史, /对联 春风拂柳, /随机地点, /人数. Group activity: /签到, /签到榜, /发言统计 [days], /发言榜 [days], /运势, /重置运势. Ask and account: /帮助, /关于, /版本, /绑定 [code], /确认 6-digit-code, /我的绑定, /解绑 确认, /新对话. Natural triggers such as “计算 1+2”, “上海天气”, “历史上的今天”, and “菜单” also work; an unknown /xxx tells you to send “菜单”.',
+            keywords: [
+              'QQ bot',
+              'commands',
+              'menu',
+              '/随机',
+              '/骰子',
+              '/天气',
+              '/绑定',
+              '/确认',
+              '/签到',
+              '/发言统计',
+            ],
           },
         },
       },
