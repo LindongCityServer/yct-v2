@@ -3,6 +3,20 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.22.1",
+      "releasedAt": "2026-11-19T04:28:01.638Z",
+      "sourceFingerprint": "b5c1671af8a9c189ddf2be03ab4438e839be0f35b44b814d1d415fb4b1ad5810",
+      "themes": ["web", "qqbot"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "问一问支持 QQ 机器人传入的临东通账号上下文，私聊绑定后可带入服务器账号的当前位置和 Wiki 玩家资料"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.22.0",
       "releasedAt": "2026-11-18T09:29:26.290Z",
       "sourceFingerprint": "e35004ca04989f9593a5e4a14f7ca927793a09269547781e066f5ff11db9c241",

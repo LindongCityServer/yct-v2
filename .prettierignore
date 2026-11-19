@@ -7,6 +7,7 @@ coverage/
 .yct-data/
 apps/web/public/legacy-assets/
 apps/web/public/card-templates/
+.env.example
 integrations/qq-bot/.env.example
 integrations/qq-bot/assets/
 integrations/qq-bot/src/card-renderer.mjs
