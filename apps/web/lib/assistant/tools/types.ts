@@ -1,5 +1,6 @@
 import type { LocaleCode } from '@yct/contracts';
 import type { AssistantReference } from '../retrieval';
+import type { AssistantScope } from '../scope';
 
 /** 工具产出的引用不需要编号，由调用方（问一问或 MCP）统一分配。 */
 export type AssistantToolReference = Omit<AssistantReference, 'id'>;
@@ -7,6 +8,8 @@ export type AssistantToolReference = Omit<AssistantReference, 'id'>;
 export interface AssistantToolRunContext {
   locale: LocaleCode;
   pathname?: string;
+  /** 按群范围过滤后的允许范围；MCP 不传，表示不限制。 */
+  allowedScopes?: AssistantScope[];
 }
 
 export interface AssistantToolResult {
@@ -37,6 +40,8 @@ export interface AssistantTool<Input extends object = Record<string, unknown>> {
   name: string;
   title: string;
   description: string;
+  /** 按群范围；不填表示任何范围都可用。 */
+  scope?: AssistantScope;
   inputSchema: ToolInputSchema;
   run(input: Input, context: AssistantToolRunContext): Promise<AssistantToolResult>;
 }

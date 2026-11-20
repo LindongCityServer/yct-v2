@@ -112,6 +112,7 @@ export async function askAssistant({
   model,
   locale,
   channel,
+  capabilities,
   messages,
   accountContext,
   accountContextSecret,
@@ -136,7 +137,14 @@ export async function askAssistant({
         'x-yct-provider-key': apiKey,
         ...(contextToken ? { 'x-yct-qq-account-context': contextToken } : {}),
       },
-      body: JSON.stringify({ providerId, model, locale, channel, messages }),
+      body: JSON.stringify({
+        providerId,
+        model,
+        locale,
+        channel,
+        messages,
+        ...(capabilities ? { capabilities } : {}),
+      }),
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
@@ -152,13 +160,16 @@ export async function askAssistant({
     });
   }
 
-  const result = { text: '', references: [], followups: [], error: '' };
+  const result = { text: '', references: [], followups: [], error: '', reasonCode: '' };
   try {
     await readSse(response.body, (event, data) => {
       switch (event) {
         case 'meta':
           if (Array.isArray(data?.references)) {
             result.references = data.references;
+          }
+          if (typeof data?.routing?.reasonCode === 'string') {
+            result.reasonCode = data.routing.reasonCode;
           }
           break;
         case 'delta':

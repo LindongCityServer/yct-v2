@@ -70,6 +70,48 @@ test('askAssistant 消费完整 SSE 流并返回最终文本', async () => {
   }
 });
 
+test('askAssistant 传能力位并读取范围拦截原因', async () => {
+  let captured = null;
+  const server = createServer((request, response) => {
+    let body = '';
+    request.on('data', (chunk) => {
+      body += chunk;
+    });
+    request.on('end', () => {
+      captured = JSON.parse(body);
+      response.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8' });
+      response.write(
+        'event: meta\ndata: {"references":[],"routing":{"intent":"precheck","confidence":"high","reasonCode":"group_scope.transit_disabled"}}\n\n',
+      );
+      response.write('event: delta\ndata: {"text":"本群未开启「公交与线路」问答。"}\n\n');
+      response.write('event: done\ndata: {"ok":true}\n\n');
+      response.end();
+    });
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const { port } = server.address();
+
+  try {
+    const result = await askAssistant({
+      baseUrl: `http://127.0.0.1:${port}`,
+      apiKey: 'sk-test',
+      providerId: 'deepseek',
+      model: 'deepseek-v4-flash',
+      locale: 'zh-CN',
+      channel: 'qq-group',
+      capabilities: { server: true, transit: false, operations: true, map: true, general: true },
+      messages: [{ role: 'user', content: '170路首班几点' }],
+    });
+
+    assert.equal(captured.capabilities.transit, false);
+    assert.equal(result.reasonCode, 'group_scope.transit_disabled');
+    assert.equal(result.text, '本群未开启「公交与线路」问答。');
+  } finally {
+    server.close();
+  }
+});
+
 test('接口返回错误时抛出可直接展示的 AssistantError', async () => {
   const server = createServer((request, response) => {
     request.resume();

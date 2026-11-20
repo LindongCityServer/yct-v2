@@ -18,6 +18,7 @@ import {
   type AssistantToolRunContext,
   type ToolInputSchema,
 } from './types';
+import type { AssistantScope } from '../scope';
 
 export type {
   AssistantTool,
@@ -76,6 +77,13 @@ export async function runAssistantTool(
       isError: true,
     };
   }
+  if (tool.scope && context.allowedScopes && !context.allowedScopes.includes(tool.scope)) {
+    return {
+      tool,
+      result: emptyToolResult('本群未开启这个范围的问答，无法调用对应的工具。'),
+      isError: true,
+    };
+  }
 
   try {
     const input = normalizeToolInput(tool, rawInput);
@@ -103,12 +111,20 @@ export async function runAssistantTool(
   }
 }
 
-/** OpenAI 兼容的 function calling 定义；意图层给出的工具优先排在前面，但不裁剪能力。 */
-export function buildOpenAiToolDefinitions(preferredNames: string[] = []) {
+/**
+ * OpenAI 兼容的 function calling 定义。
+ * - preferredNames：意图层给出的工具优先排在前面；
+ * - allowedScopes：按群范围过滤，不传表示不限制（网页与 MCP）。
+ */
+export function buildOpenAiToolDefinitions(
+  preferredNames: string[] = [],
+  allowedScopes?: AssistantScope[],
+) {
   const preferred = new Set(preferredNames);
-  const ordered = [...assistantTools].sort(
-    (left, right) => Number(preferred.has(right.name)) - Number(preferred.has(left.name)),
-  );
+  const allowed = allowedScopes ? new Set(allowedScopes) : null;
+  const ordered = [...assistantTools]
+    .filter((tool) => !allowed || !tool.scope || allowed.has(tool.scope))
+    .sort((left, right) => Number(preferred.has(right.name)) - Number(preferred.has(left.name)));
   return ordered.map((tool) => ({
     type: 'function' as const,
     function: {

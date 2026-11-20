@@ -1,12 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { helpText } from '../src/answer.mjs';
+import { commandHelpText } from '../src/commands.mjs';
 import { QQBot } from '../src/bot.mjs';
 import { shanghaiDateKey } from '../src/community.mjs';
+import { GroupModuleStore } from '../src/group-modules.mjs';
 
 function createConfig(overrides = {}) {
   return {
-    qq: { userQpm: 6, groupQpm: 20, groupAllowlist: new Set(), ...overrides.qq },
+    qq: {
+      userQpm: 6,
+      groupQpm: 20,
+      groupAllowlist: new Set(),
+      groupAliases: new Map(),
+      ...overrides.qq,
+    },
     reply: {
       ack: true,
       style: 'chat',
@@ -49,12 +56,19 @@ function createConfig(overrides = {}) {
       groupEnabled: true,
       groupTokenTtlMs: 300_000,
       groupTokenCacheMax: 10_000,
+      timeoutMs: 20_000,
       ...overrides.link,
     },
   };
 }
 
-function createSetup({ config = createConfig(), assistantImpl, condenseImpl, cardRenderer } = {}) {
+function createSetup({
+  config = createConfig(),
+  assistantImpl,
+  condenseImpl,
+  cardRenderer,
+  moduleStore,
+} = {}) {
   const sends = [];
   const uploads = [];
   const imageData = [];
@@ -132,6 +146,7 @@ function createSetup({ config = createConfig(), assistantImpl, condenseImpl, car
     condense: condenseImpl,
     queue,
     cardRenderer: renderer,
+    moduleStore,
   });
   return {
     bot,
@@ -183,7 +198,8 @@ test('帮助指令不调用模型', async () => {
 
   assert.equal(getCalls(), 0);
   assert.equal(sends.length, 1);
-  assert.equal(sends[0].payload.content, helpText);
+  assert.equal(sends[0].payload.content, commandHelpText());
+  assert.match(sends[0].payload.content, /物料盲盒/);
 });
 
 test('单聊使用输入中状态，不占用文字提示', async () => {
@@ -782,4 +798,199 @@ test('群聊首次消息日志只打印打码后的 openid', async () => {
   const text = lines.join('\n');
   assert.match(text, /首次收到群 grou…-1 的消息/);
   assert.equal(text.includes('group-1'), false);
+});
+
+test('群管理员关闭指令后，成员触发只提示一次', async () => {
+  const store = new GroupModuleStore({});
+  const { bot, sends, getCalls } = createSetup({ moduleStore: store });
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    id: 'msg-module-1',
+    group_openid: 'group-1',
+    author: { member_openid: 'user-admin', member_role: 'admin' },
+    content: '/模块 关 天气',
+  });
+  assert.match(sends.at(-1).payload.content, /已关闭本群的「天气」/);
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    id: 'msg-module-2',
+    group_openid: 'group-1',
+    author: { member_openid: 'user-1', member_role: 'member' },
+    content: '/天气',
+  });
+  assert.equal(getCalls(), 0);
+  assert.match(sends.at(-1).payload.content, /「天气」在本群未开启/);
+
+  const sent = sends.length;
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    id: 'msg-module-3',
+    group_openid: 'group-1',
+    author: { member_openid: 'user-1', member_role: 'member' },
+    content: '/天气',
+  });
+  assert.equal(sends.length, sent);
+});
+
+test('普通成员不能修改本群开关', async () => {
+  const store = new GroupModuleStore({});
+  const { bot, sends } = createSetup({ moduleStore: store });
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    id: 'msg-module-member',
+    group_openid: 'group-1',
+    author: { member_openid: 'user-1', member_role: 'member' },
+    content: '/模块 关 天气',
+  });
+
+  assert.match(sends.at(-1).payload.content, /只有群主或管理员/);
+  assert.notEqual(store.resolve('group-1').commands.weather, false);
+});
+
+test('群成员可以查看 /模块 列表', async () => {
+  const { bot, sends } = createSetup();
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    id: 'msg-module-list',
+    group_openid: 'group-1',
+    author: { member_openid: 'user-1', member_role: 'member' },
+    content: '/模块',
+  });
+
+  assert.match(sends.at(-1).payload.content, /使用说明 常开/);
+  assert.match(sends.at(-1).payload.content, /问一问/);
+});
+
+test('帮助按本群开关显示未开启项', async () => {
+  const store = new GroupModuleStore({});
+  store.setModule('group-1', 'tools', false, { role: 'admin' });
+  const { bot, sends } = createSetup({ moduleStore: store });
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    ...groupEvent,
+    id: 'msg-help-policy',
+    content: '帮助',
+  });
+
+  const reply = sends.at(-1).payload.content;
+  assert.notEqual(reply, commandHelpText());
+  assert.match(reply, /本群未开启：实用工具/);
+});
+
+test('关闭问一问范围后请求带能力位，提示走本地文案并节流', async () => {
+  const store = new GroupModuleStore({});
+  store.setModule('group-1', 'ask.transit', false, { role: 'admin' });
+  const { bot, sends, queue, getLastOptions } = createSetup({
+    moduleStore: store,
+    assistantImpl: async () => ({
+      text: '服务端固定文案',
+      references: [],
+      followups: [],
+      error: '',
+      reasonCode: 'group_scope.transit_disabled',
+    }),
+  });
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    ...groupEvent,
+    id: 'msg-scope-1',
+    content: '170路首班几点',
+  });
+  await queue.settle();
+
+  assert.equal(getLastOptions().capabilities.transit, false);
+  assert.equal(sends.length, 1);
+  assert.match(sends[0].payload.content, /本群未开启「公交与线路」问答/);
+  assert.equal(sends[0].payload.msg_seq, 1);
+  assert.equal(bot.store.get('group:group-1:user-1').length, 0);
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    ...groupEvent,
+    id: 'msg-scope-2',
+    content: '170路末班几点',
+  });
+  await queue.settle();
+  assert.equal(sends.length, 1);
+});
+
+test('群管理员锁定项在群里只读', async () => {
+  const store = new GroupModuleStore({});
+  store.setModule('group-1', 'ask.transit', false, { role: 'admin' });
+  store.data.groups['group-1'].locked = ['ask.transit'];
+  const { bot, sends } = createSetup({ moduleStore: store });
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    id: 'msg-locked',
+    group_openid: 'group-1',
+    author: { member_openid: 'user-admin', member_role: 'owner' },
+    content: '/模块 开 公交',
+  });
+
+  assert.match(sends.at(-1).payload.content, /由机器人管理员锁定/);
+  assert.equal(store.resolve('group-1').modules['ask.transit'], false);
+});
+
+test('按群关闭进退群提示后不再发送', async () => {
+  const store = new GroupModuleStore({});
+  store.setModule('group-1', 'notices', false, { role: 'admin' });
+  const { bot, sends } = createSetup({ moduleStore: store });
+  bot.groupNotices = { groups: { 'group-1': { welcome: '欢迎 {name}' } } };
+
+  await bot.handleEvent('GROUP_MEMBER_ADD', {
+    group_openid: 'group-1',
+    member_openid: 'user-2',
+    member_nickname: '新人',
+  });
+  assert.equal(sends.length, 0);
+
+  store.setModule('group-1', 'notices', true, { role: 'admin' });
+  await bot.handleEvent('GROUP_MEMBER_ADD', {
+    group_openid: 'group-1',
+    member_openid: 'user-3',
+    member_nickname: '新人2',
+  });
+  assert.equal(sends.length, 1);
+  assert.match(sends[0].payload.content, /欢迎 新人2/);
+});
+
+test('玩家进出播报按群过滤', async () => {
+  const config = createConfig({
+    reply: {
+      playerEventGroups: ['group-1', 'group-2'],
+      playerJoinText: '🟢 {name} 进入了服务器',
+      playerLeaveText: '🔴 {name} 离开了服务器',
+    },
+  });
+  const store = new GroupModuleStore({});
+  store.setModule('group-1', 'playerEvents', false, { role: 'admin' });
+  const { bot, sends } = createSetup({ config, moduleStore: store });
+
+  await bot.broadcastPlayerEvent({ type: 'join', name: '小明' });
+
+  assert.equal(sends.length, 1);
+  assert.equal(sends[0].openid, 'group-2');
+  assert.match(sends[0].payload.content, /小明 进入了服务器/);
+});
+
+test('事件桥的玩家进服按群过滤，服务聊天不受影响', async () => {
+  const config = createConfig({
+    reply: {
+      playerEventGroups: ['group-1', 'group-2'],
+      playerJoinText: '🟢 {name} 进入了服务器',
+      playerLeaveText: '🔴 {name} 离开了服务器',
+    },
+    events: { groups: new Set(['group-1', 'group-2']) },
+  });
+  const store = new GroupModuleStore({});
+  store.setModule('group-1', 'playerEvents', false, { role: 'admin' });
+  const { bot, sends } = createSetup({ config, moduleStore: store });
+
+  await bot.handleServerEvent({ type: 'join', player: '小红' });
+  assert.deepEqual(
+    sends.map((item) => item.openid),
+    ['group-2'],
+  );
+
+  sends.length = 0;
+  await bot.handleServerEvent({ type: 'chat', player: '小红', message: '晚上好' });
+  assert.deepEqual(sends.map((item) => item.openid).sort(), ['group-1', 'group-2']);
 });

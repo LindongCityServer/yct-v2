@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { IconButton } from '../ui/button';
 
 /** 由 SecondaryPageHeader 渲染的“返回按钮与标题之间”插槽。 */
 export const editorHeaderPanelSlotAttribute = 'data-editor-header-panel-slot';
@@ -26,18 +27,14 @@ export function EditorPanelTogglePortal({
   const label = panels.label ?? (panels.visible ? '隐藏全部面板' : '显示全部面板');
 
   return createPortal(
-    <button
+    <IconButton
       aria-expanded={panels.visible}
-      aria-label={label}
-      className={`icon-button editor-header-panel-toggle${panels.visible ? ' is-active' : ''}`}
+      className={`editor-header-panel-toggle${panels.visible ? ' is-active' : ''}`}
+      icon="view_sidebar"
+      label={label}
       onClick={panels.onToggle}
-      title={label}
-      type="button"
-    >
-      <span className="material-symbols-outlined" aria-hidden="true">
-        view_sidebar
-      </span>
-    </button>,
+      variant="icon"
+    />,
     slot,
   );
 }

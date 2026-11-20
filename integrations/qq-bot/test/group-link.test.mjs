@@ -478,6 +478,32 @@ test('群聊 /确认 错误码映射和缓存保留策略', async () => {
   }
 });
 
+test('token_used 时回查当前群绑定，能识别“服务端已成功但响应超时”', async () => {
+  const store = new GroupLinkTokenStore();
+  seedToken(store, 'secret-token');
+  let resolveArgs;
+  const result = await handleCommand({
+    text: '/确认 482913',
+    config: createConfig(),
+    logger: createLogger(),
+    context: group(),
+    groupTokens: store,
+    linkClient: createFakeClient({
+      confirmGroup: async () => {
+        throw new QqLinkError('已经使用', 'token_used', 409);
+      },
+      resolveGroup: async (args) => {
+        resolveArgs = args;
+        return { id: 'link-1', username: '小明', scope: 'group' };
+      },
+    }),
+  });
+
+  assert.deepEqual(resolveArgs, { openId: 'member-1', groupOpenId: 'group-1' });
+  assert.match(result.reply, /当前群已绑定到临东通账号：@小明/);
+  assert.equal(store.size, 0);
+});
+
 test('群聊 /我的绑定 查询当前群身份', async () => {
   let captured;
   const bound = await handleCommand({

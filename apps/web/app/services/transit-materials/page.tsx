@@ -1,7 +1,13 @@
 import {
   MaterialStudioPanel,
+  type InitialSharedMaterial,
   type MaterialTemplateGroup,
 } from '../../../components/material-studio-panel';
+import {
+  findMaterialShareLinkById,
+  isMaterialShareLinkExpired,
+  isMaterialShareLinkStub,
+} from '../../../lib/material-share-link-workflow';
 import { METRO_WAYFINDING_TEMPLATE_ID } from '../../../lib/metro-wayfinding';
 import {
   BUS_STOP_DETAIL_TEMPLATE_ID,
@@ -101,7 +107,13 @@ const transitMaterialTemplateGroups: MaterialTemplateGroup[] = [
   },
 ];
 
-export default function TransitMaterialsPage() {
+interface TransitMaterialsPageProps {
+  searchParams?: Promise<{ material?: string; template?: string }>;
+}
+
+export default async function TransitMaterialsPage({ searchParams }: TransitMaterialsPageProps) {
+  const params = (await searchParams) ?? {};
+  const share = params.material ? await findMaterialShareLinkById(params.material) : undefined;
   // 工作台模式自带 VisualEditorShell（标题栏 / 保存语义 / 移动端侧栏），不再套二级外壳。
   return (
     <MaterialStudioPanel
@@ -115,7 +127,34 @@ export default function TransitMaterialsPage() {
       templateGroups={transitMaterialTemplateGroups}
       compactCanvasControls
       allowTransitNetworkImport
+      initialMaterial={toInitialSharedMaterial(share)}
+      initialTemplateId={params.template ?? share?.templateId}
       workspace
     />
   );
+}
+
+function toInitialSharedMaterial(
+  share: Awaited<ReturnType<typeof findMaterialShareLinkById>>,
+): InitialSharedMaterial | undefined {
+  if (
+    !share ||
+    share.status !== 'active' ||
+    isMaterialShareLinkStub(share) ||
+    isMaterialShareLinkExpired(share)
+  ) {
+    return undefined;
+  }
+  return {
+    shareId: share.id,
+    code: share.code,
+    templateId: share.templateId,
+    templateVersion: share.templateVersion,
+    values: share.values,
+    canvas: share.canvas,
+    dataSource: share.dataSource,
+    networkName: share.networkName,
+    licenseName: share.licenseName,
+    origin: share.origin,
+  };
 }

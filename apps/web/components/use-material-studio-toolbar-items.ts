@@ -101,6 +101,13 @@ export function useMaterialStudioToolbarItems(studioId: string): MaterialStudioT
   const items = useMemo<EditorToolbarOverflowItem[]>(() => {
     const result: EditorToolbarOverflowItem[] = [
       {
+        id: 'share',
+        icon: 'share',
+        label: t('materialStudio.share'),
+        disabled: studioState.isBusy,
+        onClick: () => requestMaterialStudioAction({ studioId, action: 'share' }),
+      },
+      {
         id: 'history',
         icon: 'history',
         label: t('materialStudio.history'),

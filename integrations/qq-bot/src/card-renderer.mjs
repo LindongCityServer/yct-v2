@@ -231,6 +231,22 @@ function normalizeCard(input) {
         footer: cleanText(card.footer, 80)
       };
     }
+    case "signage":
+      return {
+        type: "signage",
+        title: cleanText(card.title, 24) || "\u968F\u673A\u7269\u6599",
+        eyebrow: cleanText(card.eyebrow, 40),
+        color: normalizeSignageColor(card.color),
+        icon: cleanText(card.icon, 24) || "explore",
+        headline: cleanText(card.headline, 40) || "\u968F\u673A\u7269\u6599",
+        subline: cleanText(card.subline, 60),
+        meta: Array.isArray(card.meta) ? card.meta.slice(0, 4).map((line) => cleanText(line, 80)).filter(Boolean) : [],
+        imageWidthPx: clampInt(card.imageWidthPx, 1, 8192, 640),
+        imageHeightPx: clampInt(card.imageHeightPx, 1, 8192, 480),
+        shareUrl: cleanText(card.shareUrl, 200),
+        date,
+        footer: cleanText(card.footer, 80)
+      };
     case "dice": {
       const sides = clampInt(card.sides, 2, 1e3, 6);
       const count = clampInt(card.count, 1, 20, 1);
@@ -268,6 +284,8 @@ function buildQqBotCardSvg(card) {
       return buildCoupletCard(card);
     case "poi":
       return buildPoiCard(card);
+    case "signage":
+      return buildSignageCard(card);
     case "dice":
       return buildDiceCard(card);
     default:
@@ -340,7 +358,11 @@ function buildWeatherCard(card) {
     card.current.humidity ? `\u6E7F\u5EA6 ${card.current.humidity}%` : "",
     card.current.wind
   ].filter(Boolean).join(" \xB7 ");
-  const tempSize = Array.from(card.current.temp).length > 3 ? 90 : 112;
+  const temperature = card.current.temp.trim();
+  const hasTemperature = /[-−－]?\d/u.test(temperature);
+  const temperatureText = hasTemperature ? `${temperature}\xB0` : "\u2014";
+  const tempSize = !hasTemperature ? 96 : Array.from(temperature).length > 3 ? 90 : 112;
+  const summaryX = Math.max(250, Math.round(28 + estimateTextWidth(temperatureText, tempSize) + 8));
   const days = card.days.slice(0, 2).map((day, index) => {
     const y = 466 + index * 70;
     return [
@@ -364,9 +386,9 @@ function buildWeatherCard(card) {
     `<g transform="translate(40,160)">`,
     `<rect width="640" height="260" rx="22" fill="${color}" fill-opacity="0.09"/>`,
     `<text x="28" y="42" font-size="14" font-weight="600" fill="${colors.textMuted}">\u73B0\u5728</text>`,
-    `<text x="28" y="170" font-size="${tempSize}" font-weight="700" fill="${colors.text}">${escapeXml(card.current.temp)}\xB0</text>`,
-    `<text x="250" y="122" font-size="30" font-weight="700" fill="${colors.text}">${escapeXml(card.current.condition)}</text>`,
-    details ? `<text x="250" y="164" font-size="16" fill="${colors.textSecondary}">${escapeXml(details)}</text>` : "",
+    `<text x="28" y="170" font-size="${tempSize}" font-weight="700" fill="${hasTemperature ? colors.text : colors.textMuted}">${escapeXml(temperatureText)}</text>`,
+    `<text x="${summaryX}" y="122" font-size="30" font-weight="700" fill="${colors.text}">${escapeXml(card.current.condition)}</text>`,
+    details ? `<text x="${summaryX}" y="164" font-size="16" fill="${colors.textSecondary}">${escapeXml(details)}</text>` : "",
     renderMaterialIconPath(weatherIconName(card.current.condition), 520, 190, 104, color),
     card.updated ? `<text x="612" y="42" text-anchor="end" font-size="13" fill="${colors.textMuted}">${escapeXml(card.updated)}</text>` : "",
     "</g>",
@@ -615,6 +637,51 @@ function buildPoiCard(card) {
     body
   });
 }
+function buildSignageCard(card) {
+  const color = normalizeSignageColor(card.color) ?? colors.primary;
+  const icon = card.icon || "explore";
+  const maxWidth = 640;
+  const maxHeight = 480;
+  const sourceWidth = card.imageWidthPx && card.imageWidthPx > 0 ? card.imageWidthPx : 640;
+  const sourceHeight = card.imageHeightPx && card.imageHeightPx > 0 ? card.imageHeightPx : 480;
+  const scale = Math.min(maxWidth / sourceWidth, maxHeight / sourceHeight);
+  const imageWidth = Math.max(1, Math.round(sourceWidth * scale));
+  const imageHeight = Math.max(1, Math.round(sourceHeight * scale));
+  const imageX = Math.round((720 - imageWidth) / 2);
+  const imageTop = 160;
+  const infoY = imageTop + imageHeight + 44;
+  const meta = (card.meta ?? []).slice(0, 4);
+  const qrY = infoY + 56 + meta.length * 20 + 24;
+  const height = qrY + 180;
+  const image = card.imageDataUri?.startsWith("data:image/") ? `<image x="${imageX}" y="${imageTop}" width="${imageWidth}" height="${imageHeight}" href="${card.imageDataUri}" preserveAspectRatio="none"/>` : [
+    `<rect x="${imageX}" y="${imageTop}" width="${imageWidth}" height="${imageHeight}" rx="12" fill="${colors.surfaceMuted}"/>`,
+    `<text x="360" y="${imageTop + imageHeight / 2}" text-anchor="middle" font-size="16" fill="${colors.textMuted}">\u724C\u9762\u56FE\u7247\u4E0D\u53EF\u7528</text>`
+  ].join("");
+  const body = [
+    image,
+    `<text x="40" y="${infoY}" font-size="30" font-weight="700" fill="${colors.text}">${escapeXml(shortText(card.headline || "\u968F\u673A\u7269\u6599", 20))}</text>`,
+    card.subline ? `<text x="40" y="${infoY + 28}" font-size="15" fill="${colors.textMuted}">${escapeXml(shortText(card.subline, 40))}</text>` : "",
+    ...meta.map(
+      (line, index) => `<text x="40" y="${infoY + 56 + index * 20}" font-size="13" fill="${colors.textSecondary}">${escapeXml(shortText(line, 48))}</text>`
+    ),
+    card.qrDataUrl?.startsWith("data:image/") ? `<image x="600" y="${qrY}" width="72" height="72" href="${card.qrDataUrl}"/>` : `<rect x="600" y="${qrY}" width="72" height="72" rx="4" fill="${colors.surfaceMuted}" stroke="${colors.borderSubtle}"/>`,
+    `<text x="40" y="${qrY + 36}" font-size="14" fill="${colors.textSecondary}">\u626B\u7801\u5728\u96E8\u57CE\u901A\u7EE7\u7EED\u7F16\u8F91\uFF0830 \u5929\u5185\uFF09</text>`,
+    card.shareUrl ? `<text x="40" y="${qrY + 60}" font-size="12" fill="${colors.textMuted}">${escapeXml(shortText(card.shareUrl, 64))}</text>` : ""
+  ].join("");
+  return buildFrame({
+    height,
+    color,
+    icon,
+    title: shortText(card.title || "\u968F\u673A\u7269\u6599", 18),
+    eyebrow: shortText(card.eyebrow || `\u57CE\u5E02\u7269\u6599 \xB7 ${displayDate(card.date)}`, 40),
+    footer: card.footer || "\u96E8\u57CE\u901A \xB7 \u968F\u673A\u751F\u6210\uFF0C\u975E\u6B63\u5F0F\u7269\u6599",
+    body
+  });
+}
+function normalizeSignageColor(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return /^#[0-9a-fA-F]{6}$/.test(text) ? text : void 0;
+}
 function buildDiceCard(card) {
   const color = "#168F78";
   const diceSize = card.rolls.length === 1 ? 160 : card.rolls.length <= 3 ? 108 : 84;
@@ -856,7 +923,9 @@ function renderQqBotCardPng(card) {
   return new Resvg(buildQqBotCardSvg(card), {
     font: {
       fontFiles,
-      loadSystemFonts: true,
+      // 卡片正文只用 HarmonyOS Sans SC：显式字体已加载时不再扫描系统字体。
+      // resvg 在 Windows 上扫描系统字体每次约 0.5–1 秒，机器人每张卡片都会被拖慢。
+      loadSystemFonts: fontFiles.length === 0,
       defaultFontFamily: fontFiles.length > 0 ? "HarmonyOS Sans SC" : "Microsoft YaHei",
       sansSerifFamily: fontFiles.length > 0 ? "HarmonyOS Sans SC" : "Microsoft YaHei"
     }
@@ -966,8 +1035,8 @@ function renderHeader(header) {
   return [
     `<rect x="40" y="40" width="88" height="88" rx="14" fill="${header.color}"/>`,
     renderMaterialIcon(header.icon, 40, 40, 88),
-    `<text x="152" y="78" font-size="34" font-weight="700" fill="${colors.text}">${escapeXml(shortText(header.title, 18))}</text>`,
-    `<text x="152" y="108" font-size="14" font-weight="600" fill="${colors.textMuted}">${escapeXml(shortText(header.eyebrow, 40))}</text>`
+    `<text x="152" y="78" font-size="34" font-weight="700" fill="${colors.text}">${escapeXml(clipTextToWidth(header.title, 528, 34))}</text>`,
+    `<text x="152" y="108" font-size="14" font-weight="600" fill="${colors.textMuted}">${escapeXml(clipTextKeepingTail(header.eyebrow, 528, 14))}</text>`
   ].join("");
 }
 function renderMaterialIcon(name, tileX, tileY, tileSize) {
@@ -1010,13 +1079,14 @@ function renderFooter(footer, height) {
   const [source, sender, sentAt] = footer.split("\uFF5C").map((part) => part.trim());
   const wordmark = getWordmarkDataUri();
   const meta = sender ? `\u53D1\u9001\u4EBA\uFF1A${sender}${sentAt ? ` \xB7 ${sentAt}` : ""}` : "\u96E8\u57CE\u901A \xB7 \u95EE\u4E00\u95EE";
+  const metaMaxWidth = wordmark ? 456 : 592;
   return [
     `<line x1="40" y1="${height - 104}" x2="680" y2="${height - 104}" stroke="${colors.borderSubtle}" stroke-width="1"/>`,
     wordmark ? `<image x="40" y="${height - 94}" width="160" height="34" href="${wordmark}" preserveAspectRatio="xMinYMid meet"/>` : renderBrandLogo(40, height - 86, 30),
     wordmark ? "" : `<text x="78" y="${height - 72}" font-size="15" font-weight="700" fill="${colors.text}">\u96E8\u57CE\u901A</text>
-         <text x="78" y="${height - 48}" font-size="12" fill="${colors.textMuted}">${escapeXml(meta)}</text>`,
+         <text x="78" y="${height - 48}" font-size="12" fill="${colors.textMuted}">${escapeXml(clipTextKeepingTail(meta, 592, 12))}</text>`,
     `<text x="680" y="${height - 76}" text-anchor="end" font-size="16" fill="${colors.textSecondary}">${escapeXml(shortText(source || "\u96E8\u57CE\u901A \xB7 \u95EE\u4E00\u95EE", 30))}</text>`,
-    `<text x="680" y="${height - 52}" text-anchor="end" font-size="14" fill="${colors.textMuted}">${escapeXml(shortText(meta, 34))}</text>`
+    `<text x="680" y="${height - 52}" text-anchor="end" font-size="14" fill="${colors.textMuted}">${escapeXml(clipTextKeepingTail(meta, metaMaxWidth, 14))}</text>`
   ].join("");
 }
 var wordmarkDataUri;
@@ -1237,6 +1307,38 @@ function estimateTextWidth(value, fontSize) {
 function shortText(value, maxChars) {
   const chars = Array.from(value);
   return chars.length > maxChars ? `${chars.slice(0, maxChars).join("")}\u2026` : value;
+}
+function clipTextToWidth(value, maxWidth, fontSize) {
+  if (estimateTextWidth(value, fontSize) <= maxWidth) {
+    return value;
+  }
+  const ellipsis = "\u2026";
+  const budget = Math.max(0, maxWidth - estimateTextWidth(ellipsis, fontSize));
+  const chars = Array.from(value);
+  let width = 0;
+  let end = 0;
+  for (const character of chars) {
+    const characterWidth = estimateTextWidth(character, fontSize);
+    if (width + characterWidth > budget) {
+      break;
+    }
+    width += characterWidth;
+    end += 1;
+  }
+  return `${chars.slice(0, end).join("")}${ellipsis}`;
+}
+function clipTextKeepingTail(value, maxWidth, fontSize, separator = " \xB7 ") {
+  const index = value.lastIndexOf(separator);
+  if (index <= 0) {
+    return clipTextToWidth(value, maxWidth, fontSize);
+  }
+  const head = value.slice(0, index);
+  const tail = value.slice(index);
+  const tailWidth = estimateTextWidth(tail, fontSize);
+  if (tailWidth >= maxWidth) {
+    return clipTextToWidth(value, maxWidth, fontSize);
+  }
+  return `${clipTextToWidth(head, maxWidth - tailWidth, fontSize)}${tail}`;
 }
 function fortuneTone(score) {
   const label = score >= 80 ? "\u5927\u5409" : score >= 60 ? "\u4E2D\u5409" : score >= 40 ? "\u5C0F\u5409" : score >= 20 ? "\u5E73" : "\u5C0F\u51F6";

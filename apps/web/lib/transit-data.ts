@@ -26,6 +26,12 @@ import type { TransitTripInstance, TransitTripStopTime } from './transit-realtim
 
 const transitOverviewCache = createTimedCache<TransitOverview>(30 * 1000);
 const transitRealtimeOverviewCache = createTimedCache<TransitOverview>(30 * 1000);
+/**
+ * 物料目录也用同一份已发布线网快照，但读的是「含规划及关闭对象」的版本。
+ * 这个读法没有公共接口的 30 秒缓存，而一次物料渲染会读它三四次；
+ * 大一点的线网库会因此把出图拖到十几秒，所以这里单独缓存 30 秒。
+ */
+const materialTransitOverviewCache = createTimedCache<TransitOverview>(30 * 1000);
 
 export async function readTransitOverview(): Promise<TransitOverview> {
   return transitOverviewCache.read('transit-overview', readTransitOverviewUncached);
@@ -45,9 +51,17 @@ export async function readTransitRealtimeOverview(): Promise<TransitOverview> {
 export function clearTransitOverviewCache(): void {
   transitOverviewCache.clear();
   transitRealtimeOverviewCache.clear();
+  materialTransitOverviewCache.clear();
 }
 
 export async function readMaterialTransitOverview(): Promise<TransitOverview> {
+  return materialTransitOverviewCache.read(
+    'material-transit-overview',
+    readMaterialTransitOverviewUncached,
+  );
+}
+
+async function readMaterialTransitOverviewUncached(): Promise<TransitOverview> {
   const modeProfiles = await readTransitModeProfiles();
   const publishedSnapshot = await readPublishedTransitEntitySnapshot();
   if (!publishedSnapshot) {

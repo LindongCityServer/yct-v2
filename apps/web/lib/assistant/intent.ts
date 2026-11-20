@@ -487,11 +487,13 @@ function detectAccountDataKind(query: string): AssistantAccountDataKind | undefi
 
 function detectPublicInfo(query: string): AssistantIntentResult | undefined {
   const toolHints = buildPublicInfoToolHints(query);
-  if (transitPublicPattern.test(query)) {
-    return createResult('public_info', 'medium', 'public_info.transit', { toolHints });
-  }
+  // 公告/停运/调整这类运营信息优先归到 operations：
+  // 它们和线路、站点共用一些词，但按群范围关闭时应该跟着「公告与运营」走。
   if (operationPublicPattern.test(query)) {
     return createResult('public_info', 'medium', 'public_info.operations', { toolHints });
+  }
+  if (transitPublicPattern.test(query)) {
+    return createResult('public_info', 'medium', 'public_info.transit', { toolHints });
   }
   if (placePublicPattern.test(query)) {
     return createResult('public_info', 'medium', 'public_info.place', { toolHints });

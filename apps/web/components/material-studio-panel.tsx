@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  MaterialCanvasConfig,
   MaterialGlyphConfig,
   MaterialTransitNetworkSnapshot,
   TileProviderDescriptor,
@@ -15,6 +16,7 @@ import {
   type ReactNode,
 } from 'react';
 import { trackAnalyticsEvent } from '../lib/analytics/client';
+import QRCode from 'qrcode';
 import { appPath } from '../lib/app-paths';
 import { PREVIEW_DIALOG_MEDIA_QUERY, SINGLE_COLUMN_MEDIA_QUERY } from '../lib/breakpoints';
 import {
@@ -116,7 +118,7 @@ import { VisualEditorShell } from './visual-editor-shell';
 import { EditorDialogPortal } from './editor/editor-dialog-portal';
 import { TransitNetworkSourceControl } from './transit-network-source-control';
 import { MaterialPreviewErrorNotice } from './material-save-download-dialog';
-import { Button, IconButton } from './ui/button';
+import { Button, ButtonLink, IconButton } from './ui/button';
 import { Eyebrow } from './ui/status';
 import { CheckboxRow, RadioRow } from './ui/checkbox-row';
 import { Field, FieldGroup, Input, Select } from './ui/field';
@@ -332,6 +334,20 @@ function listRmpLineTerminalStations(
   );
 }
 
+/** 从分享链接载入的物料；由服务端页面查询后传入。 */
+export interface InitialSharedMaterial {
+  shareId: string;
+  code: string;
+  templateId: string;
+  templateVersion: number;
+  values: Record<string, string>;
+  canvas: MaterialCanvasConfig;
+  dataSource?: string;
+  networkName?: string;
+  licenseName?: string;
+  origin?: 'bot' | 'workbench';
+}
+
 export function MaterialStudioPanel({
   studioId,
   title,
@@ -346,6 +362,8 @@ export function MaterialStudioPanel({
   compactCanvasControls = false,
   allowTransitNetworkImport = false,
   workspace = false,
+  initialMaterial,
+  initialTemplateId,
 }: Readonly<{
   studioId: string;
   title: string;
@@ -363,6 +381,10 @@ export function MaterialStudioPanel({
   allowTransitNetworkImport?: boolean;
   /** 使用统一可视化工作台外壳（标题栏 + 三栏 + 面板开关 + 保存语义）。 */
   workspace?: boolean;
+  /** 从分享链接载入的完整物料（优先于本机草稿）。 */
+  initialMaterial?: InitialSharedMaterial;
+  /** 只打开某个模板（分享过期 / 记录被清理时使用）。 */
+  initialTemplateId?: string;
 }>) {
   const [items, setItems] = useState<PublishedMaterialTemplate[]>([]);
   const [drafts, setDrafts] = useState<MaterialDraft[]>([]);
@@ -407,6 +429,13 @@ export function MaterialStudioPanel({
   const [isSingleColumnViewport, setIsSingleColumnViewport] = useState(false);
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareResult, setShareResult] = useState<{
+    id: string;
+    url: string;
+    qrDataUrl: string;
+    watermark: boolean;
+  } | null>(null);
   const [isApplyWizardOpen, setIsApplyWizardOpen] = useState(false);
   /** 模板库当前预览的模板入口（可能与当前画布模板不同，用于跨入口切换）。 */
   const [applyWizardEntryId, setApplyWizardEntryId] = useState('');
@@ -1895,6 +1924,41 @@ export function MaterialStudioPanel({
   useEffect(() => {
     let cancelled = false;
     const sourceIntentRevision = transitNetworkSourceIntentRevisionRef.current;
+    // 分享链接优先于本机草稿：扫码后看到的必须是被分享的那一块牌子。
+    if (initialMaterial) {
+      const now = new Date().toISOString();
+      const record: MaterialOfflineDraftRecord = {
+        localDraftId: createMaterialOfflineDraftId(),
+        studioId,
+        templateId: initialMaterial.templateId,
+        templateVersion: initialMaterial.templateVersion,
+        input: initialMaterial.values,
+        canvas: initialMaterial.canvas,
+        mode: 'manual',
+        transitNetworkSource: 'server',
+        createdAt: now,
+        updatedAt: now,
+        syncStatus: 'local',
+      };
+      localDraftRef.current = record;
+      setLocalDraft(record);
+      setSelectedTemplateId(record.templateId);
+      setMode('manual');
+      setLocalDraftReady(true);
+      publishToastRequested({
+        message: `已载入分享物料 ${initialMaterial.code}`,
+        tone: 'success',
+      });
+      return;
+    }
+    if (initialTemplateId) {
+      localDraftRef.current = null;
+      setLocalDraft(null);
+      setSelectedTemplateId(initialTemplateId);
+      setLocalDraftReady(true);
+      publishToastRequested({ message: '分享已过期，已打开原模板', tone: 'info' });
+      return;
+    }
     void readLatestMaterialOfflineDraft(studioId).then((record) => {
       if (cancelled) {
         return;
@@ -1939,7 +2003,7 @@ export function MaterialStudioPanel({
     return () => {
       cancelled = true;
     };
-  }, [studioId]);
+  }, [studioId, initialMaterial?.shareId, initialTemplateId]);
 
   useEffect(() => {
     const updateOnlineState = () => setIsOnline(navigator.onLine);
@@ -3729,6 +3793,76 @@ export function MaterialStudioPanel({
     }
   };
 
+  // 工作台发起分享：登录用户把当前编辑值存成短链，分享图水印由服务端判定。
+  const shareCurrentMaterial = async () => {
+    if (!selected || !activeCanvas) {
+      blockAction('当前没有可分享的物料。');
+      return;
+    }
+    if (
+      accountSession.accountStatus === 'anonymous' ||
+      accountSession.accountStatus === 'not_configured'
+    ) {
+      blockAction(t('materialStudio.shareLoginRequired'));
+      return;
+    }
+    if (isSharing) {
+      return;
+    }
+    setIsSharing(true);
+    try {
+      const serverSource =
+        mode === 'server'
+          ? buildServerSourceForFamily(selected.template.family, selected.template.fields)
+          : undefined;
+      const sourceKind =
+        mode === 'server'
+          ? (serverSource?.source as { kind?: string } | undefined)?.kind
+          : 'manual';
+      const response = await fetch(appPath('/api/materials/share-links'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateId: selected.id,
+          templateVersion: selected.template.version,
+          values: input,
+          canvas: activeCanvas,
+          sourceKind,
+          source: serverSource?.source,
+          networkGeometry: serverSource?.networkGeometry,
+          dataSource: 'server',
+          draftId: localDraft?.serverDraftId,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        shareId?: string;
+        shareUrl?: string;
+        shareImageWatermark?: boolean;
+        message?: string;
+      };
+      if (!response.ok || !data.shareId || !data.shareUrl) {
+        blockAction(data.message ?? t('materialStudio.shareFailed'));
+        return;
+      }
+      const qrDataUrl = await QRCode.toDataURL(data.shareUrl, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        width: 256,
+        color: { dark: '#263c3a', light: '#ffffff' },
+      });
+      setShareResult({
+        id: data.shareId,
+        url: data.shareUrl,
+        qrDataUrl,
+        watermark: data.shareImageWatermark === true,
+      });
+    } catch {
+      blockAction(t('materialStudio.shareFailed'));
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   // 材料工作室快捷动作：预览、导出工程、切换样式模板、切换数据源。
   const studioKeyboardHandlerRef = useRef<(event: KeyboardEvent) => void>(() => undefined);
   studioKeyboardHandlerRef.current = (event) => {
@@ -3811,6 +3945,10 @@ export function MaterialStudioPanel({
       }
       if (isBusy) {
         blockAction(t('materialStudio.operationBusy'));
+        return;
+      }
+      if (action === 'share') {
+        void shareCurrentMaterial();
         return;
       }
       if (action === 'submit') {
@@ -3983,6 +4121,92 @@ export function MaterialStudioPanel({
             ) : (
               <p className="material-history-empty">{t('materialStudio.noSubmittedYet')}</p>
             )}
+          </Modal>
+        </EditorDialogPortal>
+      ) : null}
+
+      {shareResult ? (
+        <EditorDialogPortal>
+          <Modal
+            labelledBy="material-share-heading"
+            backdropClassName="editor-dialog-backdrop"
+            className="material-history-dialog"
+            onBackdropClick={() => setShareResult(null)}
+          >
+            <div className="material-history-heading">
+              <div>
+                <h2 id="material-share-heading">{t('materialStudio.shareTitle')}</h2>
+                <p className="muted">{t('materialStudio.shareHint')}</p>
+              </div>
+              <IconButton
+                variant="icon"
+                icon="close"
+                label={t('materialStudio.close')}
+                title={t('materialStudio.close')}
+                autoFocus
+                onClick={() => setShareResult(null)}
+              />
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                gap: '1.25rem',
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+                padding: '0 0 0.5rem',
+              }}
+            >
+              <img
+                src={shareResult.qrDataUrl}
+                alt={t('materialStudio.shareQrAlt')}
+                width={192}
+                height={192}
+                style={{ borderRadius: 12, border: '1px solid #e9edec' }}
+              />
+              <div
+                style={{
+                  flex: '1 1 220px',
+                  minWidth: 0,
+                  display: 'grid',
+                  gap: '0.75rem',
+                }}
+              >
+                <input
+                  readOnly
+                  value={shareResult.url}
+                  onFocus={(event) => event.currentTarget.select()}
+                  aria-label={t('materialStudio.shareLinkLabel')}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem 0.75rem',
+                    border: '1px solid #dfe5e4',
+                    borderRadius: 8,
+                    font: 'inherit',
+                  }}
+                />
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(shareResult.url);
+                    }}
+                  >
+                    {t('materialStudio.shareCopy')}
+                  </Button>
+                  <ButtonLink
+                    variant="secondary"
+                    href={`${appPath('/api/materials/share-links')}/${shareResult.id}/card`}
+                    download
+                  >
+                    {t('materialStudio.shareDownloadImage')}
+                  </ButtonLink>
+                </div>
+                {shareResult.watermark ? (
+                  <p className="muted">{t('materialStudio.shareWatermarkHint')}</p>
+                ) : null}
+              </div>
+            </div>
           </Modal>
         </EditorDialogPortal>
       ) : null}
@@ -6688,13 +6912,17 @@ function MaterialFieldEditor({
     selectOptions.length <= 4;
   // 分段控件是一组按钮，不能再套 <label>：label 会把点击/交互转发给第一个按钮，
   // 表现为“指针在任意位置都命中第一个选项”。
-  const FieldElement = rendersSegmentedSelect ? 'div' : 'label';
   return (
-    <FieldElement className={`material-field${rendersSegmentedSelect ? ' is-segmented' : ''}`}>
-      <span>
-        {labelOverride ?? field.label}
-        {field.required ? ' *' : ''}
-      </span>
+    <FieldGroup
+      as={rendersSegmentedSelect ? 'div' : 'label'}
+      className={rendersSegmentedSelect ? 'is-segmented' : undefined}
+      label={
+        <>
+          {labelOverride ?? field.label}
+          {field.required ? ' *' : ''}
+        </>
+      }
+    >
       {field.kind === 'select' ? (
         rendersSegmentedSelect ? (
           <SegmentedControl
@@ -6804,7 +7032,7 @@ function MaterialFieldEditor({
           onChange={(event) => onChange(event.currentTarget.value)}
         />
       )}
-    </FieldElement>
+    </FieldGroup>
   );
 }
 

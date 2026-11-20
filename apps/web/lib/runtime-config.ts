@@ -31,6 +31,7 @@ export interface RuntimeConfig {
   materialDraftStorePath: string;
   materialTransitNetworkProjectStorePath: string;
   materialExportAuditStorePath: string;
+  materialShareLinkStorePath: string;
   transitDataStorePath: string;
   transitModeProfileStorePath: string;
   transitTripLabelPoolStorePath: string;
@@ -211,6 +212,10 @@ export function readRuntimeConfig(): RuntimeConfig {
     materialExportAuditStorePath: resolveRuntimePath(
       process.env.YCT_MATERIAL_EXPORT_AUDIT_STORE_PATH,
       '.yct-data/material-export-audit-store.json',
+    ),
+    materialShareLinkStorePath: resolveRuntimePath(
+      process.env.YCT_MATERIAL_SHARE_LINK_STORE_PATH,
+      '.yct-data/material-share-links.json',
     ),
     transitDataStorePath: resolveRuntimePath(
       process.env.YCT_TRANSIT_DATA_STORE_PATH,

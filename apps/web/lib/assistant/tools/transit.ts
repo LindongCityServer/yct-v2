@@ -16,6 +16,7 @@ interface SearchTransitInput {
 
 export const searchTransitTool: AssistantTool<SearchTransitInput> = {
   name: 'search_transit',
+  scope: 'transit',
   title: '搜索线路与站点',
   description:
     '检索公交/地铁线路和站点详情，返回线路经过的站点、票价、运营方，或站点的设施、出口与换乘信息。',
@@ -127,6 +128,7 @@ interface LineTimetableInput {
 
 export const lineTimetableTool: AssistantTool<LineTimetableInput> = {
   name: 'line_timetable',
+  scope: 'transit',
   title: '线路发车时刻',
   description:
     '查询某条线路的首末班和上下行下一班发车时间。时间以北京时间计算，可直接回答“末班车还有吗”。',
@@ -204,6 +206,7 @@ interface JourneyPlanInput {
 
 export const journeyPlanTool: AssistantTool<JourneyPlanInput> = {
   name: 'plan_journey',
+  scope: 'transit',
   title: '换乘方案',
   description:
     '按班次数据规划从起点站到终点站的乘车方案，返回出发/到达时间、耗时、换乘次数和购票状态。',
@@ -241,6 +244,7 @@ export const journeyPlanTool: AssistantTool<JourneyPlanInput> = {
 
 export const networkHealthTool: AssistantTool = {
   name: 'network_health',
+  scope: 'transit',
   title: '线网数据健康',
   description:
     '报告当前收录的线路数、站点数、不完整线路和换乘站数量，用于解释“为什么某条线路没有数据”。',

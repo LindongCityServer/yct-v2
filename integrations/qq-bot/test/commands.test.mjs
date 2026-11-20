@@ -108,6 +108,33 @@ test('天气指令使用配置中的城市', async () => {
   });
   assert.equal(belowZero.card?.days?.[0].low, '-1');
   assert.equal(belowZero.card?.days?.[0].condition, '晴');
+
+  const freezing = await handleCommand({
+    ...base,
+    text: '/天气 瓦房店',
+    context: { kind: 'group', groupId: 'g1', userId: 'u1', userName: '测试' },
+    weather: async () =>
+      '辽宁省大连市瓦房店市天气（11-20 07:01更新）：\n现在 -5℃、多云、湿度 59%、北风 5级。\n今天 -5~2℃、白天多云。\n明天 -6~-1℃、白天晴。',
+  });
+  assert.equal(freezing.card?.current.temp, '-5');
+  assert.equal(freezing.card?.current.condition, '多云');
+  assert.equal(freezing.card?.current.humidity, '59');
+  assert.equal(freezing.card?.current.wind, '北风 5级');
+  assert.equal(freezing.card?.updated, '11-20 07:01更新');
+  assert.equal(freezing.card?.days?.[1].low, '-6');
+  assert.equal(freezing.card?.days?.[1].high, '-1');
+
+  const fullWidthMinus = await handleCommand({
+    ...base,
+    text: '/天气 哈尔滨',
+    context: { kind: 'group', groupId: 'g1', userId: 'u1', userName: '测试' },
+    weather: async () => '哈尔滨市天气：\n现在 −8℃、晴、体感 −13℃、湿度 76%、风 4 km/h。',
+  });
+  assert.equal(fullWidthMinus.card?.current.temp, '-8');
+  assert.equal(fullWidthMinus.card?.current.condition, '晴');
+  assert.equal(fullWidthMinus.card?.current.feels, '-13');
+  assert.equal(fullWidthMinus.card?.current.humidity, '76');
+  assert.equal(fullWidthMinus.card?.current.wind, '风 4 km/h');
 });
 
 test('IP 属地与历史上的今天指令', async () => {

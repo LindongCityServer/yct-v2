@@ -18,6 +18,7 @@ interface SearchSiteContentInput {
 /** 运营公告、服务目录与 FAQ 的统一检索，补齐 MCP 只有出行/地点工具的缺口。 */
 export const searchSiteContentTool: AssistantTool<SearchSiteContentInput> = {
   name: 'search_site_content',
+  scope: 'basics',
   title: '搜索站内内容',
   description:
     '检索运营公告、服务目录和常见问题（FAQ）。适合“最近有什么公告”“哪里能买票”“怎么安装应用”“为什么找不到数据”这类站内信息问题。',
@@ -158,6 +159,7 @@ interface OperationDetailInput {
 /** 运营公告正文，供 MCP 客户端在检索到摘要后继续读取细节。 */
 export const operationDetailTool: AssistantTool<OperationDetailInput> = {
   name: 'get_operation_detail',
+  scope: 'operations',
   title: '运营公告详情',
   description: '按 ID 读取一条运营公告的完整正文；先用 search_site_content 或其它工具拿到公告 ID。',
   inputSchema: {
@@ -217,6 +219,7 @@ interface QueryTravelSchedulesInput {
 /** 客运班次列表：补齐 plan_journey 只能给起终点方案、无法按站点或日期浏览班次的缺口。 */
 export const queryTravelSchedulesTool: AssistantTool<QueryTravelSchedulesInput> = {
   name: 'query_travel_schedules',
+  scope: 'transit',
   title: '客运班次列表',
   description:
     '按站点、起终点、日期或班次号查询客运/船班/航班班次列表，返回发车时间、票价、班次性质与备注。适合“明天有哪些船班”“某站有哪些班次”这类问题。',

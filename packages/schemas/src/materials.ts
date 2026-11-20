@@ -643,6 +643,73 @@ export const materialPreviewRequestSchema = z
     }
   });
 
+export const materialShareLinkDataSourceSchema = z.enum(['server', 'sample', 'project']);
+
+/**
+ * 物料分享来源类型。
+ *
+ * 契约里 `dataSource` 是数据源类别（server / sample / project），`sourceKind` 是细化来源
+ * （manual / transit_line / ...）。创建接口两种写法都收：来源类别可直接写在 `sourceKind`，
+ * 兼容机器人渲染接口的 `source.kind` 口径，服务端再落到对应字段上。
+ */
+export const materialShareLinkSourceKindSchema = z.enum([
+  'server',
+  'sample',
+  'project',
+  'manual',
+  'transit_line',
+  'transit_station',
+  'map_location',
+  'road_coordinate',
+]);
+
+/** 工作台发起分享的创建请求。 */
+export const materialShareLinkCreateRequestSchema = z.object({
+  templateId: idSchema,
+  templateVersion: z.number().int().positive(),
+  values: materialInputRecordSchema,
+  canvas: materialCanvasSchema,
+  sourceKind: materialShareLinkSourceKindSchema.optional(),
+  sourceRef: z.string().trim().min(1).max(2_000).optional(),
+  /** 服务器来源的结构化描述：服务端据此重新解析字段，判定分享图水印。 */
+  source: materialServerSourceSchema.optional(),
+  networkGeometry: materialTransitNetworkSnapshotSchema.optional(),
+  dataSource: materialShareLinkDataSourceSchema.optional(),
+  draftId: idSchema.optional(),
+  networkName: z.string().trim().max(120).optional(),
+  licenseName: z.string().trim().max(160).optional(),
+  licenseUrl: z.string().trim().max(500).optional(),
+});
+
+export const materialShareLinkCreateResponseSchema = z.object({
+  shareId: z.string(),
+  shareUrl: z.string(),
+  shareImageWatermark: z.boolean(),
+});
+
+/** 公开只读的分享记录（脱敏：不含 createdBy / revokedBy / seed / sourceRef）。 */
+export const materialShareLinkPublicResponseSchema = z.object({
+  shareId: z.string(),
+  slug: z.string(),
+  createdAt: z.string(),
+  kind: z.enum(['road_sign', 'address_sign', 'bus_stop', 'metro_line', 'custom']),
+  code: z.string(),
+  templateId: z.string(),
+  templateVersion: z.number().int().positive(),
+  templateTitle: z.string(),
+  dataSource: materialShareLinkDataSourceSchema,
+  origin: z.enum(['bot', 'workbench']),
+  status: z.enum(['active', 'revoked']),
+  expired: z.boolean(),
+  stub: z.boolean(),
+  shareImageWatermark: z.boolean(),
+  networkName: z.string().optional(),
+  licenseName: z.string().optional(),
+  licenseUrl: z.string().optional(),
+  values: materialInputRecordSchema.optional(),
+  canvas: materialCanvasSchema.optional(),
+});
+
 export type MaterialTemplateDraftInput = z.infer<typeof materialTemplateDraftSchema>;
 export type MaterialDraftInput = z.infer<typeof materialDraftInputSchema>;
 export type MaterialExportRequestInput = z.infer<typeof materialExportRequestSchema>;
@@ -657,3 +724,8 @@ export type MaterialTransitNetworkProjectCreateInput = z.infer<
 export type MaterialTransitNetworkProjectUpdateInput = z.infer<
   typeof materialTransitNetworkProjectUpdateSchema
 >;
+export type MaterialShareLinkCreateRequestInput = z.infer<
+  typeof materialShareLinkCreateRequestSchema
+>;
+export type MaterialShareLinkCreateResponse = z.infer<typeof materialShareLinkCreateResponseSchema>;
+export type MaterialShareLinkPublicResponse = z.infer<typeof materialShareLinkPublicResponseSchema>;

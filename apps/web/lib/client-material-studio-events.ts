@@ -1,4 +1,4 @@
-export type MaterialStudioAction = 'submit' | 'download' | 'export-project' | 'history';
+export type MaterialStudioAction = 'submit' | 'download' | 'export-project' | 'history' | 'share';
 
 export interface MaterialStudioActionRequestedPayload {
   studioId: string;

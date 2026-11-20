@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { loadConfig, parseEnvFile } from '../src/config.mjs';
+import { describeConfig, loadConfig, parseEnvFile } from '../src/config.mjs';
 
 const completeEnv = {
   QQ_BOT_APP_ID: '1020304050',
@@ -140,13 +140,64 @@ test('非法数值和 URL 会报错', () => {
   assert.match(text, /YCT_ASSISTANT_PROVIDER/);
 });
 
-test('群聊绑定默认开启，TTL 和缓存容量可配置', () => {
+test('物料盲盒配置默认值与校验', () => {
+  const envPath = join(tmpdir(), 'no-such-qq-bot.env');
+  const defaults = loadConfig({ env: completeEnv, envPath });
+  assert.deepEqual(defaults.problems, []);
+  assert.equal(defaults.config.materials.enabled, true);
+  assert.equal(defaults.config.materials.secret, '');
+  assert.equal(defaults.config.materials.timeoutMs, 20000);
+  assert.ok(
+    defaults.config.materials.sourcePath.endsWith('state\\material-sources.json') ||
+      defaults.config.materials.sourcePath.endsWith('state/material-sources.json'),
+  );
+  assert.match(defaults.warnings.join('\n'), /QQ_BOT_MATERIAL_SECRET/);
+
+  const custom = loadConfig({
+    env: {
+      ...completeEnv,
+      QQ_BOT_MATERIALS: '0',
+      QQ_BOT_MATERIAL_SECRET: 'material-secret-value',
+      QQ_BOT_MATERIAL_TIMEOUT_MS: '5000',
+      QQ_BOT_MATERIAL_SOURCE_PATH: 'state/custom-material-sources.json',
+    },
+    envPath,
+  });
+  assert.deepEqual(custom.problems, []);
+  assert.equal(custom.config.materials.enabled, false);
+  assert.equal(custom.config.materials.secret, 'material-secret-value');
+  assert.equal(custom.config.materials.timeoutMs, 5000);
+  assert.ok(
+    custom.config.materials.sourcePath.endsWith('state\\custom-material-sources.json') ||
+      custom.config.materials.sourcePath.endsWith('state/custom-material-sources.json'),
+  );
+
+  const invalid = loadConfig({
+    env: { ...completeEnv, QQ_BOT_MATERIAL_TIMEOUT_MS: '100' },
+    envPath,
+  });
+  assert.match(invalid.problems.join('\n'), /QQ_BOT_MATERIAL_TIMEOUT_MS/);
+});
+
+test('describeConfig 展示物料开关但不打印 secret', () => {
+  const { config } = loadConfig({
+    env: { ...completeEnv, QQ_BOT_MATERIAL_SECRET: 'super-secret-material' },
+    envPath: join(tmpdir(), 'no-such-qq-bot.env'),
+  });
+  const text = describeConfig(config);
+  assert.match(text, /物料盲盒：开/);
+  assert.match(text, /QQ_BOT_MATERIAL_TIMEOUT_MS|超时 20000 ms/);
+  assert.equal(text.includes('super-secret-material'), false);
+});
+
+test('群聊绑定默认开启，TTL、缓存容量和请求超时可配置', () => {
   const envPath = join(tmpdir(), 'no-such-qq-bot.env');
   const defaults = loadConfig({ env: completeEnv, envPath });
   assert.deepEqual(defaults.problems, []);
   assert.equal(defaults.config.link.groupEnabled, true);
   assert.equal(defaults.config.link.groupTokenTtlMs, 300_000);
   assert.equal(defaults.config.link.groupTokenCacheMax, 10_000);
+  assert.equal(defaults.config.link.timeoutMs, 20_000);
 
   const custom = loadConfig({
     env: {
@@ -154,6 +205,7 @@ test('群聊绑定默认开启，TTL 和缓存容量可配置', () => {
       QQ_GROUP_LINK_ENABLED: '0',
       QQ_BOT_GROUP_LINK_TTL_MS: '120000',
       QQ_BOT_GROUP_LINK_CACHE_MAX: '200',
+      QQ_BOT_LINK_TIMEOUT_MS: '5000',
     },
     envPath,
   });
@@ -161,16 +213,19 @@ test('群聊绑定默认开启，TTL 和缓存容量可配置', () => {
   assert.equal(custom.config.link.groupEnabled, false);
   assert.equal(custom.config.link.groupTokenTtlMs, 120_000);
   assert.equal(custom.config.link.groupTokenCacheMax, 200);
+  assert.equal(custom.config.link.timeoutMs, 5_000);
 
   const invalid = loadConfig({
     env: {
       ...completeEnv,
       QQ_BOT_GROUP_LINK_TTL_MS: '5',
       QQ_BOT_GROUP_LINK_CACHE_MAX: '0',
+      QQ_BOT_LINK_TIMEOUT_MS: '100',
     },
     envPath,
   });
   const text = invalid.problems.join('\n');
   assert.match(text, /QQ_BOT_GROUP_LINK_TTL_MS/);
   assert.match(text, /QQ_BOT_GROUP_LINK_CACHE_MAX/);
+  assert.match(text, /QQ_BOT_LINK_TIMEOUT_MS/);
 });

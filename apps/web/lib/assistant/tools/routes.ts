@@ -35,6 +35,7 @@ const routeTransportModes = new Set<RouteTransportMode>([
  */
 export const planRouteTool: AssistantTool<PlanRouteInput> = {
   name: 'plan_route',
+  scope: 'transit',
   title: '地图路线规划',
   description:
     '规划两个地图地点之间的步行、打车和公共交通路线，返回耗时、距离、票价、换乘次数、到发时刻与文字步骤。可按指定出发时刻（timeMode=departure）或期望到达时刻（timeMode=arrival）结合已发布班次与线路发车时刻规划；适合“从A到B怎么走”“打车多久”“几点前到怎么坐车”这类问题；站点间的班次换乘请用 plan_journey。',

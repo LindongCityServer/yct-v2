@@ -1,12 +1,18 @@
 import {
   MaterialStudioPanel,
   type MaterialTemplateGroup,
+  type InitialSharedMaterial,
 } from '../../../components/material-studio-panel';
 import {
   BUILDING_ADDRESS_TEMPLATE_ID,
   NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID,
   ROAD_NAME_DIRECTION_TEMPLATE_ID,
 } from '../../../lib/material-template-ids';
+import {
+  findMaterialShareLinkById,
+  isMaterialShareLinkExpired,
+  isMaterialShareLinkStub,
+} from '../../../lib/material-share-link-workflow';
 import { getPageMetadata } from '../../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
@@ -28,8 +34,13 @@ const roadMaterialTemplateGroups: MaterialTemplateGroup[] = [
   },
 ];
 
-export default function RoadMaterialsPage() {
-  // 与公共交通导视共用工作台：本地 SVG 实时预览 + 模板库 + 统一保存与下载。
+interface RoadMaterialsPageProps {
+  searchParams?: Promise<{ material?: string; template?: string }>;
+}
+
+export default async function RoadMaterialsPage({ searchParams }: RoadMaterialsPageProps) {
+  const params = (await searchParams) ?? {};
+  const share = params.material ? await findMaterialShareLinkById(params.material) : undefined;
   return (
     <MaterialStudioPanel
       studioId="road-materials"
@@ -39,7 +50,34 @@ export default function RoadMaterialsPage() {
       serverSources={{ road_sign: 'road_coordinate', address_sign: 'map_location' }}
       templateGroups={roadMaterialTemplateGroups}
       defaultTemplateId={ROAD_NAME_DIRECTION_TEMPLATE_ID}
+      initialMaterial={toInitialSharedMaterial(share)}
+      initialTemplateId={params.template ?? share?.templateId}
       workspace
     />
   );
+}
+
+function toInitialSharedMaterial(
+  share: Awaited<ReturnType<typeof findMaterialShareLinkById>>,
+): InitialSharedMaterial | undefined {
+  if (
+    !share ||
+    share.status !== 'active' ||
+    isMaterialShareLinkStub(share) ||
+    isMaterialShareLinkExpired(share)
+  ) {
+    return undefined;
+  }
+  return {
+    shareId: share.id,
+    code: share.code,
+    templateId: share.templateId,
+    templateVersion: share.templateVersion,
+    values: share.values,
+    canvas: share.canvas,
+    dataSource: share.dataSource,
+    networkName: share.networkName,
+    licenseName: share.licenseName,
+    origin: share.origin,
+  };
 }

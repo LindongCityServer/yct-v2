@@ -9,6 +9,7 @@ interface WikiSearchInput {
 
 export const wikiSearchTool: AssistantTool<WikiSearchInput> = {
   name: 'search_wiki',
+  scope: 'server',
   title: '搜索 Wiki',
   description: '检索临东 Wiki 的百科条目，适合线路由来、城市历史、角色与活动背景等站外背景知识。',
   inputSchema: {
@@ -64,6 +65,7 @@ interface MaterialTemplatesInput {
 
 export const materialTemplatesTool: AssistantTool<MaterialTemplatesInput> = {
   name: 'list_material_templates',
+  scope: 'basics',
   title: '物料模板',
   description:
     '列出已发布的物料模板，例如公交站牌、地铁导视、路牌、门牌与地址牌，返回模板名称和适用场景。',

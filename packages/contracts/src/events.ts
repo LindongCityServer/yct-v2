@@ -9,6 +9,7 @@ import type {
   MapMarkerSpatialMetadata,
   MaterialCanvasConfig,
   MaterialDraftStatus,
+  MaterialShareLinkKind,
   MaterialSourceKind,
   MaterialTemplateFamily,
   PoiFacilitySnapshot,
@@ -936,6 +937,31 @@ export interface MaterialPreviewGeneratedPayload {
   generatedAt: ISODateTimeString;
 }
 
+/** 扫码成功解析一次物料分享短链（只记分享 ID，不记扫码者身份）。 */
+export interface MaterialShareLinkOpenedPayload {
+  shareId: string;
+  kind: MaterialShareLinkKind;
+  templateId: string;
+  templateVersion: number;
+  openedAt: ISODateTimeString;
+}
+
+/** 管理员停用分享链接。 */
+export interface MaterialShareLinkRevokedPayload {
+  shareId: string;
+  kind: MaterialShareLinkKind;
+  revokedBy: string;
+  revokedAt: ISODateTimeString;
+}
+
+/** 管理员恢复分享链接。 */
+export interface MaterialShareLinkRestoredPayload {
+  shareId: string;
+  kind: MaterialShareLinkKind;
+  restoredBy: string;
+  restoredAt: ISODateTimeString;
+}
+
 export interface TelegraphDraftUpdatedPayload {
   draftId: string;
   billableGrids: number;
@@ -1470,6 +1496,9 @@ export type YctEventPayloadMap = {
   MaterialTransitNetworkProjectUpdated: MaterialTransitNetworkProjectUpdatedPayload;
   MaterialTransitNetworkProjectDeleted: MaterialTransitNetworkProjectDeletedPayload;
   MaterialPreviewGenerated: MaterialPreviewGeneratedPayload;
+  MaterialShareLinkOpened: MaterialShareLinkOpenedPayload;
+  MaterialShareLinkRevoked: MaterialShareLinkRevokedPayload;
+  MaterialShareLinkRestored: MaterialShareLinkRestoredPayload;
   TelegraphDraftUpdated: TelegraphDraftUpdatedPayload;
   TelegraphPrintStarted: TelegraphPrintStartedPayload;
   TelegraphPrintProgress: TelegraphPrintProgressPayload;

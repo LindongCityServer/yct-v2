@@ -9,6 +9,7 @@ interface PoiNoticesInput {
 
 export const poiNoticesTool: AssistantTool<PoiNoticesInput> = {
   name: 'poi_notices',
+  scope: 'operations',
   title: '地点公告',
   description: '查询某个地点当前生效的运营公告，例如施工、临时调整、闭店通知。',
   inputSchema: {
@@ -71,6 +72,7 @@ interface ServiceNoticesInput {
 
 export const serviceNoticesTool: AssistantTool<ServiceNoticesInput> = {
   name: 'service_notices',
+  scope: 'operations',
   title: '客运公告',
   description: '查询客运、班车、航班、船班的停运与调整公告；可按线路或班次关键词筛选。',
   inputSchema: {

@@ -1,11 +1,16 @@
 import { askAssistant } from './assistant-client.mjs';
-import { composeAnswer, helpText, prepareAnswerText } from './answer.mjs';
+import { composeAnswer, prepareAnswerText } from './answer.mjs';
 import { renderCardPng } from './card-render.mjs';
 import { extractBilibiliUrl, fetchBilibiliVideo, formatBilibiliVideo } from './bilibili.mjs';
 import { condenseWithModel } from './condense.mjs';
-import { handleCommand } from './commands.mjs';
+import { commandHelpText, handleCommand, parseIncomingCommand } from './commands.mjs';
 import { CommunityStore, shanghaiDateKey } from './community.mjs';
+import { GroupModuleStore } from './group-modules.mjs';
+import { HintThrottle } from './hints.mjs';
 import { pickReferenceImage } from './images.mjs';
+import { MaterialSourceStore } from './material-sources.mjs';
+import { handleModuleCommand } from './module-command.mjs';
+import { buildHelpText, commandLabel, moduleById, moduleLabel } from './modules.mjs';
 import { loadGroupNotices, resolveGroupNotice } from './notices.mjs';
 import { startEventBridge } from './event-bridge.mjs';
 import { PlayerEventMonitor } from './player-events.mjs';
@@ -13,6 +18,7 @@ import { QqLinkClient } from './ldpass-link.mjs';
 import { GroupLinkTokenStore } from './group-link.mjs';
 import { maskOpenId } from './log.mjs';
 import { getBotVersion } from './version.mjs';
+import { handleSignageCommand } from './signage.mjs';
 import {
   classifyCommand,
   ConversationQueue,
@@ -42,6 +48,9 @@ export class QQBot {
     queue,
     store,
     groupLinkTokens,
+    moduleStore,
+    materialSourceStore,
+    signage = handleSignageCommand,
   } = {}) {
     this.api = api;
     this.config = config;
@@ -53,6 +62,7 @@ export class QQBot {
     this.linkClient = new QqLinkClient({
       baseUrl: config.link?.baseUrl,
       secret: config.link?.secret,
+      timeoutMs: config.link?.timeoutMs,
       logger,
     });
     this.groupLinkTokens =
@@ -74,6 +84,26 @@ export class QQBot {
     this.userLimiter = new SlidingWindowLimiter({ limit: config.qq.userQpm });
     this.groupLimiter = new SlidingWindowLimiter({ limit: config.qq.groupQpm });
     this.groupNotices = loadGroupNotices(config.groupNoticesPath);
+    this.moduleStore =
+      moduleStore ??
+      new GroupModuleStore({
+        path: config.modules?.path ?? '',
+        auditPath: config.modules?.auditPath ?? '',
+        aliases: config.qq?.groupAliases ?? new Map(),
+        logger,
+      });
+    this.hints = new HintThrottle({ ttlMs: config.modules?.hintTtlMs ?? 600_000 });
+    this.materialSourceStore =
+      materialSourceStore ??
+      new MaterialSourceStore({
+        path: config.materials?.sourcePath ?? '',
+        logger,
+      });
+    this.signage = signage;
+    this.toggleLimiter = {
+      user: new SlidingWindowLimiter({ limit: 5 }),
+      group: new SlidingWindowLimiter({ limit: 20 }),
+    };
     this.bridgeTargets = new Set(config.events?.groupMap?.values?.() ?? []);
     this.bridgeSeen = new RecentSet();
     this.eventBridge = null;
@@ -87,6 +117,7 @@ export class QQBot {
     this.answerSeen = new RecentSet();
     this.statsSeen = new RecentSet();
     this.warnedFullMessage = false;
+    this.warnedMissingRole = new Set();
     this.seenGroups = new Set();
   }
 
@@ -118,6 +149,84 @@ export class QQBot {
       this.eventBridge = null;
     }
     await this.community.flush();
+  }
+
+  /** 取一个群的有效开关；单聊不读群配置，沿用注册表默认值。 */
+  policyFor(context) {
+    if (context?.kind !== 'group' || !context.groupId) {
+      return this.moduleStore.resolve('');
+    }
+    this.moduleStore.reloadIfChanged();
+    return this.moduleStore.resolve(context.groupId);
+  }
+
+  canUseCommand(policy, commandId) {
+    return this.moduleStore.isCommandEnabled(policy, commandId);
+  }
+
+  /** 事件类功能（进退群提示、玩家播报）按群判断，没有模块配置时默认开启。 */
+  groupModuleEnabled(groupId, moduleId) {
+    if (!groupId) {
+      return false;
+    }
+    const policy = this.policyFor({ kind: 'group', groupId });
+    return policy.modules?.[moduleId] !== false;
+  }
+
+  /** 问一问能力位：不包含群 id，网页端只看到“哪些范围开着”。 */
+  askCapabilities(policy) {
+    const capabilities = {
+      server: true,
+      transit: true,
+      operations: true,
+      map: true,
+      general: true,
+    };
+    for (const capability of Object.keys(capabilities)) {
+      capabilities[capability] = policy.modules?.[`ask.${capability}`] !== false;
+    }
+    return capabilities;
+  }
+
+  /**
+   * 只有群里有问一问范围被关闭时才延迟“正在查资料”：
+   * 被范围拦截的回复是秒回的，先发提示再没下文会让成员以为机器人坏了。
+   */
+  shouldDeferAck(policy) {
+    return Object.values(this.askCapabilities(policy)).some((enabled) => enabled === false);
+  }
+
+  scopeModuleFromReason(reasonCode) {
+    if (
+      typeof reasonCode !== 'string' ||
+      !reasonCode.startsWith('group_scope.') ||
+      !reasonCode.endsWith('_disabled')
+    ) {
+      return '';
+    }
+    const capability = reasonCode.slice('group_scope.'.length, -'_disabled'.length);
+    const moduleId = `ask.${capability}`;
+    return moduleById.has(moduleId) ? moduleId : '';
+  }
+
+  scopeBlockText(moduleId, policy) {
+    const label = moduleLabel(moduleId);
+    const subject = label.endsWith('问答') ? label : `「${label}」问答`;
+    if (this.moduleStore.isLocked(policy, moduleId)) {
+      return `本群未开启${subject}，该项由机器人管理员锁定。`;
+    }
+    return `本群未开启${subject}。群主或管理员可以 @我 发送 /模块 开启。`;
+  }
+
+  async replyDisabledHint(target, messageId, key, text) {
+    if (this.config.modules?.hints === false) {
+      return false;
+    }
+    if (!this.hints.shouldSend(`${target.openid}:${key}`)) {
+      return false;
+    }
+    await this.safeReply(target, messageId, 1, text);
+    return true;
   }
 
   async handleEvent(type, data) {
@@ -185,6 +294,10 @@ export class QQBot {
       event.type === 'join' ? this.config.reply.playerJoinText : this.config.reply.playerLeaveText;
     const content = template.replaceAll('{name}', event.name);
     for (const groupId of this.config.reply.playerEventGroups) {
+      if (!this.groupModuleEnabled(groupId, 'playerEvents')) {
+        this.logger.debug(`群 ${maskOpenId(groupId)} 未开启玩家进出播报，跳过。`);
+        continue;
+      }
       try {
         await this.api.sendGroupMessage(groupId, { content, msg_type: 0 });
         this.logger.info(
@@ -208,6 +321,10 @@ export class QQBot {
     if (this.config.qq.groupAllowlist.size > 0 && !this.config.qq.groupAllowlist.has(groupId)) {
       return;
     }
+    if (!this.groupModuleEnabled(groupId, 'notices')) {
+      this.logger.debug(`群 ${maskOpenId(groupId)} 未开启进退群提示，跳过。`);
+      return;
+    }
     const id = memberOpenId(data);
     const name =
       data.member_nickname ||
@@ -220,7 +337,7 @@ export class QQBot {
       id,
       group: this.groupNotices.groups[groupId]?.name ?? groupId,
     });
-    const noticeGroupId = this.config.qq.groupAliases.get(groupId) ?? groupId;
+    const noticeGroupId = this.config.qq.groupAliases?.get(groupId) ?? groupId;
     const aliasedText = text
       ? text
       : resolveGroupNotice(this.groupNotices, noticeGroupId, kind, {
@@ -288,6 +405,10 @@ export class QQBot {
       if (!kind) {
         return;
       }
+      if (!this.groupModuleEnabled(targetGroupId, 'notices')) {
+        this.logger.debug(`群 ${maskOpenId(targetGroupId)} 未开启进退群提示，跳过。`);
+        return;
+      }
       const text = resolveGroupNotice(this.groupNotices, sourceGroupId, kind, {
         name: event.sender?.card || event.sender?.nickname || String(event.user_id ?? ''),
         id: String(event.user_id ?? ''),
@@ -334,7 +455,18 @@ export class QQBot {
     if (!content) {
       return;
     }
+    const playerBroadcast =
+      type === 'join' ||
+      type === 'player_join' ||
+      type === 'server_join' ||
+      type === 'leave' ||
+      type === 'player_leave' ||
+      type === 'server_leave';
     for (const groupId of groups) {
+      if (playerBroadcast && !this.groupModuleEnabled(groupId, 'playerEvents')) {
+        this.logger.debug(`群 ${maskOpenId(groupId)} 未开启玩家进出播报，跳过。`);
+        continue;
+      }
       await this.sendActiveText(groupId, content);
     }
   }
@@ -397,6 +529,14 @@ export class QQBot {
     }
 
     const target = { kind: 'group', openid: groupOpenid };
+    const role = normalizeMemberRole(data.author?.member_role);
+    if (role === 'unknown' && !this.warnedMissingRole.has(groupOpenid)) {
+      this.warnedMissingRole.add(groupOpenid);
+      this.logger.warn(
+        `群 ${maskOpenId(groupOpenid)} 的事件没有 member_role，/模块 将无法确认群主或管理员；` +
+          '请确认机器人事件版本，必要时用 QQ_BOT_MODULE_ADMINS 兜底。',
+      );
+    }
     await this.handleIncoming({
       target,
       userId,
@@ -409,6 +549,7 @@ export class QQBot {
         userId,
         memberOpenId,
         userName: userDisplayName(data),
+        role,
         date: shanghaiDateKey(),
       },
     });
@@ -443,8 +584,19 @@ export class QQBot {
       return;
     }
 
+    const policy = this.policyFor(context);
+
     const bilibiliUrl = extractBilibiliUrl(incoming);
     if (bilibiliUrl && this.config.reply.bilibili) {
+      if (!policy.modules.bilibili) {
+        await this.replyDisabledHint(
+          target,
+          messageId,
+          'bilibili',
+          '本群未开启 B 站链接解析。群主或管理员可以 @我 发送 /模块 开启。',
+        );
+        return;
+      }
       const video = await fetchBilibiliVideo(bilibiliUrl);
       if (video) {
         await this.safeReply(target, messageId, 1, formatBilibiliVideo(video));
@@ -458,14 +610,39 @@ export class QQBot {
     }
 
     const command = classifyCommand(incoming);
-    if (command === 'help') {
-      await this.safeReply(target, messageId, 1, helpText);
-      return;
-    }
     if (command === 'reset') {
       this.store.reset(conversationKey);
       await this.safeReply(target, messageId, 1, '上下文已清空，可以开始新问题了。');
       return;
+    }
+
+    // 帮助常开且按本群开关生成；/模块 只改本群配置，不进入问一问。
+    const parsed = parseIncomingCommand(incoming);
+    if (parsed && !parsed.unknown) {
+      if (parsed.command === 'help') {
+        await this.safeReply(target, messageId, 1, buildHelpText(policy, commandHelpText()));
+        return;
+      }
+      if (parsed.command === 'modules') {
+        const result = handleModuleCommand({
+          args: parsed.args,
+          context,
+          store: this.moduleStore,
+          config: this.config,
+          limiter: this.toggleLimiter,
+        });
+        await this.safeReply(target, messageId, 1, clipCommandReply(result.reply));
+        return;
+      }
+      if (!this.canUseCommand(policy, parsed.command)) {
+        await this.replyDisabledHint(
+          target,
+          messageId,
+          `command:${parsed.command}`,
+          `「${commandLabel(parsed.command)}」在本群未开启。群主或管理员可以 @我 发送 /模块 开启。`,
+        );
+        return;
+      }
     }
 
     // 本地快捷指令（随机数、算式、电码、天气、对联、签到、统计）不经过问一问。
@@ -477,6 +654,9 @@ export class QQBot {
       context,
       groupTokens: this.groupLinkTokens,
       linkClient: this.linkClient,
+      moduleStore: this.moduleStore,
+      materialSourceStore: this.materialSourceStore,
+      signage: this.signage,
     });
     if (local?.handled) {
       const reply = clipCommandReply(local.reply);
@@ -542,15 +722,19 @@ export class QQBot {
 
     const question = incoming.slice(0, this.config.reply.maxQuestionChars);
     const accepted = this.queue.submit(conversationKey, () =>
-      this.answer({ target, messageId, userId, conversationKey, question, maxReplies }),
+      this.answer({ target, messageId, userId, conversationKey, question, maxReplies, policy }),
     );
     if (!accepted) {
       await this.safeReply(target, messageId, 1, '排队的问题有点多，请稍后再试。');
     }
   }
 
-  async answer({ target, messageId, userId, conversationKey, question, maxReplies }) {
+  async answer({ target, messageId, userId, conversationKey, question, maxReplies, policy }) {
+    const activePolicy = policy ?? this.moduleStore.resolve('');
     let seq = 0;
+    let ackSent = false;
+    let ackTask = null;
+    let ackTimer = null;
     const send = async (content) => {
       if (!content) {
         return false;
@@ -562,11 +746,39 @@ export class QQBot {
       }
       return this.safeReply(target, messageId, seq, content);
     };
+    const startAck = () => {
+      if (ackSent) {
+        return null;
+      }
+      // 先发提示固定占用 msg_seq=1；即使发送失败也不复用该序号，避免触发平台去重。
+      ackSent = true;
+      seq = Math.max(seq, 1);
+      ackTask = this.sendAck(target, messageId, 1);
+      return ackTask;
+    };
+    const settleAck = async () => {
+      if (ackTimer) {
+        clearTimeout(ackTimer);
+        ackTimer = null;
+      }
+      if (ackTask) {
+        await ackTask;
+      }
+    };
 
-    // 先发提示固定占用 msg_seq=1；即使发送失败也不复用该序号，避免触发平台去重。
     if (this.config.reply.ack) {
-      seq = 1;
-      await this.sendAck(target, messageId, 1);
+      if (target.kind === 'group' && this.shouldDeferAck(activePolicy)) {
+        // 有问一问范围被关闭时延后提示：被拦截的回复是秒回的，
+        // 先发「正在查资料」再没有下文会让成员以为机器人坏了。
+        const delayMs = Math.max(0, this.config.reply.ackDelayMs ?? 1000);
+        ackTimer = setTimeout(() => {
+          ackTimer = null;
+          startAck();
+        }, delayMs);
+        ackTimer.unref?.();
+      } else {
+        await startAck();
+      }
     }
 
     const startedAt = Date.now();
@@ -591,6 +803,7 @@ export class QQBot {
               ? 'qq-group'
               : 'qq-c2c'
             : undefined,
+        capabilities: target.kind === 'group' ? this.askCapabilities(activePolicy) : undefined,
         messages: [...history, { role: 'user', content: question }],
         accountContext,
         accountContextSecret: this.config.link?.contextSecret,
@@ -598,13 +811,29 @@ export class QQBot {
         logger: this.logger,
       });
     } catch (error) {
+      await settleAck();
       this.logger.error('问一问请求失败：', error);
       await send(friendlyError(error));
       return;
     }
 
+    await settleAck();
+
     if (result.error) {
       await send(result.error);
+      return;
+    }
+
+    const scopeModule = this.scopeModuleFromReason(result.reasonCode);
+    if (scopeModule) {
+      const key = `scope:${target.openid}:${scopeModule}`;
+      const hintsEnabled = this.config.modules?.hints !== false;
+      const shouldSend = ackSent || (hintsEnabled && this.hints.shouldSend(key));
+      if (shouldSend) {
+        await send(this.scopeBlockText(scopeModule, activePolicy));
+      } else {
+        this.logger.debug(`问一问范围「${scopeModule}」未开启，本次提示已节流。`);
+      }
       return;
     }
 
@@ -866,6 +1095,11 @@ export class QQBot {
 
 function userDisplayName(data) {
   return data.author?.member_nickname || data.author?.username || '';
+}
+
+function normalizeMemberRole(value) {
+  const role = String(value ?? '').toLowerCase();
+  return ['owner', 'admin', 'member'].includes(role) ? role : 'unknown';
 }
 
 function memberOpenId(data) {

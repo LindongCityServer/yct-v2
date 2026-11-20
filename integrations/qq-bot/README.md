@@ -18,6 +18,10 @@
   `/天气` 配置 `QQ_BOT_AMAP_KEY` 时走高德，未配置则回退 wttr.in。
 - **群互动**：`签到`、`签到榜`、`发言统计 [天数]`、`发言榜 [天数]`、`今日运势`、`重置运势`；
   状态保存在 `state/`，更新时保留。
+- **按群功能开关**：群主和群管理员可以在群里用 `/模块` 关闭本群不需要的指令、问一问范围
+  （临东服资料、公交与线路、公告与运营、地图与地点、通用问答），以及进退群提示和玩家进出播报；
+  配置在 `state/group-modules.json`，审计在 `state/module-audit.jsonl`。没有配置文件时全部开启。
+  权限、锁定和范围划分见 [按群功能模块](../../docs/QQ_BOT_GROUP_MODULES.md)。
 - **指令卡片**：除签到、帮助、关于、新对话外，本地指令会附一张 720px PNG；
   机器人在本地渲染后直接上传，不需要 `YCT_PUBLIC_BASE_URL`。
 - **回答配图**：运营内容引用带封面时，可在文字后补一张图片（需 `YCT_PUBLIC_BASE_URL` 和
@@ -104,6 +108,10 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -NodePat
 | `src/answer.mjs`           | Markdown 转 QQ 纯文本、表格转列表、按句取舍、分段            |
 | `src/bot.mjs`              | 事件处理、去重、限流、被动回复序号、对话上下文               |
 | `src/commands.mjs`         | 本地快捷指令分发                                             |
+| `src/modules.mjs`          | 按群功能模块注册表、别名和帮助文本                           |
+| `src/group-modules.mjs`    | 按群开关存储、优先级、锁定、审计和热加载                     |
+| `src/module-command.mjs`   | `/模块` 命令、权限和变更文案                                 |
+| `src/hints.mjs`            | 功能关闭后的提示节流                                         |
 | `src/group-link.mjs`       | 群绑定 token 内存缓存、URL token 与确认码解析                |
 | `src/card-render.mjs`      | 卡片封面/二维码预处理和本地 PNG 渲染                         |
 | `src/card-renderer.mjs`    | 由网页卡片源码生成的本地渲染器，更新卡片后同步重建           |
@@ -118,7 +126,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -NodePat
 | `src/couplet.mjs`          | 对对联提示词与模型调用                                       |
 | `src/model-api.mjs`        | 模型服务商兼容接口封装                                       |
 | `data/`                    | 中文电码与 GB2312 静态表                                     |
-| `state/`                   | 签到、发言统计和运势状态；更新时保留                         |
+| `state/`                   | 签到、发言统计、运势、按群开关和审计；更新时保留             |
 | `src/conversation.mjs`     | 对话记录、限流器、去重集合、会话队列                         |
 | `src/config.mjs`           | `.env` 读取与校验                                            |
 | `start-qq-bot.ps1`         | Windows 常驻启动脚本（自动重启 + 日志）                      |

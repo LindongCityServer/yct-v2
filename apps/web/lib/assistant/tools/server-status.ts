@@ -6,6 +6,7 @@ import { emptyToolResult, type AssistantTool, type AssistantToolResult } from '.
  */
 export const serverStatusTool: AssistantTool<Record<string, never>> = {
   name: 'get_server_status',
+  scope: 'server',
   title: '查询服务器状态',
   description:
     '查询游戏服务器当前是否在线、在线玩家数量和检测时间。适合“服务器在线吗”“现在几个人”“服炸了吗”这类问题。不要用它查询具体玩家位置。',

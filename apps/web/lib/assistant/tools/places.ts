@@ -25,6 +25,7 @@ interface SearchPlacesInput {
 
 export const searchPlacesTool: AssistantTool<SearchPlacesInput> = {
   name: 'search_places',
+  scope: 'map',
   title: '搜索地点',
   description:
     '按名称或类别检索雨城通地图收录的地点（含商场、超市、医院、站点附属设施等）。返回地点名称、分类、地址和地图入口。',
@@ -102,6 +103,7 @@ interface NearbyPlacesInput {
 
 export const nearbyPlacesTool: AssistantTool<NearbyPlacesInput> = {
   name: 'nearby_places',
+  scope: 'map',
   title: '周边地点',
   description:
     '以某个地点为圆心，按距离查找周边地点。适合“XX 附近有什么”“XX 周边有哪些超市”这类问题。距离单位是地图格。',
@@ -185,6 +187,7 @@ interface AlongLinePlacesInput {
 
 export const alongLinePlacesTool: AssistantTool<AlongLinePlacesInput> = {
   name: 'along_line_places',
+  scope: 'map',
   title: '沿线地点',
   description:
     '查找某条公交/地铁线路沿途的地点，按沿线里程排序。适合“XX 路沿线有哪些商场”“这条线经过哪里”。',

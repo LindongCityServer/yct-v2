@@ -1740,6 +1740,61 @@ export interface MaterialExportAuditRecord {
   requestedAt: ISODateTimeString;
 }
 
+export type MaterialShareLinkKind =
+  'road_sign' | 'address_sign' | 'bus_stop' | 'metro_line' | 'custom';
+export type MaterialShareLinkStatus = 'active' | 'revoked';
+/** 有效状态：后台「分享记录」列表里展示的派生状态（status + 30 天有效期）。 */
+export type MaterialShareLinkEffectiveStatus = 'active' | 'expired' | 'revoked';
+export type MaterialShareLinkDataSource = 'server' | 'sample' | 'project';
+export type MaterialShareLinkOrigin = 'bot' | 'workbench';
+
+/**
+ * 物料分享短链记录。
+ *
+ * 二维码里只放 `id`，路径带 `slug`（模板短名）；即使记录被清理，也能按 slug
+ * 落回同一个模板族。完整记录保留 values / canvas，30 天后压缩成
+ * `MaterialShareLinkStub`（清空 values / canvas），再保留 1 年后清理。
+ */
+export interface MaterialShareLink {
+  id: string;
+  slug: string;
+  createdAt: ISODateTimeString;
+  kind: MaterialShareLinkKind;
+  code: string;
+  seed: string;
+  templateId: string;
+  templateVersion: number;
+  templateTitle: string;
+  values: Record<string, string>;
+  canvas: MaterialCanvasConfig;
+  /** 只用于展示与追溯，不参与复现。 */
+  sourceKind?: MaterialSourceKind;
+  sourceRef?: string;
+  status: MaterialShareLinkStatus;
+  dataSource: MaterialShareLinkDataSource;
+  origin: MaterialShareLinkOrigin;
+  /** 工作台分享记录创建者；机器人分享为空。 */
+  createdBy?: string;
+  shareImageWatermark: boolean;
+  networkName?: string;
+  licenseName?: string;
+  licenseUrl?: string;
+  openCount: number;
+  lastOpenedAt?: ISODateTimeString;
+  revokedAt?: ISODateTimeString;
+  revokedBy?: string;
+}
+
+/** 过期压缩后的占位记录：只剩展示与模板兜底所需字段，values / canvas 已清空。 */
+export interface MaterialShareLinkStub extends Omit<
+  MaterialShareLink,
+  'values' | 'canvas' | 'sourceKind' | 'sourceRef' | 'seed' | 'lastOpenedAt'
+> {
+  stub: true;
+}
+
+export type MaterialShareLinkRecord = MaterialShareLink | MaterialShareLinkStub;
+
 export interface ServiceEntry {
   id: string;
   title: string;

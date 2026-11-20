@@ -27,13 +27,24 @@ const defaults = {
   QQ_BOT_WEATHER_CITY: '',
   QQ_BOT_AMAP_KEY: '',
   QQ_BOT_STATE_PATH: 'state/qq-bot-state.json',
+  QQ_BOT_GROUP_CONFIG_PATH: 'state/group-modules.json',
+  QQ_BOT_MODULE_EDITORS: 'owner,admin',
+  QQ_BOT_MODULE_ADMINS: '',
+  QQ_BOT_MODULE_HINTS: '1',
+  QQ_BOT_MODULE_HINT_TTL_MS: '600000',
+  QQ_BOT_ACK_DELAY_MS: '1000',
   QQ_BOT_IMAGES: '1',
   QQ_BOT_IMAGE_HOSTS: '',
   QQ_BOT_CARDS: '1',
+  QQ_BOT_MATERIALS: '1',
+  QQ_BOT_MATERIAL_SECRET: '',
+  QQ_BOT_MATERIAL_TIMEOUT_MS: '20000',
+  QQ_BOT_MATERIAL_SOURCE_PATH: 'state/material-sources.json',
   QQ_BOT_LOG_LEVEL: 'info',
   QQ_GROUP_LINK_ENABLED: '1',
   QQ_BOT_GROUP_LINK_TTL_MS: '300000',
   QQ_BOT_GROUP_LINK_CACHE_MAX: '10000',
+  QQ_BOT_LINK_TIMEOUT_MS: '20000',
   YCT_BASE_URL: 'http://127.0.0.1:3300',
   YCT_PUBLIC_BASE_URL: '',
   YCT_ASSISTANT_PROVIDER: 'deepseek',
@@ -227,6 +238,18 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
   const linkSecret = read('QQ_BOT_LINK_SECRET');
   const contextSecret = read('QQ_BOT_CONTEXT_SECRET');
 
+  const moduleEditors = splitList(read('QQ_BOT_MODULE_EDITORS'));
+  for (const role of moduleEditors) {
+    if (!['owner', 'admin'].includes(role)) {
+      problems.push(`QQ_BOT_MODULE_EDITORS 只支持 owner、admin，当前包含「${role}」。`);
+    }
+  }
+
+  // 物料渲染接口的 HMAC secret 必须和网页端 YCT_QQ_MATERIAL_SECRET 一致；
+  // 没配置时物料指令只提示“还没有配置完成”，不影响机器人其它功能启动。
+  const materialSecret = read('QQ_BOT_MATERIAL_SECRET');
+  const materialsEnabled = toBoolean(read, 'QQ_BOT_MATERIALS', true);
+
   const config = {
     envPath: file.source,
     statePath: resolve(botRoot, read('QQ_BOT_STATE_PATH') || 'state/qq-bot-state.json'),
@@ -272,6 +295,35 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
         min: 100,
         max: 100_000,
       }),
+      timeoutMs: toInteger(read, 'QQ_BOT_LINK_TIMEOUT_MS', 20_000, problems, {
+        min: 3_000,
+        max: 60_000,
+      }),
+    },
+    modules: {
+      path: resolve(botRoot, read('QQ_BOT_GROUP_CONFIG_PATH') || 'state/group-modules.json'),
+      auditPath: read('QQ_BOT_MODULE_AUDIT_PATH')
+        ? resolve(botRoot, read('QQ_BOT_MODULE_AUDIT_PATH'))
+        : '',
+      editors: [...moduleEditors],
+      admins: splitPairs(read('QQ_BOT_MODULE_ADMINS')),
+      hints: toBoolean(read, 'QQ_BOT_MODULE_HINTS', true),
+      hintTtlMs: toInteger(read, 'QQ_BOT_MODULE_HINT_TTL_MS', 600_000, problems, {
+        min: 60_000,
+        max: 86_400_000,
+      }),
+    },
+    materials: {
+      enabled: materialsEnabled,
+      secret: materialSecret,
+      timeoutMs: toInteger(read, 'QQ_BOT_MATERIAL_TIMEOUT_MS', 20_000, problems, {
+        min: 1_000,
+        max: 30_000,
+      }),
+      sourcePath: resolve(
+        botRoot,
+        read('QQ_BOT_MATERIAL_SOURCE_PATH') || 'state/material-sources.json',
+      ),
     },
     weather: {
       city: read('QQ_BOT_WEATHER_CITY'),
@@ -279,6 +331,10 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
     },
     reply: {
       ack: toBoolean(read, 'QQ_BOT_ACK', true),
+      ackDelayMs: toInteger(read, 'QQ_BOT_ACK_DELAY_MS', 1000, problems, {
+        min: 0,
+        max: 5000,
+      }),
       style,
       chatMaxChars: toInteger(read, 'QQ_BOT_CHAT_MAX_CHARS', 360, problems, {
         min: 80,
@@ -330,9 +386,19 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
   if (config.qq.groupAllowlist.size > 0) {
     warnings.push(`只响应 ${config.qq.groupAllowlist.size} 个白名单群，其他群会被忽略。`);
   }
+  if (config.modules.editors.length === 0 && config.modules.admins.size === 0) {
+    warnings.push(
+      'QQ_BOT_MODULE_EDITORS 为空且没有 QQ_BOT_MODULE_ADMINS，群里将没人能调整功能开关。',
+    );
+  }
   if (Boolean(config.link.baseUrl) !== Boolean(config.link.secret)) {
     warnings.push(
       'LDPASS_API_BASE_URL 和 QQ_BOT_LINK_SECRET 需要同时配置，否则 /绑定（含群聊）会提示功能未配置。',
+    );
+  }
+  if (config.materials.enabled && !config.materials.secret) {
+    warnings.push(
+      '物料盲盒已开启但没有配置 QQ_BOT_MATERIAL_SECRET，群里的物料指令会提示「物料功能还没有配置完成」。',
     );
   }
   if (config.link.secret && !config.link.contextSecret) {
@@ -402,13 +468,26 @@ export function describeConfig(config) {
     `模型 Key：${maskSecret(config.yct.apiKey)}`,
     `公开站点：${config.yct.publicBaseUrl || '（未配置，回答里的图片不会发送）'}`,
     `QQ 绑定：${config.link.baseUrl && config.link.secret ? '开' : '关'}`,
+    `绑定请求超时：${config.link.timeoutMs} ms`,
     `群聊绑定：${config.link.groupEnabled ? `开（缓存 ${Math.round(config.link.groupTokenTtlMs / 60_000)} 分钟，最多 ${config.link.groupTokenCacheMax} 条）` : '关'}`,
     `账号上下文：${config.link.contextSecret ? '开' : '关'}`,
     `回答配图：${config.reply.images && config.yct.publicBaseUrl ? '开' : '关'}`,
     `指令结果卡片：${config.reply.cards ? '开（本地渲染）' : '关'}`,
+    `物料盲盒：${
+      config.materials.enabled
+        ? config.materials.secret
+          ? '开'
+          : '开（缺 QQ_BOT_MATERIAL_SECRET，群里会提示未配置）'
+        : '关'
+    }，超时 ${config.materials.timeoutMs} ms，数据源设置：${config.materials.sourcePath}`,
     `天气城市：${config.weather.city || '（未配置，/天气 会提示先填 QQ_BOT_WEATHER_CITY）'}`,
     `高德天气 Key：${maskSecret(config.weather.amapKey)}`,
     `签到/统计状态：${config.statePath}`,
+    `群功能开关：${config.modules.path}`,
+    `模块编辑权限：${config.modules.editors.join('、') || '（无）'}${
+      config.modules.admins.size > 0 ? `，另有 ${config.modules.admins.size} 个白名单成员` : ''
+    }`,
+    `关闭提示：${config.modules.hints ? `开（${Math.round(config.modules.hintTtlMs / 60_000)} 分钟一次）` : '关'}`,
     `运势文案：${config.fortuneTextsPath}`,
     `群进退群文案：${config.groupNoticesPath}`,
     `玩家进出同步：${config.reply.playerEvents && config.reply.playerEventGroups.length > 0 ? '开' : '关'}`,

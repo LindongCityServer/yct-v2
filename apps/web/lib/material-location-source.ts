@@ -15,7 +15,6 @@ import { findRoadSignPinyin } from './entity-translation-store';
 import { parseMaterialAddress } from './material-address';
 import { listPublishedPublicPoiSubmissions } from './poi-submission-store';
 import { readRuntimeConfig } from './runtime-config';
-import { createTimedCache } from './server-cache';
 
 export interface MaterialLocationOption {
   id: string;
@@ -45,7 +44,15 @@ export interface MaterialRoadMatch {
 }
 
 const endpointCircleDistance = 80;
-const materialLocationCache = createTimedCache<MaterialLocationEntry[]>(60 * 1000);
+const materialLocationCacheTtlMs = 60 * 1000;
+/** 地图标记服务失败时，先沿用旧数据 30 秒再重试。 */
+const materialLocationStaleRetryMs = 30 * 1000;
+/** 完全没有旧数据时，只把“降级结果”缓存 5 秒，便于地图恢复后立刻重试。 */
+const materialLocationDegradedTtlMs = 5 * 1000;
+
+let materialLocationCache:
+  { key: string; entries: MaterialLocationEntry[]; expiresAt: number } | undefined;
+let materialLocationPending: { key: string; promise: Promise<MaterialLocationEntry[]> } | undefined;
 
 export async function listMaterialLocations(): Promise<MaterialLocationOption[]> {
   const locations = await readMaterialLocations();
@@ -212,42 +219,81 @@ export async function resolveRoadCoordinateMaterialInput(input: {
 async function readMaterialLocations(): Promise<MaterialLocationEntry[]> {
   const config = readRuntimeConfig();
   const cacheKey = [config.unminedMapBaseUrl, config.markerBdslmTimeoutMs].join('|');
-  return materialLocationCache.read(cacheKey, async () => {
-    const [staticMarkers, publishedPois] = await Promise.all([
-      readStaticLocationMarkers().catch(() => []),
-      listPublishedPublicPoiSubmissions(),
-    ]);
-    const staticEntries: MaterialLocationEntry[] = staticMarkers.map((marker) => ({
-      id: `marker:${marker.id}`,
-      label: marker.label,
-      categoryId: marker.categoryId ?? 'map-marker',
-      address: marker.address,
-      addressRoadMarkerId: marker.addressRoadMarkerId,
-      geometry: marker.geometry,
-      iconFileName: marker.iconFileName,
-      description: marker.description,
-    }));
-    const entries = [
-      ...staticEntries,
-      ...createRoadEndpointEntries(staticEntries),
-      ...publishedPois.map((poi) => ({
-        id: `poi:${poi.id}`,
-        label: poi.title,
-        categoryId: poi.categoryId,
-        address: poi.address,
-        addressRoadMarkerId: poi.addressRoadMarkerId,
-        geometry: poi.geometry,
-        iconFileName: poi.iconFileName,
-        description: poi.description,
-      })),
-    ]
-      .filter((entry) => Boolean(entry.label.trim()))
-      .sort(
-        (left, right) =>
-          left.label.localeCompare(right.label, 'zh-CN') || left.id.localeCompare(right.id),
-      );
-    return entries;
+  const now = Date.now();
+  if (materialLocationCache?.key === cacheKey && materialLocationCache.expiresAt > now) {
+    return materialLocationCache.entries;
+  }
+  if (materialLocationPending?.key === cacheKey) {
+    return materialLocationPending.promise;
+  }
+  const promise = loadMaterialLocations(cacheKey, now).finally(() => {
+    if (materialLocationPending?.promise === promise) {
+      materialLocationPending = undefined;
+    }
   });
+  materialLocationPending = { key: cacheKey, promise };
+  return promise;
+}
+
+async function loadMaterialLocations(
+  cacheKey: string,
+  startedAt: number,
+): Promise<MaterialLocationEntry[]> {
+  let markerError = false;
+  const [staticMarkers, publishedPois] = await Promise.all([
+    readStaticLocationMarkers().catch(() => {
+      markerError = true;
+      return [];
+    }),
+    listPublishedPublicPoiSubmissions(),
+  ]);
+  if (markerError && materialLocationCache?.key === cacheKey) {
+    // 地图服务抖动时沿用上一次成功的数据，短暂退避后再重试；
+    // 否则整块道路/公交候选会因为一次 6 秒超时消失一整分钟。
+    materialLocationCache = {
+      key: cacheKey,
+      entries: materialLocationCache.entries,
+      expiresAt: startedAt + materialLocationStaleRetryMs,
+    };
+    return materialLocationCache.entries;
+  }
+  const staticEntries: MaterialLocationEntry[] = staticMarkers.map((marker) => ({
+    id: `marker:${marker.id}`,
+    label: marker.label,
+    categoryId: marker.categoryId ?? 'map-marker',
+    address: marker.address,
+    addressRoadMarkerId: marker.addressRoadMarkerId,
+    geometry: marker.geometry,
+    iconFileName: marker.iconFileName,
+    description: marker.description,
+  }));
+  const entries = [
+    ...staticEntries,
+    ...createRoadEndpointEntries(staticEntries),
+    ...publishedPois.map((poi) => ({
+      id: `poi:${poi.id}`,
+      label: poi.title,
+      categoryId: poi.categoryId,
+      address: poi.address,
+      addressRoadMarkerId: poi.addressRoadMarkerId,
+      geometry: poi.geometry,
+      iconFileName: poi.iconFileName,
+      description: poi.description,
+    })),
+  ]
+    .filter((entry) => Boolean(entry.label.trim()))
+    .sort(
+      (left, right) =>
+        left.label.localeCompare(right.label, 'zh-CN') || left.id.localeCompare(right.id),
+    );
+  materialLocationCache = {
+    key: cacheKey,
+    entries,
+    // 地图标记没拉到时只缓存几秒；否则地图恢复后要再等一分钟才能出道路/公交物料。
+    expiresAt:
+      startedAt + (markerError ? materialLocationDegradedTtlMs : materialLocationCacheTtlMs),
+  };
+  return entries;
 }
 
 async function readStaticLocationMarkers(): Promise<MapMarkerSnapshot['markers']> {

@@ -154,7 +154,7 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           'qq-bot-commands': {
             question: 'QQ 機器人支援哪些指令？',
             answer:
-              '群聊需先 @機器人；快捷指令加不加 / 都可以。常用：/随机、/骰子、/算 1+2、/电码 临东、/gb2312 临东、/天气 上海、/ip 8.8.8.8、/历史、/对联 春风拂柳、/随机地点、/人数。群互動：/签到、/签到榜、/发言统计 [天數]、/发言榜 [天數]、/运势、/重置运势。問一問與帳號：/帮助、/关于、/版本、/绑定 [綁定碼]、/确认 6 位碼、/我的绑定、/解绑 确认、/新对话。也支援「计算 1+2」「上海天气」「历史上的今天」「菜单」等自然觸發詞；未知的 /xxx 會提示傳送「菜单」。',
+              '群聊需先 @機器人；快捷指令加不加 / 都可以。常用：/随机、/骰子、/算 1+2、/电码 临东、/gb2312 临东、/天气 上海、/ip 8.8.8.8、/历史、/对联 春风拂柳、/随机地点、/人数。群互動：/签到、/签到榜、/发言统计 [天數]、/发言榜 [天數]、/运势、/重置运势。物料：/物料、/盲盒、/路牌、/樓牌、/站牌、/地鐵、/数据源。問一問與帳號：/帮助、/关于、/版本、/绑定 [綁定碼]、/确认 6 位碼、/我的绑定、/解绑 确认、/新对话。也支援「计算 1+2」「上海天气」「历史上的今天」「菜单」等自然觸發詞；未知的 /xxx 會提示傳送「菜单」。',
             keywords: [
               'QQ 機器人',
               '指令',
@@ -166,6 +166,25 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               '/确认',
               '/签到',
               '/发言统计',
+            ],
+          },
+          'qq-bot-materials': {
+            question: 'QQ 機器人能隨機產生路牌、站牌這些物料嗎？',
+            answer:
+              '可以。群裡 @機器人 傳送 /物料 查看入口：/盲盒 從 19 個系統模板隨機一張，/路牌、/樓牌、/站牌、/地鐵 按族抽。每張圖帶編號和 QR 碼，30 天內掃碼可回到工作台繼續編輯，過期後仍會按原模板打開。產生的是「非正式物料」，改字後需要審核才能下載無浮水印圖；群主或管理員可用 /数据源 在本群切換伺服器線網或瀋陽示例線網（示例只開放地鐵物料，並標註 CC BY-NC-SA 4.0），也可以用 /模块 關閉本群物料功能。',
+            keywords: [
+              '物料盲盒',
+              '隨機物料',
+              '/物料',
+              '/盲盒',
+              '/路牌',
+              '/站牌',
+              '/樓牌',
+              '/地鐵',
+              'QR 碼',
+              '分享',
+              '数据源',
+              '示例線網',
             ],
           },
         },
@@ -958,7 +977,7 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           'qq-bot-commands': {
             question: 'Which commands does the QQ bot support?',
             answer:
-              'Mention the bot first in a group; commands work with or without a leading /. Common: /随机, /骰子, /算 1+2, /电码 临东, /gb2312 临东, /天气 上海, /ip 8.8.8.8, /历史, /对联 春风拂柳, /随机地点, /人数. Group activity: /签到, /签到榜, /发言统计 [days], /发言榜 [days], /运势, /重置运势. Ask and account: /帮助, /关于, /版本, /绑定 [code], /确认 6-digit-code, /我的绑定, /解绑 确认, /新对话. Natural triggers such as “计算 1+2”, “上海天气”, “历史上的今天”, and “菜单” also work; an unknown /xxx tells you to send “菜单”.',
+              'Mention the bot first in a group; commands work with or without a leading /. Common: /随机, /骰子, /算 1+2, /电码 临东, /gb2312 临东, /天气 上海, /ip 8.8.8.8, /历史, /对联 春风拂柳, /随机地点, /人数. Group activity: /签到, /签到榜, /发言统计 [days], /发言榜 [days], /运势, /重置运势. Materials: /物料, /盲盒, /路牌, /楼牌, /站牌, /地铁, /数据源. Ask and account: /帮助, /关于, /版本, /绑定 [code], /确认 6-digit-code, /我的绑定, /解绑 确认, /新对话. Natural triggers such as “计算 1+2”, “上海天气”, “历史上的今天”, and “菜单” also work; an unknown /xxx tells you to send “菜单”.',
             keywords: [
               'QQ bot',
               'commands',
@@ -970,6 +989,25 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               '/确认',
               '/签到',
               '/发言统计',
+            ],
+          },
+          'qq-bot-materials': {
+            question: 'Can the QQ bot generate random road signs, stop signs and other materials?',
+            answer:
+              'Yes. Mention the bot in a group and send /物料 for the entry points: /盲盒 picks one of 19 system templates, while /路牌, /楼牌, /站牌 and /地铁 pick within a family. Every image carries a code and a QR link that opens the workbench for 30 days; after expiry the same template still opens. Output is marked as unofficial material, and edited text needs review before a watermark-free download. Group owners and admins can switch the group between the server network and the Shenyang sample network with /数据源 (the sample only exposes metro materials and keeps the CC BY-NC-SA 4.0 notice); they can also disable the feature with /模块.',
+            keywords: [
+              'material',
+              'blind box',
+              '/物料',
+              '/盲盒',
+              '/路牌',
+              '/站牌',
+              '/楼牌',
+              '/地铁',
+              'QR code',
+              'share',
+              'data source',
+              'sample network',
             ],
           },
         },

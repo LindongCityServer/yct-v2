@@ -11,6 +11,7 @@ import { randomInteger, rollDice } from './random.mjs';
 import { fetchWeather } from './weather.mjs';
 import { getBotVersion } from './version.mjs';
 import { QqLinkClient } from './ldpass-link.mjs';
+import { handleSignageCommand, signageCommands } from './signage.mjs';
 import {
   extractTokenFromUrl,
   GroupLinkTokenStore,
@@ -81,6 +82,10 @@ const commandAliases = new Map([
   ['关于', 'about'],
   ['关于机器人', 'about'],
   ['about', 'about'],
+  ['模块', 'modules'],
+  ['群模块', 'modules'],
+  ['功能模块', 'modules'],
+  ['modules', 'modules'],
   ['签到', 'signin'],
   ['打卡', 'signin'],
   ['签到榜', 'signinboard'],
@@ -107,7 +112,45 @@ const commandAliases = new Map([
   ['重置运势', 'fortunereset'],
   ['重抽运势', 'fortunereset'],
   ['重抽', 'fortunereset'],
+  ['物料', 'materials'],
+  ['物料盲盒说明', 'materials'],
+  ['materials', 'materials'],
+  ['盲盒', 'blindbox'],
+  ['随机物料', 'blindbox'],
+  ['物料盲盒', 'blindbox'],
+  ['随机盲盒', 'blindbox'],
+  ['blindbox', 'blindbox'],
+  ['路牌', 'roadsign'],
+  ['roadsign', 'roadsign'],
+  ['楼牌', 'buildingsign'],
+  ['buildingsign', 'buildingsign'],
+  ['站牌', 'stopsign'],
+  ['stopsign', 'stopsign'],
+  ['地铁', 'metro'],
+  ['地铁物料', 'metro'],
+  ['地铁盲盒', 'metro'],
+  ['metro', 'metro'],
+  ['数据源', 'materialsource'],
+  ['物料数据源', 'materialsource'],
+  ['materialsource', 'materialsource'],
 ]);
+
+/**
+ * 帮助菜单：在 answer.mjs 的通用帮助末尾说明段前补一行物料指令。
+ * （answer.mjs 由问一问方向维护，物料相关文案集中放在本文件，避免两边同时改。）
+ */
+export const materialHelpLine =
+  '物料盲盒：/物料 查看玩法；/盲盒、/路牌、/楼牌、/站牌、/地铁 抽一张；/数据源 查看或切换本群线网';
+
+export function commandHelpText() {
+  const lines = helpText.split('\n');
+  const note = lines.pop() ?? '';
+  while (lines.length > 0 && lines.at(-1) === '') {
+    lines.pop();
+  }
+  lines.push('', materialHelpLine, '', note);
+  return lines.join('\n');
+}
 
 /**
  * 本地快捷指令：在调用问一问之前处理，不消耗站内检索和主问答的模型调用。
@@ -127,9 +170,11 @@ export async function handleCommand({
   history = fetchTodayHistory,
   groupTokens,
   linkClient,
+  moduleStore,
+  materialSourceStore,
+  signage = handleSignageCommand,
 }) {
-  const raw = normalizeCommandText(text);
-  const parsed = raw.startsWith('/') ? parseSlashCommand(raw) : parseNaturalCommand(raw);
+  const parsed = parseIncomingCommand(text);
   if (!parsed) {
     return { handled: false };
   }
@@ -142,9 +187,23 @@ export async function handleCommand({
 
   const { command, args, label } = parsed;
   try {
+    // 物料指令统一交给 signage.mjs：/物料、/盲盒、/路牌、/楼牌、/站牌、/地铁、/数据源。
+    if (signageCommands.includes(command)) {
+      return signage({
+        text,
+        args,
+        command,
+        config,
+        context,
+        fetchImpl,
+        logger,
+        moduleStore,
+        materialSourceStore,
+      });
+    }
     switch (command) {
       case 'help':
-        return { handled: true, reply: helpText };
+        return { handled: true, reply: commandHelpText() };
       case 'about':
         return { handled: true, reply: aboutText };
       case 'version': {
@@ -840,6 +899,7 @@ function createLinkClient(config, fetchImpl, logger) {
   return new QqLinkClient({
     baseUrl: config?.link?.baseUrl,
     secret: config?.link?.secret,
+    timeoutMs: config?.link?.timeoutMs,
     fetchImpl,
     logger,
   });
@@ -1026,6 +1086,7 @@ async function handleGroupConfirm({
     return { handled: true, reply: '请先 @我 发送 /绑定 获取新的绑定链接。' };
   }
 
+  const startedAt = Date.now();
   let link;
   try {
     link = await client.confirmGroup({
@@ -1035,21 +1096,47 @@ async function handleGroupConfirm({
       code,
     });
   } catch (error) {
-    return handleGroupConfirmError(error, { store, groupOpenId, memberOpenId, logger });
+    return handleGroupConfirmError(error, {
+      store,
+      groupOpenId,
+      memberOpenId,
+      logger,
+      client,
+      elapsedMs: Date.now() - startedAt,
+    });
   }
 
   store.delete(groupOpenId, memberOpenId);
   return { handled: true, reply: groupConfirmSuccess(link) };
 }
 
-function handleGroupConfirmError(error, { store, groupOpenId, memberOpenId, logger }) {
+async function handleGroupConfirmError(
+  error,
+  { store, groupOpenId, memberOpenId, logger, client, elapsedMs },
+) {
   const code = safeLinkErrorCode(error);
-  logger?.warn('群聊绑定确认失败：', code);
+  const duration = Number.isFinite(elapsedMs) ? Math.max(0, Math.round(elapsedMs)) : 0;
+  logger?.warn(`群聊绑定确认失败：${code}（${duration}ms）`);
   if (
     ['token_used', 'token_expired', 'token_invalid', 'token_claimed', 'http_409'].includes(code)
   ) {
     store.delete(groupOpenId, memberOpenId);
   }
+
+  // 群确认是幂等的：上一次可能已经在服务端成功，只是响应超时。
+  // token_used/http_409 时回查当前群身份，能把“已绑定”准确告诉用户。
+  if (code === 'token_used' || code === 'http_409') {
+    let existing = null;
+    try {
+      existing = await client.resolveGroup({ openId: memberOpenId, groupOpenId });
+    } catch (resolveError) {
+      logger?.warn('群聊绑定确认后查询失败：', safeLinkErrorCode(resolveError));
+    }
+    if (existing) {
+      return { handled: true, reply: groupConfirmAlreadyLinked(existing) };
+    }
+  }
+
   return { handled: true, reply: groupConfirmErrorReply(code, error) };
 }
 
@@ -1082,7 +1169,7 @@ function groupConfirmErrorReply(code, error) {
       return 'QQ 绑定功能还没有配置完成，请联系管理员。';
     default:
       if (isRetryableLinkError(error) || code === 'invalid_response') {
-        return '临东通暂时无法完成确认，请稍后重试。';
+        return '临东通暂时无法完成确认，请稍后重试；如果网页已确认，可先发送 /我的绑定 查看是否已经绑定。';
       }
       return '绑定确认没有成功，请稍后重试。';
   }
@@ -1091,6 +1178,11 @@ function groupConfirmErrorReply(code, error) {
 function groupConfirmSuccess(link) {
   const username = link?.username || '当前账号';
   return `群绑定成功：本群已绑定到临东通账号：@${username}。\n只影响本群，不影响单聊和其他群。`;
+}
+
+function groupConfirmAlreadyLinked(link) {
+  const username = link?.username || '当前账号';
+  return `当前群已绑定到临东通账号：@${username}。\n只影响本群，不影响单聊和其他群。`;
 }
 
 async function handleGroupMyLink({ config, fetchImpl, logger, context, linkClient }) {
@@ -1230,6 +1322,12 @@ function normalizeCommandText(value) {
   text = text.replace(/^(?:<@[^>]*>\s*)+/u, '');
   text = text.replace(/^(?:(?:<@[^>]*>|@[^\s/]+)\s*)+(?=\/)/u, '');
   return text.trim();
+}
+
+/** 指令解析入口：bot 先用它判断模块开关，再交给 handleCommand 执行。 */
+export function parseIncomingCommand(text) {
+  const raw = normalizeCommandText(text);
+  return raw.startsWith('/') ? parseSlashCommand(raw) : parseNaturalCommand(raw);
 }
 
 function parseSlashCommand(raw) {
@@ -1384,7 +1482,37 @@ function parseNaturalCommand(raw) {
     return { command: 'ccc', args: cleanArgs(rest), label: '电码' };
   }
 
+  const material = parseMaterialNatural(input);
+  if (material) {
+    return material;
+  }
+
   return parseWeatherNatural(input);
+}
+
+/**
+ * 物料自然触发词：只接管「随机路牌」「来张站牌」「抽个楼牌」「地铁盲盒」「物料盲盒」
+ * 这类明确句式；带“怎么 / 是什么 / 申请”等问法时返回 null，继续交给问一问。
+ */
+function parseMaterialNatural(input) {
+  if (isQuestion(input)) {
+    return null;
+  }
+  if (/^(?:物料盲盒|盲盒|随机盲盒|随机物料|抽(?:一)?个?盲盒|来(?:一)?个?盲盒)$/u.test(input)) {
+    return { command: 'blindbox', args: '', label: '盲盒' };
+  }
+  if (/^地铁盲盒$/u.test(input)) {
+    return { command: 'metro', args: '', label: '地铁' };
+  }
+  const match =
+    /^(?:随机|来(?:一)?张|来(?:一)?个|抽(?:一)?张|抽(?:一)?个|整(?:一)?张|发(?:一)?张)(路牌|楼牌|站牌)$/u.exec(
+      input,
+    );
+  if (!match) {
+    return null;
+  }
+  const command = { 路牌: 'roadsign', 楼牌: 'buildingsign', 站牌: 'stopsign' }[match[1]];
+  return { command, args: '', label: match[1] };
 }
 
 function parseWeatherNatural(input) {
@@ -1542,11 +1670,18 @@ function parseDiceSpec(rawArgs) {
   throw new Error('用法：/掷骰子、/掷骰子 2d6、/掷骰子 2个6面骰 或 /掷骰子 3d6+2');
 }
 
+// 天气服务通常返回 ASCII 负号，少数镜像会用全角或数学负号；统一成半角再拼卡片。
+function normalizeSignedNumber(value) {
+  return value.replace(/[−－]/gu, '-');
+}
+
 function parseWeatherCurrent(line) {
+  const current = /现在\s*([-−－]?\d+(?:\.\d+)?)\s*℃(?:\s*、\s*([^、。]+))?/u.exec(line);
+  const feels = /体感\s*([-−－]?\d+(?:\.\d+)?)\s*℃/u.exec(line)?.[1];
   return {
-    temp: /现在\s*([\d.]+)℃/u.exec(line)?.[1] ?? '--',
-    condition: /现在\s*[\d.]+℃、([^、。]+)/u.exec(line)?.[1] ?? '天气未知',
-    feels: /体感\s*([\d.]+)℃/u.exec(line)?.[1] ?? '',
+    temp: current?.[1] ? normalizeSignedNumber(current[1]) : '--',
+    condition: current?.[2] ?? '天气未知',
+    feels: feels ? normalizeSignedNumber(feels) : '',
     humidity: /湿度\s*([\d.]+)%/u.exec(line)?.[1] ?? '',
     wind: /、([^、。]*风[^、。]*)/u.exec(line)?.[1] ?? '',
   };
@@ -1554,7 +1689,7 @@ function parseWeatherCurrent(line) {
 
 function parseWeatherDay(line) {
   const match =
-    /^(今天|明天)\s*(-?[\d.]+)\s*[~～/]\s*(-?[\d.]+)\s*(?:℃|°C|C)?\s*[、,，]?\s*([^、。]+)(?:、[^。]*)?[。.]?$/u.exec(
+    /^(今天|明天)\s*([-−－]?\d+(?:\.\d+)?)\s*[~～/]\s*([-−－]?\d+(?:\.\d+)?)\s*(?:℃|°C|C)?\s*[、,，]?\s*([^、。]+)(?:、[^。]*)?[。.]?$/u.exec(
       line,
     );
   if (!match) {
@@ -1562,8 +1697,8 @@ function parseWeatherDay(line) {
   }
   return {
     label: match[1],
-    low: match[2],
-    high: match[3],
+    low: normalizeSignedNumber(match[2]),
+    high: normalizeSignedNumber(match[3]),
     condition: match[4].replace(/^白天/u, '').trim(),
   };
 }

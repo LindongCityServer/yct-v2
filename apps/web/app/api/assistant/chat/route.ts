@@ -29,6 +29,12 @@ import {
   type AssistantIntentReference,
 } from '../../../../lib/assistant/intent';
 import { readQqAccountContext } from '../../../../lib/assistant/qq-account-context';
+import {
+  allowedScopesFor,
+  buildAssistantScopePrecheck,
+  buildAssistantScopePrompt,
+  normalizeAssistantCapabilities,
+} from '../../../../lib/assistant/scope';
 import { buildViewerPrompt, resolveViewerProfile } from '../../../../lib/assistant/viewer-role';
 import { getAssistantProvider } from '../../../../lib/assistant/providers';
 import {
@@ -74,6 +80,8 @@ interface ChatRequestBody {
   page?: unknown;
   /** 聊天渠道；网页端不传，QQ 机器人传 qq-group / qq-c2c 以获得更短的回复。 */
   channel?: unknown;
+  /** 按群范围；网页端不传，表示所有范围都开启。 */
+  capabilities?: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -109,6 +117,9 @@ export async function POST(request: NextRequest) {
 
   const page = normalizePageContext(body.page);
   const channel = normalizeChannel(body.channel);
+  // 按群范围只来自 QQ 机器人；网页端不传，等于所有范围开启。
+  const capabilities = normalizeAssistantCapabilities(body.capabilities);
+  const allowedScopes = capabilities ? allowedScopesFor(capabilities) : undefined;
   const isGroupChannel = channel === 'qq-group';
   // 群聊请求当前不携带账号上下文；这里不读取网页登录态，也不解析账号位置。
   const accountContext = isGroupChannel ? undefined : readQqAccountContext(request);
@@ -139,6 +150,16 @@ export async function POST(request: NextRequest) {
     return buildDirectAssistantReply(precheck.text, precheck.references, precheck.reasonCode);
   }
 
+  // 按群范围：在检索和模型之前拦截，不产生检索和 token 成本。
+  const scopePrecheck = buildAssistantScopePrecheck({
+    result: intent,
+    capabilities,
+    hasHistory: messages.filter((message) => message.role === 'user').length > 1,
+  });
+  if (scopePrecheck) {
+    return buildDirectAssistantReply(scopePrecheck.text, [], scopePrecheck.reasonCode);
+  }
+
   // 页面标题只用于提示词，不参与检索，避免“这个页面怎么用”召回同名的无关地点。
   const retrievalQuery = messages
     .filter((message) => message.role === 'user')
@@ -162,7 +183,10 @@ export async function POST(request: NextRequest) {
   const baseSystemPrompt = buildAssistantSystemPrompt(locale);
   // 渠道提示放在工具规则之后，用来覆盖网页专属的 Markdown、引用编号和卡片格式。
   const channelPrompt = channel ? buildAssistantChannelPrompt(channel) : '';
-  const plainSystemPrompt = [baseSystemPrompt, channelPrompt].filter(Boolean).join('\n\n');
+  const scopePrompt = buildAssistantScopePrompt(capabilities);
+  const plainSystemPrompt = [baseSystemPrompt, channelPrompt, scopePrompt]
+    .filter(Boolean)
+    .join('\n\n');
   const systemPromptWithTools = [
     baseSystemPrompt,
     '',
@@ -172,6 +196,7 @@ export async function POST(request: NextRequest) {
     '3. 工具结果会附带引用编号，回答时继续用 [编号] 引用；不要编造编号。',
     buildAssistantToolPrompt(),
     channelPrompt,
+    scopePrompt,
   ]
     .join('\n')
     .trimEnd();
@@ -262,7 +287,7 @@ export async function POST(request: NextRequest) {
         };
         break;
       }
-      const toolDefinitions = buildOpenAiToolDefinitions(intent.toolHints);
+      const toolDefinitions = buildOpenAiToolDefinitions(intent.toolHints, allowedScopes);
       let toolsEnabled = shouldEnableTools(intent);
       let round = 0;
       let finalFollowUps: string[] = [];
@@ -352,7 +377,7 @@ export async function POST(request: NextRequest) {
             const outcome = await runAssistantTool(
               call.function.name,
               parseToolArguments(call.function.arguments),
-              { locale, pathname: page?.pathname },
+              { locale, pathname: page?.pathname, allowedScopes },
             );
             const addedReferences = addToolReferences(outcome.result.references);
             providerMessages.push({

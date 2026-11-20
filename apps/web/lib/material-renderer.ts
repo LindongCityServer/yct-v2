@@ -2,15 +2,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
-import type {
-  MaterialCanvasConfig,
-  MaterialTemplateVersion,
-} from '@yct/contracts';
+import type { MaterialCanvasConfig, MaterialTemplateVersion } from '@yct/contracts';
 import { createServerMaterialGlyphAssets } from './material-glyph-server-assets';
-import {
-  composeMaterialTemplateSvg,
-  type MaterialInputValidationOptions,
-} from './material-svg';
+import { composeMaterialTemplateSvg, type MaterialInputValidationOptions } from './material-svg';
 
 export {
   MaterialInputError,
@@ -61,11 +55,13 @@ export async function renderMaterialTemplateToPng(input: {
         rendered.renderScale,
       )
     : rendered.svg;
+  const fallbackFontFiles = resolveMaterialFallbackFontFiles();
   const png = new Resvg(svg, {
     font: {
-      fontFiles: resolveMaterialFontFiles(),
-      // HarmonyOS 字体随部署包显式提供；仅保留系统字体供模板明确指定的 Arial 使用。
-      loadSystemFonts: true,
+      fontFiles: [...resolveMaterialFontFiles(), ...fallbackFontFiles],
+      // 模板里的 Arial 单独加载，避免 resvg 每次扫描整个系统字体目录
+      // （Windows 上实测每次多花 0.5–1 秒，是出图超时的主要固定成本之一）。
+      loadSystemFonts: fallbackFontFiles.length === 0,
       defaultFontFamily: 'HarmonyOS Sans SC',
       sansSerifFamily: 'HarmonyOS Sans SC',
     },
@@ -188,6 +184,26 @@ function resolveMaterialFontFiles(): string[] {
     resolveMaterialFontPath('HarmonyOS_Sans_SC_Regular.ttf'),
     resolveMaterialFontPath('HarmonyOS_Sans_SC_Bold.ttf'),
   ];
+}
+
+/**
+ * 模板里大量拉丁字母和数字写死了 Arial；把这些字体文件单独交给 resvg，
+ * 就不必再 `loadSystemFonts` 扫描整个系统字体目录。
+ * 找不到 Arial（非 Windows 部署）时返回空数组，调用方退回扫描系统字体。
+ */
+function resolveMaterialFallbackFontFiles(): string[] {
+  const candidates =
+    process.platform === 'win32'
+      ? ['arial.ttf', 'arialbd.ttf'].map((fileName) =>
+          resolve(process.env.WINDIR ?? 'C:\\Windows', 'Fonts', fileName),
+        )
+      : process.platform === 'darwin'
+        ? [
+            '/System/Library/Fonts/Supplemental/Arial.ttf',
+            '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+          ]
+        : [];
+  return candidates.filter((candidate) => existsSync(candidate));
 }
 
 function resolveMaterialFontPath(fileName: string): string {
