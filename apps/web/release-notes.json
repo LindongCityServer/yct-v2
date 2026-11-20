@@ -3,6 +3,79 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.24.1",
+      "releasedAt": "2026-11-20T02:32:53.268Z",
+      "sourceFingerprint": "8226a9623004f50d75f43dcf9e58365f7560b0de16a20a4f95e962079623c86c",
+      "themes": ["qqbot", "materials"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "天气卡片当前气温在零下时按实际温度显示，不再出现「--°」和「天气未知」；两位数负温不再与天气描述重叠"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "指令卡片遇到长群昵称时完整保留日期和发送时间，只截断昵称"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "随机物料请求超时从 8 秒放宽到 20 秒，失败日志记录实际耗时与请求地址"
+        },
+        {
+          "category": "perf",
+          "breaking": false,
+          "summary": "卡片与物料出图不再每次扫描系统字体；网页端缓存线网和物料数据，首次出图更快、更不容易超时"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
+      "version": "2.24.0",
+      "releasedAt": "2026-11-19T14:38:07.306Z",
+      "sourceFingerprint": "cebc998cc0b9d6929890824ff9f0de73c101bd62eecd027bfe383427ae47a84a",
+      "themes": ["materials", "qqbot", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "QQ 机器人新增随机物料盲盒：从 19 个系统模板随机出图，覆盖路牌、楼牌、公交站牌、地铁线路图、站名、方向、站台牌与导视牌"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "物料图片带编号、二维码和 30 天分享短链，扫码直达工作台继续编辑，过期后仍按原模板打开"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "工作台工具栏支持发起分享，可复制链接、查看二维码、下载分享图；未审核的自定义内容分享图强制带预览水印"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "物料后台新增分享记录，可按类型、状态、数据源与来源筛选，支持复制链接、二维码、停用与恢复"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "QQ 机器人支持按群切换服务器线网与沈阳示例线网，仅群主和管理员可切换；示例线网只开放地铁物料并标注 CC BY-NC-SA 4.0"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "物料盲盒注册为按群模块，默认对所有群开放，群主或管理员可用 /模块 关闭"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "常见问题补充随机物料、分享二维码和示例线网说明"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.23.0",
       "releasedAt": "2026-11-19T08:29:03.819Z",
       "sourceFingerprint": "14a72123a1d614f1d0f12ba65a697ad31e66851c1982154fd34c7d0862047df1",
