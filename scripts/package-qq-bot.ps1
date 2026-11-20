@@ -37,11 +37,12 @@ Write-Host '生成自包含部署目录...'
 if (Test-Path -LiteralPath $staging) {
   Remove-Item -LiteralPath $staging -Recurse -Force
 }
-& pnpm --filter yct-qq-bot deploy --prod --legacy $staging
+& pnpm --filter yct-qq-bot deploy --prod --legacy --config.node-linker=hoisted $staging
 
 $required = @(
   (Join-Path $staging 'src\card-renderer.mjs'),
-  (Join-Path $staging 'node_modules\@resvg\resvg-js'),
+  (Join-Path $staging 'node_modules\@resvg\resvg-js\package.json'),
+  (Join-Path $staging 'node_modules\qrcode\package.json'),
   (Join-Path $staging 'assets\fonts\HarmonyOS_Sans_SC_Regular.ttf'),
   (Join-Path $staging 'start-qq-bot.ps1')
 )
@@ -50,6 +51,16 @@ foreach ($path in $required) {
     throw "部署包缺少必要文件：$path"
   }
 }
+
+# Compress-Archive 不会跟随 junction：isolated 布局下直接压缩会得到只有 .pnpm、
+# 没有 node_modules\@resvg\resvg-js 的坏包。必须用 hoisted 布局并显式检查。
+foreach ($linkedPath in @('node_modules\@resvg\resvg-js', 'node_modules\qrcode')) {
+  $item = Get-Item -LiteralPath (Join-Path $staging $linkedPath)
+  if ($item.LinkType) {
+    throw "部署目录里的 $linkedPath 是链接（$($item.LinkType)），压缩后会丢失；请保留 --config.node-linker=hoisted。"
+  }
+}
+
 if (Test-Path -LiteralPath (Join-Path $staging '.env')) {
   throw '部署目录里出现真实 .env，已中止打包。'
 }
