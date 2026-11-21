@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CommunityStore } from '../src/community.mjs';
-import { handleCommand } from '../src/commands.mjs';
+import { handleCommand, parseIncomingCommand } from '../src/commands.mjs';
 
 const config = {
   weather: { city: '上海' },
@@ -244,6 +244,27 @@ test('自然触发词命中本地指令', async () => {
 
   const about = await handleCommand({ ...base, text: '关于机器人' });
   assert.match(about.reply, /QQ 机器人/);
+});
+
+test('无斜线裸词兼容物料、数据源和模块', () => {
+  const cases = [
+    ['物料', 'materials'],
+    ['路牌', 'roadsign'],
+    ['楼牌', 'buildingsign'],
+    ['站牌', 'stopsign'],
+    ['地铁', 'metro'],
+    ['盲盒', 'blindbox'],
+    ['数据源', 'materialsource'],
+    ['数据源 示例', 'materialsource'],
+    ['模块', 'modules'],
+    ['模块 关 天气', 'modules'],
+  ];
+  for (const [text, command] of cases) {
+    assert.equal(parseIncomingCommand(text)?.command, command, text);
+  }
+  for (const text of ['路牌怎么申请', '站牌在哪里', '地铁怎么坐', '模块是什么']) {
+    assert.equal(parseIncomingCommand(text), null, text);
+  }
 });
 
 test('容易误触发的自然语句交回问一问', async () => {

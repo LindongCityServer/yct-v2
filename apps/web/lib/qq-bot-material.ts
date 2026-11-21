@@ -127,6 +127,68 @@ export const qqBotMaterialTemplateIds = [
 
 export type QqBotMaterialTemplateId = (typeof qqBotMaterialTemplateIds)[number];
 
+/**
+ * 第一层模板入口：与工作台「模板与版式」的 templateGroups 保持一致。
+ * `/盲盒` 先在这些入口之间等概率抽，再在入口内按内部模板等概率抽。
+ * 指定族指令（/站牌、/地铁 等）仍按内部模板等概率，不经过这一层。
+ */
+export const qqBotMaterialTemplateEntries = [
+  {
+    id: 'road_sign',
+    templateIds: [ROAD_NAME_DIRECTION_TEMPLATE_ID],
+  },
+  {
+    id: 'address_sign',
+    templateIds: [BUILDING_ADDRESS_TEMPLATE_ID, NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID],
+  },
+  {
+    id: 'bus_stop',
+    templateIds: [
+      BUS_STOP_TERMINAL_TEMPLATE_ID,
+      BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID,
+      BUS_STOP_OVERVIEW_TEMPLATE_ID,
+      BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID,
+      BUS_STOP_DETAIL_TEMPLATE_ID,
+    ],
+  },
+  {
+    id: 'bus_stop_horizontal_detail',
+    templateIds: [BUS_STOP_HORIZONTAL_DETAIL_TEMPLATE_ID],
+  },
+  {
+    id: 'metro_line_map_vertical',
+    templateIds: [METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID, METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID],
+  },
+  {
+    id: 'metro_line_map',
+    templateIds: [
+      METRO_LINE_MAP_NEW_TEMPLATE_ID,
+      METRO_LINE_MAP_OLD_TEMPLATE_ID,
+      METRO_STATION_NAME_NEW_TEMPLATE_ID,
+      METRO_STATION_NAME_OLD_TEMPLATE_ID,
+      METRO_DIRECTION_NEW_TEMPLATE_ID,
+      METRO_DIRECTION_OLD_TEMPLATE_ID,
+    ],
+  },
+  {
+    id: 'metro_platform_sign',
+    templateIds: [METRO_PLATFORM_SIGN_TEMPLATE_ID],
+  },
+  {
+    id: 'metro_wayfinding',
+    templateIds: [METRO_WAYFINDING_TEMPLATE_ID],
+  },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  templateIds: readonly QqBotMaterialTemplateId[];
+}>;
+
+const qqBotMaterialEntryIdByTemplateId = new Map<QqBotMaterialTemplateId, string>(
+  qqBotMaterialTemplateEntries.flatMap((entry) =>
+    entry.templateIds.map((templateId) => [templateId, entry.id] as const),
+  ),
+);
+
 /** 数据源：server = 服务器真实公开数据；sample = 沈阳示例线网。 */
 export type QqBotMaterialDataSource = 'server' | 'sample';
 
@@ -1676,22 +1738,30 @@ function normalizeQqBotMaterialRequest(
  * 失败时抛 `QqBotMaterialError`（可识别错误码；sample 拉取失败抛 sample_unavailable），
  * 其余异常说明渲染链路本身出错，由路由按 500 render_failed 处理。
  */
-/** 先按模板分组并打乱模板顺序，再打乱组内候选：保证每个可用模板先验等概率。 */
-function orderCandidateIndicesByTemplate(
+/**
+ * 抽样顺序分两层：
+ * 1. 先按工作台模板入口等概率（路牌、门牌、公交站牌、公交横版、地铁竖版、地铁横版、站台牌、导视牌）；
+ * 2. 入口内直接按候选等概率，因此内部模板按可用候选数量加权，
+ *    不再把始发终到 / 同向概览 / 线路详情强行等分。
+ * 指定族指令（/站牌、/地铁 等）也走入口层，只是入口集合被 kind 过滤后变小。
+ */
+function orderCandidateIndicesByTemplateEntry(
   candidates: readonly MaterialCandidate[],
   rng: QqBotMaterialRandom,
 ): number[] {
-  const groups = new Map<string, number[]>();
+  const entries = new Map<string, number[]>();
   candidates.forEach((candidate, index) => {
-    const list = groups.get(candidate.templateId);
+    const entryId =
+      qqBotMaterialEntryIdByTemplateId.get(candidate.templateId) ?? candidate.templateId;
+    const list = entries.get(entryId);
     if (list) {
       list.push(index);
     } else {
-      groups.set(candidate.templateId, [index]);
+      entries.set(entryId, [index]);
     }
   });
-  const templateIds = shuffleWithRandom([...groups.keys()], rng);
-  return templateIds.flatMap((templateId) => shuffleWithRandom(groups.get(templateId) ?? [], rng));
+  const entryIds = shuffleWithRandom([...entries.keys()], rng);
+  return entryIds.flatMap((entryId) => shuffleWithRandom(entries.get(entryId) ?? [], rng));
 }
 
 function shuffleWithRandom<T>(values: readonly T[], rng: QqBotMaterialRandom): T[] {
@@ -1742,7 +1812,7 @@ export async function renderQqBotMaterial(
 
   // 先按模板分组、再组内打乱：否则候选多的模板（如地铁导视牌示例）会
   // 在 /盲盒 里占掉大部分概率，19 个模板就不再是“均匀抽模板”。
-  const orderedCandidateIndices = orderCandidateIndicesByTemplate(pool.candidates, rng);
+  const orderedCandidateIndices = orderCandidateIndicesByTemplateEntry(pool.candidates, rng);
   let lastRejection: unknown;
   let renderError: unknown;
   const maximumAttempts = Math.min(qqBotMaterialMaximumAttempts, orderedCandidateIndices.length);

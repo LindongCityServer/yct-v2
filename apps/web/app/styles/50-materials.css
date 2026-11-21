@@ -1386,7 +1386,10 @@
 .transit-material-preview-frame .material-preview-stage {
   width: min(100%, 760px);
   min-height: 0;
+  /* 预览舞台只是布局容器，不能让它的圆角/溢出裁掉物料本身；物料需要保持原牌面直角。 */
+  overflow: visible;
   border: 0;
+  border-radius: 0;
   background: transparent;
 }
 
@@ -1439,6 +1442,16 @@
   height: 100%;
   max-width: 100%;
   max-height: 100%;
+}
+
+/*
+ * 工作台里的本地 SVG 预览就是物料本身：不能叠加预览卡片的描边、投影和圆角，
+ * 否则用户会把这些装饰当成物料样式的一部分；版式差异只应来自模板 SVG。
+ */
+.transit-material-preview-frame .material-preview-canvas.material-preview-svg {
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
 }
 
 .material-preview-error {
@@ -2385,7 +2398,8 @@
 /* 中等宽度用更小的工具按钮，给标题栏留出标题与保存按钮的空间。 */
 @media (min-width: 761px) and (max-width: 1199px) {
   .editor-header-tools .editor-toolbar-button,
-  .editor-header-tools .editor-toolbar-actions > button {
+  .editor-header-tools .editor-toolbar-actions > button,
+  .editor-header-panel-toggle-toolbar .editor-toolbar-button {
     width: 34px;
     height: 34px;
   }

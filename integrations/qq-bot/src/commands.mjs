@@ -1498,6 +1498,25 @@ function parseMaterialNatural(input) {
   if (isQuestion(input)) {
     return null;
   }
+  // 裸词：菜单点击或用户直接打字不带 / 时也能用；只做完全匹配，避免吞掉正常问题。
+  const bareCommands = {
+    物料: 'materials',
+    路牌: 'roadsign',
+    楼牌: 'buildingsign',
+    站牌: 'stopsign',
+    地铁: 'metro',
+  };
+  if (bareCommands[input]) {
+    return { command: bareCommands[input], args: '', label: input };
+  }
+  const source = /^数据源(?:\s+([\s\S]+))?$/u.exec(input);
+  if (source) {
+    return { command: 'materialsource', args: cleanArgs(source[1] ?? ''), label: '数据源' };
+  }
+  const modules = /^模块(?:\s+([\s\S]+))?$/u.exec(input);
+  if (modules) {
+    return { command: 'modules', args: cleanArgs(modules[1] ?? ''), label: '模块' };
+  }
   if (/^(?:物料盲盒|盲盒|随机盲盒|随机物料|抽(?:一)?个?盲盒|来(?:一)?个?盲盒)$/u.test(input)) {
     return { command: 'blindbox', args: '', label: '盲盒' };
   }

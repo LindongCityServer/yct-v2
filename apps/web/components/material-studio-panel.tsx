@@ -476,6 +476,15 @@ export function MaterialStudioPanel({
   const [metroExampleLineId, setMetroExampleLineId] = useState('');
   const [metroLineMapProjectLineKey, setMetroLineMapProjectLineKey] = useState('');
   const [metroLineMapProjectNodeId, setMetroLineMapProjectNodeId] = useState('');
+  /**
+   * 最近一次套用到当前物料的线路站序。
+   * 方向 / 站名版式没有 routeStations 字段，开往终点只能靠这份站序在切换行车方向时重算；
+   * 只在用户显式套用线网数据时写入，避免把手动物料误绑到默认线路。
+   */
+  const [appliedMetroSignStations, setAppliedMetroSignStations] = useState<{
+    stationNames: string[];
+    currentIndex: number;
+  } | null>(null);
   /** 模板源码：键为 `${templateId}:${version}`，初始化时一次性拉取，用于本地 SVG 预览。 */
   const [templateSources, setTemplateSources] = useState<Record<string, string>>({});
   /** 最近一次本地渲染失败原因；同时用于预览区常驻提示。 */
@@ -1237,6 +1246,13 @@ export function MaterialStudioPanel({
       }
       // 站台站名标志等模板没有完整站序字段，继续走下面的真实站序兜底。
     }
+    if (
+      isMetroLineMap &&
+      appliedMetroSignStations &&
+      appliedMetroSignStations.stationNames.length >= 2
+    ) {
+      return appliedMetroSignStations.stationNames;
+    }
     const manualStations = (input.routeStations ?? '')
       .split(/\r?\n|\s*\/\s*/u)
       .map((station) => station.trim())
@@ -1251,6 +1267,7 @@ export function MaterialStudioPanel({
       : manualStations;
   }, [
     activeTransitStation,
+    appliedMetroSignStations,
     input.routeStations,
     isMetroLineMap,
     metroLineMapProjectStations,
@@ -1259,6 +1276,10 @@ export function MaterialStudioPanel({
     selectedLine,
     transitNetworkSource,
   ]);
+  // 换线路后旧站序不再可信：清掉派生上下文，等下一次显式套用。
+  useEffect(() => {
+    setAppliedMetroSignStations(null);
+  }, [metroLineMapProjectLineKey, selectedLineId, transitNetworkSource]);
   const travelDirectionOptions =
     travelDirectionStationNames.length >= 2
       ? [
@@ -1270,6 +1291,7 @@ export function MaterialStudioPanel({
         ]
       : undefined;
   // 地铁站名 / 方向版式：开往终点由行车方向与线路站序自动推断，不再手填。
+  // 套用线网数据后若用户切换行车方向，终点点位与下一站也要跟着翻转。
   useEffect(() => {
     if (!selected || selected.template.family !== 'metro_line') {
       return;
@@ -1282,27 +1304,56 @@ export function MaterialStudioPanel({
       return;
     }
     const direction = input.travelDirection === 'first' ? 'first' : 'last';
+    const lastStationIndex = travelDirectionStationNames.length - 1;
     const terminal =
       direction === 'first'
         ? travelDirectionStationNames[0]!
-        : travelDirectionStationNames[travelDirectionStationNames.length - 1]!;
+        : travelDirectionStationNames[lastStationIndex]!;
     const terminalPinyin = toUppercasePinyin(terminal);
+    // 方向 / 站台站名版式没有 routeStations 字段，当前站位置只能从「套用时记住的站序」来。
+    const appliedSelection =
+      appliedMetroSignStations &&
+      travelDirectionStationNames === appliedMetroSignStations.stationNames &&
+      fieldKeys.has('nextStationName')
+        ? appliedMetroSignStations
+        : null;
+    const nextStationIndex =
+      appliedSelection && appliedSelection.currentIndex >= 0
+        ? direction === 'first'
+          ? appliedSelection.currentIndex - 1
+          : appliedSelection.currentIndex + 1
+        : -1;
+    const nextStationName =
+      nextStationIndex >= 0 && nextStationIndex <= lastStationIndex
+        ? (travelDirectionStationNames[nextStationIndex] ?? '')
+        : '';
     setInput((current) => {
       const nextTerminal = current.terminalName ?? '';
       const nextPinyin = current.terminalNamePinyin ?? '';
-      if (
+      const hasNextStationField = Boolean(appliedSelection && fieldKeys.has('nextStationName'));
+      const currentNextStation = current.nextStationName ?? '';
+      const terminalUnchanged =
         nextTerminal === terminal &&
-        (!fieldKeys.has('terminalNamePinyin') || nextPinyin === terminalPinyin)
-      ) {
+        (!fieldKeys.has('terminalNamePinyin') || nextPinyin === terminalPinyin);
+      const nextStationUnchanged = !hasNextStationField || currentNextStation === nextStationName;
+      if (terminalUnchanged && nextStationUnchanged) {
         return current;
       }
       return {
         ...current,
         terminalName: terminal,
         ...(fieldKeys.has('terminalNamePinyin') ? { terminalNamePinyin: terminalPinyin } : {}),
+        ...(hasNextStationField
+          ? {
+              nextStationName,
+              ...(fieldKeys.has('nextStationPinyin')
+                ? { nextStationPinyin: toUppercasePinyin(nextStationName) }
+                : {}),
+            }
+          : {}),
       };
     });
-  }, [input.travelDirection, selected, travelDirectionStationNames]);
+  }, [appliedMetroSignStations, input.travelDirection, selected, travelDirectionStationNames]);
   const verticalTrackPosition = isMetroVerticalLineMap
     ? input.trackPosition === 'right' || input.trackPosition === 'both'
       ? input.trackPosition
@@ -1489,9 +1540,46 @@ export function MaterialStudioPanel({
   }, [applyWizardVariants, isApplyWizardOpen, selected?.id, selected?.template.fields]);
   const usesSingleTransitLineSelection = maximumTransitLineCount === 1;
 
+  /** 当前线网来源下的线路站序与当前站在站序里的位置（线路类模板共用）。 */
+  const resolveTransitLineStationSelection = () => {
+    const stationNames =
+      transitNetworkSource === 'rmp'
+        ? metroLineMapProjectStations.map((station) => station.name)
+        : (selectedLine?.stations.map((station) => station.stationName) ?? []);
+    const currentIndex =
+      transitNetworkSource === 'rmp'
+        ? metroLineMapProjectStations.findIndex(
+            (station) => station.id === metroLineMapProjectNodeId,
+          )
+        : (selectedLine?.stations.findIndex(
+            (station) => station.stationSourceId === selectedStationSourceId,
+          ) ?? -1);
+    return { stationNames, currentIndex };
+  };
+
+  /** 套用线网数据后记住站序，供方向版式在切换行车方向时重推开往终点。 */
+  const rememberAppliedMetroSignStations = (
+    fields: ReadonlyArray<MaterialField>,
+    templateFamily?: MaterialFamily,
+  ) => {
+    const fieldKeys = new Set(fields.map((field) => field.key));
+    if (!fieldKeys.has('terminalName') && !fieldKeys.has('nextStationName')) {
+      return;
+    }
+    const sourceKind = templateFamily
+      ? (serverSources?.[templateFamily] ?? serverSource)
+      : activeServerSource;
+    if (sourceKind !== 'transit_line') {
+      setAppliedMetroSignStations(null);
+      return;
+    }
+    const { stationNames, currentIndex } = resolveTransitLineStationSelection();
+    setAppliedMetroSignStations(stationNames.length ? { stationNames, currentIndex } : null);
+  };
+
   /**
    * 把当前站点 / 线路数据换算成目标模板的字段值。
-   * 不做拼音推导（客户端没有可靠拼音源），其余无法推导的字段保持用户原值。
+   * 无法从线网推导的字段保持用户原值；派生字段（下一站、开往终点）按行车方向重算。
    */
   const buildTransitNetworkFieldValues = (
     fields: ReadonlyArray<MaterialField>,
@@ -1526,18 +1614,23 @@ export function MaterialStudioPanel({
         transitNetworkSource === 'rmp'
           ? metroLineMapProjectLine?.secondaryLineName?.trim() || `Line ${lineNumber}`.trim()
           : `Line ${lineNumber}`.trim();
-      const stationNames =
-        transitNetworkSource === 'rmp'
-          ? metroLineMapProjectStations.map((station) => station.name)
-          : (selectedLine?.stations.map((station) => station.stationName) ?? []);
-      const currentIndex =
-        transitNetworkSource === 'rmp'
-          ? metroLineMapProjectStations.findIndex(
-              (station) => station.id === metroLineMapProjectNodeId,
-            )
-          : (selectedLine?.stations.findIndex(
-              (station) => station.stationSourceId === selectedStationSourceId,
-            ) ?? -1);
+      const { stationNames, currentIndex } = resolveTransitLineStationSelection();
+      // 「开往终点 / 下一站」由行车方向与站序共同决定：开往首站时终点取第一站、
+      // 下一站取当前站前一站；开往末站时相反。以前这里只写 terminalNamePinyin，
+      // 漏了中文 terminalName，方向版式预览就会只剩「开往」两个字。
+      const travelDirection = input.travelDirection === 'first' ? 'first' : 'last';
+      const lastStationIndex = stationNames.length - 1;
+      const terminalIndex = travelDirection === 'first' ? 0 : lastStationIndex;
+      const nextStationIndex =
+        currentIndex >= 0
+          ? travelDirection === 'first'
+            ? currentIndex - 1
+            : currentIndex + 1
+          : -1;
+      const nextStationName =
+        nextStationIndex >= 0 && nextStationIndex <= lastStationIndex
+          ? (stationNames[nextStationIndex] ?? '')
+          : '';
       setField('lineLabel', lineNumber);
       setField('lineEnglishLabel', lineEnglish);
       setField('routeNumber', lineNumber);
@@ -1566,12 +1659,13 @@ export function MaterialStudioPanel({
       }
       if (currentIndex >= 0) {
         setField('currentStationIndex', currentIndex);
-        setField('nextStationName', stationNames[currentIndex + 1]);
+        setField('nextStationName', nextStationName);
         // 地铁站名拼音没有现成数据时用统一拼音工具兜底。
         setField('stationNamePinyin', toUppercasePinyin(stationNames[currentIndex] ?? ''));
-        setField('nextStationPinyin', toUppercasePinyin(stationNames[currentIndex + 1] ?? ''));
-        setField('terminalNamePinyin', toUppercasePinyin(stationNames.at(-1) ?? ''));
+        setField('nextStationPinyin', toUppercasePinyin(nextStationName));
       }
+      setField('terminalName', stationNames[terminalIndex]);
+      setField('terminalNamePinyin', toUppercasePinyin(stationNames[terminalIndex] ?? ''));
       setField(
         'accentColor',
         (transitNetworkSource === 'rmp'
@@ -1718,6 +1812,7 @@ export function MaterialStudioPanel({
       blockAction('当前模板没有可套用的线网字段。');
       return;
     }
+    rememberAppliedMetroSignStations(selected.template.fields, selected.template.family);
     setInput((current) => ({ ...current, ...values }));
     clearPreview();
     publishToastRequested({
@@ -2608,6 +2703,7 @@ export function MaterialStudioPanel({
       ...buildCarriedRoadValues(target.template.fields, target.template.family),
       ...buildTransitNetworkFieldValues(target.template.fields, target.template.family),
     };
+    rememberAppliedMetroSignStations(target.template.fields, target.template.family);
     setPendingWizardApply({ templateId, values });
     setMode('manual');
     selectTemplate(templateId);
@@ -2792,6 +2888,7 @@ export function MaterialStudioPanel({
       blockAction('当前模板没有可套用的线网字段。');
       return;
     }
+    rememberAppliedMetroSignStations(card.template.fields, card.template.family);
     setIsApplyWizardOpen(false);
     setMode('manual');
     if (!isSwitching && selected) {
@@ -3131,6 +3228,7 @@ export function MaterialStudioPanel({
         return;
       }
       const nextInput = { ...input, ...data.values };
+      rememberAppliedMetroSignStations(selected.template.fields, selected.template.family);
       setInput(nextInput);
       // 套用后的文本就是新的免审核基线。
       setMaterialBaseline({
@@ -5284,7 +5382,10 @@ export function MaterialStudioPanel({
                   <MaterialLayoutThumbnail
                     source={templateSources[`${card.templateId}:${card.template.version}`]}
                     template={card.template}
-                    values={buildTransitNetworkFieldValues(card.template.fields)}
+                    values={buildTransitNetworkFieldValues(
+                      card.template.fields,
+                      card.template.family,
+                    )}
                   />
                   <div className="material-template-example-heading">
                     <strong>{card.label}</strong>

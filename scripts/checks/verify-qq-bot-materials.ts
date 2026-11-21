@@ -31,6 +31,7 @@ import {
   createQqBotMaterialSignature,
   normalizeQqBotMaterialSeed,
   postProcessQqBotMaterialPng,
+  qqBotMaterialTemplateEntries,
   qqBotMaterialTemplateIds,
   renderQqBotMaterial,
   resetQqBotMaterialRateLimit,
@@ -517,6 +518,18 @@ test('19 个系统模板与固定映射完整（slug / 编号前缀 / 族）', (
   assert.equal(kindCounts.get('bus_stop'), 6, '公交站牌模板数量');
   assert.equal(kindCounts.get('metro_line'), 9, '地铁模板数量');
   assert.equal(kindCounts.get('custom'), 1, '导视牌模板数量');
+});
+
+test('第一层模板入口覆盖 19 个内部模板且不重叠', () => {
+  const entryTemplateIds = qqBotMaterialTemplateEntries.flatMap((entry) => entry.templateIds);
+  assert.equal(qqBotMaterialTemplateEntries.length, 8);
+  assert.equal(entryTemplateIds.length, 19);
+  assert.equal(new Set(entryTemplateIds).size, 19);
+  assert.deepEqual(new Set(entryTemplateIds), new Set(qqBotMaterialTemplateIds));
+  const busEntry = qqBotMaterialTemplateEntries.find((entry) => entry.id === 'bus_stop');
+  assert.equal(busEntry?.templateIds.length, 5);
+  const metroEntry = qqBotMaterialTemplateEntries.find((entry) => entry.id === 'metro_line_map');
+  assert.equal(metroEntry?.templateIds.length, 6);
 });
 
 test('seed 归一化、编号前缀与画布尺寸策略', () => {

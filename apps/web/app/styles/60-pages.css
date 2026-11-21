@@ -2047,14 +2047,24 @@
   display: none;
 }
 
-.editor-header-panel-toggle {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+/*
+ * 工作台的“显示 / 隐藏全部面板”是标题栏按钮，不是独立品牌入口：
+ * 直接复用工具条的胶囊分组与按钮三件套（`.editor-toolbar` / `.editor-toolbar-group` /
+ * `.editor-toolbar-button`），尺寸、悬停、选中态与标题栏中央的工具栏完全一致。
+ * 材质不在本文件里硬编码：透光模式下由 `.editor-toolbar-group` 的通用液态材质规则
+ * 和 `LiquidMaterialBridge` 自动接管；简约 / 均衡模式下由通用规则保持透明。
+ */
+.secondary-leading-slot .editor-header-panel-toggle-toolbar {
+  flex: 0 0 auto;
+  max-width: none;
 }
 
-.editor-header-panel-toggle .material-symbols-outlined {
-  font-size: 20px;
+.editor-header-panel-toggle-toolbar .editor-toolbar-group {
+  padding: 2px;
+}
+
+.editor-header-panel-toggle-toolbar .editor-header-panel-toggle {
+  flex: 0 0 auto;
 }
 
 .secondary-actions {
