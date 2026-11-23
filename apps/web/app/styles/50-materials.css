@@ -1949,6 +1949,324 @@
   gap: var(--yct-space-3);
 }
 
+/* 自定义线网车站资料面板（P1：出口 + 结构） */
+.modal-panel.transit-network-profile-dialog {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: min(1120px, calc(100vw - 32px));
+  max-height: min(90vh, 900px);
+  overflow: hidden;
+}
+
+.transit-network-profile-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+}
+
+.transit-network-profile-header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.transit-network-profile-header span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-network-profile-header h2 {
+  margin: 0;
+  font-size: var(--yct-font-size-20);
+}
+
+.transit-network-profile-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--yct-space-2) var(--yct-space-4);
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-network-profile-summary .muted {
+  color: var(--yct-color-text-muted);
+}
+
+.transit-network-profile-body {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: var(--yct-space-4);
+  min-height: 0;
+}
+
+.transit-network-profile-sidebar {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: var(--yct-space-2);
+  min-height: 0;
+}
+
+.transit-network-profile-list {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.transit-network-profile-station {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.transit-network-profile-station:is(:hover, :focus-visible) {
+  background: var(--yct-color-surface-muted);
+}
+
+.transit-network-profile-station.is-active {
+  border-color: var(--yct-color-primary);
+  background: var(--yct-color-primary-soft);
+}
+
+.transit-network-profile-station > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.transit-network-profile-station strong,
+.transit-network-profile-station small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-network-profile-station strong {
+  font-size: var(--yct-font-size-13);
+}
+
+.transit-network-profile-station small {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+}
+
+.transit-network-profile-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.transit-network-profile-badges em {
+  padding: 1px 6px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-warning-strong);
+  font-size: var(--yct-font-size-10);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.transit-network-profile-detail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--yct-space-3);
+  min-height: 0;
+}
+
+.transit-network-profile-detail-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+  min-width: 0;
+}
+
+.transit-network-profile-detail-heading > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.transit-network-profile-detail-heading h3 {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--yct-font-size-18);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-network-profile-detail-heading span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-network-profile-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.transit-network-profile-section {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+}
+
+.transit-network-profile-section + .transit-network-profile-section {
+  margin-top: var(--yct-space-3);
+}
+
+.transit-network-profile-section h4,
+.transit-network-profile-subheading h4 {
+  margin: 0;
+  font-size: var(--yct-font-size-14);
+}
+
+.transit-network-profile-subheading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+}
+
+.transit-network-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--yct-space-2);
+}
+
+.transit-network-profile-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-network-profile-field > span {
+  font-weight: 650;
+}
+
+.transit-network-profile-field :is(input, select, textarea),
+.transit-network-profile-exit-row :is(input, select),
+.transit-network-profile-layer-row :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-sm);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  font: inherit;
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-network-profile-field textarea {
+  min-height: 58px;
+  padding: 6px 8px;
+  resize: vertical;
+}
+
+.transit-network-profile-layers {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.transit-network-profile-layer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.transit-network-profile-exits {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.transit-network-profile-exit-head,
+.transit-network-profile-exit-row {
+  display: grid;
+  grid-template-columns: 72px 96px 108px 82px minmax(180px, 1fr) 36px;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 620px;
+}
+
+.transit-network-profile-exit-head span {
+  color: var(--yct-color-text-muted);
+  font-size: var(--yct-font-size-11);
+  font-weight: 650;
+}
+
+.transit-network-profile-exit-row .icon-button,
+.transit-network-profile-layer-row .icon-button {
+  justify-self: end;
+  width: 32px;
+  height: 32px;
+}
+
+.transit-network-profile-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+  flex-wrap: wrap;
+}
+
+.transit-network-profile-footer > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-network-profile-footer .muted {
+  color: var(--yct-color-text-muted);
+}
+
+.transit-network-profile-notice {
+  color: var(--yct-color-primary-hover);
+  font-weight: 650;
+}
+
+@media (max-width: 900px) {
+  .modal-panel.transit-network-profile-dialog {
+    max-height: calc(100dvh - 24px);
+  }
+
+  .transit-network-profile-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transit-network-profile-sidebar {
+    grid-template-rows: auto auto minmax(160px, 220px);
+  }
+
+  .transit-network-profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .metro-wayfinding-canvas-stage {
   display: grid;
   place-items: center;
@@ -3550,6 +3868,12 @@
 /* Portal 到 body 的工作台弹窗要高于 .visual-editor-page.is-workspace（z-index: 90）。 */
 .editor-dialog-backdrop {
   z-index: 120;
+}
+
+/* 线网名称编辑弹窗从数据来源弹窗内投送到 body，必须高于数据来源弹窗（120）。
+ * 否则在 advanced 材质下会被数据来源弹窗的 backdrop-filter 包含块困住。 */
+.transit-network-editor-backdrop {
+  z-index: 130;
 }
 
 .transit-station-detail-backdrop {

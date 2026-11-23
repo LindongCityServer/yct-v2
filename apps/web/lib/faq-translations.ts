@@ -201,8 +201,16 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           'server-status-refresh': {
             question: '首頁的伺服器狀態和在線人數是即時的嗎？',
             answer:
-              '伺服器狀態來自閘道的週期性查詢，頁面約每 15 秒重新整理一次，並非持續即時連線。短暫查詢失敗時會保留最近一次明確狀態；需要判斷特定玩家位置時，請進入地圖並結合「最近觀測」和「最後在線」時間查看。',
-            keywords: ['伺服器狀態', '在線人數', '延遲', '重新整理頻率', '狀態未更新'],
+              '伺服器狀態來自閘道的週期性查詢，頁面約每 15 秒重新整理一次，並非持續即時連線。短暫查詢失敗時會保留最近一次明確狀態；頂欄狀態膠囊在懸停或鍵盤聚焦時展開在線玩家名單，需要判斷特定玩家位置時，請進入地圖並結合「最近觀測」和「最後在線」時間查看。',
+            keywords: [
+              '伺服器狀態',
+              '在線人數',
+              '在線玩家',
+              '誰在線',
+              '延遲',
+              '重新整理頻率',
+              '狀態未更新',
+            ],
           },
         },
       },
@@ -1030,10 +1038,11 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           'server-status-refresh': {
             question: 'Are the server status and online player count live?',
             answer:
-              'Server status comes from periodic gateway queries. The page refreshes it about every 15 seconds rather than using a continuous live connection. A brief query failure keeps the last confirmed state. To check a specific player, open the map and use the last observed and last online times.',
+              'Server status comes from periodic gateway queries. The page refreshes it about every 15 seconds rather than using a continuous live connection. A brief query failure keeps the last confirmed state. Hover or focus the status pill in the top bar to see the online player list. To check a specific player position, open the map and use the last observed and last online times.',
             keywords: [
               'server status',
               'online players',
+              'who is online',
               'latency',
               'refresh interval',
               'status not updating',

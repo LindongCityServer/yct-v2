@@ -3123,3 +3123,16 @@
   color: var(--yct-color-text-muted);
 }
 
+/* 顶栏在线玩家浮层是不透明表面，不继承透光材质写给透明控件的白色文字光晕；
+ * 同时恢复被材质控件规则抹掉的分隔线。规则放在最后，用顺序压过 70-data 的同特异性覆盖。 */
+:root[data-material-mode='advanced'] [data-liquid-material] .topbar-server-status-popover-surface,
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  .topbar-server-status-popover-surface
+  :where(span, strong, small, em, b, i) {
+  text-shadow: none;
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] .topbar-server-status-popover-link {
+  border-top-color: var(--yct-color-border-subtle);
+}

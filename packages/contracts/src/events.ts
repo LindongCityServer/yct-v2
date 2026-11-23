@@ -899,7 +899,7 @@ export interface MaterialTransitNetworkProjectImportedPayload {
 export interface MaterialTransitNetworkProjectUpdatedPayload {
   projectId: string;
   ownerId: string;
-  changedFields: Array<'lineNames' | 'stationNames'>;
+  changedFields: Array<'lineNames' | 'stationNames' | 'stationProfiles'>;
   updatedAt: ISODateTimeString;
 }
 

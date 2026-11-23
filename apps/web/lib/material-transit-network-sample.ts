@@ -12,6 +12,15 @@ export const DEFAULT_MATERIAL_TRANSIT_NETWORK_SAMPLE_LICENSE_NAME = 'CC BY-NC-SA
 export const DEFAULT_MATERIAL_TRANSIT_NETWORK_SAMPLE_LICENSE_URL =
   'https://creativecommons.org/licenses/by-nc-sa/4.0/';
 
+const defaultMaterialTransitNetworkSampleLineNames = [
+  { lineKey: 'shenyang:sy1', name: '1号线' },
+  { lineKey: 'shenyang:sy2', name: '2号线' },
+  { lineKey: 'shenyang:sy3', name: '3号线' },
+  { lineKey: 'shenyang:sy4', name: '4号线' },
+  { lineKey: 'shenyang:sy9', name: '9号线' },
+  { lineKey: 'shenyang:sy10', name: '10号线' },
+] as const;
+
 const defaultMaterialTransitNetworkSampleStationNames: Readonly<
   Record<string, readonly [string, string]>
 > = {
@@ -66,6 +75,7 @@ export async function loadDefaultMaterialTransitNetworkSample(): Promise<Materia
     licenseUrl: DEFAULT_MATERIAL_TRANSIT_NETWORK_SAMPLE_LICENSE_URL,
     snapshot: {
       ...parsedSnapshot,
+      lineNames: defaultMaterialTransitNetworkSampleLineNames.map((line) => ({ ...line })),
       nodes: parsedSnapshot.nodes.map((node) => {
         const fallbackNames = defaultMaterialTransitNetworkSampleStationNames[node.id];
         return node.kind === 'station' && node.names.length === 0 && fallbackNames

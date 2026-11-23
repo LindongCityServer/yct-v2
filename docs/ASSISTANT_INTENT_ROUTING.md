@@ -71,7 +71,7 @@ interface AssistantIntentResult {
 | `identity`      | 我是谁、我的 Wiki 身份、我的服务器账号   | 是       | 否       | 是             | 是          | 无                                                                            | 用 viewer prompt 里的服务器账号 / Wiki 名回答 |
 | `account_data`  | 我的票、我的订单、我的乘车码、我的收藏   | 是       | 否       | 否             | 是          | 无                                                                            | 当前没有工具，预检直接回答“暂未接入”          |
 | `public_info`   | 临东站有哪些线路、临东站在哪、运营公告   | 否       | 否       | 否             | 否          | `search_transit` / `search_places` / `search_site_content` / `wiki_search` 等 | 显式地点、线路、班次、公告、Wiki 都是公开信息 |
-| `server_status` | 服务器在线吗、现在几个人、服务器状态     | 否       | 否       | 否             | 否          | `get_server_status`                                                           | 不注入位置，不检索无关资料                    |
+| `server_status` | 服务器在线吗、现在几个人、谁在线         | 否       | 否       | 否             | 否          | `get_server_status`                                                           | 返回在线人数与在线玩家名单，不注入位置        |
 | `site_help`     | 怎么绑定、账号设置在哪、问一问怎么用     | 否       | 否       | 否             | 否          | `search_site_content`                                                         | 可用身份提示判断是否已经绑定                  |
 | `smalltalk`     | 你好、谢谢、你是谁                       | 否       | 否       | 否             | 否          | 无                                                                            | 不检索、不注入位置和身份、不开工具            |
 | `feedback`      | 打不开、报错、建议、bug                  | 否       | 否       | 否             | 否          | 无                                                                            | 保留现有 Issue 入口检索                       |

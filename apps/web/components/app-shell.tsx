@@ -316,6 +316,8 @@ function AppShellFrame({
     serverStatus.displayState === 'online'
       ? serverStatus.response?.item?.onlinePlayerCount
       : undefined;
+  const serverStatusOnlinePlayers =
+    serverStatus.displayState === 'online' ? serverStatus.response?.item?.onlinePlayers : undefined;
   const serverStatusLabel =
     serverStatusOnlinePlayerCount !== undefined && serverStatusOnlinePlayerCount > 0
       ? `${serverStatusPillText(serverStatus.displayState, t)} · ${t('serverStatus.pill.players', {
@@ -448,6 +450,7 @@ function AppShellFrame({
             <ServerStatusPill
               state={serverStatus.displayState}
               onlinePlayerCount={serverStatusOnlinePlayerCount}
+              onlinePlayers={serverStatusOnlinePlayers}
               href={appPath('/map?category=player')}
             />
           ) : null}

@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import type { MaterialTransitNetworkProject } from '@yct/contracts';
+import type {
+  MaterialTransitNetworkProject,
+  MaterialTransitNetworkSupplement,
+  MaterialTransitStationProfile,
+} from '@yct/contracts';
 import type {
   MaterialTransitNetworkProjectCreateInput,
   MaterialTransitNetworkProjectUpdateInput,
@@ -42,6 +46,8 @@ export async function createMaterialTransitNetworkProject(input: {
     ownerId: input.ownerId,
     fileName: input.project.fileName,
     snapshot: input.project.snapshot,
+    // 单线网下重新导入是替换几何；车站资料按 nodeId 保留，避免用户白填。
+    supplement: existing?.supplement,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -83,6 +89,17 @@ export async function updateMaterialTransitNetworkProject(input: {
       };
     }
   }
+  for (const profile of input.update.stationProfiles ?? []) {
+    const node = current.snapshot.nodes.find((candidate) => candidate.id === profile.nodeId);
+    if (node?.kind !== 'station') {
+      return {
+        ok: false,
+        status: 400,
+        error: 'invalid_material_transit_network_project',
+        message: '车站资料引用了项目中不存在的车站。',
+      };
+    }
+  }
   const snapshotResult = materialTransitNetworkSnapshotSchema.safeParse({
     ...current.snapshot,
     nodes: stationNamesByNodeId.size
@@ -107,12 +124,14 @@ export async function updateMaterialTransitNetworkProject(input: {
     };
   }
   const now = new Date().toISOString();
-  const changedFields: Array<'lineNames' | 'stationNames'> = [];
+  const changedFields: Array<'lineNames' | 'stationNames' | 'stationProfiles'> = [];
   if (input.update.lineNames !== undefined) changedFields.push('lineNames');
   if (input.update.stationNames !== undefined) changedFields.push('stationNames');
+  if (input.update.stationProfiles !== undefined) changedFields.push('stationProfiles');
   const project: MaterialTransitNetworkProject = {
     ...current,
     snapshot: snapshotResult.data,
+    supplement: mergeStationProfiles(current.supplement, input.update.stationProfiles),
     updatedAt: now,
   };
   await writeMaterialTransitNetworkProject(project);
@@ -155,6 +174,32 @@ async function findOwnedProject(
 ): Promise<MaterialTransitNetworkProject | undefined> {
   const project = await findMaterialTransitNetworkProject(projectId);
   return project?.ownerId === ownerId ? project : undefined;
+}
+
+/**
+ * 车站资料按 nodeId 合并：未提交的车站保留旧资料，提交空资料的站视为清空。
+ * 这样维护面板可以只发送改动过的站，也不会因为重新导入把其它站资料抹掉。
+ */
+function mergeStationProfiles(
+  current: MaterialTransitNetworkSupplement | undefined,
+  incoming: MaterialTransitStationProfile[] | undefined,
+): MaterialTransitNetworkSupplement | undefined {
+  if (incoming === undefined) return current;
+  const byNodeId = new Map(
+    (current?.stations ?? []).map((profile) => [profile.nodeId, profile] as const),
+  );
+  for (const profile of incoming) {
+    if (!profile.structure && !profile.exits?.length && !profile.note) {
+      byNodeId.delete(profile.nodeId);
+      continue;
+    }
+    byNodeId.set(profile.nodeId, profile);
+  }
+  const stations = [...byNodeId.values()].sort((left, right) =>
+    left.nodeId.localeCompare(right.nodeId),
+  );
+  if (!stations.length && !current) return undefined;
+  return { ...current, stations };
 }
 
 function projectNotFound(): MaterialTransitNetworkProjectFailure {

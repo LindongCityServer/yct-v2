@@ -1,4 +1,4 @@
-import type { MaterialTransitNetworkSnapshot } from '@yct/contracts';
+import type { MaterialTransitNetworkSnapshot, MaterialTransitStationProfile } from '@yct/contracts';
 
 export type TransitNetworkSourceKind = 'server' | 'rmp';
 export type TransitNetworkSourceChangeReason =
@@ -40,11 +40,18 @@ export interface TransitNetworkLineNameEditorRequestedPayload {
   studioId: string;
 }
 
+/** 车站资料（出口/结构）保存后广播；物料工作台据此重算模板空位。 */
+export interface TransitNetworkProfilesChangedPayload {
+  studioId: string;
+  stationProfiles: MaterialTransitStationProfile[];
+}
+
 const sourceChangedEventName = 'yct:transit-network-source-changed';
 const importSucceededEventName = 'yct:transit-network-import-succeeded';
 const importFailedEventName = 'yct:transit-network-import-failed';
 const projectSnapshotChangedEventName = 'yct:transit-network-project-snapshot-changed';
 const lineNameEditorRequestedEventName = 'yct:transit-network-line-name-editor-requested';
+const profilesChangedEventName = 'yct:transit-network-profiles-changed';
 
 export function publishTransitNetworkSourceChanged(
   payload: TransitNetworkSourceChangedPayload,
@@ -74,6 +81,12 @@ export function publishTransitNetworkLineNameEditorRequested(
   payload: TransitNetworkLineNameEditorRequestedPayload,
 ): void {
   window.dispatchEvent(new CustomEvent(lineNameEditorRequestedEventName, { detail: payload }));
+}
+
+export function publishTransitNetworkProfilesChanged(
+  payload: TransitNetworkProfilesChangedPayload,
+): void {
+  window.dispatchEvent(new CustomEvent(profilesChangedEventName, { detail: payload }));
 }
 
 export function subscribeTransitNetworkSourceChanged(
@@ -110,4 +123,16 @@ export function subscribeTransitNetworkLineNameEditorRequested(
   };
   window.addEventListener(lineNameEditorRequestedEventName, handleEvent);
   return () => window.removeEventListener(lineNameEditorRequestedEventName, handleEvent);
+}
+
+export function subscribeTransitNetworkProfilesChanged(
+  studioId: string,
+  listener: (payload: TransitNetworkProfilesChangedPayload) => void,
+): () => void {
+  const handleEvent = (event: Event) => {
+    const payload = (event as CustomEvent<TransitNetworkProfilesChangedPayload>).detail;
+    if (payload?.studioId === studioId) listener(payload);
+  };
+  window.addEventListener(profilesChangedEventName, handleEvent);
+  return () => window.removeEventListener(profilesChangedEventName, handleEvent);
 }

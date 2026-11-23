@@ -18,6 +18,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const user = await requireActiveLdpassUser(request);
   if (!user.ok) return user.response;
+  const contentLength = Number(request.headers.get('content-length') ?? '0');
+  if (Number.isFinite(contentLength) && contentLength > 8 * 1024 * 1024) {
+    return NextResponse.json(
+      { error: 'material_transit_network_payload_too_large', message: '线网项目不能超过 8MB。' },
+      { status: 413 },
+    );
+  }
   const parsed = materialTransitNetworkProjectCreateSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json(

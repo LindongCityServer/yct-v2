@@ -220,9 +220,14 @@ function renderMetroWayfindingRow(
         : sizing.elementWidths[index]!;
     const elementWidth =
       element.type === 'text' ? intrinsicElementWidth * sizing.textScaleX : intrinsicElementWidth;
+    const isFramedLargeText = element.type === 'largeText' && element.frameShape !== 'none';
     const elementScaleX =
       sizing.layoutScale *
       (element.type === 'largeText' || element.type === 'combination' ? sizing.textScaleX : 1);
+    // 方框/圆框大文本只做等比缩小，避免把 A 压成瘦长条；等比缩小时在行内垂直居中。
+    const elementScaleY = isFramedLargeText
+      ? sizing.layoutScale * sizing.textScaleX
+      : sizing.layoutScale;
     const displayWidth = elementWidth * elementScaleX;
     const output = renderMetroWayfindingElement(
       element,
@@ -230,7 +235,7 @@ function renderMetroWayfindingRow(
       elementWidth,
       layout,
       elementScaleX,
-      sizing.layoutScale,
+      elementScaleY,
       assets,
     );
     const nextElement = elements[index + 1];
@@ -294,7 +299,17 @@ function renderMetroWayfindingElement(
     suppressInheritedBackground && element.backgroundColor === undefined
       ? ''
       : `<rect width="${formatNumber(width)}" height="${formatNumber(elementHeight)}" fill="${background}"/>`;
-  const transform = `translate(${formatNumber(x)} 0) scale(${formatNumber(scaleX)} ${formatNumber(scaleY)})`;
+  const uniformFramedLargeTextScale =
+    element.type === 'largeText' &&
+    element.frameShape !== 'none' &&
+    Math.abs(scaleX - scaleY) < 0.0001
+      ? scaleY
+      : 1;
+  const uniformScaleOffsetY =
+    uniformFramedLargeTextScale < 1
+      ? (elementHeight - elementHeight * uniformFramedLargeTextScale) / 2
+      : 0;
+  const transform = `translate(${formatNumber(x)} ${formatNumber(uniformScaleOffsetY)}) scale(${formatNumber(scaleX)} ${formatNumber(scaleY)})`;
   if (element.type === 'space') {
     return suppressInheritedBackground && element.backgroundColor === undefined
       ? ''
@@ -560,7 +575,7 @@ function renderMetroVerticalMainSegments(
         const shouldInvert = lineColor.toUpperCase() === background.toUpperCase();
         const badgeBackground = shouldInvert ? color : lineColor;
         const badgeForeground = shouldInvert ? lineColor : '#FFFFFF';
-        const output = `<g transform="translate(${formatNumber(x)} ${formatNumber(centerY)})"><circle r="${formatNumber(diameter / 2)}" fill="${badgeBackground}"/><text x="0" y="${formatNumber(fontSize * 0.9 * 0.34)}" transform="rotate(90)" fill="${badgeForeground}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}">${escapeXml(segment.value)}</text></g>`;
+        const output = `<g transform="translate(${formatNumber(x)} ${formatNumber(centerY)})"><circle r="${formatNumber(diameter / 2)}" fill="${badgeBackground}"/><text x="${formatNumber(fontSize * -0.035)}" y="${formatNumber(fontSize * 0.9 * 0.34)}" transform="rotate(90)" fill="${badgeForeground}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}" data-yct-spacing="glyph-middle">${escapeXml(segment.value)}</text></g>`;
         cursorY += diameter + trailingGap;
         return output;
       }
@@ -689,7 +704,7 @@ function renderMetroMainSegments(
         const badgeBackground = shouldInvert ? color : lineColor;
         const badgeForeground = shouldInvert ? lineColor : '#FFFFFF';
         cursor += diameter + trailingGap;
-        return `<g transform="translate(${formatNumber(centerX)} ${formatNumber(baseline - fontSize * 0.32)})"><circle r="${formatNumber(diameter / 2)}" fill="${badgeBackground}"/><text y="${formatNumber(fontSize * 0.9 * 0.34)}" fill="${badgeForeground}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}">${escapeXml(segment.value)}</text></g>`;
+        return `<g transform="translate(${formatNumber(centerX)} ${formatNumber(baseline - fontSize * 0.32)})"><circle r="${formatNumber(diameter / 2)}" fill="${badgeBackground}"/><text x="${formatNumber(fontSize * -0.035)}" y="${formatNumber(fontSize * 0.9 * 0.34)}" fill="${badgeForeground}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}" data-yct-spacing="glyph-middle">${escapeXml(segment.value)}</text></g>`;
       }
       const textWidth = estimateMetroWayfindingTextWidth(segment.value, fontSize);
       const horizontalPadding = segment.kind === 'boxed' ? fontSize * 0.16 : 0;

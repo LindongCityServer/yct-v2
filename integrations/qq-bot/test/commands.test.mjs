@@ -258,6 +258,8 @@ test('无斜线裸词兼容物料、数据源和模块', () => {
     ['数据源 示例', 'materialsource'],
     ['模块', 'modules'],
     ['模块 关 天气', 'modules'],
+    ['谁在线', 'serverplayers'],
+    ['在线玩家', 'serverplayers'],
   ];
   for (const [text, command] of cases) {
     assert.equal(parseIncomingCommand(text)?.command, command, text);
@@ -418,7 +420,7 @@ test('内容指令都带卡片数据', async () => {
   assert.equal(couplet.card?.lower, '细雨润花');
 });
 
-test('服务器在线人数', async () => {
+test('服务器在线人数与在线玩家', async () => {
   const result = await handleCommand({
     ...base,
     text: '/人数',
@@ -432,14 +434,54 @@ test('服务器在线人数', async () => {
             availability: 'online',
             onlinePlayerCount: 12,
             checkedAt: '2026-11-18T04:00:00.000Z',
+            onlinePlayers: [
+              {
+                name: 'Alice',
+                x: 100,
+                z: 200,
+                lastSeenAt: '2026-11-18T03:59:00.000Z',
+              },
+              {
+                name: 'Bob',
+                x: -10,
+                z: -20,
+                lastSeenAt: '2026-11-18T03:58:00.000Z',
+              },
+            ],
           },
         };
       },
     }),
   });
   assert.match(result.reply, /服务器在线：12 人/);
+  assert.match(result.reply, /在线玩家：Alice、Bob/);
   assert.equal(result.card?.type, 'result');
   assert.equal(result.card?.result, '12');
+  assert.equal(result.card?.note, '在线玩家：Alice、Bob');
+});
+
+test('服务器在线但没有玩家时明确显示空名单', async () => {
+  const result = await handleCommand({
+    ...base,
+    text: '/谁在线',
+    config: { ...config, yct: { ...config.yct, baseUrl: 'http://127.0.0.1:3300' } },
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return {
+          meta: { sourceStatus: 'ready', message: '正常' },
+          item: {
+            availability: 'online',
+            onlinePlayerCount: 0,
+            checkedAt: '2026-11-18T04:00:00.000Z',
+            onlinePlayers: [],
+          },
+        };
+      },
+    }),
+  });
+  assert.match(result.reply, /当前没有玩家在线/);
+  assert.equal(result.card?.note, '当前没有玩家在线');
 });
 
 test('随机地点返回 POI 分享卡片', async () => {

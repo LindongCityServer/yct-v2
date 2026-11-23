@@ -301,6 +301,17 @@ console.log('── 4. 其他路由分支 ────────────�
 }
 
 {
+  const result = intent('谁在线');
+  check(
+    '在线玩家问法命中服务器状态工具',
+    result.intent === 'server_status' &&
+      result.toolHints.includes('get_server_status') &&
+      !result.needsAccount,
+    JSON.stringify(result),
+  );
+}
+
+{
   const result = intent('怎么绑定临东通');
   check(
     '绑定指引 = site_help',

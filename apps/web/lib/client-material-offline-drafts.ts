@@ -1,4 +1,8 @@
-import type { MaterialCanvasConfig, MaterialTransitNetworkSnapshot } from '@yct/contracts';
+import type {
+  MaterialCanvasConfig,
+  MaterialTransitNetworkSnapshot,
+  MaterialTransitStationProfile,
+} from '@yct/contracts';
 
 const DATABASE_NAME = 'yct-material-offline-v1';
 const STORE_NAME = 'drafts';
@@ -26,6 +30,8 @@ export interface MaterialOfflineDraftRecord {
   mode: 'manual' | 'server';
   transitNetworkSource: 'server' | 'rmp';
   importedTransitNetwork?: MaterialTransitNetworkSnapshot;
+  /** 自定义线网的车站资料；本机草稿也要能回填出口/结构。 */
+  stationProfiles?: MaterialTransitStationProfile[];
   /** 上次套用的车站 / 方向 / 线路，用于「模板库」预填。 */
   transitSelection?: MaterialOfflineDraftTransitSelection;
   createdAt: string;

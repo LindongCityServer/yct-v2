@@ -4,7 +4,9 @@ import type {
   MaterialCanvasConfig,
   MaterialGlyphConfig,
   MaterialTransitNetworkSnapshot,
+  MaterialTransitStationProfile,
   TileProviderDescriptor,
+  TransitStationDetailSnapshot,
 } from '@yct/contracts';
 import {
   useEffect,
@@ -42,6 +44,7 @@ import {
 import {
   publishTransitNetworkLineNameEditorRequested,
   publishTransitNetworkSourceChanged,
+  subscribeTransitNetworkProfilesChanged,
   subscribeTransitNetworkProjectSnapshotChanged,
   subscribeTransitNetworkSourceChanged,
   type TransitNetworkProjectOrigin,
@@ -77,6 +80,12 @@ import {
   type MetroWayfindingExample,
   type MetroWayfindingExampleStation,
 } from '../lib/metro-wayfinding-examples';
+import { buildMetroExampleLineExits } from '../lib/metro-wayfinding-station-exits';
+import {
+  getShenyangSampleStationProfile,
+  getShenyangSampleStationProfileByNodeId,
+  isShenyangSampleGroundStation,
+} from '../lib/shenyang-sample-station-exits';
 import { formatServiceTimeRange, parseServiceTimeRange } from '../lib/material-service-time';
 import { composeMaterialTemplateSvg } from '../lib/material-svg';
 import {
@@ -459,6 +468,31 @@ export function MaterialStudioPanel({
     useState<TransitNetworkProjectOrigin>('none');
   const [importedTransitNetwork, setImportedTransitNetwork] =
     useState<MaterialTransitNetworkSnapshot>();
+  // 自定义线网的车站资料（目前只有出口参与导视模板填充）。
+  const [importedStationProfiles, setImportedStationProfiles] = useState<
+    MaterialTransitStationProfile[]
+  >([]);
+  // 服务器线网的站内资料（按线路+车站存），模板库据此区分当前线路出口与换乘出口。
+  const [serverStationDetails, setServerStationDetails] = useState<TransitStationDetailSnapshot[]>(
+    [],
+  );
+  const serverStationDetailsRevisionRef = useRef(0);
+  /** 重新拉站内资料：打开模板库前调用，避免页面开着时后台数据更新了却还读旧快照。 */
+  const reloadServerStationDetails = async (): Promise<void> => {
+    if (!workspace) return;
+    const revision = ++serverStationDetailsRevisionRef.current;
+    try {
+      const response = await fetch(appPath('/api/transit/station-details'), { cache: 'no-store' });
+      if (!response.ok) return;
+      const data = (await response.json().catch(() => ({}))) as {
+        items?: TransitStationDetailSnapshot[];
+      };
+      if (revision !== serverStationDetailsRevisionRef.current) return;
+      setServerStationDetails(data.items ?? []);
+    } catch {
+      // 站内资料不可用时静默降级为无出口，不影响模板库打开。
+    }
+  };
   const [localDraft, setLocalDraft] = useState<MaterialOfflineDraftRecord | null>(null);
   const [localDraftReady, setLocalDraftReady] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -882,21 +916,82 @@ export function MaterialStudioPanel({
   const metroExampleStations = useMemo<MetroWayfindingExampleStation[]>(() => {
     if (transitNetworkSource === 'rmp') {
       if (!importedTransitNetwork) return [];
+      // 初始化事件可能早于面板订阅；示例线网的线路键是稳定标记，补一层兜底。
+      const isShenyangSampleNetwork = Boolean(
+        importedTransitNetwork.lineNames?.some((line) => line.lineKey.startsWith('shenyang:sy')),
+      );
+      const usesShenyangSample =
+        transitProjectOrigin === 'sample' ||
+        (transitProjectOrigin !== 'imported' && isShenyangSampleNetwork);
       return importedTransitNetwork.nodes
         .filter((node) => node.kind === 'station' && node.names[0])
-        .map((node) => ({
-          name: node.names[0]!,
-          secondaryName: node.names[1],
-          lines: listMaterialTransitNetworkNodeLines(importedTransitNetwork, node.id).map(
-            (line) => ({
-              id: line.id,
-              name: line.label,
-              secondaryName: line.secondaryLabel,
-              color: line.color,
-              terminalStations: listRmpLineTerminalStations(importedTransitNetwork, line.lineKey),
-            }),
-          ),
-        }))
+        .map((node) => {
+          const stationProfile =
+            getShenyangSampleStationProfileByNodeId(node.id) ??
+            (usesShenyangSample ? getShenyangSampleStationProfile(node.names[0]!) : undefined);
+          const importedProfile = importedStationProfiles.find(
+            (profile) => profile.nodeId === node.id,
+          );
+          const sampleExits = stationProfile
+            ? Array.from(
+                new Map(
+                  stationProfile.lineGroups
+                    .flatMap((group) => group.exits)
+                    .map((exit) => [exit.code, exit] as const),
+                ).values(),
+              ).map((exit) => ({
+                code: exit.code,
+                direction: exit.direction,
+                orientation: exit.orientation,
+                status: exit.status,
+                order: exit.order,
+                description: exit.description,
+                hasAccessibleElevator: exit.hasAccessibleElevator,
+              }))
+            : undefined;
+          return {
+            name: node.names[0]!,
+            secondaryName: node.names[1],
+            exits:
+              sampleExits ??
+              importedProfile?.exits?.map((exit) => ({
+                code: exit.code,
+                direction: exit.direction,
+                orientation: exit.orientation,
+                status: exit.status,
+                order: exit.order,
+                description: exit.description,
+              })),
+            lineExits: stationProfile?.lineGroups.map((group) => ({
+              lineId: group.lineKey,
+              lineName: group.lineName,
+              hasElevator: group.exits.some((exit) => exit.hasAccessibleElevator),
+              exits: group.exits.map((exit) => ({
+                code: exit.code,
+                direction: exit.direction,
+                orientation: exit.orientation,
+                status: exit.status,
+                order: exit.order,
+                description: exit.description,
+                hasAccessibleElevator: exit.hasAccessibleElevator,
+              })),
+            })),
+            lines: listMaterialTransitNetworkNodeLines(importedTransitNetwork, node.id).map(
+              (line) => ({
+                id: line.id,
+                name:
+                  stationProfile?.lineGroups.find((group) => group.lineKey === line.id)?.lineName ??
+                  line.label,
+                secondaryName: line.secondaryLabel,
+                color: line.color,
+                terminalStations: listRmpLineTerminalStations(importedTransitNetwork, line.lineKey),
+              }),
+            ),
+            overGround:
+              importedProfile?.structure?.overGround ??
+              (stationProfile ? isShenyangSampleGroundStation(node.names[0]!) : false),
+          };
+        })
         .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
     }
     return transitLines
@@ -925,8 +1020,22 @@ export function MaterialStudioPanel({
         result.push(station);
         return result;
       }, [])
+      .map((station) => ({
+        ...station,
+        lineExits: buildMetroExampleLineExits(station.name, station.lines, serverStationDetails),
+        overGround: serverStationDetails.some(
+          (detail) => detail.stationName === station.name && detail.overGround,
+        ),
+      }))
       .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
-  }, [importedTransitNetwork, transitLines, transitNetworkSource]);
+  }, [
+    importedStationProfiles,
+    importedTransitNetwork,
+    serverStationDetails,
+    transitLines,
+    transitNetworkSource,
+    transitProjectOrigin,
+  ]);
 
   const selectedMetroExampleStation =
     metroExampleStations.find((station) => station.name === metroExampleStationName) ??
@@ -2150,6 +2259,7 @@ export function MaterialStudioPanel({
           if (snapshot) setImportedTransitNetwork(snapshot);
           if (clearSnapshot) {
             setImportedTransitNetwork(undefined);
+            setImportedStationProfiles([]);
             setTransitProjectOrigin('none');
           }
           setSelectedTransitLineIds([]);
@@ -2168,6 +2278,50 @@ export function MaterialStudioPanel({
       }),
     [studioId],
   );
+
+  useEffect(
+    () =>
+      subscribeTransitNetworkProfilesChanged(studioId, ({ stationProfiles }) => {
+        setImportedStationProfiles(stationProfiles);
+      }),
+    [studioId],
+  );
+
+  // 数据来源弹窗按需挂载，未打开时也要拿到车站资料，否则模板库先打开会没有出口。
+  useEffect(() => {
+    if (transitNetworkSource !== 'rmp') {
+      setImportedStationProfiles([]);
+      return;
+    }
+    // 示例线网的资料由数据来源面板发布，不能再被「当前用户项目」的空资料覆盖。
+    const isShenyangSampleNetwork = Boolean(
+      importedTransitNetwork?.lineNames?.some((line) => line.lineKey.startsWith('shenyang:sy')),
+    );
+    if (transitProjectOrigin === 'sample' || isShenyangSampleNetwork) return;
+    let cancelled = false;
+    void fetch(appPath('/api/materials/transit-network-projects'), { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return undefined;
+        return (await response.json().catch(() => ({}))) as {
+          items?: Array<{ supplement?: { stations?: MaterialTransitStationProfile[] } }>;
+        };
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setImportedStationProfiles(data?.items?.[0]?.supplement?.stations ?? []);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [importedTransitNetwork, transitNetworkSource, transitProjectOrigin]);
+
+  // 服务器线网站内资料：模板库需要出口/电梯信息；只读，失败时静默降级为无出口。
+  useEffect(() => {
+    if (!workspace) return;
+    void reloadServerStationDetails();
+  }, [workspace]);
 
   useEffect(() => {
     if (!selected || !localDraftReady) {
@@ -2252,6 +2406,7 @@ export function MaterialStudioPanel({
         mode,
         transitNetworkSource,
         importedTransitNetwork,
+        stationProfiles: importedStationProfiles,
         transitSelection: {
           stationMarkerId: selectedTransitStationMarkerId || undefined,
           importedStationNodeId: selectedImportedStationNodeId || undefined,
@@ -2274,6 +2429,7 @@ export function MaterialStudioPanel({
   }, [
     activeCanvas,
     importedTransitNetwork,
+    importedStationProfiles,
     input,
     localDraftReady,
     metroLineMapProjectLineKey,
@@ -2639,6 +2795,8 @@ export function MaterialStudioPanel({
       targetGroup ? Math.max(targetGroup.templateIds.indexOf(targetId), 0) : 0,
     );
     setApplyWizardTemplateId(targetId);
+    // 页面可能已经开很久，打开模板库前重新拉一次站内资料，避免读到旧的无障碍电梯信息。
+    void reloadServerStationDetails();
     setIsApplyWizardOpen(true);
   };
 
@@ -3284,6 +3442,7 @@ export function MaterialStudioPanel({
       mode,
       transitNetworkSource,
       importedTransitNetwork,
+      stationProfiles: importedStationProfiles,
       transitSelection: {
         stationMarkerId: selectedTransitStationMarkerId || undefined,
         importedStationNodeId: selectedImportedStationNodeId || undefined,
@@ -4807,6 +4966,7 @@ export function MaterialStudioPanel({
                     ? localDraft.importedTransitNetwork
                     : undefined
                 }
+                initialStationProfiles={localDraftReady ? localDraft?.stationProfiles : undefined}
               />
             </ResponsiveSidebarDisclosure>
           ) : null}
@@ -5115,6 +5275,7 @@ export function MaterialStudioPanel({
               ? localDraft.importedTransitNetwork
               : undefined
           }
+          initialStationProfiles={localDraftReady ? localDraft?.stationProfiles : undefined}
         />
       ) : (
         // 路牌等工作台没有线网导入，直接把地点 / 坐标选择器放进全局属性的数据来源。

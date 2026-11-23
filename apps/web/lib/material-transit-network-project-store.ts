@@ -1,7 +1,10 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { MaterialTransitNetworkProject } from '@yct/contracts';
-import { materialTransitNetworkSnapshotSchema } from '@yct/schemas';
+import {
+  materialTransitNetworkSnapshotSchema,
+  materialTransitNetworkSupplementSchema,
+} from '@yct/schemas';
 import { readRuntimeConfig } from './runtime-config';
 
 interface MaterialTransitNetworkProjectStoreSnapshot {
@@ -77,7 +80,9 @@ function isMaterialTransitNetworkProject(value: unknown): value is MaterialTrans
     typeof project.fileName === 'string' &&
     typeof project.createdAt === 'string' &&
     typeof project.updatedAt === 'string' &&
-    materialTransitNetworkSnapshotSchema.safeParse(project.snapshot).success
+    materialTransitNetworkSnapshotSchema.safeParse(project.snapshot).success &&
+    (project.supplement === undefined ||
+      materialTransitNetworkSupplementSchema.safeParse(project.supplement).success)
   );
 }
 

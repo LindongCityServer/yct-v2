@@ -658,6 +658,10 @@ export interface TransitStationExitSnapshot {
   placeMarkerId?: string;
   /** 用于生成出口介绍的附近道路标记，最多保留两条。 */
   roadMarkerIds?: string[];
+  /** 出口 POI 上的设施（无障碍电梯/升降机等），读取时按 placeMarkerId/站名+编号关联。 */
+  facilities?: PoiFacilitySnapshot[];
+  /** 该出口 POI 是否带无障碍电梯/升降机；由 facilities 推导。 */
+  hasAccessibleElevator?: boolean;
 }
 
 export interface TransitStationDetailSnapshot {
@@ -1585,11 +1589,67 @@ export interface MaterialTransitNetworkSnapshot {
   lineNames?: MaterialTransitNetworkLineName[];
 }
 
+export type MaterialTransitStationOrientation = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW';
+
+export interface MaterialTransitStationExit {
+  code: string;
+  name?: string;
+  floor?: string;
+  direction?: 'upwards' | 'downwards';
+  orientation?: MaterialTransitStationOrientation;
+  status?: 'open' | 'closed' | 'reserved';
+  lineKeys?: string[];
+  order?: number;
+  description?: string;
+  landmarks?: string[];
+}
+
+export interface MaterialTransitStationStructure {
+  position?: 'underground' | 'elevated' | 'ground' | 'mixed';
+  platformType?: 'island' | 'side' | 'stacked' | 'twin-island' | 'side-stacked' | 'other';
+  platformCount?: number;
+  overGround?: boolean;
+  platformSide?: 'left' | 'right' | 'both' | 'none';
+  layers?: Array<{
+    name: string;
+    usage: 'concourse' | 'platform' | 'entrance' | 'transfer' | 'equipment' | 'other';
+    order?: number;
+    note?: string;
+  }>;
+  platforms?: Array<{
+    lineKeys?: string[];
+    floor?: string;
+    type?: 'island' | 'side' | 'stacked' | 'twin-island' | 'side-stacked' | 'other';
+    note?: string;
+  }>;
+  note?: string;
+}
+
+export interface MaterialTransitStationLineGroup {
+  lineKey: string;
+  lineName?: string;
+  exits: MaterialTransitStationExit[];
+}
+
+export interface MaterialTransitStationProfile {
+  nodeId: string;
+  structure?: MaterialTransitStationStructure;
+  exits?: MaterialTransitStationExit[];
+  /** 按线路分组的出口；示例线网/换乘站使用，平铺 exits 仍作为兜底。 */
+  lineGroups?: MaterialTransitStationLineGroup[];
+  note?: string;
+}
+
+export interface MaterialTransitNetworkSupplement {
+  stations?: MaterialTransitStationProfile[];
+}
+
 export interface MaterialTransitNetworkProject {
   id: string;
   ownerId: string;
   fileName: string;
   snapshot: MaterialTransitNetworkSnapshot;
+  supplement?: MaterialTransitNetworkSupplement;
   createdAt: ISODateTimeString;
   updatedAt: ISODateTimeString;
 }

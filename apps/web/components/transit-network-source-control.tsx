@@ -1,13 +1,18 @@
 'use client';
 
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, ComponentProps } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { MaterialTransitNetworkProject, MaterialTransitNetworkSnapshot } from '@yct/contracts';
+import type {
+  MaterialTransitNetworkProject,
+  MaterialTransitNetworkSnapshot,
+  MaterialTransitStationProfile,
+} from '@yct/contracts';
 import { appPath } from '../lib/app-paths';
 import { publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import {
   publishTransitNetworkImportFailed,
   publishTransitNetworkImportSucceeded,
+  publishTransitNetworkProfilesChanged,
   publishTransitNetworkProjectSnapshotChanged,
   publishTransitNetworkSourceChanged,
   subscribeTransitNetworkLineNameEditorRequested,
@@ -23,12 +28,27 @@ import {
   resolveMaterialTransitNetworkLineNames,
 } from '../lib/rmp-transit-network';
 import { deriveMetroWayfindingLineIdentity } from '../lib/metro-wayfinding-line-source';
+import { buildShenyangSamplePanelProfiles } from '../lib/shenyang-sample-station-exits';
 import { useI18n } from '../lib/client-i18n';
+import { EditorDialogPortal } from './editor/editor-dialog-portal';
 import { SegmentedControl } from './segmented-control';
+import { TransitNetworkProfilePanel } from './transit-network-profile-panel';
 import { Modal } from './ui/modal';
 import { Button, IconButton } from './ui/button';
 
 type Translate = ReturnType<typeof useI18n>['t'];
+
+/**
+ * 名称编辑弹窗必须投送到 body：数据来源弹窗（advanced 材质）带 backdrop-filter，
+ * 会成为 fixed 后代的包含块，嵌套 modal 会被困在面板里。
+ */
+function PortaledModal(props: ComponentProps<typeof Modal>) {
+  return (
+    <EditorDialogPortal>
+      <Modal {...props} backdropClassName="transit-network-editor-backdrop" />
+    </EditorDialogPortal>
+  );
+}
 
 interface TransitNetworkLineNameDraft {
   name: string;
@@ -76,6 +96,28 @@ async function fetchDefaultTransitNetworkSample(
 }
 
 /**
+ * 示例线网被另存/导入成项目时，节点 ID 仍是样本 ID；用这层合并让项目也能看到示例出口。
+ * 只补项目里没有资料的节点，已有项目资料优先。
+ */
+function mergeShenyangSampleProfiles(
+  snapshot: MaterialTransitNetworkSnapshot,
+  profiles: MaterialTransitStationProfile[],
+): MaterialTransitStationProfile[] {
+  const sampleById = new Map(
+    buildShenyangSamplePanelProfiles().map((profile) => [profile.nodeId, profile] as const),
+  );
+  const stationIds = snapshot.nodes
+    .filter((node) => node.kind === 'station')
+    .map((node) => node.id);
+  if (!stationIds.some((id) => sampleById.has(id))) return profiles;
+  const byId = new Map(profiles.map((profile) => [profile.nodeId, profile] as const));
+  return stationIds.flatMap((id) => {
+    const profile = byId.get(id) ?? sampleById.get(id);
+    return profile ? [profile] : [];
+  });
+}
+
+/**
  * 安全读取 JSON：401/重定向可能返回 HTML，直接 `json()` 会抛
  * `Unexpected token '<'`。非 JSON 响应统一当作空对象处理。
  */
@@ -95,10 +137,12 @@ export function TransitNetworkSourceControl({
   studioId,
   initialSource,
   initialSnapshot,
+  initialStationProfiles,
 }: Readonly<{
   studioId: string;
   initialSource?: TransitNetworkSourceKind;
   initialSnapshot?: MaterialTransitNetworkSnapshot;
+  initialStationProfiles?: MaterialTransitStationProfile[];
 }>) {
   const { locale, t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -108,7 +152,17 @@ export function TransitNetworkSourceControl({
   const [source, setSource] = useState<TransitNetworkSourceKind>(sourceRef.current);
   const [snapshot, setSnapshot] = useState<MaterialTransitNetworkSnapshot>();
   const [projectId, setProjectId] = useState('');
+  const [stationProfiles, setStationProfiles] = useState<MaterialTransitStationProfile[]>([]);
+  const [isProfilePanelOpen, setIsProfilePanelOpen] = useState(false);
   const [projectOrigin, setProjectOrigin] = useState<TransitNetworkProjectOrigin>('none');
+  useEffect(() => {
+    if (projectId || !initialStationProfiles?.length) return;
+    setStationProfiles(initialStationProfiles);
+    publishTransitNetworkProfilesChanged({
+      studioId,
+      stationProfiles: initialStationProfiles,
+    });
+  }, [initialStationProfiles, projectId, studioId]);
   // 事件回调里要读最新的 origin（避免闭包拿到旧值）。
   const projectOriginRef = useRef<TransitNetworkProjectOrigin>('none');
   useEffect(() => {
@@ -218,6 +272,12 @@ export function TransitNetworkSourceControl({
           throw new Error(data.message ?? t('transitNetworkSource.error.persistFailed'));
         setProjectId(data.id!);
         setSnapshot(data.snapshot!);
+        const profiles = mergeShenyangSampleProfiles(
+          data.snapshot!,
+          data.supplement?.stations ?? [],
+        );
+        setStationProfiles(profiles);
+        publishTransitNetworkProfilesChanged({ studioId, stationProfiles: profiles });
       } catch (error) {
         setProjectId('');
         setErrorMessage(
@@ -268,6 +328,7 @@ export function TransitNetworkSourceControl({
     setSnapshot(undefined);
     setProjectId('');
     setProjectOrigin('none');
+    setStationProfiles([]);
     setFileName('');
     setSampleName('');
     setSampleSourceUrl('');
@@ -285,6 +346,7 @@ export function TransitNetworkSourceControl({
       clearSnapshot: true,
       projectOrigin: 'none',
     });
+    publishTransitNetworkProfilesChanged({ studioId, stationProfiles: [] });
     setIsPersisting(false);
     setIsProjectLoading(true);
     try {
@@ -305,6 +367,9 @@ export function TransitNetworkSourceControl({
         snapshot: sample.snapshot,
         projectOrigin: 'sample',
       });
+      const profiles = buildShenyangSamplePanelProfiles();
+      setStationProfiles(profiles);
+      publishTransitNetworkProfilesChanged({ studioId, stationProfiles: profiles });
     } catch (error) {
       if (projectLoadRevisionRef.current !== loadRevision) return;
       setErrorMessage(
@@ -496,6 +561,11 @@ export function TransitNetworkSourceControl({
         setProjectId('');
         setFileName(t('transitNetworkSource.localDraftName'));
         setIsProjectLoading(false);
+        const draftProfiles = initialStationProfiles ?? [];
+        if (draftProfiles.length) {
+          setStationProfiles(draftProfiles);
+          publishTransitNetworkProfilesChanged({ studioId, stationProfiles: draftProfiles });
+        }
         if (sourceRef.current === 'rmp') {
           publishTransitNetworkSourceChanged({
             studioId,
@@ -505,6 +575,34 @@ export function TransitNetworkSourceControl({
             projectOrigin: 'imported',
           });
         }
+        // 本地草稿只存了几何快照；车站资料仍从服务器项目补一次，否则刷新后出口会“消失”。
+        void fetch(appPath('/api/materials/transit-network-projects'), { cache: 'no-store' })
+          .then(async (response) => {
+            if (!response.ok) return undefined;
+            const data =
+              (await readJsonResponse<{ items?: MaterialTransitNetworkProject[] }>(response)) ?? {};
+            return data.items?.[0];
+          })
+          .then((project) => {
+            if (cancelled || projectLoadRevisionRef.current !== loadRevision) return;
+            if (!project) {
+              const profiles = mergeShenyangSampleProfiles(
+                initialSnapshot,
+                initialStationProfiles ?? [],
+              );
+              setStationProfiles(profiles);
+              publishTransitNetworkProfilesChanged({ studioId, stationProfiles: profiles });
+              return;
+            }
+            setProjectId(project.id);
+            const profiles = mergeShenyangSampleProfiles(
+              project.snapshot,
+              project.supplement?.stations ?? [],
+            );
+            setStationProfiles(profiles);
+            publishTransitNetworkProfilesChanged({ studioId, stationProfiles: profiles });
+          })
+          .catch(() => undefined);
         return;
       }
       let project: MaterialTransitNetworkProject | undefined;
@@ -534,6 +632,11 @@ export function TransitNetworkSourceControl({
         setProjectOrigin('imported');
         setSnapshot(project.snapshot);
         setFileName(project.fileName);
+        const profiles = mergeShenyangSampleProfiles(
+          project.snapshot,
+          project.supplement?.stations ?? [],
+        );
+        setStationProfiles(profiles);
         setIsProjectLoading(false);
         if (sourceRef.current === 'rmp') {
           publishTransitNetworkSourceChanged({
@@ -543,6 +646,7 @@ export function TransitNetworkSourceControl({
             snapshot: project.snapshot,
             projectOrigin: 'imported',
           });
+          publishTransitNetworkProfilesChanged({ studioId, stationProfiles: profiles });
         }
         return;
       }
@@ -564,6 +668,9 @@ export function TransitNetworkSourceControl({
             snapshot: sample.snapshot,
             projectOrigin: 'sample',
           });
+          const profiles = buildShenyangSamplePanelProfiles();
+          setStationProfiles(profiles);
+          publishTransitNetworkProfilesChanged({ studioId, stationProfiles: profiles });
         }
       } catch (error) {
         if (cancelled || projectLoadRevisionRef.current !== loadRevision) return;
@@ -743,6 +850,19 @@ export function TransitNetworkSourceControl({
                 </span>
               </button>
             ) : null}
+            {projectOrigin !== 'none' ? (
+              <button
+                type="button"
+                className="transit-network-maintenance-button"
+                disabled={isPersisting}
+                onClick={() => setIsProfilePanelOpen(true)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  edit_note
+                </span>
+                <span>{projectId ? '管理车站资料' : '查看车站资料'}</span>
+              </button>
+            ) : null}
             <IconButton
               variant="icon"
               icon="edit"
@@ -780,7 +900,7 @@ export function TransitNetworkSourceControl({
       ) : null}
 
       {isLineNameEditorOpen && snapshot ? (
-        <Modal
+        <PortaledModal
           className="transit-network-line-name-dialog"
           as="form"
           onSubmit={(event) => {
@@ -868,11 +988,11 @@ export function TransitNetworkSourceControl({
                 : t('transitNetworkSource.lineName.save')}
             </Button>
           </div>
-        </Modal>
+        </PortaledModal>
       ) : null}
 
       {isStationNameEditorOpen && snapshot ? (
-        <Modal
+        <PortaledModal
           className="transit-network-station-name-dialog"
           as="form"
           onSubmit={(event) => {
@@ -963,7 +1083,21 @@ export function TransitNetworkSourceControl({
                 : t('transitNetworkSource.stationName.save')}
             </Button>
           </div>
-        </Modal>
+        </PortaledModal>
+      ) : null}
+
+      {isProfilePanelOpen && snapshot ? (
+        <TransitNetworkProfilePanel
+          studioId={studioId}
+          snapshot={snapshot}
+          projectId={projectId}
+          initialProfiles={stationProfiles}
+          onClose={() => setIsProfilePanelOpen(false)}
+          onSaved={(profiles) => {
+            setStationProfiles(profiles);
+            publishTransitNetworkProfilesChanged({ studioId, stationProfiles: profiles });
+          }}
+        />
       ) : null}
     </section>
   );

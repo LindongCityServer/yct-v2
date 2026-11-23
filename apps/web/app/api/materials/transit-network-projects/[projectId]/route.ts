@@ -14,6 +14,13 @@ interface RouteContext {
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const user = await requireActiveLdpassUser(request);
   if (!user.ok) return user.response;
+  const contentLength = Number(request.headers.get('content-length') ?? '0');
+  if (Number.isFinite(contentLength) && contentLength > 8 * 1024 * 1024) {
+    return NextResponse.json(
+      { error: 'material_transit_network_payload_too_large', message: '线网资料不能超过 8MB。' },
+      { status: 413 },
+    );
+  }
   const parsed = materialTransitNetworkProjectUpdateSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json(

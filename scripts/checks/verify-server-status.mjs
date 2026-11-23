@@ -506,6 +506,14 @@ test('map-first workflow persists all-offline transitions, emits once and restor
         const status = await readOperationsServerStatus();
         assert.equal(status.item.availability, 'online');
         assert.equal(status.item.onlinePlayerCount, 2);
+        assert.deepEqual(
+          status.item.onlinePlayers.map(({ name, x, z }) => ({ name, x, z })),
+          [
+            { name: 'Alice', x: 100, z: 200 },
+            { name: 'Bob', x: -10, z: -20 },
+          ],
+        );
+        assert.ok(status.item.onlinePlayers.every((player) => player.lastSeenAt));
       },
     );
     const before = await readPlayerLocationSnapshot();
@@ -532,6 +540,7 @@ test('map-first workflow persists all-offline transitions, emits once and restor
         const status = await readOperationsServerStatus();
         assert.equal(status.item.availability, 'offline');
         assert.equal(status.item.onlinePlayerCount, 0);
+        assert.deepEqual(status.item.onlinePlayers, []);
         offlineSince = result.snapshot.locations.map((player) => player.offlineSince);
       },
     );
@@ -646,6 +655,7 @@ test('map-first workflow persists all-offline transitions, emits once and restor
       const status = await readOperationsServerStatus();
       assert.equal(status.item.availability, 'unknown');
       assert.equal(status.item.onlinePlayerCount, undefined);
+      assert.equal(status.item.onlinePlayers, undefined);
     });
     await t.test(
       'a detector error alone does not override recovered map availability',

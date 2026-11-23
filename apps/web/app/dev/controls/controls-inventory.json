@@ -1107,6 +1107,7 @@
         "apps/web/components/title-with-breaks.tsx",
         "apps/web/components/toast-viewport.tsx",
         "apps/web/components/transit-material-form-workspace.tsx",
+        "apps/web/components/transit-network-profile-panel.tsx",
         "apps/web/components/transit-network-source-control.tsx",
         "apps/web/components/transit-wayfinding-workspace.tsx",
         "apps/web/components/ui/button.tsx",
@@ -1189,6 +1190,7 @@
         "apps/web/components/title-with-breaks.tsx",
         "apps/web/components/toast-viewport.tsx",
         "apps/web/components/transit-material-form-workspace.tsx",
+        "apps/web/components/transit-network-profile-panel.tsx",
         "apps/web/components/transit-network-source-control.tsx",
         "apps/web/components/transit-wayfinding-workspace.tsx",
         "apps/web/components/ui/button.tsx",
@@ -24710,8 +24712,8 @@
           "types": [],
           "states": [],
           "lines": [
-            348,
-            472
+            350,
+            475
           ]
         },
         {
@@ -24723,7 +24725,7 @@
           "types": [],
           "states": [],
           "lines": [
-            360
+            362
           ]
         },
         {
@@ -24742,7 +24744,7 @@
           "types": [],
           "states": [],
           "lines": [
-            414
+            416
           ]
         },
         {
@@ -24756,7 +24758,7 @@
           "types": [],
           "states": [],
           "lines": [
-            427
+            429
           ]
         },
         {
@@ -24768,7 +24770,7 @@
           "types": [],
           "states": [],
           "lines": [
-            428
+            430
           ]
         },
         {
@@ -24784,7 +24786,7 @@
             "aria-expanded"
           ],
           "lines": [
-            429
+            431
           ]
         },
         {
@@ -24800,7 +24802,7 @@
           "types": [],
           "states": [],
           "lines": [
-            437
+            439
           ]
         },
         {
@@ -24815,7 +24817,7 @@
           "types": [],
           "states": [],
           "lines": [
-            442
+            444
           ]
         },
         {
@@ -24830,7 +24832,7 @@
           "types": [],
           "states": [],
           "lines": [
-            443
+            445
           ]
         },
         {
@@ -24844,7 +24846,7 @@
           "types": [],
           "states": [],
           "lines": [
-            445
+            447
           ]
         },
         {
@@ -24858,7 +24860,7 @@
           "types": [],
           "states": [],
           "lines": [
-            446
+            448
           ]
         },
         {
@@ -24870,7 +24872,7 @@
           "types": [],
           "states": [],
           "lines": [
-            448
+            450
           ]
         },
         {
@@ -24889,7 +24891,7 @@
             "disabled"
           ],
           "lines": [
-            454
+            457
           ]
         },
         {
@@ -24903,10 +24905,10 @@
           "types": [],
           "states": [],
           "lines": [
-            461,
-            489,
-            514,
-            535
+            464,
+            492,
+            517,
+            538
           ]
         },
         {
@@ -24918,7 +24920,7 @@
           "types": [],
           "states": [],
           "lines": [
-            467
+            470
           ]
         },
         {
@@ -24930,7 +24932,7 @@
           "types": [],
           "states": [],
           "lines": [
-            475
+            478
           ]
         },
         {
@@ -24944,7 +24946,7 @@
           "types": [],
           "states": [],
           "lines": [
-            482
+            485
           ]
         },
         {
@@ -24958,7 +24960,7 @@
           "types": [],
           "states": [],
           "lines": [
-            494
+            497
           ]
         },
         {
@@ -24973,7 +24975,7 @@
           "types": [],
           "states": [],
           "lines": [
-            499
+            502
           ]
         },
         {
@@ -24987,7 +24989,7 @@
           "types": [],
           "states": [],
           "lines": [
-            505
+            508
           ]
         },
         {
@@ -25001,7 +25003,7 @@
           "types": [],
           "states": [],
           "lines": [
-            506
+            509
           ]
         },
         {
@@ -25015,7 +25017,7 @@
           "types": [],
           "states": [],
           "lines": [
-            507
+            510
           ]
         },
         {
@@ -25030,7 +25032,7 @@
           "types": [],
           "states": [],
           "lines": [
-            509
+            512
           ]
         },
         {
@@ -25044,7 +25046,7 @@
           "types": [],
           "states": [],
           "lines": [
-            519
+            522
           ]
         },
         {
@@ -25058,7 +25060,7 @@
           "types": [],
           "states": [],
           "lines": [
-            522
+            525
           ]
         },
         {
@@ -25072,7 +25074,7 @@
           "types": [],
           "states": [],
           "lines": [
-            524
+            527
           ]
         },
         {
@@ -25086,7 +25088,7 @@
           "types": [],
           "states": [],
           "lines": [
-            528
+            531
           ]
         },
         {
@@ -25101,7 +25103,7 @@
           "types": [],
           "states": [],
           "lines": [
-            530
+            533
           ]
         },
         {
@@ -25113,7 +25115,7 @@
           "types": [],
           "states": [],
           "lines": [
-            653
+            656
           ]
         },
         {
@@ -25125,7 +25127,7 @@
           "types": [],
           "states": [],
           "lines": [
-            654
+            657
           ]
         },
         {
@@ -25137,8 +25139,8 @@
           "types": [],
           "states": [],
           "lines": [
-            712,
-            740
+            715,
+            743
           ]
         },
         {
@@ -25152,7 +25154,7 @@
           "types": [],
           "states": [],
           "lines": [
-            734
+            737
           ]
         },
         {
@@ -25167,7 +25169,7 @@
           "types": [],
           "states": [],
           "lines": [
-            748
+            751
           ]
         },
         {
@@ -25179,7 +25181,7 @@
           "types": [],
           "states": [],
           "lines": [
-            754
+            757
           ]
         },
         {
@@ -25194,7 +25196,7 @@
           "types": [],
           "states": [],
           "lines": [
-            761
+            764
           ]
         },
         {
@@ -25208,7 +25210,7 @@
           "types": [],
           "states": [],
           "lines": [
-            768
+            771
           ]
         },
         {
@@ -25222,7 +25224,7 @@
           "types": [],
           "states": [],
           "lines": [
-            769
+            772
           ]
         },
         {
@@ -25237,7 +25239,7 @@
           "types": [],
           "states": [],
           "lines": [
-            776
+            779
           ]
         },
         {
@@ -25251,7 +25253,7 @@
           "types": [],
           "states": [],
           "lines": [
-            791
+            794
           ]
         },
         {
@@ -25266,7 +25268,7 @@
           "types": [],
           "states": [],
           "lines": [
-            792
+            795
           ]
         },
         {
@@ -25281,7 +25283,7 @@
           "types": [],
           "states": [],
           "lines": [
-            793
+            796
           ]
         },
         {
@@ -25296,7 +25298,7 @@
           "types": [],
           "states": [],
           "lines": [
-            794
+            797
           ]
         },
         {
@@ -25310,7 +25312,7 @@
           "types": [],
           "states": [],
           "lines": [
-            804
+            807
           ]
         },
         {
@@ -25322,8 +25324,8 @@
           "types": [],
           "states": [],
           "lines": [
-            807,
-            810
+            810,
+            813
           ]
         },
         {
@@ -25337,7 +25339,7 @@
           "types": [],
           "states": [],
           "lines": [
-            817
+            820
           ]
         },
         {
@@ -25352,7 +25354,7 @@
           "types": [],
           "states": [],
           "lines": [
-            854
+            857
           ]
         },
         {
@@ -25364,7 +25366,7 @@
           "types": [],
           "states": [],
           "lines": [
-            855
+            858
           ]
         },
         {
@@ -25378,7 +25380,7 @@
           "types": [],
           "states": [],
           "lines": [
-            857
+            860
           ]
         },
         {
@@ -25392,7 +25394,7 @@
           ],
           "states": [],
           "lines": [
-            859
+            862
           ]
         },
         {
@@ -25406,9 +25408,9 @@
           "types": [],
           "states": [],
           "lines": [
-            865,
-            869,
-            878
+            868,
+            872,
+            881
           ]
         },
         {
@@ -25420,7 +25422,7 @@
           "types": [],
           "states": [],
           "lines": [
-            868
+            871
           ]
         },
         {
@@ -25435,7 +25437,7 @@
           "types": [],
           "states": [],
           "lines": [
-            873
+            876
           ]
         },
         {
@@ -25449,7 +25451,7 @@
           "types": [],
           "states": [],
           "lines": [
-            881
+            884
           ]
         },
         {
@@ -25463,7 +25465,7 @@
           "types": [],
           "states": [],
           "lines": [
-            882
+            885
           ]
         },
         {
@@ -25477,7 +25479,7 @@
           "types": [],
           "states": [],
           "lines": [
-            883
+            886
           ]
         },
         {
@@ -25491,7 +25493,7 @@
           "types": [],
           "states": [],
           "lines": [
-            885
+            888
           ]
         },
         {
@@ -25505,7 +25507,7 @@
           "types": [],
           "states": [],
           "lines": [
-            888
+            891
           ]
         }
       ]
@@ -38032,7 +38034,7 @@
             "disabled"
           ],
           "lines": [
-            4080
+            4239
           ]
         },
         {
@@ -38044,10 +38046,10 @@
           "types": [],
           "states": [],
           "lines": [
-            4113,
-            4151,
-            4227,
-            5289
+            4272,
+            4310,
+            4386,
+            5450
           ]
         },
         {
@@ -38061,7 +38063,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4114
+            4273
           ]
         },
         {
@@ -38075,8 +38077,8 @@
           "types": [],
           "states": [],
           "lines": [
-            4121,
-            4990
+            4280,
+            5150
           ]
         },
         {
@@ -38088,8 +38090,8 @@
           "types": [],
           "states": [],
           "lines": [
-            4124,
-            4992
+            4283,
+            5152
           ]
         },
         {
@@ -38101,10 +38103,10 @@
           "types": [],
           "states": [],
           "lines": [
-            4129,
-            4165,
-            4239,
-            5301
+            4288,
+            4324,
+            4398,
+            5462
           ]
         },
         {
@@ -38116,9 +38118,9 @@
           "types": [],
           "states": [],
           "lines": [
-            4139,
-            4997,
-            5743
+            4298,
+            5157,
+            5904
           ]
         },
         {
@@ -38132,8 +38134,8 @@
           "types": [],
           "states": [],
           "lines": [
-            4152,
-            4228
+            4311,
+            4387
           ]
         },
         {
@@ -38147,8 +38149,8 @@
           "types": [],
           "states": [],
           "lines": [
-            4158,
-            4234
+            4317,
+            4393
           ]
         },
         {
@@ -38162,10 +38164,10 @@
           "types": [],
           "states": [],
           "lines": [
-            4161,
-            4237,
-            4304,
-            4516
+            4320,
+            4396,
+            4463,
+            4675
           ]
         },
         {
@@ -38179,7 +38181,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4163
+            4322
           ]
         },
         {
@@ -38193,7 +38195,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4176
+            4335
           ]
         },
         {
@@ -38207,7 +38209,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4182
+            4341
           ]
         },
         {
@@ -38225,7 +38227,7 @@
             "disabled"
           ],
           "lines": [
-            4202
+            4361
           ]
         },
         {
@@ -38239,9 +38241,9 @@
           "types": [],
           "states": [],
           "lines": [
-            4209,
-            4526,
-            5398
+            4368,
+            4685,
+            5559
           ]
         },
         {
@@ -38255,7 +38257,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4220
+            4379
           ]
         },
         {
@@ -38269,7 +38271,7 @@
             "readOnly"
           ],
           "lines": [
-            4272
+            4431
           ]
         },
         {
@@ -38283,7 +38285,7 @@
           ],
           "states": [],
           "lines": [
-            4286
+            4445
           ]
         },
         {
@@ -38295,7 +38297,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4295
+            4454
           ]
         },
         {
@@ -38309,7 +38311,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4324
+            4483
           ]
         },
         {
@@ -38321,24 +38323,24 @@
           "types": [],
           "states": [],
           "lines": [
-            4328,
-            4540,
-            4553,
-            4569,
-            4590,
-            4611,
-            4624,
-            4655,
-            4671,
-            5037,
-            5154,
-            5186,
-            5218,
-            5243,
-            5312,
-            5510,
-            5518,
-            5611
+            4487,
+            4699,
+            4712,
+            4728,
+            4749,
+            4770,
+            4783,
+            4814,
+            4830,
+            5197,
+            5315,
+            5347,
+            5379,
+            5404,
+            5473,
+            5671,
+            5679,
+            5772
           ]
         },
         {
@@ -38352,14 +38354,14 @@
             "disabled"
           ],
           "lines": [
-            4337,
-            4541,
-            4554,
-            4570,
-            4591,
-            4631,
-            5038,
-            5612
+            4496,
+            4700,
+            4713,
+            4729,
+            4750,
+            4790,
+            5198,
+            5773
           ]
         },
         {
@@ -38373,7 +38375,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4374
+            4533
           ]
         },
         {
@@ -38385,12 +38387,12 @@
           "types": [],
           "states": [],
           "lines": [
-            4388,
-            4834,
-            4855,
-            5065,
-            5086,
-            5354
+            4547,
+            4994,
+            5015,
+            5225,
+            5246,
+            5515
           ]
         },
         {
@@ -38408,7 +38410,7 @@
             "disabled"
           ],
           "lines": [
-            4395
+            4554
           ]
         },
         {
@@ -38424,7 +38426,7 @@
             "disabled"
           ],
           "lines": [
-            4414
+            4573
           ]
         },
         {
@@ -38439,8 +38441,8 @@
             "disabled"
           ],
           "lines": [
-            4430,
-            4475
+            4589,
+            4634
           ]
         },
         {
@@ -38454,7 +38456,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4456
+            4615
           ]
         },
         {
@@ -38468,7 +38470,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4515
+            4674
           ]
         },
         {
@@ -38482,7 +38484,7 @@
           ],
           "states": [],
           "lines": [
-            4522
+            4681
           ]
         },
         {
@@ -38496,10 +38498,10 @@
           "types": [],
           "states": [],
           "lines": [
-            4539,
-            4654,
-            4904,
-            4944
+            4698,
+            4813,
+            5064,
+            5104
           ]
         },
         {
@@ -38513,9 +38515,9 @@
             "disabled"
           ],
           "lines": [
-            4618,
-            5511,
-            5519
+            4777,
+            5672,
+            5680
           ]
         },
         {
@@ -38529,8 +38531,8 @@
           "types": [],
           "states": [],
           "lines": [
-            4648,
-            5672
+            4807,
+            5833
           ]
         },
         {
@@ -38546,8 +38548,8 @@
             "disabled"
           ],
           "lines": [
-            4656,
-            4672
+            4815,
+            4831
           ]
         },
         {
@@ -38559,7 +38561,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4688
+            4847
           ]
         },
         {
@@ -38575,7 +38577,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4706
+            4865
           ]
         },
         {
@@ -38592,7 +38594,7 @@
             "aria-busy"
           ],
           "lines": [
-            4726
+            4885
           ]
         },
         {
@@ -38607,7 +38609,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4731
+            4890
           ]
         },
         {
@@ -38619,7 +38621,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4733
+            4892
           ]
         },
         {
@@ -38635,7 +38637,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4736
+            4895
           ]
         },
         {
@@ -38649,7 +38651,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4737
+            4896
           ]
         },
         {
@@ -38663,7 +38665,7 @@
             "disabled"
           ],
           "lines": [
-            4746
+            4905
           ]
         },
         {
@@ -38677,7 +38679,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4759
+            4918
           ]
         },
         {
@@ -38691,7 +38693,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4767
+            4926
           ]
         },
         {
@@ -38705,7 +38707,7 @@
             "disabled"
           ],
           "lines": [
-            4770
+            4929
           ]
         },
         {
@@ -38717,8 +38719,8 @@
           "types": [],
           "states": [],
           "lines": [
-            4798,
-            4814
+            4957,
+            4974
           ]
         },
         {
@@ -38730,8 +38732,8 @@
           "types": [],
           "states": [],
           "lines": [
-            4802,
-            5110
+            4961,
+            5270
           ]
         },
         {
@@ -38745,9 +38747,9 @@
             "disabled"
           ],
           "lines": [
-            4818,
-            5714,
-            5791
+            4978,
+            5875,
+            5952
           ]
         },
         {
@@ -38761,7 +38763,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4832
+            4992
           ]
         },
         {
@@ -38778,8 +38780,8 @@
           "types": [],
           "states": [],
           "lines": [
-            4835,
-            4856
+            4995,
+            5016
           ]
         },
         {
@@ -38797,8 +38799,8 @@
             "disabled"
           ],
           "lines": [
-            4841,
-            4862
+            5001,
+            5022
           ]
         },
         {
@@ -38814,7 +38816,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4876
+            5036
           ]
         },
         {
@@ -38830,8 +38832,8 @@
           ],
           "states": [],
           "lines": [
-            4881,
-            4891
+            5041,
+            5051
           ]
         },
         {
@@ -38845,8 +38847,8 @@
             "disabled"
           ],
           "lines": [
-            4909,
-            5642
+            5069,
+            5803
           ]
         },
         {
@@ -38860,10 +38862,10 @@
             "disabled"
           ],
           "lines": [
-            4917,
-            4950,
-            5604,
-            5653
+            5077,
+            5110,
+            5765,
+            5814
           ]
         },
         {
@@ -38878,7 +38880,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4985
+            5145
           ]
         },
         {
@@ -38892,7 +38894,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4989
+            5149
           ]
         },
         {
@@ -38904,7 +38906,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5013
+            5173
           ]
         },
         {
@@ -38920,8 +38922,8 @@
             "disabled"
           ],
           "lines": [
-            5066,
-            5087
+            5226,
+            5247
           ]
         },
         {
@@ -38937,7 +38939,7 @@
             "disabled"
           ],
           "lines": [
-            5123
+            5284
           ]
         },
         {
@@ -38951,9 +38953,9 @@
           "types": [],
           "states": [],
           "lines": [
-            5153,
-            5217,
-            5283
+            5314,
+            5378,
+            5444
           ]
         },
         {
@@ -38965,11 +38967,11 @@
           "types": [],
           "states": [],
           "lines": [
-            5155,
-            5187,
-            5219,
-            5244,
-            5313
+            5316,
+            5348,
+            5380,
+            5405,
+            5474
           ]
         },
         {
@@ -38983,7 +38985,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5258
+            5419
           ]
         },
         {
@@ -38997,7 +38999,7 @@
             "checked"
           ],
           "lines": [
-            5261
+            5422
           ]
         },
         {
@@ -39011,8 +39013,8 @@
           "types": [],
           "states": [],
           "lines": [
-            5276,
-            5406
+            5437,
+            5567
           ]
         },
         {
@@ -39027,7 +39029,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5290
+            5451
           ]
         },
         {
@@ -39042,7 +39044,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5309
+            5470
           ]
         },
         {
@@ -39056,10 +39058,10 @@
           "types": [],
           "states": [],
           "lines": [
-            5310,
-            5346,
-            5351,
-            5366
+            5471,
+            5507,
+            5512,
+            5527
           ]
         },
         {
@@ -39073,7 +39075,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5353
+            5514
           ]
         },
         {
@@ -39087,7 +39089,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5355
+            5516
           ]
         },
         {
@@ -39101,7 +39103,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5368
+            5529
           ]
         },
         {
@@ -39118,7 +39120,7 @@
           ],
           "states": [],
           "lines": [
-            5370
+            5531
           ]
         },
         {
@@ -39130,7 +39132,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5382
+            5543
           ]
         },
         {
@@ -39144,7 +39146,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5390
+            5551
           ]
         },
         {
@@ -39158,7 +39160,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5394
+            5555
           ]
         },
         {
@@ -39172,7 +39174,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5397
+            5558
           ]
         },
         {
@@ -39187,7 +39189,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5509
+            5670
           ]
         },
         {
@@ -39202,7 +39204,7 @@
             "disabled"
           ],
           "lines": [
-            5530
+            5691
           ]
         },
         {
@@ -39214,8 +39216,8 @@
           "types": [],
           "states": [],
           "lines": [
-            5680,
-            5773
+            5841,
+            5934
           ]
         },
         {
@@ -39229,7 +39231,7 @@
             "disabled"
           ],
           "lines": [
-            5691
+            5852
           ]
         },
         {
@@ -39243,7 +39245,7 @@
             "disabled"
           ],
           "lines": [
-            5784
+            5945
           ]
         },
         {
@@ -39263,7 +39265,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6570
+            6731
           ]
         },
         {
@@ -39277,7 +39279,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6585
+            6746
           ]
         },
         {
@@ -39291,7 +39293,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6588
+            6749
           ]
         },
         {
@@ -39305,7 +39307,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6595
+            6756
           ]
         },
         {
@@ -39319,7 +39321,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6606
+            6767
           ]
         },
         {
@@ -39334,7 +39336,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6665
+            6826
           ]
         },
         {
@@ -39351,7 +39353,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6666
+            6827
           ]
         },
         {
@@ -39366,7 +39368,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6676
+            6837
           ]
         },
         {
@@ -39380,7 +39382,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6678
+            6839
           ]
         },
         {
@@ -39394,7 +39396,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6679
+            6840
           ]
         },
         {
@@ -39410,7 +39412,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6685
+            6846
           ]
         },
         {
@@ -39424,7 +39426,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6686
+            6847
           ]
         },
         {
@@ -39438,7 +39440,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6725
+            6886
           ]
         },
         {
@@ -39450,7 +39452,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6732
+            6893
           ]
         },
         {
@@ -39464,7 +39466,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6734
+            6895
           ]
         },
         {
@@ -39478,7 +39480,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6738
+            6899
           ]
         },
         {
@@ -39494,7 +39496,7 @@
             "disabled"
           ],
           "lines": [
-            6844
+            7005
           ]
         },
         {
@@ -39508,10 +39510,10 @@
           ],
           "states": [],
           "lines": [
-            6851,
-            6872,
-            6891,
-            6908
+            7012,
+            7033,
+            7052,
+            7069
           ]
         },
         {
@@ -39526,7 +39528,7 @@
             "disabled"
           ],
           "lines": [
-            6917
+            7078
           ]
         },
         {
@@ -39540,7 +39542,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6953
+            7114
           ]
         },
         {
@@ -39552,8 +39554,8 @@
           "types": [],
           "states": [],
           "lines": [
-            6955,
-            6965
+            7116,
+            7126
           ]
         },
         {
@@ -39569,8 +39571,8 @@
             "disabled"
           ],
           "lines": [
-            6956,
-            6966
+            7117,
+            7127
           ]
         },
         {
@@ -39584,7 +39586,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7017
+            7178
           ]
         },
         {
@@ -39602,7 +39604,7 @@
             "disabled"
           ],
           "lines": [
-            7029
+            7190
           ]
         },
         {
@@ -39616,7 +39618,7 @@
             "disabled"
           ],
           "lines": [
-            7041
+            7202
           ]
         },
         {
@@ -39633,7 +39635,7 @@
             "required"
           ],
           "lines": [
-            7063
+            7224
           ]
         },
         {
@@ -39650,8 +39652,8 @@
             "required"
           ],
           "lines": [
-            7072,
-            7109
+            7233,
+            7270
           ]
         },
         {
@@ -39666,7 +39668,7 @@
             "required"
           ],
           "lines": [
-            7085
+            7246
           ]
         },
         {
@@ -39680,7 +39682,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7097
+            7258
           ]
         },
         {
@@ -39694,7 +39696,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7104
+            7265
           ]
         },
         {
@@ -39712,7 +39714,7 @@
             "required"
           ],
           "lines": [
-            7125
+            7286
           ]
         }
       ]
@@ -46291,7 +46293,7 @@
           "types": [],
           "states": [],
           "lines": [
-            51
+            69
           ]
         },
         {
@@ -46305,7 +46307,7 @@
           "types": [],
           "states": [],
           "lines": [
-            52
+            70
           ]
         },
         {
@@ -46319,7 +46321,7 @@
           "types": [],
           "states": [],
           "lines": [
-            54
+            72
           ]
         },
         {
@@ -46335,7 +46337,7 @@
           "types": [],
           "states": [],
           "lines": [
-            62
+            81
           ]
         },
         {
@@ -46352,7 +46354,219 @@
           "types": [],
           "states": [],
           "lines": [
-            75
+            91
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-wrap"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            106
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-popover"
+          ],
+          "roles": [
+            "region"
+          ],
+          "types": [],
+          "states": [],
+          "lines": [
+            108
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-popover-surface"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            113
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-popover-head"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            114
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-popover-title"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            115
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-popover-count"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            118
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-player-list"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            123
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-player"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            125
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-player-avatar"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            126
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-player-name"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            129
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-player-coords"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            132
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-player-more"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            141
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "topbar-server-status-popover-empty"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            147
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "Link",
+          "kind": "component",
+          "classes": [
+            "topbar-server-status-popover-link"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            152
+          ]
+        },
+        {
+          "owner": "ServerStatusPill",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "material-symbols-outlined"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            154
           ]
         },
         {
@@ -46367,7 +46581,7 @@
           "types": [],
           "states": [],
           "lines": [
-            89
+            168
           ]
         },
         {
@@ -46381,7 +46595,7 @@
           "types": [],
           "states": [],
           "lines": [
-            90
+            169
           ]
         },
         {
@@ -46395,7 +46609,7 @@
           "types": [],
           "states": [],
           "lines": [
-            93
+            172
           ]
         }
       ]
@@ -51484,12 +51698,573 @@
       ]
     },
     {
+      "source": "apps/web/components/transit-network-profile-panel.tsx",
+      "routes": [
+        "/services/road-materials",
+        "/services/transit-materials"
+      ],
+      "controls": [
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "EditorDialogPortal",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            301
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "Modal",
+          "kind": "component",
+          "classes": [
+            "transit-network-profile-dialog"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            302
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "header",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-header"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            312
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "IconButton",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            317,
+            499,
+            597
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-summary"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            320
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "muted"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            324,
+            396,
+            649,
+            651
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-body"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            327
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "aside",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-sidebar"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            328
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "SearchField",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            329
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "SegmentedControl",
+          "kind": "component",
+          "classes": [
+            "transit-visual-segmented"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            340
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-list"
+          ],
+          "roles": [
+            "listbox"
+          ],
+          "types": [],
+          "states": [],
+          "lines": [
+            352
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "button",
+          "kind": "control",
+          "classes": [
+            "is-active",
+            "transit-network-profile-station"
+          ],
+          "roles": [
+            "option"
+          ],
+          "types": [
+            "button"
+          ],
+          "states": [
+            "aria-selected"
+          ],
+          "lines": [
+            359
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-badges"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            375
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "p",
+          "kind": "surface",
+          "classes": [
+            "poi-visual-panel-empty"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            383,
+            508,
+            608,
+            635
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "section",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-detail"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            388
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-detail-heading"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            391
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-scroll"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            402
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "section",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-section"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            403,
+            513,
+            614
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-grid"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            405
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "label",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-field"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            406,
+            425,
+            444,
+            615
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "Select",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            408,
+            427,
+            482,
+            542,
+            559
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "Input",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [
+            "number"
+          ],
+          "states": [],
+          "lines": [
+            446
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-layers"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            463
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-subheading"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            464,
+            514
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "Button",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [],
+          "lines": [
+            466,
+            516,
+            655
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-layer-row"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            472
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "Input",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            473,
+            534,
+            575,
+            586
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-exits"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            521
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-exit-head"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            522
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-exit-row"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            533
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "Textarea",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            617
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "footer",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-footer"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            640
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "form-error-text"
+          ],
+          "roles": [
+            "alert"
+          ],
+          "types": [],
+          "states": [],
+          "lines": [
+            643
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "transit-network-profile-notice"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            647
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "material-action-row"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            654
+          ]
+        },
+        {
+          "owner": "TransitNetworkProfilePanel",
+          "element": "Button",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [
+            "submit"
+          ],
+          "states": [
+            "disabled"
+          ],
+          "lines": [
+            658
+          ]
+        }
+      ]
+    },
+    {
       "source": "apps/web/components/transit-network-source-control.tsx",
       "routes": [
         "/services/road-materials",
         "/services/transit-materials"
       ],
       "controls": [
+        {
+          "owner": "PortaledModal",
+          "element": "EditorDialogPortal",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            47
+          ]
+        },
+        {
+          "owner": "PortaledModal",
+          "element": "Modal",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            48
+          ]
+        },
         {
           "owner": "TransitNetworkSourceControl",
           "element": "section",
@@ -51501,7 +52276,7 @@
           "types": [],
           "states": [],
           "lines": [
-            607
+            714
           ]
         },
         {
@@ -51515,7 +52290,7 @@
           "types": [],
           "states": [],
           "lines": [
-            611
+            718
           ]
         },
         {
@@ -51529,7 +52304,7 @@
           "types": [],
           "states": [],
           "lines": [
-            623
+            730
           ]
         },
         {
@@ -51541,10 +52316,10 @@
           "types": [],
           "states": [],
           "lines": [
-            634,
-            746,
-            796,
-            888
+            741,
+            866,
+            916,
+            1008
           ]
         },
         {
@@ -51560,7 +52335,7 @@
           ],
           "states": [],
           "lines": [
-            640
+            747
           ]
         },
         {
@@ -51574,7 +52349,7 @@
           "types": [],
           "states": [],
           "lines": [
-            649
+            756
           ]
         },
         {
@@ -51588,7 +52363,7 @@
           "types": [],
           "states": [],
           "lines": [
-            673
+            780
           ]
         },
         {
@@ -51600,8 +52375,8 @@
           "types": [],
           "states": [],
           "lines": [
-            676,
-            703
+            783,
+            810
           ]
         },
         {
@@ -51615,7 +52390,7 @@
           "types": [],
           "states": [],
           "lines": [
-            709
+            816
           ]
         },
         {
@@ -51629,7 +52404,7 @@
           "types": [],
           "states": [],
           "lines": [
-            722
+            829
           ]
         },
         {
@@ -51647,7 +52422,8 @@
             "disabled"
           ],
           "lines": [
-            724
+            831,
+            854
           ]
         },
         {
@@ -51661,7 +52437,8 @@
           "types": [],
           "states": [],
           "lines": [
-            736
+            843,
+            860
           ]
         },
         {
@@ -51675,7 +52452,7 @@
             "disabled"
           ],
           "lines": [
-            754
+            874
           ]
         },
         {
@@ -51689,7 +52466,7 @@
           "types": [],
           "states": [],
           "lines": [
-            766
+            886
           ]
         },
         {
@@ -51705,12 +52482,12 @@
           "types": [],
           "states": [],
           "lines": [
-            777
+            897
           ]
         },
         {
           "owner": "TransitNetworkSourceControl",
-          "element": "Modal",
+          "element": "PortaledModal",
           "kind": "component",
           "classes": [
             "transit-network-line-name-dialog"
@@ -51719,7 +52496,7 @@
           "types": [],
           "states": [],
           "lines": [
-            783
+            903
           ]
         },
         {
@@ -51733,8 +52510,8 @@
           "types": [],
           "states": [],
           "lines": [
-            792,
-            884
+            912,
+            1004
           ]
         },
         {
@@ -51748,7 +52525,7 @@
           "types": [],
           "states": [],
           "lines": [
-            804
+            924
           ]
         },
         {
@@ -51762,7 +52539,7 @@
           "types": [],
           "states": [],
           "lines": [
-            813
+            933
           ]
         },
         {
@@ -51776,8 +52553,8 @@
             "required"
           ],
           "lines": [
-            820,
-            914
+            940,
+            1034
           ]
         },
         {
@@ -51789,8 +52566,8 @@
           "types": [],
           "states": [],
           "lines": [
-            840,
-            934
+            960,
+            1054
           ]
         },
         {
@@ -51804,8 +52581,8 @@
           "types": [],
           "states": [],
           "lines": [
-            861,
-            956
+            981,
+            1076
           ]
         },
         {
@@ -51819,8 +52596,8 @@
           ],
           "states": [],
           "lines": [
-            862,
-            957
+            982,
+            1077
           ]
         },
         {
@@ -51834,13 +52611,13 @@
           ],
           "states": [],
           "lines": [
-            865,
-            960
+            985,
+            1080
           ]
         },
         {
           "owner": "TransitNetworkSourceControl",
-          "element": "Modal",
+          "element": "PortaledModal",
           "kind": "component",
           "classes": [
             "transit-network-station-name-dialog"
@@ -51849,7 +52626,7 @@
           "types": [],
           "states": [],
           "lines": [
-            875
+            995
           ]
         },
         {
@@ -51863,7 +52640,7 @@
           "types": [],
           "states": [],
           "lines": [
-            896
+            1016
           ]
         },
         {
@@ -51877,7 +52654,19 @@
           "types": [],
           "states": [],
           "lines": [
-            903
+            1023
+          ]
+        },
+        {
+          "owner": "TransitNetworkSourceControl",
+          "element": "TransitNetworkProfilePanel",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            1090
           ]
         }
       ]

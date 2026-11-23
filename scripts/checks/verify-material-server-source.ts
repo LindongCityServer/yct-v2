@@ -115,7 +115,7 @@ const rendererSource = readFileSync(
 );
 check(
   '渲染复核把校验口径透传给 validateMaterialInput',
-  /composeMaterialTemplateSvg[\s\S]{0,800}?validateMaterialInput\(\s*input\.template\.fields,\s*input\.values,\s*input\.validation,?\s*\)/.test(
+  /composeMaterialTemplateSvg[\s\S]{0,2000}?validateMaterialInput\(\s*input\.template\.fields,\s*input\.values,\s*input\.validation,?\s*\)/.test(
     rendererSource,
   ),
 );

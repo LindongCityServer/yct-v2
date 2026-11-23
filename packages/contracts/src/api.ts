@@ -82,11 +82,23 @@ export interface OperationsStrongReminderItem {
   displayEndDate?: string;
 }
 
+export interface OperationsServerStatusPlayer {
+  name: string;
+  x: number;
+  z: number;
+  lastSeenAt: ISODateTimeString;
+}
+
 export interface OperationsServerStatus {
   availability: 'online' | 'offline' | 'unknown';
   checkedAt: ISODateTimeString;
   latencyMs?: number;
   onlinePlayerCount?: number;
+  /**
+   * 在线玩家名单，仅在线时返回；外网离线返回空数组，状态未知时不返回，
+   * 避免把可能过期的玩家名单当作实时数据。
+   */
+  onlinePlayers?: OperationsServerStatusPlayer[];
 }
 
 export interface ServiceEntryGroup {

@@ -98,6 +98,8 @@ const commandAliases = new Map([
   ['在线人数', 'serverplayers'],
   ['服务器人数', 'serverplayers'],
   ['服务器状态', 'serverplayers'],
+  ['在线玩家', 'serverplayers'],
+  ['谁在线', 'serverplayers'],
   ['随机地点', 'randomplace'],
   ['随机poi', 'randomplace'],
   ['手气不错', 'randomplace'],
@@ -715,10 +717,27 @@ export async function handleCommand({
         }
         const item = payload?.item;
         const checked = formatCheckedAt(item?.checkedAt);
+        const hasPlayerList = Array.isArray(item?.onlinePlayers);
+        const onlinePlayers = hasPlayerList
+          ? item.onlinePlayers
+              .map((player) => (typeof player?.name === 'string' ? player.name.trim() : ''))
+              .filter(Boolean)
+          : [];
+        const playerListLine = hasPlayerList
+          ? onlinePlayers.length > 0
+            ? `在线玩家：${formatOnlinePlayerNames(onlinePlayers)}`
+            : '在线玩家：当前没有玩家在线'
+          : undefined;
         if (item?.availability === 'online' && Number.isFinite(item?.onlinePlayerCount)) {
           return {
             handled: true,
-            reply: `服务器在线：${item.onlinePlayerCount} 人\n检测时间：${checked}`,
+            reply: [
+              `服务器在线：${item.onlinePlayerCount} 人`,
+              playerListLine,
+              `检测时间：${checked}`,
+            ]
+              .filter(Boolean)
+              .join('\n'),
             card: {
               type: 'result',
               icon: 'public',
@@ -727,7 +746,11 @@ export async function handleCommand({
               color: '#168F78',
               result: String(item.onlinePlayerCount),
               resultLabel: '当前在线',
-              note: '只显示人数，不公开玩家名单',
+              note: hasPlayerList
+                ? onlinePlayers.length > 0
+                  ? `在线玩家：${formatOnlinePlayerNames(onlinePlayers, 6)}`
+                  : '当前没有玩家在线'
+                : '暂无在线玩家名单',
               footer: '数据来自雨城通',
             },
           };
@@ -1278,6 +1301,14 @@ function randomPlaceCategoryLabel(categoryId) {
   return labels[String(categoryId ?? '')] ?? '';
 }
 
+/** 在线玩家名单过长时保留前几位并标注总人数，避免 QQ 消息被截断。 */
+function formatOnlinePlayerNames(names, limit = 20) {
+  const visible = names.slice(0, limit);
+  return names.length > visible.length
+    ? `${visible.join('、')} 等 ${names.length} 人`
+    : visible.join('、');
+}
+
 function formatCheckedAt(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -1400,7 +1431,11 @@ function parseNaturalCommand(raw) {
   if (/^(?:今日运势|运势|抽签)$/u.test(input)) {
     return { command: 'fortune', args: '', label: '今日运势' };
   }
-  if (/^(?:服务器状态|服务器在线人数|服务器人数|在线人数|几个人在线|服务器几个人)$/u.test(input)) {
+  if (
+    /^(?:服务器状态|服务器在线人数|服务器人数|在线人数|在线玩家|在线玩家有哪些|谁在线|哪些人在线|几个人在线|服务器几个人)$/u.test(
+      input,
+    )
+  ) {
     return { command: 'serverplayers', args: '', label: '服务器人数' };
   }
   if (/^(?:随机地点|随机poi|手气不错|随便逛逛|逛一逛)$/u.test(input)) {

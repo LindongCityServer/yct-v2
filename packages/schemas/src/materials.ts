@@ -476,6 +476,77 @@ const materialTransitNetworkStationNameSchema = z.object({
   names: z.array(z.string().trim().min(1).max(160)).min(1).max(8),
 });
 
+/**
+ * 自定义线网的车站资料：只服务物料/导视渲染，不参与几何。
+ * 字段命名尽量对齐官方 `transitStationDetailUpdateSchema`，但去掉了依赖地图 marker 的
+ * `placeMarkerId/roadMarkerIds`（自定义线网没有 POI），并补了导视牌需要的 `lineKeys/status/order`。
+ */
+export const materialTransitStationExitSchema = z.object({
+  code: z.string().trim().min(1).max(40),
+  name: z.string().trim().max(120).optional(),
+  floor: z.string().trim().max(40).optional(),
+  direction: z.enum(['upwards', 'downwards']).optional(),
+  orientation: z.enum(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']).optional(),
+  status: z.enum(['open', 'closed', 'reserved']).optional(),
+  lineKeys: z.array(z.string().trim().min(1).max(120)).max(12).optional(),
+  order: z.number().int().min(0).max(10_000).optional(),
+  description: z.string().trim().max(300).optional(),
+  landmarks: z.array(z.string().trim().min(1).max(120)).max(12).optional(),
+});
+
+export const materialTransitStationStructureSchema = z.object({
+  position: z.enum(['underground', 'elevated', 'ground', 'mixed']).optional(),
+  platformType: z
+    .enum(['island', 'side', 'stacked', 'twin-island', 'side-stacked', 'other'])
+    .optional(),
+  platformCount: z.number().int().min(1).max(16).optional(),
+  overGround: z.boolean().optional(),
+  platformSide: z.enum(['left', 'right', 'both', 'none']).optional(),
+  layers: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(40),
+        usage: z.enum(['concourse', 'platform', 'entrance', 'transfer', 'equipment', 'other']),
+        order: z.number().int().min(0).max(100).optional(),
+        note: z.string().trim().max(200).optional(),
+      }),
+    )
+    .max(64)
+    .optional(),
+  platforms: z
+    .array(
+      z.object({
+        lineKeys: z.array(z.string().trim().min(1).max(120)).max(12).optional(),
+        floor: z.string().trim().max(40).optional(),
+        type: z
+          .enum(['island', 'side', 'stacked', 'twin-island', 'side-stacked', 'other'])
+          .optional(),
+        note: z.string().trim().max(200).optional(),
+      }),
+    )
+    .max(24)
+    .optional(),
+  note: z.string().trim().max(500).optional(),
+});
+
+export const materialTransitStationLineGroupSchema = z.object({
+  lineKey: z.string().trim().min(1).max(120),
+  lineName: z.string().trim().max(120).optional(),
+  exits: z.array(materialTransitStationExitSchema).max(256),
+});
+
+export const materialTransitStationProfileSchema = z.object({
+  nodeId: z.string().trim().min(1).max(120),
+  structure: materialTransitStationStructureSchema.optional(),
+  exits: z.array(materialTransitStationExitSchema).max(256).optional(),
+  lineGroups: z.array(materialTransitStationLineGroupSchema).max(16).optional(),
+  note: z.string().trim().max(500).optional(),
+});
+
+export const materialTransitNetworkSupplementSchema = z.object({
+  stations: z.array(materialTransitStationProfileSchema).max(2_000).optional(),
+});
+
 export const materialTransitNetworkSnapshotSchema = z
   .object({
     format: z.literal('rmp'),
@@ -525,9 +596,14 @@ export const materialTransitNetworkProjectUpdateSchema = z
   .object({
     lineNames: z.array(materialTransitNetworkLineNameSchema).max(256).optional(),
     stationNames: z.array(materialTransitNetworkStationNameSchema).max(2_000).optional(),
+    stationProfiles: z.array(materialTransitStationProfileSchema).max(2_000).optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.lineNames === undefined && value.stationNames === undefined) {
+    if (
+      value.lineNames === undefined &&
+      value.stationNames === undefined &&
+      value.stationProfiles === undefined
+    ) {
       ctx.addIssue({ code: 'custom', message: '至少需要提供一项线网补充信息。' });
     }
     const nodeIds = new Set<string>();
@@ -540,6 +616,28 @@ export const materialTransitNetworkProjectUpdateSchema = z
         });
       }
       nodeIds.add(stationName.nodeId);
+    }
+    const profileNodeIds = new Set<string>();
+    for (const [index, profile] of (value.stationProfiles ?? []).entries()) {
+      if (profileNodeIds.has(profile.nodeId)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: '同一车站不能重复提交资料。',
+          path: ['stationProfiles', index, 'nodeId'],
+        });
+      }
+      profileNodeIds.add(profile.nodeId);
+      const exitCodes = new Set<string>();
+      for (const [exitIndex, exit] of (profile.exits ?? []).entries()) {
+        if (exitCodes.has(exit.code)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: '同一车站的出口编号不能重复。',
+            path: ['stationProfiles', index, 'exits', exitIndex, 'code'],
+          });
+        }
+        exitCodes.add(exit.code);
+      }
     }
   });
 
@@ -723,6 +821,16 @@ export type MaterialTransitNetworkProjectCreateInput = z.infer<
 >;
 export type MaterialTransitNetworkProjectUpdateInput = z.infer<
   typeof materialTransitNetworkProjectUpdateSchema
+>;
+export type MaterialTransitStationExitInput = z.infer<typeof materialTransitStationExitSchema>;
+export type MaterialTransitStationStructureInput = z.infer<
+  typeof materialTransitStationStructureSchema
+>;
+export type MaterialTransitStationProfileInput = z.infer<
+  typeof materialTransitStationProfileSchema
+>;
+export type MaterialTransitNetworkSupplementInput = z.infer<
+  typeof materialTransitNetworkSupplementSchema
 >;
 export type MaterialShareLinkCreateRequestInput = z.infer<
   typeof materialShareLinkCreateRequestSchema
