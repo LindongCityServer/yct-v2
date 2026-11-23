@@ -3,6 +3,30 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.26.0",
+      "releasedAt": "2026-11-23T12:03:55.731Z",
+      "sourceFingerprint": "336ffac5ef365bd5330507f84fb4fa94630efe46fffb9a6c496db7e9cda1d5bf",
+      "themes": ["qqbot", "deploy"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "QQ 机器人新增按群开启的运维提醒：雨城通、临东通或机器人更新开始/结束时在群里通知"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "QQ 机器人服务器消息支持按群开启，玩家进出播报改为默认关闭、按群开启"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复 QQ 机器人玩家进出轮询因群列表类型错误从未启动的问题"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.25.0",
       "releasedAt": "2026-11-23T10:39:11.905Z",
       "sourceFingerprint": "b573fa4ddb0af7b1ed6363e529f081bfc3da59ecb1de5458acf8ad0d37980883",
