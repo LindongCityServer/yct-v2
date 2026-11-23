@@ -30,6 +30,7 @@ const defaults = {
   QQ_BOT_GROUP_CONFIG_PATH: 'state/group-modules.json',
   QQ_BOT_OPS_TOKEN: '',
   QQ_BOT_OPS_STATE_PATH: 'state/ops-reminders.json',
+  QQ_BOT_OPS_RECIPIENT_PATH: 'state/ops-recipients.json',
   QQ_BOT_MODULE_EDITORS: 'owner,admin',
   QQ_BOT_MODULE_ADMINS: '',
   QQ_BOT_MODULE_HINTS: '1',
@@ -318,6 +319,10 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
     ops: {
       token: read('QQ_BOT_OPS_TOKEN'),
       statePath: resolve(botRoot, read('QQ_BOT_OPS_STATE_PATH') || 'state/ops-reminders.json'),
+      recipientPath: resolve(
+        botRoot,
+        read('QQ_BOT_OPS_RECIPIENT_PATH') || 'state/ops-recipients.json',
+      ),
     },
     materials: {
       enabled: materialsEnabled,
@@ -514,6 +519,7 @@ export function describeConfig(config) {
           ? '开（/ops）'
           : '配置了 QQ_BOT_OPS_TOKEN，但 QQ_BOT_EVENT_PORT=0'
     }`,
+    `运维提醒接收：私聊机器人且发过消息的好友（${config.ops.recipientPath}）`,
     `回答风格：${config.reply.style}（聊天模式上限 ${config.reply.chatMaxChars} 字）`,
     `二次精炼：${config.reply.condense ? `开，目标 ${config.reply.condenseChars} 字` : '关'}`,
     `单段字数：${config.reply.segmentChars}，回答超时：${config.reply.answerTimeoutMs} ms`,

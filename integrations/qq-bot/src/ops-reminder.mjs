@@ -6,7 +6,7 @@ import { maskOpenId } from './log.mjs';
  * 运维提醒：雨城通、临东通、QQ 机器人更新开始/结束时，
  * 向开启了 opsReminder 模块的群发一条纯文本通知。
  *
- * 这里不直接连 QQ 网关，只负责校验、生成文案、幂等和按群发送；
+ * 这里不直接连 QQ 网关，只负责校验、生成文案、幂等和按私聊好友发送；
  * 入口是事件桥的 POST /ops，由部署脚本或 notify-ops.ps1 调用。
  */
 
@@ -150,7 +150,7 @@ export class OpsReminderStore {
     this.path = path;
     this.logger = logger;
     this.now = now;
-    this.data = { version: 1, updates: {} };
+    this.data = { version: 1, updates: {}, pending: [] };
     this.load();
   }
 
@@ -166,7 +166,11 @@ export class OpsReminderStore {
         parsed.updates &&
         typeof parsed.updates === 'object'
       ) {
-        this.data = { version: 1, updates: parsed.updates };
+        this.data = {
+          version: 1,
+          updates: parsed.updates,
+          pending: Array.isArray(parsed.pending) ? parsed.pending : [],
+        };
       }
     } catch (error) {
       if (error?.code !== 'ENOENT') {
@@ -214,6 +218,36 @@ export class OpsReminderStore {
     return entry;
   }
 
+  addPending({ userOpenId, content, updateId, phase }, at = this.now()) {
+    const id = `${updateId}:${phase}:${userOpenId}`;
+    const entry = {
+      id,
+      userOpenId,
+      content,
+      updateId,
+      phase,
+      at: at.toISOString(),
+    };
+    this.data.pending = this.data.pending.filter((item) => item.id !== id);
+    this.data.pending.push(entry);
+    this.data.pending = this.data.pending.slice(-50);
+    this.persist();
+    return entry;
+  }
+
+  listPending(userOpenId) {
+    return this.data.pending.filter((item) => item.userOpenId === userOpenId);
+  }
+
+  removePending(ids) {
+    const remove = new Set(ids);
+    const before = this.data.pending.length;
+    this.data.pending = this.data.pending.filter((item) => !remove.has(item.id));
+    if (this.data.pending.length !== before) {
+      this.persist();
+    }
+  }
+
   prune(now = this.now()) {
     const entries = Object.values(this.data.updates);
     const cutoff = now.getTime() - RETENTION_MS;
@@ -242,16 +276,125 @@ export class OpsReminderStore {
   }
 }
 
+/** 记录给机器人发过私聊的用户；个人认证机器人只能让核心管理员加好友。 */
+export class OpsRecipientStore {
+  constructor({ path = '', logger, now = () => new Date(), maxUsers = 200 } = {}) {
+    this.path = path;
+    this.logger = logger;
+    this.now = now;
+    this.maxUsers = maxUsers;
+    this.data = { version: 1, users: {} };
+    this.load();
+  }
+
+  load() {
+    if (!this.path) {
+      return this.data;
+    }
+    try {
+      const parsed = JSON.parse(readFileSync(this.path, 'utf8'));
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        parsed.users &&
+        typeof parsed.users === 'object'
+      ) {
+        this.data = { version: 1, users: parsed.users };
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        this.logger?.warn(`读取运维提醒接收人失败，先按空列表处理：${error.message}`);
+      }
+    }
+    return this.data;
+  }
+
+  remember(userOpenId, { source = 'message', at = this.now() } = {}) {
+    const id = String(userOpenId ?? '').trim();
+    if (!id || id.length > 200) {
+      return false;
+    }
+    const existing = this.data.users[id];
+    const nowIso = at.toISOString();
+    const lastSeen = Date.parse(existing?.lastSeenAt ?? '');
+    const shouldPersist =
+      !existing || !Number.isFinite(lastSeen) || at.getTime() - lastSeen >= 60 * 60 * 1000;
+    this.data.users[id] = {
+      addedAt: existing?.addedAt || nowIso,
+      lastSeenAt: nowIso,
+      source: existing?.source || source,
+    };
+    if (shouldPersist) {
+      this.prune(at);
+      this.persist();
+    }
+    return true;
+  }
+
+  list() {
+    return Object.keys(this.data.users);
+  }
+
+  count() {
+    return this.list().length;
+  }
+
+  remove(userOpenId) {
+    const id = String(userOpenId ?? '').trim();
+    if (!this.data.users[id]) {
+      return false;
+    }
+    delete this.data.users[id];
+    this.persist();
+    return true;
+  }
+
+  prune(now = this.now()) {
+    const entries = Object.entries(this.data.users)
+      .sort((left, right) =>
+        String(right[1]?.lastSeenAt ?? '').localeCompare(String(left[1]?.lastSeenAt ?? '')),
+      )
+      .slice(0, this.maxUsers);
+    this.data.users = Object.fromEntries(entries);
+  }
+
+  persist() {
+    if (!this.path) {
+      return;
+    }
+    try {
+      mkdirSync(dirname(this.path), { recursive: true });
+      const temporary = `${this.path}.tmp`;
+      writeFileSync(temporary, `${JSON.stringify(this.data, null, 2)}\n`, 'utf8');
+      renameSync(temporary, this.path);
+    } catch (error) {
+      this.logger?.warn(`保存运维提醒接收人失败：${error.message}`);
+    }
+  }
+}
+
 export class OpsReminder {
-  constructor({ store, groupStore, api, logger, now = () => new Date() } = {}) {
+  constructor({ store, recipientStore, api, logger, now = () => new Date() } = {}) {
     this.store = store;
-    this.groupStore = groupStore;
+    this.recipientStore = recipientStore;
     this.api = api;
     this.logger = logger;
     this.now = now;
   }
 
-  /** 处理一次 /ops 请求；重复的 updateId + phase 不会重复发群消息。 */
+  rememberRecipient(userOpenId, source = 'message') {
+    this.recipientStore?.remember?.(userOpenId, { source });
+  }
+
+  listPending(userOpenId) {
+    return this.store?.listPending?.(userOpenId) ?? [];
+  }
+
+  removePending(ids) {
+    this.store?.removePending?.(ids);
+  }
+
+  /** 处理一次 /ops 请求；重复的 updateId + phase 不会重复发私聊消息。 */
   async handle(payload) {
     const event = normalizeOpsEvent(payload);
     if (this.store.hasNotified(event.updateId, event.phase)) {
@@ -264,8 +407,8 @@ export class OpsReminder {
       };
     }
 
-    const groups = this.groupStore.listEnabledGroups('opsReminder');
-    if (groups.length === 0) {
+    const recipients = this.recipientStore?.list?.() ?? [];
+    if (recipients.length === 0) {
       return {
         duplicate: false,
         system: event.system,
@@ -273,7 +416,8 @@ export class OpsReminder {
         updateId: event.updateId,
         sent: 0,
         failed: 0,
-        reason: 'no_groups',
+        pending: 0,
+        reason: 'no_recipients',
       };
     }
 
@@ -294,22 +438,29 @@ export class OpsReminder {
 
     let sent = 0;
     const failed = [];
-    for (const groupId of groups) {
+    const failureCodes = new Set();
+    for (const userOpenId of recipients) {
       try {
-        await this.api.sendGroupMessage(groupId, { content, msg_type: 0 });
+        await this.api.sendC2CMessage(userOpenId, { content, msg_type: 0 });
         sent += 1;
         this.logger?.info(
-          `运维提醒已发送到群 ${maskOpenId(groupId)}（${event.system}/${event.phase}）。`,
+          `运维提醒已发送到私聊 ${maskOpenId(userOpenId)}（${event.system}/${event.phase}）。`,
         );
       } catch (error) {
-        failed.push(maskOpenId(groupId));
-        // QQApiError 的 message 里可能带完整群 openid；这里只记错误码/状态。
-        const reason = error?.code
-          ? `code ${error.code}`
-          : error?.status
-            ? `HTTP ${error.status}`
-            : '发送失败';
-        this.logger?.warn(`运维提醒发送失败（群 ${maskOpenId(groupId)}）：${reason}`);
+        const code = Number(error?.code) || 0;
+        failed.push(maskOpenId(userOpenId));
+        if (code) {
+          failureCodes.add(code);
+        }
+        this.store.addPending({
+          userOpenId,
+          content,
+          updateId: event.updateId,
+          phase: event.phase,
+        });
+        // QQApiError 的 message 里可能带完整 openid；这里只记错误码/状态。
+        const reason = code ? `code ${code}` : error?.status ? `HTTP ${error.status}` : '发送失败';
+        this.logger?.warn(`运维提醒发送失败（私聊 ${maskOpenId(userOpenId)}）：${reason}`);
       }
     }
 
@@ -323,7 +474,10 @@ export class OpsReminder {
       updateId: event.updateId,
       sent,
       failed,
-      groups: groups.length,
+      failureCodes: [...failureCodes],
+      pending: failed.length,
+      recipients: recipients.length,
+      hint: buildFailureHint([...failureCodes]),
     };
   }
 }
@@ -334,6 +488,19 @@ function optionalText(value, maxLength) {
     return '';
   }
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
+function buildFailureHint(codes) {
+  if (codes.includes(40034105)) {
+    return 'QQ 拒绝了主动私聊消息（40034105）：请确认机器人管理员已在机器人资料页开启接收推送，或平台主动消息权限是否开放；通知已保留，私聊机器人发送 /运维 可补发。';
+  }
+  if (codes.includes(40054013)) {
+    return '接收方关闭了机器人主动消息推送；通知已保留，私聊机器人发送 /运维 可补发。';
+  }
+  if (codes.includes(40034100)) {
+    return '主动消息触发频控；通知已保留，稍后再试或私聊机器人发送 /运维 补发。';
+  }
+  return '';
 }
 
 function optionalInteger(value, min, max) {

@@ -551,6 +551,43 @@ test('事件桥补全群消息统计，并发送进退群和服务聊天', async
   assert.equal(sends.at(-1).payload.content, '💬 小明：晚上好');
 });
 
+test('单聊 /运维 补发 pending，并记录私聊接收人', async () => {
+  const { bot, sends } = createSetup();
+  bot.opsReminder.store.addPending({
+    userOpenId: 'user-1',
+    content: '【运维提醒·开始】雨城通\n11-23 20:00 开始更新',
+    updateId: 'u1',
+    phase: 'start',
+  });
+
+  await bot.handleEvent('C2C_MESSAGE_CREATE', {
+    id: 'c2c-1',
+    content: '/运维',
+    author: { user_openid: 'user-1' },
+  });
+
+  assert.deepEqual(bot.opsRecipients.list(), ['user-1']);
+  assert.equal(sends.length, 1);
+  assert.match(sends[0].payload.content, /补发运维提醒/);
+  assert.match(sends[0].payload.content, /【运维提醒·开始】雨城通/);
+  assert.equal(bot.opsReminder.listPending('user-1').length, 0);
+
+  sends.length = 0;
+  await bot.handleEvent('C2C_MESSAGE_CREATE', {
+    id: 'c2c-2',
+    content: '/运维',
+    author: { user_openid: 'user-1' },
+  });
+  assert.equal(sends.length, 1);
+  assert.match(sends[0].payload.content, /当前没有待补发的运维提醒/);
+});
+
+test('单聊首次消息会记录为运维提醒接收人', async () => {
+  const { bot } = createSetup();
+  await bot.handleEvent('FRIEND_ADD', { openid: 'user-9' });
+  assert.deepEqual(bot.opsRecipients.list(), ['user-9']);
+});
+
 test('指令结果在机器人本地渲染并上传卡片图片', async () => {
   const config = createConfig({
     reply: { ack: false, cards: true, appendSources: false },

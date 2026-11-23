@@ -21,11 +21,12 @@
 - **按群功能开关**：群主和群管理员可以在群里用 `/模块` 关闭本群不需要的指令、问一问范围
   （临东服资料、公交与线路、公告与运营、地图与地点、通用问答），以及进退群提示、玩家进出播报和服务器消息；
   配置在 `state/group-modules.json`，审计在 `state/module-audit.jsonl`。没有配置文件时按注册表默认值：
-  日常功能开；玩家进出播报、服务器消息和运维提醒默认关闭，需要群管理员用 `/模块` 单独开启。
+  日常功能开；玩家进出播报和服务器消息默认关闭，需要群管理员用 `/模块` 单独开启。
   玩家进出还需要在 `.env` 配置 `QQ_BOT_PLAYER_EVENTS=1`，`/模块` 只决定哪些群接收。
+  运维提醒不走群模块，改为私聊机器人好友。
   权限、锁定和范围划分见 [按群功能模块](../../docs/QQ_BOT_GROUP_MODULES.md)。
-- **运维提醒**：部署脚本调用 `POST /ops`（`QQ_BOT_OPS_TOKEN` 鉴权），向开了
-  `/模块 开 运维提醒` 的群发送雨城通/临东通/机器人更新开始与结束通知；手动入口是
+- **运维提醒**：部署脚本调用 `POST /ops`（`QQ_BOT_OPS_TOKEN` 鉴权），私聊发给给机器人
+  发过消息的好友；主动私聊失败时保留 pending，好友私聊机器人发送 `/运维` 补发。手动入口是
   `notify-ops.ps1`。流程见 [运维提醒](../../docs/QQ_BOT_OPS_REMINDER.md)；机器人部署包根目录也会带一份
   `QQ_BOT_OPS_REMINDER.md`。
 - **指令卡片**：除签到、帮助、关于、新对话外，本地指令会附一张 720px PNG；
@@ -116,7 +117,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -NodePat
 | `src/commands.mjs`         | 本地快捷指令分发                                             |
 | `src/modules.mjs`          | 按群功能模块注册表、别名和帮助文本                           |
 | `src/group-modules.mjs`    | 按群开关存储、优先级、锁定、审计和热加载                     |
-| `src/ops-reminder.mjs`     | 运维提醒校验、模板、幂等状态和按群发送                       |
+| `src/ops-reminder.mjs`     | 运维提醒校验、模板、私聊接收人、幂等和 pending               |
 | `src/module-command.mjs`   | `/模块` 命令、权限和变更文案                                 |
 | `src/hints.mjs`            | 功能关闭后的提示节流                                         |
 | `src/group-link.mjs`       | 群绑定 token 内存缓存、URL token 与确认码解析                |

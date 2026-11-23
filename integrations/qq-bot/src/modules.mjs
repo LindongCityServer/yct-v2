@@ -193,15 +193,6 @@ const commandModuleDefinitions = [
     aliases: ['服务器消息', '服务聊天', '聊天同步', 'serverchat', 'servermessages'],
     commands: [],
   },
-  {
-    id: 'opsReminder',
-    label: '运维提醒',
-    defaultEnabled: false,
-    optIn: true,
-    description: '雨城通、临东通或 QQ 机器人更新开始/结束时通知本群',
-    aliases: ['运维提醒', '运维', '更新提醒', '维护提醒', 'ops', 'opsreminder'],
-    commands: [],
-  },
 ];
 
 export const askScopes = askScopeDefinitions.map((scope) => ({ ...scope, group: ASK_GROUP_ID }));

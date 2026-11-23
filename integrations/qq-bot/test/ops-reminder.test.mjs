@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   formatOpsReminder,
   normalizeOpsEvent,
+  OpsRecipientStore,
   OpsReminder,
   OpsReminderStore,
 } from '../src/ops-reminder.mjs';
@@ -21,18 +22,23 @@ function createLogger() {
   };
 }
 
-function createGroupStore(groups = ['group-1', 'group-2']) {
+function createRecipientStore(users = ['user-1', 'user-2']) {
   return {
-    listEnabledGroups: (moduleId) => (moduleId === 'opsReminder' ? groups : []),
+    list: () => users,
   };
 }
 
-function createApi() {
+function createApi({ failFor = new Set(), code = 40034105 } = {}) {
   const sends = [];
   return {
     sends,
-    async sendGroupMessage(groupId, payload) {
-      sends.push({ groupId, payload });
+    async sendC2CMessage(userOpenId, payload) {
+      if (failFor.has(userOpenId)) {
+        const error = new Error('主动消息发送失败，无权限');
+        error.code = code;
+        throw error;
+      }
+      sends.push({ userOpenId, payload });
     },
   };
 }
@@ -93,7 +99,7 @@ test('完成文案带版本和开始到结束的用时', () => {
   assert.match(text, /用时：8 分钟/);
 });
 
-test('运维提醒按开启的群发送，并跳过重复的阶段', async () => {
+test('运维提醒按私聊好友发送，并跳过重复的阶段', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'yct-ops-reminder-'));
   try {
     let now = new Date('2026-11-23T12:00:00Z');
@@ -101,7 +107,7 @@ test('运维提醒按开启的群发送，并跳过重复的阶段', async () =>
     const api = createApi();
     const reminder = new OpsReminder({
       store,
-      groupStore: createGroupStore(),
+      recipientStore: createRecipientStore(),
       api,
       logger: createLogger(),
       now: () => now,
@@ -136,14 +142,43 @@ test('运维提醒按开启的群发送，并跳过重复的阶段', async () =>
   }
 });
 
-test('没有群开启运维提醒时不发送，也不记成已通知', async () => {
+test('私聊发送失败时保留 pending 并提示 40034105', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'yct-ops-reminder-'));
+  try {
+    const store = new OpsReminderStore({ path: join(dir, 'ops-reminders.json') });
+    const api = createApi({ failFor: new Set(['user-1']) });
+    const reminder = new OpsReminder({
+      store,
+      recipientStore: createRecipientStore(['user-1', 'user-2']),
+      api,
+      logger: createLogger(),
+    });
+
+    const result = await reminder.handle({
+      system: 'yct',
+      phase: 'start',
+      updateId: 'u2',
+    });
+
+    assert.equal(result.sent, 1);
+    assert.equal(result.pending, 1);
+    assert.deepEqual(result.failureCodes, [40034105]);
+    assert.match(result.hint, /40034105/);
+    assert.equal(reminder.listPending('user-1').length, 1);
+    assert.equal(reminder.listPending('user-2').length, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('没有私聊好友时不发送，也不记成已通知', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'yct-ops-reminder-'));
   try {
     const store = new OpsReminderStore({ path: join(dir, 'ops-reminders.json') });
     const api = createApi();
     const reminder = new OpsReminder({
       store,
-      groupStore: createGroupStore([]),
+      recipientStore: createRecipientStore([]),
       api,
       logger: createLogger(),
     });
@@ -151,12 +186,26 @@ test('没有群开启运维提醒时不发送，也不记成已通知', async ()
     const result = await reminder.handle({
       system: 'ldpass',
       phase: 'start',
-      updateId: 'u2',
+      updateId: 'u3',
     });
     assert.equal(result.sent, 0);
-    assert.equal(result.reason, 'no_groups');
+    assert.equal(result.reason, 'no_recipients');
     assert.equal(api.sends.length, 0);
-    assert.equal(store.hasNotified('u2', 'start'), false);
+    assert.equal(store.hasNotified('u3', 'start'), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('私聊接收人存储会记录、去重并支持移除', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'yct-ops-recipients-'));
+  try {
+    const store = new OpsRecipientStore({ path: join(dir, 'ops-recipients.json') });
+    assert.equal(store.remember('user-1', { source: 'friend_add' }), true);
+    assert.equal(store.remember('user-1', { source: 'message' }), true);
+    assert.deepEqual(store.list(), ['user-1']);
+    assert.equal(store.remove('user-1'), true);
+    assert.equal(store.remove('user-1'), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

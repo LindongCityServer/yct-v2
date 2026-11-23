@@ -223,9 +223,6 @@ function describeFailure(result) {
 }
 
 function optInHint(moduleId) {
-  if (moduleId === 'opsReminder') {
-    return '\n雨城通、临东通或机器人更新开始/结束时会在这里发一条简短通知。';
-  }
   if (moduleId === 'playerEvents') {
     return '\n机器人侧开启玩家同步后，进服/退服变化才会发到本群。';
   }

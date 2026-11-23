@@ -5,6 +5,7 @@
 .DESCRIPTION
   机器人事件桥需要开启 QQ_BOT_EVENT_PORT，并配置 QQ_BOT_OPS_TOKEN。
   脚本只负责 POST http://127.0.0.1:<port>/ops，不直接连 QQ。
+  通知会私聊发给“给机器人发过消息的好友”（个人认证下通常就是核心管理员），不再发群。
   同一次更新的开始和结束必须传同一个 -UpdateId；不传时脚本会生成一个并打印出来。
 
 .EXAMPLE
@@ -97,14 +98,20 @@ try {
     -TimeoutSec 20
 
   $response | ConvertTo-Json -Depth 8
-  if ($response.reason -eq 'no_groups') {
-    Write-Warning '没有任何群开启「运维提醒」；发送数为 0。'
+  if ($response.reason -eq 'no_recipients') {
+    Write-Warning '还没有好友给机器人发过私聊消息；请先私聊机器人任意一条消息，再重发运维提醒。'
   }
   if (@($response.failed).Count -gt 0) {
-    Write-Warning "部分群发送失败：$($response.failed -join '、')"
+    Write-Warning "部分私聊发送失败：$($response.failed -join '、')"
   }
-  if ($response.sent -eq 0 -and $response.reason -ne 'no_groups' -and $response.duplicate -ne $true) {
-    Write-Warning '本次没有成功发送到任何群，请查看机器人日志。'
+  if (@($response.failureCodes).Count -gt 0) {
+    Write-Warning "QQ 返回错误码：$($response.failureCodes -join '、')。$($response.hint)"
+  }
+  if ($response.pending -gt 0) {
+    Write-Warning "已保留 $($response.pending) 条待补发通知；私聊机器人发送 /运维 可补发。"
+  }
+  if ($response.sent -eq 0 -and $response.reason -ne 'no_recipients' -and $response.duplicate -ne $true) {
+    Write-Warning '本次没有成功发送到任何私聊，请查看机器人日志。'
   }
 }
 catch {

@@ -12,7 +12,7 @@ import { MaterialSourceStore } from './material-sources.mjs';
 import { handleModuleCommand } from './module-command.mjs';
 import { buildHelpText, commandLabel, moduleById, moduleLabel } from './modules.mjs';
 import { loadGroupNotices, resolveGroupNotice } from './notices.mjs';
-import { OpsReminder, OpsReminderStore } from './ops-reminder.mjs';
+import { OpsRecipientStore, OpsReminder, OpsReminderStore } from './ops-reminder.mjs';
 import { startEventBridge } from './event-bridge.mjs';
 import { PlayerEventMonitor } from './player-events.mjs';
 import { QqLinkClient } from './ldpass-link.mjs';
@@ -100,12 +100,16 @@ export class QQBot {
         path: config.materials?.sourcePath ?? '',
         logger,
       });
+    this.opsRecipients = new OpsRecipientStore({
+      path: config.ops?.recipientPath ?? '',
+      logger,
+    });
     this.opsReminder = new OpsReminder({
       store: new OpsReminderStore({
         path: config.ops?.statePath ?? '',
         logger,
       }),
-      groupStore: this.moduleStore,
+      recipientStore: this.opsRecipients,
       api: this.api,
       logger,
     });
@@ -157,11 +161,6 @@ export class QQBot {
     ) {
       this.logger.warn(
         '有群开启了服务器消息，但 QQ_BOT_EVENT_PORT=0，事件桥不会启动；请让机器人运维打开事件桥。',
-      );
-    }
-    if (!this.config.ops?.token && this.moduleStore.listEnabledGroups('opsReminder').length > 0) {
-      this.logger.warn(
-        '有群开启了运维提醒，但 QQ_BOT_OPS_TOKEN 未配置，/ops 接口关闭；请让机器人运维配置 token。',
       );
     }
     if (this.config.events?.port > 0) {
@@ -291,13 +290,18 @@ export class QQBot {
         }
         await this.handleGroupMessage(data);
         return;
-      case 'C2C_MESSAGE_CREATE':
+      case 'C2C_MESSAGE_CREATE': {
+        const c2cUserId = data.author?.user_openid ?? data.author?.id ?? '';
+        if (c2cUserId) {
+          this.opsRecipients.remember(c2cUserId, { source: 'message' });
+        }
         if (!this.answerSeen.add(data.id)) {
           this.logger.debug(`重复推送的消息 ${data.id}，忽略。`);
           return;
         }
         await this.handleC2CMessage(data);
         return;
+      }
       case 'GROUP_MESSAGE_CREATE':
         this.recordGroupStats(data, 'all');
         if (!this.warnedFullMessage) {
@@ -330,9 +334,14 @@ export class QQBot {
       case 'GROUP_DEL_ROBOT':
         this.logger.info(`机器人被移出群 ${maskOpenId(data.group_openid)}。`);
         return;
-      case 'FRIEND_ADD':
-        this.logger.info(`用户 ${maskOpenId(data.openid ?? data.user_openid)} 添加了机器人。`);
+      case 'FRIEND_ADD': {
+        const friendOpenId = data.openid ?? data.user_openid ?? '';
+        if (friendOpenId) {
+          this.opsRecipients.remember(friendOpenId, { source: 'friend_add' });
+        }
+        this.logger.info(`用户 ${maskOpenId(friendOpenId)} 添加了机器人。`);
         return;
+      }
       default:
         this.logger.debug(`忽略事件 ${type}。`);
     }
@@ -605,6 +614,11 @@ export class QQBot {
     if (!userId) {
       return;
     }
+    this.opsRecipients.remember(userId, { source: 'message' });
+    if (isOpsStatusCommand(normalizeQuestion(data))) {
+      await this.replyOpsStatus(userId, data);
+      return;
+    }
     const target = { kind: 'c2c', openid: userId };
     await this.handleIncoming({
       target,
@@ -619,6 +633,33 @@ export class QQBot {
         date: shanghaiDateKey(),
       },
     });
+  }
+
+  /** 私聊发送 /运维：补发主动消息失败时暂存的通知，不依赖主动消息权限。 */
+  async replyOpsStatus(userId, data) {
+    const messageId = typeof data?.id === 'string' ? data.id : '';
+    if (!messageId) {
+      return;
+    }
+    const pending = this.opsReminder.listPending(userId);
+    if (pending.length === 0) {
+      await this.safeReply(
+        { kind: 'c2c', openid: userId },
+        messageId,
+        1,
+        '当前没有待补发的运维提醒。发送 /版本 可以查看当前版本。',
+      );
+      return;
+    }
+    const content = ['【补发运维提醒】', ...pending.map((item) => item.content)]
+      .join('\n\n')
+      .slice(0, 1800);
+    try {
+      await this.safeReply({ kind: 'c2c', openid: userId }, messageId, 1, content);
+      this.opsReminder.removePending(pending.map((item) => item.id));
+    } catch (error) {
+      this.logger.warn('补发运维提醒失败：', error);
+    }
   }
 
   async handleIncoming({ target, userId, conversationKey, data, maxReplies, context }) {
@@ -1199,6 +1240,14 @@ function normalizeQuestion(data) {
     return '';
   }
   return '';
+}
+
+function isOpsStatusCommand(text) {
+  const normalized = String(text ?? '')
+    .trim()
+    .replace(/^\/+/u, '')
+    .replace(/\s+/gu, '');
+  return ['运维', '运维提醒', 'ops'].includes(normalized);
 }
 
 function friendlyError(error) {

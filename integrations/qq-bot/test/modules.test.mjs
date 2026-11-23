@@ -14,15 +14,15 @@ test('模块和指令别名都能解析', () => {
   assert.equal(resolveTarget('进退群')?.module?.id, 'notices');
   assert.equal(resolveTarget('玩家播报')?.module?.id, 'playerEvents');
   assert.equal(resolveTarget('服务器消息')?.module?.id, 'serverMessages');
-  assert.equal(resolveTarget('运维提醒')?.module?.id, 'opsReminder');
+  assert.equal(resolveTarget('运维提醒'), null);
   assert.equal(resolveTarget('菜单')?.type, 'always');
   assert.equal(resolveTarget('问一问')?.moduleIds?.length, 5);
-  assert.equal(resolveTarget('指令')?.moduleIds?.length, 10);
+  assert.equal(resolveTarget('指令')?.moduleIds?.length, 9);
   assert.equal(resolveTarget('不存在的功能'), null);
 });
 
-test('玩家进出、服务器消息和运维提醒默认关闭、按群开启', () => {
-  for (const id of ['playerEvents', 'serverMessages', 'opsReminder']) {
+test('玩家进出和服务器消息默认关闭、按群开启', () => {
+  for (const id of ['playerEvents', 'serverMessages']) {
     const definition = moduleById.get(id);
     assert.equal(definition?.defaultEnabled, false, id);
     assert.equal(definition?.optIn, true, id);
@@ -80,7 +80,6 @@ test('/模块 列表默认展示常开和已开启项', () => {
   assert.match(text, /进退群提示 开/);
   assert.match(text, /玩家进出播报 开/);
   assert.match(text, /服务器消息 开/);
-  assert.match(text, /运维提醒 开/);
   assert.doesNotMatch(text, /锁定/);
 });
 

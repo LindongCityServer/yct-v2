@@ -536,16 +536,16 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3400 -Ho
 http://127.0.0.1:3400
 ```
 
-## 发版时的 QQ 群运维提醒
+## 发版时的 QQ 私聊运维提醒
 
-如果机器人和网页在同一台 Windows 服务器上，可以在雨城通发版开始/结束时向开启了「运维提醒」的 QQ 群发通知。
+如果机器人和网页在同一台 Windows 服务器上，可以在雨城通发版开始/结束时私聊通知机器人管理员。
 这是可选步骤，不影响网页部署本身；通知失败只记日志，不要让部署中止。
 
 前提：
 
 - 机器人目录 `C:\wwwroot\qq-bot\notify-ops.ps1` 存在（P0 之后的新机器人部署包会自带）；
 - 机器人 `.env` 已配置 `QQ_BOT_OPS_TOKEN` 和 `QQ_BOT_EVENT_PORT`（默认示例 `8765`），事件桥已启动；
-- 至少一个群已经发送 `/模块 开 运维提醒`。
+- 接收人先私聊机器人发一条消息（或先加好友），让 `state/ops-recipients.json` 记录到。
 
 雨城通发版命令（在机器人目录执行）：
 
@@ -555,18 +555,18 @@ cd C:\wwwroot\qq-bot
 # 1. 开始：先发开始通知，再停网页进程
 .\notify-ops.ps1 -System yct -Phase start `
   -UpdateId ops-yct-20261123-2000 `
-  -Version 2.26.0 -ExpectedMinutes 10 `
+  -Version 2.27.0 -ExpectedMinutes 10 `
   -Summary "车站资料和在线玩家名单"
 
 # 2. 按本文前面的流程停止 Web 和位置采集器、替换部署目录、启动 Web
 
 # 3. 健康检查通过（/api/health 的 buildId 已是新版本）后发完成
 .\notify-ops.ps1 -System yct -Phase end `
-  -UpdateId ops-yct-20261123-2000 -Version 2.26.0
+  -UpdateId ops-yct-20261123-2000 -Version 2.27.0
 
 # 4. 失败并已回滚时
 .\notify-ops.ps1 -System yct -Phase rolled_back `
-  -UpdateId ops-yct-20261123-2000 -Version 2.25.0 `
+  -UpdateId ops-yct-20261123-2000 -Version 2.26.0 `
   -Reason "部署后健康检查未通过"
 ```
 
@@ -575,14 +575,14 @@ cd C:\wwwroot\qq-bot
 ```powershell
 # 停机器人之前发开始
 .\notify-ops.ps1 -System qqbot -Phase start -UpdateId ops-bot-20261123-2200 `
-  -Version 2.26.0 -ExpectedMinutes 3
+  -Version 2.27.0 -ExpectedMinutes 3
 
 # 覆盖 src/data/脚本、保留 .env 和 state、--check 通过、启动后再发完成
-.\notify-ops.ps1 -System qqbot -Phase end -UpdateId ops-bot-20261123-2200 -Version 2.26.0
+.\notify-ops.ps1 -System qqbot -Phase end -UpdateId ops-bot-20261123-2200 -Version 2.27.0
 ```
 
 如果新版本机器人起不来，旧版本回滚启动后发 `rolled_back`；两个版本都起不来时无法自动发完成，
-需要人工在群里说明，或等 P1 的独立发信器。
+需要人工私聊说明，或等 P1 的独立发信器。
 
 临东通是独立服务器，P0 先在机器人所在服务器手动执行：
 
@@ -597,6 +597,7 @@ cd C:\wwwroot\qq-bot
 `notify-ops.ps1` 默认请求 `http://127.0.0.1:8765/ops`；事件桥端口不同时加
 `-Url http://127.0.0.1:<端口>/ops`。token 建议放 `-TokenFile` 或进程环境变量，不要写进命令历史。
 不希望通知失败影响部署脚本时给每条命令加 `-BestEffort`。
+如果私聊主动消息被 QQ 拒绝（`40034105`），通知会保留为 pending，管理员私聊机器人发送 `/运维` 可补发。
 完整字段、幂等和排障说明见部署包根目录的 `QQ_BOT_OPS_REMINDER.md`。
 
 ## Node.js 版本

@@ -45,14 +45,6 @@ test('群管理员可以关模块并收到恢复提示', () => {
   assert.equal(store.resolve('group-1').modules['ask.transit'], false);
 });
 
-test('开启运维提醒时说明会收到更新通知', () => {
-  const { store, run } = setup();
-  const reply = run('开 运维提醒').reply;
-  assert.match(reply, /已打开本群的「运维提醒」/);
-  assert.match(reply, /更新开始\/结束/);
-  assert.equal(store.resolve('group-1').modules.opsReminder, true);
-});
-
 test('指令级覆盖可以单独打开', () => {
   const { store, run } = setup();
   run('关 实用工具');
