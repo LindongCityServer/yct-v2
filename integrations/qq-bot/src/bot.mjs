@@ -12,6 +12,7 @@ import { MaterialSourceStore } from './material-sources.mjs';
 import { handleModuleCommand } from './module-command.mjs';
 import { buildHelpText, commandLabel, moduleById, moduleLabel } from './modules.mjs';
 import { loadGroupNotices, resolveGroupNotice } from './notices.mjs';
+import { OpsReminder, OpsReminderStore } from './ops-reminder.mjs';
 import { startEventBridge } from './event-bridge.mjs';
 import { PlayerEventMonitor } from './player-events.mjs';
 import { QqLinkClient } from './ldpass-link.mjs';
@@ -99,6 +100,15 @@ export class QQBot {
         path: config.materials?.sourcePath ?? '',
         logger,
       });
+    this.opsReminder = new OpsReminder({
+      store: new OpsReminderStore({
+        path: config.ops?.statePath ?? '',
+        logger,
+      }),
+      groupStore: this.moduleStore,
+      api: this.api,
+      logger,
+    });
     this.signage = signage;
     this.toggleLimiter = {
       user: new SlidingWindowLimiter({ limit: 5 }),
@@ -109,7 +119,6 @@ export class QQBot {
     this.eventBridge = null;
     this.playerEvents = new PlayerEventMonitor({
       baseUrl: config.yct.baseUrl,
-      groups: config.reply.playerEventGroups,
       intervalMs: config.reply.playerPollMs,
       logger,
       onEvent: (event) => this.broadcastPlayerEvent(event),
@@ -124,13 +133,43 @@ export class QQBot {
   async init() {
     await this.community.load();
     if (this.config.reply.playerEvents) {
-      this.playerEvents.start();
+      if (!this.playerEvents.enabled) {
+        this.logger.warn(
+          'QQ_BOT_PLAYER_EVENTS 已开启，但 YCT_BASE_URL 为空，玩家进出轮询不会启动。',
+        );
+      } else {
+        this.playerEvents.start();
+        const targets = this.resolveBroadcastGroups('playerEvents');
+        this.logger.info(
+          targets.length > 0
+            ? `玩家进出轮询已启动：当前 ${targets.length} 个群开启播报，间隔 ${this.config.reply.playerPollMs}ms。`
+            : '玩家进出轮询已启动；当前没有群开启玩家进出播报，群管理员可用 /模块 开 玩家进出播报。',
+        );
+      }
+    } else if (this.moduleStore.listEnabledGroups('playerEvents').length > 0) {
+      this.logger.warn(
+        '有群开启了玩家进出播报，但 QQ_BOT_PLAYER_EVENTS=0，轮询不会启动；请让机器人运维打开全局开关。',
+      );
+    }
+    if (
+      this.config.events?.port === 0 &&
+      this.moduleStore.listEnabledGroups('serverMessages').length > 0
+    ) {
+      this.logger.warn(
+        '有群开启了服务器消息，但 QQ_BOT_EVENT_PORT=0，事件桥不会启动；请让机器人运维打开事件桥。',
+      );
+    }
+    if (!this.config.ops?.token && this.moduleStore.listEnabledGroups('opsReminder').length > 0) {
+      this.logger.warn(
+        '有群开启了运维提醒，但 QQ_BOT_OPS_TOKEN 未配置，/ops 接口关闭；请让机器人运维配置 token。',
+      );
     }
     if (this.config.events?.port > 0) {
       this.eventBridge = await startEventBridge({
         port: this.config.events.port,
         bind: this.config.events.bind,
         token: this.config.events.token,
+        opsToken: this.config.ops?.token ?? '',
         info: {
           version: getBotVersion(),
           startedAt: new Date().toISOString(),
@@ -138,6 +177,7 @@ export class QQBot {
         logger: this.logger,
         onOneBotEvent: (event) => this.handleOneBotEvent(event),
         onServerEvent: (event) => this.handleServerEvent(event),
+        onOpsEvent: (event) => this.opsReminder.handle(event),
       });
     }
   }
@@ -164,13 +204,22 @@ export class QQBot {
     return this.moduleStore.isCommandEnabled(policy, commandId);
   }
 
-  /** 事件类功能（进退群提示、玩家播报）按群判断，没有模块配置时默认开启。 */
+  /** 事件类功能（进退群提示）按群判断，没有模块配置时默认开启。 */
   groupModuleEnabled(groupId, moduleId) {
     if (!groupId) {
       return false;
     }
     const policy = this.policyFor({ kind: 'group', groupId });
     return policy.modules?.[moduleId] !== false;
+  }
+
+  /**
+   * 事件广播目标：只取显式开启模块的群（含群里 /模块 开的）。
+   * 环境变量里的旧群列表已废弃，避免“模块显示关但仍在发消息”。
+   */
+  resolveBroadcastGroups(moduleId) {
+    this.moduleStore.reloadIfChanged();
+    return this.moduleStore.listEnabledGroups(moduleId);
   }
 
   /** 问一问能力位：不包含群 id，网页端只看到“哪些范围开着”。 */
@@ -293,11 +342,12 @@ export class QQBot {
     const template =
       event.type === 'join' ? this.config.reply.playerJoinText : this.config.reply.playerLeaveText;
     const content = template.replaceAll('{name}', event.name);
-    for (const groupId of this.config.reply.playerEventGroups) {
-      if (!this.groupModuleEnabled(groupId, 'playerEvents')) {
-        this.logger.debug(`群 ${maskOpenId(groupId)} 未开启玩家进出播报，跳过。`);
-        continue;
-      }
+    const groups = this.resolveBroadcastGroups('playerEvents');
+    if (groups.length === 0) {
+      this.logger.debug('没有群开启玩家进出播报，跳过。');
+      return;
+    }
+    for (const groupId of groups) {
       try {
         await this.api.sendGroupMessage(groupId, { content, msg_type: 0 });
         this.logger.info(
@@ -424,14 +474,6 @@ export class QQBot {
     if (!event || typeof event !== 'object') {
       return;
     }
-    const configuredGroups = [...(this.config.events.groups ?? [])];
-    const groups =
-      configuredGroups.length > 0
-        ? configuredGroups
-        : [...(this.config.reply.playerEventGroups ?? [])];
-    if (groups.length === 0) {
-      return;
-    }
     const type = String(event.type ?? '');
     const player = String(event.player ?? event.name ?? '').trim();
     const message = String(event.message ?? '').trim();
@@ -455,6 +497,7 @@ export class QQBot {
     if (!content) {
       return;
     }
+
     const playerBroadcast =
       type === 'join' ||
       type === 'player_join' ||
@@ -462,11 +505,13 @@ export class QQBot {
       type === 'leave' ||
       type === 'player_leave' ||
       type === 'server_leave';
+    const moduleId = playerBroadcast ? 'playerEvents' : 'serverMessages';
+    const groups = this.resolveBroadcastGroups(moduleId);
+    if (groups.length === 0) {
+      this.logger.debug(`没有群开启${playerBroadcast ? '玩家进出播报' : '服务器消息'}，跳过。`);
+      return;
+    }
     for (const groupId of groups) {
-      if (playerBroadcast && !this.groupModuleEnabled(groupId, 'playerEvents')) {
-        this.logger.debug(`群 ${maskOpenId(groupId)} 未开启玩家进出播报，跳过。`);
-        continue;
-      }
       await this.sendActiveText(groupId, content);
     }
   }

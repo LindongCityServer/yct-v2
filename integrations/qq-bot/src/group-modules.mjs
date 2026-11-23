@@ -203,14 +203,20 @@ export class GroupModuleStore {
     if (this.isLocked(policy, moduleId)) {
       return { ok: false, reason: 'locked', label: moduleById.get(moduleId)?.label ?? moduleId };
     }
+    const explicit = this.explicitModuleValue(groupId, moduleId);
+    if (explicit === enabled) {
+      return { ok: true, changed: false, moduleId, label: moduleById.get(moduleId)?.label };
+    }
+    // 默认开启且当前已经生效的模块再“开”一次不需要写配置；默认关闭的模块“关”要显式落盘，
+    // 否则环境变量种子群会把这次关闭覆盖掉。
+    if (explicit === undefined && enabled && policy.modules[moduleId] === true) {
+      return { ok: true, changed: false, moduleId, label: moduleById.get(moduleId)?.label };
+    }
     const found = this.entryForWrite(groupId);
     if (!found) {
       return { ok: false, reason: 'unknown' };
     }
     const previous = policy.modules[moduleId];
-    if (previous === enabled) {
-      return { ok: true, changed: false, moduleId, label: moduleById.get(moduleId)?.label };
-    }
     found.entry.modules[moduleId] = enabled;
     this.touch(found.entry, actor);
     this.persist();
@@ -321,6 +327,61 @@ export class GroupModuleStore {
     } catch (error) {
       this.logger?.warn(`写入群功能审计失败：${error.message}`);
     }
+  }
+
+  /**
+   * 列出真正开启了某个模块的群，并统一换成可发送的 group_openid。
+   *
+   * 配置文件可能按旧群号（QQ_BOT_GROUP_ALIASES 的值）作 key，这里会反查回 openid；
+   * 没有别名映射的 key 按原值返回，发送失败时由调用方记录日志。
+   */
+  listEnabledGroups(moduleId) {
+    this.reloadIfChanged();
+    const openids = new Set();
+    for (const key of Object.keys(this.data.groups)) {
+      const policy = this.resolve(key);
+      if (policy.modules?.[moduleId] !== true) {
+        continue;
+      }
+      const openid = this.openIdForGroupKey(key);
+      if (openid) {
+        openids.add(openid);
+      }
+    }
+    return [...openids];
+  }
+
+  hasEnabledGroups(moduleId) {
+    return this.listEnabledGroups(moduleId).length > 0;
+  }
+
+  /** 只返回显式写入的模块值；没有配置时返回 undefined，不会把默认值当成显式开关。 */
+  explicitModuleValue(groupId, moduleId) {
+    const key = this.findGroupKey(groupId);
+    if (key) {
+      return this.data.groups[key]?.modules?.[moduleId];
+    }
+    const direct = String(groupId ?? '').trim();
+    return this.data.groups[direct]?.modules?.[moduleId];
+  }
+
+  /** 把配置里的群 key（可能是旧群号）换回 group_openid。 */
+  resolveGroupOpenId(groupId) {
+    const key = this.findGroupKey(groupId);
+    return this.openIdForGroupKey(key || groupId);
+  }
+
+  openIdForGroupKey(key) {
+    const text = String(key ?? '').trim();
+    if (!text) {
+      return '';
+    }
+    for (const [openid, legacy] of this.aliases) {
+      if (legacy === text && openid) {
+        return openid;
+      }
+    }
+    return text;
   }
 
   /** 只读摘要，给 --check 和排障用。 */

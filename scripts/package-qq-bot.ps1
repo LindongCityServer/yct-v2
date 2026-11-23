@@ -39,12 +39,17 @@ if (Test-Path -LiteralPath $staging) {
 }
 & pnpm --filter yct-qq-bot deploy --prod --legacy --config.node-linker=hoisted $staging
 
+# 机器人部署包里带一份运维提醒说明，方便服务器上直接查命令和字段。
+Copy-Item -LiteralPath (Join-Path $root 'docs\QQ_BOT_OPS_REMINDER.md') -Destination (Join-Path $staging 'QQ_BOT_OPS_REMINDER.md') -Force
+
 $required = @(
   (Join-Path $staging 'src\card-renderer.mjs'),
   (Join-Path $staging 'node_modules\@resvg\resvg-js\package.json'),
   (Join-Path $staging 'node_modules\qrcode\package.json'),
   (Join-Path $staging 'assets\fonts\HarmonyOS_Sans_SC_Regular.ttf'),
-  (Join-Path $staging 'start-qq-bot.ps1')
+  (Join-Path $staging 'start-qq-bot.ps1'),
+  (Join-Path $staging 'notify-ops.ps1'),
+  (Join-Path $staging 'QQ_BOT_OPS_REMINDER.md')
 )
 foreach ($path in $required) {
   if (-not (Test-Path -LiteralPath $path)) {

@@ -1,6 +1,6 @@
 # QQ 机器人接入（问一问）
 
-更新时间：2026-11-19
+更新时间：2026-11-23
 
 本文说明如何把雨城通「问一问」接到 QQ 官方机器人：平台侧需要准备什么、配置文件怎么写、
 Windows 服务器怎么部署、出错时先看哪里，以及服务器上的 `codex` 能帮到什么程度。
@@ -145,16 +145,16 @@ QQ 是聊天窗口，长回答会刷屏、Markdown 符号会原样显示、引�
 | `QQ_BOT_MODULE_HINTS`         | `1`                        | 功能关闭后是否提示；同群同功能按下面的 TTL 节流                              |
 | `QQ_BOT_MODULE_HINT_TTL_MS`   | `600000`                   | 关闭提示的节流时间，默认 10 分钟                                             |
 | `QQ_BOT_ACK_DELAY_MS`         | `1000`                     | 有问一问范围被关闭时延后「正在查资料」，避免秒回拦截时先提示再没下文         |
-| `QQ_BOT_PLAYER_EVENTS`        | `0`                        | 是否轮询站内玩家位置，自动播报玩家进服/退服                                  |
-| `QQ_BOT_PLAYER_EVENT_GROUPS`  | 空                         | 玩家进服/退服播报的群 openid，逗号或空格分隔                                 |
+| `QQ_BOT_PLAYER_EVENTS`        | `0`                        | 是否轮询站内玩家位置；具体发到哪些群由 `/模块 开 玩家进出播报` 决定          |
 | `QQ_BOT_PLAYER_POLL_MS`       | `30000`                    | 玩家位置轮询间隔，最小 10 秒                                                 |
 | `QQ_BOT_PLAYER_JOIN_TEXT`     | `🟢 {name} 进入了服务器`   | 玩家进服文案，支持 `{name}`                                                  |
 | `QQ_BOT_PLAYER_LEAVE_TEXT`    | `🔴 {name} 离开了服务器`   | 玩家退服文案，支持 `{name}`                                                  |
-| `QQ_BOT_EVENT_PORT`           | `0`（关闭）                | 事件桥监听端口；开启后接 OneBot 群消息/进退群和游戏服务器事件                |
+| `QQ_BOT_EVENT_PORT`           | `0`（关闭）                | 事件桥监听端口；开启后接 OneBot、游戏服务器事件和 `/ops` 运维提醒            |
 | `QQ_BOT_EVENT_BIND`           | `127.0.0.1`                | 事件桥绑定地址；默认只允许本机插件访问                                       |
 | `QQ_BOT_EVENT_TOKEN`          | 空                         | 事件桥 Bearer Token；绑定非回环地址时必须设置                                |
 | `QQ_BOT_EVENT_GROUP_MAP`      | 空                         | `旧群号=官方群openid` 映射，用于把 OneBot 群事件对到官方群                   |
-| `QQ_BOT_EVENT_GROUPS`         | 空                         | 游戏服务器聊天/进服/退服广播到的官方群 openid                                |
+| `QQ_BOT_OPS_TOKEN`            | 空                         | `/ops` 运维提醒接口的 Bearer Token；为空时接口关闭，至少 16 位随机串         |
+| `QQ_BOT_OPS_STATE_PATH`       | `state/ops-reminders.json` | 运维提醒的幂等状态；更新机器人时保留                                         |
 | `QQ_BOT_IMAGE_HOSTS`          | 空                         | 额外允许的配图域名，逗号分隔；默认只允许站点自己的域名                       |
 | `QQ_BOT_LOG_LEVEL`            | `info`                     | `debug` / `info` / `warn` / `error`                                          |
 
@@ -203,6 +203,7 @@ C:\wwwroot\qq-bot\   # 机器人：把 integrations\qq-bot 整个目录复制过
 ├─ data\                      # 电码/GB2312 静态表，随代码更新
 ├─ state\                     # 签到、发言统计、运势、按群开关和审计，更新时保留
 ├─ start-qq-bot.ps1
+├─ notify-ops.ps1
 ├─ install-qq-bot-task.ps1
 └─ logs\                      # 运行时生成
 ```
@@ -282,8 +283,9 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -Uninsta
 机器人不写站内数据库；签到、发言统计和运势保存在本地 `state/`，对话上下文只保存在内存里。更新步骤：
 
 1. 停止计划任务或进程（`Stop-ScheduledTask -TaskName "YCT QQBOT"`）；
-2. 覆盖 `src\`、`data\` 和两个 `.ps1` 脚本；
-3. 保留服务器上的 `.env` 和 `state\`（`group-modules.json`、`module-audit.jsonl` 都在这里）；
+2. 覆盖 `src\`、`data\` 和三个 `.ps1` 脚本（含 `notify-ops.ps1`）；
+3. 保留服务器上的 `.env` 和 `state\`（`group-modules.json`、`module-audit.jsonl`、
+   `ops-reminders.json` 都在这里）；
 4. 重新 `--check`，再启动。
 
 回滚只需要把旧目录换回来。网页更新（`deploy-yct-web.ps1`）不会碰到机器人目录；
@@ -302,23 +304,31 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -Uninsta
   [QQ_BOT_COMMANDS.md](./QQ_BOT_COMMANDS.md)。
 - **群互动**：签到、签到榜、发言统计/发言榜、今日运势；状态在 `state/`，更新时保留。
 - **按群功能开关**：群主和群管理员可以在群里用 `/模块` 关闭本群不需要的指令、问一问范围、
-  进退群提示和玩家进出播报。配置在 `state/group-modules.json`，每次修改写入
-  `state/module-audit.jsonl`；没有配置文件时全部开启，行为与升级前一致。权限、锁定和问一问
-  范围划分见 [QQ_BOT_GROUP_MODULES.md](./QQ_BOT_GROUP_MODULES.md)。
+  进退群提示和玩家进出播报。玩家进出、服务器消息和运维提醒默认关，需要按群开启。
+  配置在 `state/group-modules.json`，每次修改写入 `state/module-audit.jsonl`；
+  没有配置文件时按注册表默认值。权限、锁定和问一问范围划分见
+  [QQ_BOT_GROUP_MODULES.md](./QQ_BOT_GROUP_MODULES.md)。
 - **运势文案**：默认读取 `data/fortune-texts.txt`，一行一条，可直接编辑；状态里只保存文案索引，
   修改文件后重启机器人即可生效。
-- **玩家进出播报**：设置 `QQ_BOT_PLAYER_EVENTS=1` 和 `QQ_BOT_PLAYER_EVENT_GROUPS` 后，
-  每 `QQ_BOT_PLAYER_POLL_MS` 轮询站内 `/api/map/player-locations`，只在在线名单变化时发消息；
-  首次轮询只建基线，不补发历史。
+- **玩家进出播报**：设置 `QQ_BOT_PLAYER_EVENTS=1` 后，每 `QQ_BOT_PLAYER_POLL_MS` 轮询站内
+  `/api/map/player-locations`，只在在线名单变化时发消息；首次轮询只建基线，不补发历史，
+  机器人启动时已经在线的人不会触发“进服”。**具体发到哪些群由 `/模块 开 玩家进出播报` 决定**，
+  该模块默认关闭。只开 `/模块` 不会启动轮询，只配环境变量也不会给没开模块的群发消息；
+  旧版 `QQ_BOT_PLAYER_EVENT_GROUPS` 已废弃，配置后只提示、不生效。
+- **服务器消息**：`/模块 开 服务器消息` 默认关闭；开启后，游戏服务器插件 POST 到 `/server` 的
+  `chat` / `server_chat` 消息才会发到这个群。它依赖 `QQ_BOT_EVENT_PORT` 事件桥。
 - **B 站链接**：消息里出现 `bilibili.com/video/...` 或 `b23.tv/...` 时，读取视频标题、UP 主、
   标准链接和封面，文字与海报各占一次被动回复；可用 `QQ_BOT_BILIBILI=0` 关闭。
 - **群进退群文案**：`data/group-notices.json` 按群配置 `welcome` / `kick` / `leave`，
   支持 `{name}`、`{id}` 和旧文案占位符。官方 QQ 机器人不保证下发普通成员进退群事件；
   若平台不下发，需要由 OneBot/群管事件桥接后再调用对应事件处理。
-- **事件桥**：设置 `QQ_BOT_EVENT_PORT` 后监听 `POST /onebot` 和 `POST /server`。
+- **事件桥**：设置 `QQ_BOT_EVENT_PORT` 后监听 `POST /onebot`、`POST /server` 和 `POST /ops`。
   OneBot 群消息会补全发言统计，进退群通知按 `data/group-notices.json` 发送；
-  游戏服务器可以把 `join`、`leave`、`chat` 事件 POST 到 `/server`，由机器人广播到
-  `QQ_BOT_EVENT_GROUPS`。事件桥默认只绑定 `127.0.0.1`，非本机访问请设置 Token。
+  游戏服务器可以把 `join`、`leave`、`chat` 事件 POST 到 `/server`，由机器人按
+  `playerEvents` / `serverMessages` 模块过滤后广播。事件桥默认只绑定 `127.0.0.1`，
+  非本机访问请设置 `QQ_BOT_EVENT_TOKEN`；旧版 `QQ_BOT_EVENT_GROUPS` 已废弃，配置后只提示、不生效。
+- **运维提醒**：配置 `QQ_BOT_OPS_TOKEN` 后，`/ops` 接受部署脚本的更新开始/完成/异常/回滚/取消通知，
+  并发送给 `/模块 开 运维提醒` 的群。完整流程见 [QQ 机器人运维提醒](./QQ_BOT_OPS_REMINDER.md)。
 - **群消息统计范围**：官方机器人只收到 `GROUP_AT_MESSAGE_CREATE` 时，统计只能覆盖 @机器人 的消息；
   需要在 QQ 开放平台开通“接收所有消息”，或用 OneBot 事件桥把全部群消息 POST 到 `/onebot`。
   开启事件桥并配置 `QQ_BOT_EVENT_GROUP_MAP` 后，机器人会把该群的全部消息计入统计，并跳过重复的官方 @ 事件。
@@ -343,6 +353,14 @@ Authorization: Bearer <QQ_BOT_EVENT_TOKEN>
 Content-Type: application/json
 
 {"type":"chat","player":"小明","message":"晚上好"}
+```
+
+```http
+POST http://127.0.0.1:8765/ops
+Authorization: Bearer <QQ_BOT_OPS_TOKEN>
+Content-Type: application/json
+
+{"system":"yct","phase":"start","updateId":"ops-20261123-200000-a1b2c3d4","version":"2.26.0","expectedMinutes":10}
 ```
 
 ```json
@@ -462,6 +480,8 @@ Content-Type: application/json
 - `.env` 只放在服务器机器人目录，配合 NTFS 权限限制为管理员和 `SYSTEM` 可读；
   不要复制进网页部署包，也不要提交到仓库。
 - 更换 AppSecret 或模型 Key 后重启机器人（停止计划任务再启动）。
+- `QQ_BOT_OPS_TOKEN` 只放在服务器 `.env` 或 `-TokenFile`，不要写进部署包、群消息或仓库；
+  它和 `QQ_BOT_EVENT_TOKEN` 分开，泄露一个不影响另一个。
 - 模型 Key 有额度，建议上线后配置 `QQ_BOT_GROUP_ALLOWLIST` 和较低的 `QQ_BOT_USER_QPM`。
 - 机器人只读问一问，不写数据库、不改站点数据、不读取账号或后台信息。
 - 日志会打印打码后的群/用户 openid、回答长度和错误码，但不打印 AppSecret、模型 Key、完整回答、
@@ -475,6 +495,8 @@ Content-Type: application/json
 - [ ] 沙箱群里 @ 机器人能收到答案，日志里有一次完整回答记录
 - [ ] 单聊能收到「输入中」状态和答案
 - [ ] 计划任务或进程守护已配置，重启服务器后机器人自动上线
+- [ ] 需要运维提醒时，`QQ_BOT_OPS_TOKEN` 和 `QQ_BOT_EVENT_PORT` 已配置，`/health` 返回 `ops: true`
+- [ ] 测试群里 `/模块 开 运维提醒` 后，`notify-ops.ps1` 能收到开始/完成消息
 - [ ] `logs` 目录有当天日志，磁盘空间足够
 - [ ] 按需配置群白名单和限流
 - [ ] 记录 AppID、负责人和 Key 的轮换时间（不要记录密钥本身）

@@ -1409,6 +1409,7 @@ Notes:
 - llms.txt is a navigation document, not a source of time-sensitive facts. AI clients should follow $publicOpenApiPath and inspect sourceStatus, generatedAt, asOf, timezone, and canonicalUrl before presenting data.
 - If ldpass login still jumps to localhost or 127.0.0.1, inspect $publicLdpassStartPath directly. The redirect Location should contain redirect_uri=https://yct.shangxiaoguan.top$publicCallbackPath and Set-Cookie should include both yct.ldpass_state and yct.ldpass_return_origin.
 - For the one-time /v2 to site-root cutover, follow ROOT_PATH_MIGRATION.md and install nginx/yct-root-locations.conf only after reviewing the documented old-static-site compatibility rules.
+- Optional: send QQ group ops reminders around YCT, bot, or LDPASS updates with C:\wwwroot\qq-bot\notify-ops.ps1. See QQ_BOT_OPS_REMINDER.md in this bundle. Notification failure must not abort the deployment.
 - For the one-time import of the old content_data.js and content/*.html files, follow LEGACY_CONTENT_MIGRATION.md. Preview first; -Apply only creates missing drafts and never overwrites an existing contentId.
 "@
 
@@ -1433,6 +1434,7 @@ Notes:
   Copy-Item -LiteralPath (Join-Path $root "docs\DATA_MIGRATION.md") -Destination (Join-Path $stageRoot "DATA_MIGRATION.md") -Force
   Copy-Item -LiteralPath (Join-Path $root "docs\LDPASS_INTEGRATION.md") -Destination (Join-Path $stageRoot "LDPASS_INTEGRATION.md") -Force
   Copy-Item -LiteralPath (Join-Path $root "docs\RIDE_CODE_GATEWAY.md") -Destination (Join-Path $stageRoot "RIDE_CODE_GATEWAY.md") -Force
+  Copy-Item -LiteralPath (Join-Path $root "docs\QQ_BOT_OPS_REMINDER.md") -Destination (Join-Path $stageRoot "QQ_BOT_OPS_REMINDER.md") -Force
   $stageNginxRoot = Join-Path $stageRoot "nginx"
   New-Item -ItemType Directory -Force -Path $stageNginxRoot | Out-Null
   Copy-Item -LiteralPath (Join-Path $root "deploy\nginx\yct-root-locations.conf") -Destination (Join-Path $stageNginxRoot "yct-root-locations.conf") -Force

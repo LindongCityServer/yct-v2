@@ -46,7 +46,6 @@ function createConfig(overrides = {}) {
       bind: '127.0.0.1',
       token: '',
       groupMap: new Map(),
-      groups: new Set(),
       ...overrides.events,
     },
     link: {
@@ -517,10 +516,11 @@ test('事件桥补全群消息统计，并发送进退群和服务聊天', async
       bind: '127.0.0.1',
       token: '',
       groupMap: new Map([['old-group', 'group-1']]),
-      groups: new Set(['group-1']),
     },
   });
-  const { bot, sends } = createSetup({ config });
+  const store = new GroupModuleStore({});
+  store.setModule('group-1', 'serverMessages', true, { role: 'admin' });
+  const { bot, sends } = createSetup({ config, moduleStore: store });
   bot.eventBridge = { close: async () => {} };
   bot.groupNotices = { groups: { 'old-group': { welcome: '欢迎 {name}' } } };
 
@@ -952,15 +952,31 @@ test('按群关闭进退群提示后不再发送', async () => {
   assert.match(sends[0].payload.content, /欢迎 新人2/);
 });
 
-test('玩家进出播报按群过滤', async () => {
+test('玩家进出和服务器消息默认关闭', async () => {
   const config = createConfig({
     reply: {
-      playerEventGroups: ['group-1', 'group-2'],
       playerJoinText: '🟢 {name} 进入了服务器',
       playerLeaveText: '🔴 {name} 离开了服务器',
     },
   });
   const store = new GroupModuleStore({});
+  const { bot, sends } = createSetup({ config, moduleStore: store });
+
+  await bot.broadcastPlayerEvent({ type: 'join', name: '小明' });
+  await bot.handleServerEvent({ type: 'chat', player: '小明', message: '晚上好' });
+
+  assert.equal(sends.length, 0);
+});
+
+test('玩家进出播报按群过滤', async () => {
+  const config = createConfig({
+    reply: {
+      playerJoinText: '🟢 {name} 进入了服务器',
+      playerLeaveText: '🔴 {name} 离开了服务器',
+    },
+  });
+  const store = new GroupModuleStore({});
+  store.setModule('group-2', 'playerEvents', true, { role: 'admin' });
   store.setModule('group-1', 'playerEvents', false, { role: 'admin' });
   const { bot, sends } = createSetup({ config, moduleStore: store });
 
@@ -971,17 +987,52 @@ test('玩家进出播报按群过滤', async () => {
   assert.match(sends[0].payload.content, /小明 进入了服务器/);
 });
 
-test('事件桥的玩家进服按群过滤，服务聊天不受影响', async () => {
+test('玩家进出播报按群开启，关闭的群不发送', async () => {
   const config = createConfig({
     reply: {
-      playerEventGroups: ['group-1', 'group-2'],
       playerJoinText: '🟢 {name} 进入了服务器',
       playerLeaveText: '🔴 {name} 离开了服务器',
     },
-    events: { groups: new Set(['group-1', 'group-2']) },
   });
   const store = new GroupModuleStore({});
-  store.setModule('group-1', 'playerEvents', false, { role: 'admin' });
+  store.setModule('group-3', 'playerEvents', true, { role: 'admin' });
+  const { bot, sends } = createSetup({ config, moduleStore: store });
+
+  await bot.broadcastPlayerEvent({ type: 'join', name: '小明' });
+
+  assert.equal(sends.length, 1);
+  assert.equal(sends[0].openid, 'group-3');
+});
+
+test('服务器聊天默认不发，按群开启后只发到开启的群', async () => {
+  const config = createConfig();
+  const store = new GroupModuleStore({});
+  store.setModule('group-2', 'serverMessages', true, { role: 'admin' });
+  const { bot, sends } = createSetup({ config, moduleStore: store });
+
+  await bot.handleServerEvent({ type: 'chat', player: '小明', message: '你好' });
+  assert.deepEqual(
+    sends.map((item) => item.openid),
+    ['group-2'],
+  );
+
+  store.setModule('group-2', 'serverMessages', false, { role: 'admin' });
+  sends.length = 0;
+  await bot.handleServerEvent({ type: 'chat', player: '小红', message: '晚上好' });
+  assert.equal(sends.length, 0);
+});
+
+test('事件桥的玩家进服按群过滤，服务聊天不受影响', async () => {
+  const config = createConfig({
+    reply: {
+      playerJoinText: '🟢 {name} 进入了服务器',
+      playerLeaveText: '🔴 {name} 离开了服务器',
+    },
+  });
+  const store = new GroupModuleStore({});
+  store.setModule('group-2', 'playerEvents', true, { role: 'admin' });
+  store.setModule('group-1', 'serverMessages', true, { role: 'admin' });
+  store.setModule('group-2', 'serverMessages', true, { role: 'admin' });
   const { bot, sends } = createSetup({ config, moduleStore: store });
 
   await bot.handleServerEvent({ type: 'join', player: '小红' });

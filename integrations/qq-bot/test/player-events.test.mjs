@@ -7,7 +7,6 @@ test('玩家进出轮询首次建立基线，之后只发变化', async () => {
   const events = [];
   const monitor = new PlayerEventMonitor({
     baseUrl: 'http://127.0.0.1:3300',
-    groups: ['g1'],
     intervalMs: 10_000,
     onEvent: (event) => events.push(event),
     fetchImpl: async () => ({
@@ -38,4 +37,13 @@ test('玩家进出轮询首次建立基线，之后只发变化', async () => {
     { type: 'join', name: '小红' },
     { type: 'leave', name: '小明' },
   ]);
+});
+
+test('没有 YCT 地址时不启动轮询', () => {
+  const monitor = new PlayerEventMonitor({
+    baseUrl: '',
+    onEvent: () => {},
+  });
+
+  assert.equal(monitor.enabled, false);
 });

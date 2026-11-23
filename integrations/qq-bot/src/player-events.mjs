@@ -3,16 +3,8 @@
  * 首次拉取只建立基线，不补发历史进服/退服消息。
  */
 export class PlayerEventMonitor {
-  constructor({
-    baseUrl,
-    groups,
-    intervalMs = 30_000,
-    onEvent,
-    logger,
-    fetchImpl = fetch,
-  } = {}) {
+  constructor({ baseUrl, intervalMs = 30_000, onEvent, logger, fetchImpl = fetch } = {}) {
     this.baseUrl = String(baseUrl ?? '').replace(/\/+$/, '');
-    this.groups = Array.isArray(groups) ? groups.filter(Boolean) : [];
     this.intervalMs = Math.max(10_000, Number(intervalMs) || 30_000);
     this.onEvent = onEvent;
     this.logger = logger;
@@ -20,10 +12,11 @@ export class PlayerEventMonitor {
     this.timer = null;
     this.online = null;
     this.polling = false;
+    this.failureLogged = false;
   }
 
   get enabled() {
-    return Boolean(this.baseUrl && this.groups.length > 0);
+    return Boolean(this.baseUrl);
   }
 
   start() {
@@ -61,6 +54,7 @@ export class PlayerEventMonitor {
           .map((marker) => String(marker.label ?? marker.playerLocation?.serverAccountName ?? ''))
           .filter(Boolean),
       );
+      const firstPoll = this.online === null;
       if (this.online) {
         for (const name of names) {
           if (!this.online.has(name)) {
@@ -74,8 +68,18 @@ export class PlayerEventMonitor {
         }
       }
       this.online = names;
+      this.failureLogged = false;
+      if (firstPoll) {
+        this.logger?.info(`玩家进出轮询已建立基线，当前在线 ${names.size} 人。`);
+      }
     } catch (error) {
-      this.logger?.debug('玩家进出轮询失败：', error);
+      // 默认 info 级别下 debug 不可见；首次失败用 warn 提示，避免轮询静默失效。
+      if (!this.failureLogged) {
+        this.failureLogged = true;
+        this.logger?.warn('玩家进出轮询失败（后续同类错误只记 debug）：', error);
+      } else {
+        this.logger?.debug('玩家进出轮询失败：', error);
+      }
     } finally {
       this.polling = false;
     }

@@ -30,7 +30,7 @@ function createStore(options = {}) {
   };
 }
 
-test('没有配置文件时全部按默认开启', (t) => {
+test('没有配置文件时按注册表默认值', (t) => {
   const setup = createStore();
   t.after(setup.cleanup);
   const policy = setup.store.resolve('group-1');
@@ -101,6 +101,33 @@ test('旧群号别名能命中同一份配置', (t) => {
   const raw = JSON.parse(readFileSync(setup.path, 'utf8'));
   assert.equal(raw.groups['legacy-9'].modules.community, false);
   assert.equal(raw.groups['openid-1'], undefined);
+});
+
+test('按群开启模块时，listEnabledGroups 会把旧群号换回 openid', (t) => {
+  const setup = createStore({
+    aliases: new Map([
+      ['openid-1', 'legacy-9'],
+      ['openid-2', 'legacy-10'],
+    ]),
+  });
+  t.after(setup.cleanup);
+  writeFileSync(
+    setup.path,
+    JSON.stringify({
+      groups: {
+        'legacy-9': { modules: { playerEvents: true } },
+        'legacy-10': { modules: { playerEvents: false } },
+        'openid-3': { modules: { playerEvents: true } },
+      },
+    }),
+    'utf8',
+  );
+  setup.store.load();
+
+  assert.deepEqual(setup.store.listEnabledGroups('playerEvents').sort(), ['openid-1', 'openid-3']);
+  assert.equal(setup.store.explicitModuleValue('legacy-10', 'playerEvents'), false);
+  assert.equal(setup.store.resolveGroupOpenId('legacy-9'), 'openid-1');
+  assert.equal(setup.store.hasEnabledGroups('playerEvents'), true);
 });
 
 test('锁定项群管理不能改，运维改文件后生效', (t) => {

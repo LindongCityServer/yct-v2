@@ -9,6 +9,7 @@
     "data/",
     "assets/",
     "start-qq-bot.ps1",
+    "notify-ops.ps1",
     "install-qq-bot-task.ps1",
     "README.md",
     ".env.example"

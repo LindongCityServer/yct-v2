@@ -5,29 +5,42 @@ const maximumBodyBytes = 64 * 1024;
 /**
  * 本机事件桥：
  * - POST /onebot：接 OneBot v11 的群消息、进退群通知；
- * - POST /server：接游戏服务器插件的进服/退服/聊天事件。
- * 只监听回环地址，写一个随机 token 后由外部插件带上。
+ * - POST /server：接游戏服务器插件的进服/退服/聊天事件；
+ * - POST /ops：接部署脚本的运维提醒（开始/完成/异常/回滚/取消）。
+ * 只监听回环地址，写一个随机 token 后由外部插件带上；/ops 另有独立 token。
  */
 export function startEventBridge({
   port,
   bind = '127.0.0.1',
   token = '',
+  opsToken = '',
   info = {},
   onOneBotEvent,
   onServerEvent,
+  onOpsEvent,
   logger,
 } = {}) {
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? '127.0.0.1'}`);
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json(response, 200, { ok: true, ...info });
+      return json(response, 200, { ok: true, ...info, ops: Boolean(opsToken) });
     }
     if (request.method !== 'POST') {
       return json(response, 405, { error: 'method_not_allowed' });
     }
-    if (!authorize(request, token)) {
+
+    // /ops 使用独立 token，避免把部署通知权限和 OneBot / 游戏服务器事件混在一起。
+    if (url.pathname === '/ops') {
+      if (!opsToken) {
+        return json(response, 503, { error: 'ops_not_configured' });
+      }
+      if (!authorize(request, opsToken)) {
+        return json(response, 401, { error: 'unauthorized' });
+      }
+    } else if (!authorize(request, token)) {
       return json(response, 401, { error: 'unauthorized' });
     }
+
     let body;
     try {
       body = await readJsonBody(request);
@@ -35,6 +48,10 @@ export function startEventBridge({
       return json(response, 400, { error: error.message });
     }
     try {
+      if (url.pathname === '/ops') {
+        const result = (await onOpsEvent?.(body)) ?? {};
+        return json(response, 202, { ok: true, ...result });
+      }
       if (url.pathname === '/onebot') {
         await onOneBotEvent?.(body);
       } else if (url.pathname === '/server') {
@@ -44,6 +61,9 @@ export function startEventBridge({
       }
       return json(response, 202, { ok: true });
     } catch (error) {
+      if (error?.name === 'OpsReminderError' || error?.code === 'invalid_ops_event') {
+        return json(response, 400, { error: 'invalid_ops_event', message: error.message });
+      }
       logger?.warn(`事件桥处理 ${url.pathname} 失败：`, error);
       return json(response, 500, { error: 'handler_failed' });
     }

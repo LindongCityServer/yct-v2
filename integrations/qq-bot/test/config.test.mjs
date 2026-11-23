@@ -229,3 +229,50 @@ test('群聊绑定默认开启，TTL、缓存容量和请求超时可配置', ()
   assert.match(text, /QQ_BOT_GROUP_LINK_CACHE_MAX/);
   assert.match(text, /QQ_BOT_LINK_TIMEOUT_MS/);
 });
+
+test('玩家进出播报按群开启，describeConfig 显示为开', () => {
+  const { config, problems, warnings } = loadConfig({
+    env: {
+      ...completeEnv,
+      QQ_BOT_PLAYER_EVENTS: '1',
+    },
+    envPath: join(tmpdir(), 'no-such-qq-bot.env'),
+  });
+  assert.deepEqual(problems, []);
+  assert.equal(config.reply.playerEvents, true);
+  assert.match(describeConfig(config), /玩家进出同步：开（按群开启）/);
+  assert.equal(
+    warnings.some((warning) => warning.includes('QQ_BOT_PLAYER_EVENT_GROUPS 已废弃')),
+    false,
+  );
+});
+
+test('旧群列表配置提示已废弃', () => {
+  const { warnings } = loadConfig({
+    env: {
+      ...completeEnv,
+      QQ_BOT_PLAYER_EVENT_GROUPS: 'g1',
+      QQ_BOT_EVENT_GROUPS: 'g2',
+    },
+    envPath: join(tmpdir(), 'no-such-qq-bot.env'),
+  });
+  const text = warnings.join('\n');
+  assert.match(text, /QQ_BOT_PLAYER_EVENT_GROUPS 已废弃/);
+  assert.match(text, /QQ_BOT_EVENT_GROUPS 已废弃/);
+});
+
+test('运维提醒 token 需要事件桥端口，describeConfig 反映接口状态', () => {
+  const envPath = join(tmpdir(), 'no-such-qq-bot.env');
+  const withoutPort = loadConfig({
+    env: { ...completeEnv, QQ_BOT_OPS_TOKEN: '1234567890123456' },
+    envPath,
+  });
+  assert.match(withoutPort.warnings.join('\n'), /QQ_BOT_EVENT_PORT=0/);
+  assert.match(describeConfig(withoutPort.config), /运维提醒接口：配置了 QQ_BOT_OPS_TOKEN/);
+
+  const withPort = loadConfig({
+    env: { ...completeEnv, QQ_BOT_OPS_TOKEN: '1234567890123456', QQ_BOT_EVENT_PORT: '8765' },
+    envPath,
+  });
+  assert.match(describeConfig(withPort.config), /运维提醒接口：开（\/ops）/);
+});

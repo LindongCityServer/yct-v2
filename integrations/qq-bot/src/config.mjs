@@ -28,6 +28,8 @@ const defaults = {
   QQ_BOT_AMAP_KEY: '',
   QQ_BOT_STATE_PATH: 'state/qq-bot-state.json',
   QQ_BOT_GROUP_CONFIG_PATH: 'state/group-modules.json',
+  QQ_BOT_OPS_TOKEN: '',
+  QQ_BOT_OPS_STATE_PATH: 'state/ops-reminders.json',
   QQ_BOT_MODULE_EDITORS: 'owner,admin',
   QQ_BOT_MODULE_ADMINS: '',
   QQ_BOT_MODULE_HINTS: '1',
@@ -313,6 +315,10 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
         max: 86_400_000,
       }),
     },
+    ops: {
+      token: read('QQ_BOT_OPS_TOKEN'),
+      statePath: resolve(botRoot, read('QQ_BOT_OPS_STATE_PATH') || 'state/ops-reminders.json'),
+    },
     materials: {
       enabled: materialsEnabled,
       secret: materialSecret,
@@ -351,7 +357,6 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
       cards: toBoolean(read, 'QQ_BOT_CARDS', true),
       bilibili: toBoolean(read, 'QQ_BOT_BILIBILI', true),
       playerEvents: toBoolean(read, 'QQ_BOT_PLAYER_EVENTS', false),
-      playerEventGroups: splitList(read('QQ_BOT_PLAYER_EVENT_GROUPS')),
       playerPollMs: toInteger(read, 'QQ_BOT_PLAYER_POLL_MS', 30_000, problems, {
         min: 10_000,
         max: 300_000,
@@ -373,7 +378,6 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
       bind: read('QQ_BOT_EVENT_BIND') || '127.0.0.1',
       token: read('QQ_BOT_EVENT_TOKEN'),
       groupMap: splitPairs(read('QQ_BOT_EVENT_GROUP_MAP')),
-      groups: splitList(read('QQ_BOT_EVENT_GROUPS')),
     },
   };
 
@@ -409,12 +413,23 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
       'QQ_BOT_EVENT_BIND 不是回环地址时必须设置 QQ_BOT_EVENT_TOKEN，否则事件桥会拒绝启动。',
     );
   }
-  if (
-    config.events.port > 0 &&
-    config.events.groupMap.size === 0 &&
-    config.events.groups.size === 0
-  ) {
-    warnings.push('事件桥已开启，但没有配置 QQ_BOT_EVENT_GROUP_MAP 或 QQ_BOT_EVENT_GROUPS。');
+  if (read('QQ_BOT_PLAYER_EVENT_GROUPS')) {
+    warnings.push(
+      'QQ_BOT_PLAYER_EVENT_GROUPS 已废弃：玩家进出播报改为按群 /模块 开，配置里的群列表不再生效。',
+    );
+  }
+  if (read('QQ_BOT_EVENT_GROUPS')) {
+    warnings.push(
+      'QQ_BOT_EVENT_GROUPS 已废弃：服务器消息改为按群 /模块 开，配置里的群列表不再生效。',
+    );
+  }
+  if (config.ops.token && config.events.port === 0) {
+    warnings.push(
+      'QQ_BOT_OPS_TOKEN 已配置，但 QQ_BOT_EVENT_PORT=0，/ops 接口不会启动，notify-ops.ps1 会连不上。',
+    );
+  }
+  if (config.ops.token && config.ops.token.length < 16) {
+    warnings.push('QQ_BOT_OPS_TOKEN 太短，建议使用至少 16 位随机串。');
   }
 
   return { config, problems, warnings };
@@ -490,8 +505,15 @@ export function describeConfig(config) {
     `关闭提示：${config.modules.hints ? `开（${Math.round(config.modules.hintTtlMs / 60_000)} 分钟一次）` : '关'}`,
     `运势文案：${config.fortuneTextsPath}`,
     `群进退群文案：${config.groupNoticesPath}`,
-    `玩家进出同步：${config.reply.playerEvents && config.reply.playerEventGroups.length > 0 ? '开' : '关'}`,
-    `事件桥接：${config.events.port > 0 ? `http://${config.events.bind}:${config.events.port}` : '关'}`,
+    `玩家进出同步：${config.reply.playerEvents ? '开（按群开启）' : '关'}`,
+    `服务器消息：${config.events.port > 0 ? '事件桥已开（按群开启）' : '关（QQ_BOT_EVENT_PORT=0）'}`,
+    `运维提醒接口：${
+      !config.ops.token
+        ? '关（未配置 QQ_BOT_OPS_TOKEN）'
+        : config.events.port > 0
+          ? '开（/ops）'
+          : '配置了 QQ_BOT_OPS_TOKEN，但 QQ_BOT_EVENT_PORT=0'
+    }`,
     `回答风格：${config.reply.style}（聊天模式上限 ${config.reply.chatMaxChars} 字）`,
     `二次精炼：${config.reply.condense ? `开，目标 ${config.reply.condenseChars} 字` : '关'}`,
     `单段字数：${config.reply.segmentChars}，回答超时：${config.reply.answerTimeoutMs} ms`,

@@ -110,6 +110,7 @@ const askScopeDefinitions = [
 ];
 
 const commandModuleDefinitions = [
+  // optIn 模块默认关闭，只作为按群可选项：不在帮助里列成“未开启”，由群管理员用 /模块 开启。
   {
     id: 'tools',
     label: '实用工具',
@@ -177,9 +178,28 @@ const commandModuleDefinitions = [
   {
     id: 'playerEvents',
     label: '玩家进出播报',
-    defaultEnabled: true,
-    description: '玩家进服、退服消息广播到本群',
+    defaultEnabled: false,
+    optIn: true,
+    description: '玩家进服、退服消息广播到本群（机器人侧需开启同步）',
     aliases: ['玩家播报', '玩家进出', '进服退服', 'player-events', 'playerevents'],
+    commands: [],
+  },
+  {
+    id: 'serverMessages',
+    label: '服务器消息',
+    defaultEnabled: false,
+    optIn: true,
+    description: '游戏服务器聊天消息广播到本群（机器人侧需开启同步）',
+    aliases: ['服务器消息', '服务聊天', '聊天同步', 'serverchat', 'servermessages'],
+    commands: [],
+  },
+  {
+    id: 'opsReminder',
+    label: '运维提醒',
+    defaultEnabled: false,
+    optIn: true,
+    description: '雨城通、临东通或 QQ 机器人更新开始/结束时通知本群',
+    aliases: ['运维提醒', '运维', '更新提醒', '维护提醒', 'ops', 'opsreminder'],
     commands: [],
   },
 ];
@@ -343,8 +363,9 @@ function stateText(policy, moduleId, locked) {
     return '常开';
   }
   const enabled = Boolean(policy.modules?.[moduleId]);
+  const optInHint = !enabled && moduleById.get(moduleId)?.optIn ? '（可选）' : '';
   const lockSuffix = locked?.has?.(moduleId) ? '（锁定）' : '';
-  return `${enabled ? '开' : '关'}${lockSuffix}`;
+  return `${enabled ? '开' : '关'}${optInHint}${lockSuffix}`;
 }
 
 /** 某个模块是否被整体锁定（模块本身或它的群组锁定都算）。 */
@@ -371,6 +392,10 @@ export function buildHelpText(policy, baseHelpText) {
     }
   }
   for (const definition of moduleDefinitions.filter((item) => item.group === 'commands')) {
+    // 可选模块默认关，不在帮助里当作“功能被关闭”刷一长串；群管理员用 /模块 查看和开启。
+    if (definition.optIn) {
+      continue;
+    }
     if (!policy.modules?.[definition.id]) {
       disabled.push(definition.label);
       continue;

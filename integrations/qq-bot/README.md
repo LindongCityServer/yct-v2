@@ -19,9 +19,15 @@
 - **群互动**：`签到`、`签到榜`、`发言统计 [天数]`、`发言榜 [天数]`、`今日运势`、`重置运势`；
   状态保存在 `state/`，更新时保留。
 - **按群功能开关**：群主和群管理员可以在群里用 `/模块` 关闭本群不需要的指令、问一问范围
-  （临东服资料、公交与线路、公告与运营、地图与地点、通用问答），以及进退群提示和玩家进出播报；
-  配置在 `state/group-modules.json`，审计在 `state/module-audit.jsonl`。没有配置文件时全部开启。
+  （临东服资料、公交与线路、公告与运营、地图与地点、通用问答），以及进退群提示、玩家进出播报和服务器消息；
+  配置在 `state/group-modules.json`，审计在 `state/module-audit.jsonl`。没有配置文件时按注册表默认值：
+  日常功能开；玩家进出播报、服务器消息和运维提醒默认关闭，需要群管理员用 `/模块` 单独开启。
+  玩家进出还需要在 `.env` 配置 `QQ_BOT_PLAYER_EVENTS=1`，`/模块` 只决定哪些群接收。
   权限、锁定和范围划分见 [按群功能模块](../../docs/QQ_BOT_GROUP_MODULES.md)。
+- **运维提醒**：部署脚本调用 `POST /ops`（`QQ_BOT_OPS_TOKEN` 鉴权），向开了
+  `/模块 开 运维提醒` 的群发送雨城通/临东通/机器人更新开始与结束通知；手动入口是
+  `notify-ops.ps1`。流程见 [运维提醒](../../docs/QQ_BOT_OPS_REMINDER.md)；机器人部署包根目录也会带一份
+  `QQ_BOT_OPS_REMINDER.md`。
 - **指令卡片**：除签到、帮助、关于、新对话外，本地指令会附一张 720px PNG；
   机器人在本地渲染后直接上传，不需要 `YCT_PUBLIC_BASE_URL`。
 - **回答配图**：运营内容引用带封面时，可在文字后补一张图片（需 `YCT_PUBLIC_BASE_URL` 和
@@ -110,6 +116,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -NodePat
 | `src/commands.mjs`         | 本地快捷指令分发                                             |
 | `src/modules.mjs`          | 按群功能模块注册表、别名和帮助文本                           |
 | `src/group-modules.mjs`    | 按群开关存储、优先级、锁定、审计和热加载                     |
+| `src/ops-reminder.mjs`     | 运维提醒校验、模板、幂等状态和按群发送                       |
 | `src/module-command.mjs`   | `/模块` 命令、权限和变更文案                                 |
 | `src/hints.mjs`            | 功能关闭后的提示节流                                         |
 | `src/group-link.mjs`       | 群绑定 token 内存缓存、URL token 与确认码解析                |
@@ -130,5 +137,6 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -NodePat
 | `src/conversation.mjs`     | 对话记录、限流器、去重集合、会话队列                         |
 | `src/config.mjs`           | `.env` 读取与校验                                            |
 | `start-qq-bot.ps1`         | Windows 常驻启动脚本（自动重启 + 日志）                      |
+| `notify-ops.ps1`           | 手动/部署时向 `/ops` 发运维提醒                              |
 | `install-qq-bot-task.ps1`  | 注册/卸载开机计划任务                                        |
 | `test/`                    | `node --test test`，不依赖网络和真实 QQ 凭证                 |

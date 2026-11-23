@@ -130,7 +130,11 @@ function applyToggle({ target, enabled, groupId, context, store }) {
   }
   if (target.type === 'module') {
     const result = store.setModule(groupId, target.module.id, enabled, actor);
-    return describeChange(result, enabled, target.module.label);
+    const reply = describeChange(result, enabled, target.module.label);
+    if (result.ok && result.changed && enabled) {
+      return `${reply}${optInHint(target.module.id)}`;
+    }
+    return reply;
   }
   if (target.type === 'command') {
     const result = store.setCommand(groupId, target.commandId, enabled, actor);
@@ -216,6 +220,19 @@ function describeFailure(result) {
     return `「${result.label ?? '该项'}」是常开功能，不能关闭。`;
   }
   return '没有识别出要修改的模块。发送「/模块」查看可调整的项。';
+}
+
+function optInHint(moduleId) {
+  if (moduleId === 'opsReminder') {
+    return '\n雨城通、临东通或机器人更新开始/结束时会在这里发一条简短通知。';
+  }
+  if (moduleId === 'playerEvents') {
+    return '\n机器人侧开启玩家同步后，进服/退服变化才会发到本群。';
+  }
+  if (moduleId === 'serverMessages') {
+    return '\n机器人侧开启服务器事件同步后，聊天消息才会发到本群。';
+  }
+  return '';
 }
 
 function describeTarget(target, store, groupId) {
