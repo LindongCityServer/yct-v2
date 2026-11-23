@@ -3,6 +3,35 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.25.0",
+      "releasedAt": "2026-11-23T10:39:11.905Z",
+      "sourceFingerprint": "b573fa4ddb0af7b1ed6363e529f081bfc3da59ecb1de5458acf8ad0d37980883",
+      "themes": ["transit", "materials", "web", "qqbot"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "自定义线网新增车站资料维护：可填写车站结构、楼层、站台与出口，重新导入线网后资料仍按车站保留"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "站点详情与导视牌接入出口设施：自动读取出口 POI 的无障碍电梯/升降机，导视牌按线路与方向填充出口编号和电梯"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "服务器状态支持查看在线玩家名单：顶栏胶囊悬停展开，/谁在线、/在线玩家 与问一问都能查询；离线或未知时不显示可能过期的名单"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "物料工作台与机器人出图的站名等两端对齐文本不再右偏贴边，预览与导出保持一致"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.24.4",
       "releasedAt": "2026-11-23T03:37:27.578Z",
       "sourceFingerprint": "21762980b41cce40f6619aff7479c0790a6028404fd32b1cba82453eaa8fabf6",
