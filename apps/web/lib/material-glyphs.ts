@@ -3037,7 +3037,10 @@ function renderMetroSignText(input: {
   const x = anchor === 'middle' ? input.x + spacing / 2 : input.x;
   const spacingAttribute =
     Math.abs(spacing) > 0.01 ? ` letter-spacing="${formatNumber(spacing)}"` : '';
-  return `<text x="${formatNumber(x)}" y="${formatNumber(input.y)}" fill="${input.color}" font-family="${input.fontFamily ?? metroLineMapFontFamily}" font-size="${formatNumber(fontSize)}" font-weight="${input.weight ?? 400}" text-anchor="${anchor}"${spacingAttribute}>${escapeXml(value)}</text>`;
+  // 中锚点已按浏览器「末尾也加字距」的口径预补偿；光栅化时由 material-svg 扣回。
+  const spacingMarker =
+    anchor === 'middle' && Math.abs(spacing) > 0.01 ? ' data-yct-spacing="glyph-middle"' : '';
+  return `<text x="${formatNumber(x)}" y="${formatNumber(input.y)}" fill="${input.color}" font-family="${input.fontFamily ?? metroLineMapFontFamily}" font-size="${formatNumber(fontSize)}" font-weight="${input.weight ?? 400}" text-anchor="${anchor}"${spacingAttribute}${spacingMarker}>${escapeXml(value)}</text>`;
 }
 
 /**

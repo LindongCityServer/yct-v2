@@ -11,7 +11,9 @@ import type { MaterialGlyphAssets } from './material-glyph-assets';
  * 物料模板的同构 SVG 合成核心。
  *
  * 这里不引用任何 Node 内置模块：服务端导出与浏览器实时预览都走同一份实现，
- * 字体与图标素材由 `MaterialGlyphAssets` 注入，保证两端版式一致。
+ * 字体与图标素材由 `MaterialGlyphAssets` 注入。唯一的渲染器差异是 `letter-spacing`
+ * 的末尾字距锚点（浏览器计入、resvg 不计入），由 `resolveLetterSpacingAnchors`
+ * 按 `rasterize` 目标补偿，保证两端视觉一致。
  */
 
 const prohibitedSourcePatterns = [
@@ -160,6 +162,11 @@ export function composeMaterialTemplateSvg(input: {
    * 导出仍保持严格（不开此开关）。
    */
   tolerateFieldErrors?: boolean;
+  /**
+   * 输出是否交给 resvg 光栅化。浏览器与 resvg 对 `letter-spacing` 末尾间距的
+   * 锚点算法不同，见 `resolveLetterSpacingAnchors`；默认按浏览器预览口径输出。
+   */
+  rasterize?: boolean;
 }): {
   svg: string;
   widthPx: number;
@@ -282,8 +289,9 @@ export function composeMaterialTemplateSvg(input: {
   if (!sourceViewBox) {
     throw new MaterialTemplateSourceError('模板 SVG 未能解析 viewBox。');
   }
-  const children = compensateTemplateLetterSpacing(
+  const children = resolveLetterSpacingAnchors(
     resolved.replace(/^<svg\b[^>]*>/i, '').replace(/<\/svg>\s*$/i, ''),
+    input.rasterize === true,
   );
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.widthPx}" height="${size.heightPx}" viewBox="0 0 ${size.widthPx} ${size.heightPx}"><svg x="0" y="0" width="${size.contentWidthPx}" height="${size.contentHeightPx}" viewBox="${sourceViewBox}">${children}</svg></svg>`;
   return {
@@ -326,38 +334,67 @@ export function escapeXml(value: string): string {
   });
 }
 
+/** 模板里的 `<text>` 标记：浏览器需要补尾部字距，resvg 不需要。 */
+const templateSpacingMarker = 'data-yct-spacing="template"';
+/** 字形渲染器（如 `renderMetroSignText`）已经按浏览器口径补过半个字距的标记。 */
+const glyphSpacingMarker = 'data-yct-spacing="glyph-middle"';
+
 /** 只给模板自身的 `<text>` 打标记；字形插件生成的文本不参与尾部间距补偿。 */
 function markTemplateSpacingTexts(source: string): string {
   return source.replace(
     /<text\b([^>]*\bletter-spacing="[^"]+"[^>]*)>/g,
-    `<text$1 data-yct-spacing="1">`,
+    `<text$1 ${templateSpacingMarker}>`,
   );
 }
 
 /**
- * 补偿 `letter-spacing` 的尾部空隙。
+ * 统一处理 `letter-spacing` 与 `text-anchor` 的末尾间距差异。
  *
- * SVG / CSS 的 letter-spacing 会在最后一个字后面也加一段间距，
- * 导致 `text-anchor="middle"` 的文字整体左偏、版面上看起来“最后一个字后多了一段空”。
- * 这里按锚点把文字整体右移半个（或一个）字间距，让视觉居中与排字宽度一致。
+ * SVG/CSS 的 `letter-spacing` 会在最后一个字之后也加一段间距：
+ * - 浏览器把它算进 `text-anchor` 的排版宽度，中锚文字整体左偏半个字距；
+ * - resvg（导出 PNG 用）只在字与字之间加间距，中锚文字按实际字宽居中。
+ *
+ * 因此浏览器预览给模板文字补 `dx`，光栅化时不补；字形渲染器内部已按浏览器
+ * 口径预补偿的文本，则在光栅化时把这段补偿扣回去。两种产物最终落在同一视觉中心，
+ * 不会出现「预览居中、导出顶到边框」的分叉。
  */
-function compensateTemplateLetterSpacing(children: string): string {
-  return children.replace(/<text\b[^>]*data-yct-spacing="1"[^>]*>/g, (tag) => {
-    const cleaned = tag.replace(/\sdata-yct-spacing="1"/u, '');
+function resolveLetterSpacingAnchors(children: string, rasterize: boolean): string {
+  return children.replace(/<text\b[^>]*\bletter-spacing="[^"]+"[^>]*>/g, (tag) => {
     const spacing = Number(tag.match(/\bletter-spacing="([^"]+)"/u)?.[1]);
+    const isTemplate = tag.includes(templateSpacingMarker);
+    const isGlyphMiddle = tag.includes(glyphSpacingMarker);
+    const cleaned = tag
+      .replace(new RegExp(`\\s${templateSpacingMarker}`, 'u'), '')
+      .replace(new RegExp(`\\s${glyphSpacingMarker}`, 'u'), '');
     if (!Number.isFinite(spacing) || spacing === 0) {
       return cleaned;
     }
+    if (rasterize) {
+      return isGlyphMiddle ? shiftTextX(cleaned, -spacing / 2) : cleaned;
+    }
     const anchor = tag.match(/\btext-anchor="(middle|end)"/u)?.[1];
-    const offset = anchor === 'middle' ? spacing / 2 : anchor === 'end' ? spacing : 0;
-    if (!offset) {
+    if (!isTemplate || !anchor) {
       return cleaned;
     }
+    const offset = anchor === 'middle' ? spacing / 2 : spacing;
     if (/\bdx="/u.test(cleaned)) {
       return cleaned;
     }
     return cleaned.replace(/<text\b/u, `<text dx="${formatSvgNumber(offset)}"`);
   });
+}
+
+/** 改写 `<text>` 的 x 坐标；没有 x 时补一个。 */
+function shiftTextX(tag: string, delta: number): string {
+  const match = tag.match(/\bx="([^"]+)"/u);
+  if (!match) {
+    return tag.replace(/<text\b/u, `<text x="${formatSvgNumber(delta)}"`);
+  }
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) {
+    return tag;
+  }
+  return tag.replace(match[0], `x="${formatSvgNumber(value + delta)}"`);
 }
 
 /** 判断板面上所有已填线路是否都开启了临时停靠。 */

@@ -34,7 +34,8 @@ export function renderMaterialTemplateToSvg(input: {
   validation?: MaterialInputValidationOptions;
 }): { svg: string; widthPx: number; heightPx: number; renderScale: number } {
   serverGlyphAssets ??= createServerMaterialGlyphAssets();
-  return composeMaterialTemplateSvg({ ...input, assets: serverGlyphAssets });
+  // 该 SVG 只用于 resvg 光栅化：字距锚点按 resvg 口径输出，和浏览器预览视觉一致。
+  return composeMaterialTemplateSvg({ ...input, assets: serverGlyphAssets, rasterize: true });
 }
 
 export async function renderMaterialTemplateToPng(input: {
