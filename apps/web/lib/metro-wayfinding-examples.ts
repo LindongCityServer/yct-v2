@@ -257,6 +257,22 @@ function buildMetroExampleTerminalText(
   };
 }
 
+/**
+ * 本站就是线路终点站时，双向标识朝终点的那一侧不再写「开往」（对端不存在），
+ * 改成「终点本站 / 本站 Terminus」，并由调用方把该侧地铁图标换成圆形外框。
+ */
+function buildMetroExampleTerminusText(station: { name: string; secondaryName?: string }): {
+  main: string;
+  secondary: string;
+} {
+  const stationName = station.name.trim();
+  const secondaryName = station.secondaryName?.trim() || toUppercasePinyin(stationName);
+  return {
+    main: `终点${stationName}`,
+    secondary: secondaryName ? `${secondaryName} Terminus` : 'Terminus',
+  };
+}
+
 /** 出口是否带无障碍电梯/升降机：优先看数据字段，否则看描述关键词。 */
 export function hasAccessibleElevatorExit(
   exit: Pick<MetroWayfindingExampleExit, 'description' | 'hasAccessibleElevator'>,
@@ -604,6 +620,7 @@ export function buildMetroWayfindingTemplateExamples(
   );
   const primaryLine = lines[0];
   const secondaryLine = lines[1];
+  const isTransferStation = lines.length > 1;
   const selectedLine = lines.find((line) => line.id === selectedLineId) ?? primaryLine;
   const linePair = secondaryLine ? [primaryLine!, secondaryLine] : primaryLine ? [primaryLine] : [];
   const lineSegments = buildMetroExampleLineSegments(linePair);
@@ -660,8 +677,8 @@ export function buildMetroWayfindingTemplateExamples(
       b.arrow('west'),
       b.facility('subway'),
       b.text(
-        lines.length > 1 ? lineSegments : '乘车',
-        lines.length > 1 ? lineSecondary : 'To Subway',
+        isTransferStation ? lineSegments : '乘车',
+        isTransferStation ? lineSecondary : 'To Subway',
       ),
       b.space(),
       b.divider(),
@@ -679,8 +696,8 @@ export function buildMetroWayfindingTemplateExamples(
       b.arrow('west'),
       b.facility('subway'),
       b.text(
-        selectedLine ? selectedLineSegments : '乘车',
-        selectedLine ? selectedLineSecondary : 'To Subway',
+        isTransferStation && selectedLine ? selectedLineSegments : '乘车',
+        isTransferStation && selectedLine ? selectedLineSecondary : 'To Subway',
       ),
       b.space(),
     ],
@@ -711,27 +728,49 @@ export function buildMetroWayfindingTemplateExamples(
     4,
   );
   if (selectedLine) {
-    const terminals = (selectedLine.terminalStations ?? []).filter(
-      (terminal) => terminal.name && terminal.name !== stationName,
+    const currentStationName = stationName.trim();
+    const terminals = (selectedLine.terminalStations ?? []).filter((terminal) =>
+      terminal.name.trim(),
     );
-    const terminalA = buildMetroExampleTerminalText(terminals[0]);
-    const terminalB = buildMetroExampleTerminalText(terminals[1]);
-    add(
-      'entry',
-      '双向线路标识',
-      [
-        b.arrow('west'),
-        b.facility('subway'),
-        b.text(terminalA.main, terminalA.secondary),
-        b.space(),
-        b.divider(),
-        b.space(),
-        b.text(terminalB.main, terminalB.secondary, 'right'),
-        b.facility('subway'),
-        b.arrow('east'),
-      ],
-      9,
+    const terminusTerminal = terminals.find(
+      (terminal) => terminal.name.trim() === currentStationName,
     );
+    const onwardTerminals = terminals.filter(
+      (terminal) => terminal.name.trim() !== currentStationName,
+    );
+    // 本站是终点站时，朝终点的一侧没有「开往」对象；至少要有一个对端终点，
+    // 这块双向牌才排得满，否则整条示例不出。
+    if (!terminusTerminal || onwardTerminals.length) {
+      const terminalA = buildMetroExampleTerminalText(onwardTerminals[0]);
+      const terminalB = terminusTerminal
+        ? buildMetroExampleTerminusText({
+            name: currentStationName,
+            secondaryName: station?.secondaryName ?? terminusTerminal.secondaryName,
+          })
+        : buildMetroExampleTerminalText(onwardTerminals[1]);
+      const leftSubwayMark = b.facility('subway');
+      // 终点站那一侧：地铁图标改圆形外框，与「开往」一侧区分。
+      const rightSubwayMark = b.facility('subway');
+      if (terminusTerminal && rightSubwayMark.type === 'facility') {
+        rightSubwayMark.frameShape = 'circle';
+      }
+      add(
+        'entry',
+        '双向线路标识',
+        [
+          b.arrow('west'),
+          leftSubwayMark,
+          b.text(terminalA.main, terminalA.secondary),
+          b.space(),
+          b.divider(),
+          b.space(),
+          b.text(terminalB.main, terminalB.secondary, 'right'),
+          rightSubwayMark,
+          b.arrow('east'),
+        ],
+        9,
+      );
+    }
   }
   add(
     'entry',

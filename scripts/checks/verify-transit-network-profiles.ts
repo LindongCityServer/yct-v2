@@ -311,6 +311,89 @@ check('服务器数据里没有空出口大文本（站外线路标识的空白�
   }
 });
 
+/** 示例牌面的文本行与地铁图标外框，用来校验进站标识与终点站那一侧的特殊排布。 */
+function exampleSides(example: MetroWayfindingExample | undefined): {
+  texts: Array<{ main: string; secondary: string; align: string }>;
+  frames: string[];
+} {
+  const texts = textElements(example).map((element) => {
+    const mainRow = element.rows.find((row) => row.kind === 'main');
+    const secondaryRow = element.rows.find((row) => row.kind === 'secondary');
+    return {
+      main:
+        mainRow?.kind === 'main' ? mainRow.segments.map((segment) => segment.value).join('') : '',
+      secondary: secondaryRow?.kind === 'secondary' ? secondaryRow.value : '',
+      align: element.align,
+    };
+  });
+  const frames = cardElements(example).flatMap((element) =>
+    element.type === 'facility' ? [element.frameShape] : [],
+  );
+  return { texts, frames };
+}
+
+const terminusLine = {
+  id: 'L1',
+  name: '1号线',
+  color: '#E4002B',
+  terminalStations: [{ name: '临东机场' }, { name: '临东火车站' }],
+};
+const terminusByRemark = new Map(
+  buildMetroWayfindingTemplateExamples(
+    { name: '临东机场', secondaryName: 'LINDONGJICHANG', lines: [terminusLine] },
+    'L1',
+  ).map((example) => [example.source.remark, example]),
+);
+const middleStationByRemark = new Map(
+  buildMetroWayfindingTemplateExamples(
+    { name: '人民广场', secondaryName: 'RENMINGUANGCHANG', lines: [terminusLine] },
+    'L1',
+  ).map((example) => [example.source.remark, example]),
+);
+
+check('终点站的双向线路标识：朝终点的一侧写「终点本站」并把地铁图标换成圆框', () => {
+  const { texts, frames } = exampleSides(terminusByRemark.get('双向线路标识'));
+  assert.deepEqual(texts, [
+    { main: '开往临东火车站', secondary: 'To LINDONGHUOCHEZHAN', align: 'left' },
+    { main: '终点临东机场', secondary: 'LINDONGJICHANG Terminus', align: 'right' },
+  ]);
+  assert.deepEqual(frames, ['rectangle', 'circle']);
+});
+
+check('中途站的双向线路标识保持「开往两端」与方框地铁图标', () => {
+  const { texts, frames } = exampleSides(middleStationByRemark.get('双向线路标识'));
+  assert.deepEqual(texts, [
+    { main: '开往临东机场', secondary: 'To LINDONGJICHANG', align: 'left' },
+    { main: '开往临东火车站', secondary: 'To LINDONGHUOCHEZHAN', align: 'right' },
+  ]);
+  assert.deepEqual(frames, ['rectangle', 'rectangle']);
+});
+
+check('非换乘站的进站线路标识写「乘车 / To Subway」', () => {
+  const { texts } = exampleSides(terminusByRemark.get('进站线路标识'));
+  assert.deepEqual(texts, [{ main: '乘车', secondary: 'To Subway', align: 'left' }]);
+});
+
+check('换乘站的进站线路标识仍写当前线路', () => {
+  const { texts } = exampleSides(serverByRemark.get('进站线路标识'));
+  assert.deepEqual(texts, [{ main: '1号线', secondary: 'Line 1', align: 'left' }]);
+});
+
+check('线路只有本站一个终点时不出半空的「开往」', () => {
+  const onlyTerminus = new Map(
+    buildMetroWayfindingTemplateExamples(
+      {
+        name: '环线站',
+        lines: [
+          { id: 'L1', name: '1号线', color: '#E4002B', terminalStations: [{ name: '环线站' }] },
+        ],
+      },
+      'L1',
+    ).map((example) => [example.source.remark, example]),
+  );
+  assert.equal(onlyTerminus.has('双向线路标识'), false);
+});
+
 const noElevatorStation = {
   ...serverStation,
   lineExits: [

@@ -1307,6 +1307,9 @@ function renderMetroLineMapVertical(
       const leftPassed = displayIndex > displayCurrentIndex;
       const rightPassed = displayIndex < displayCurrentIndex;
       const stationLayoutScale = layoutScale * classicStationScale;
+      // 本站落在终点时不再叠加终点实心填充：既会把本站方向箭头埋进色块里，
+      // 又让两侧填充色不一致；直接沿用「本站」图标（白底圆点 + 方向箭头）。
+      const showsCurrentStationIcon = isClassicBoth && isCurrent;
       if (isCurrent) {
         if (isClassicBoth) {
           // 旧版不画实心框：本站站名用线路色，中间标注「本站」。
@@ -1452,11 +1455,13 @@ function renderMetroLineMapVertical(
           innerRadius: isClassicBoth ? 1 * widthScale : undefined,
           currentArrow: isClassicBoth && isCurrent ? 'up' : undefined,
           terminalFill:
-            style === 'classic' && displayIndex === 0
+            !showsCurrentStationIcon && style === 'classic' && displayIndex === 0
               ? leftPassed
                 ? metroVerticalPassedColor
                 : accentColor
-              : style === 'classic' && displayIndex === displayStations.length - 1
+              : !showsCurrentStationIcon &&
+                  style === 'classic' &&
+                  displayIndex === displayStations.length - 1
                 ? metroVerticalPassedColor
                 : undefined,
         }),
@@ -1476,11 +1481,13 @@ function renderMetroLineMapVertical(
           innerRadius: isClassicBoth ? 1 * widthScale : undefined,
           currentArrow: isClassicBoth && isCurrent ? 'down' : undefined,
           terminalFill:
-            style === 'classic' && displayIndex === displayStations.length - 1
+            !showsCurrentStationIcon &&
+            style === 'classic' &&
+            displayIndex === displayStations.length - 1
               ? rightPassed
                 ? metroVerticalPassedColor
                 : accentColor
-              : style === 'classic' && displayIndex === 0
+              : !showsCurrentStationIcon && style === 'classic' && displayIndex === 0
                 ? metroVerticalPassedColor
                 : undefined,
         }),

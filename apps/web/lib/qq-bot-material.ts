@@ -20,6 +20,7 @@ import type {
   MaterialCanvasConfig,
   MaterialTemplateVersion,
   MaterialTransitNetworkSnapshot,
+  TransitStationDetailSnapshot,
 } from '@yct/contracts';
 import { parseMaterialAddress } from './material-address';
 import { MATERIAL_CANVAS_MIN_PX_PER_METER } from './material-canvas-policy';
@@ -69,10 +70,18 @@ import {
 import {
   buildMetroWayfindingTemplateExamples,
   type MetroWayfindingExample,
+  type MetroWayfindingExampleExit,
   type MetroWayfindingExampleLine,
+  type MetroWayfindingExampleLineExits,
   type MetroWayfindingExampleStation,
 } from './metro-wayfinding-examples';
 import { METRO_WAYFINDING_TEMPLATE_ID, serializeMetroWayfindingLayout } from './metro-wayfinding';
+import { readTransitStationDetails } from './transit-station-details';
+import {
+  getShenyangSampleStationProfile,
+  getShenyangSampleStationProfileByNodeId,
+  isShenyangSampleGroundStation,
+} from './shenyang-sample-station-exits';
 import {
   listMaterialTransitNetworkLines,
   listMaterialTransitNetworkLineStations,
@@ -713,6 +722,8 @@ interface ServerMaterialDataSet {
   transitLinesError?: string;
   transitStations?: MaterialTransitStationOption[];
   transitStationsError?: string;
+  stationDetails?: TransitStationDetailSnapshot[];
+  stationDetailsError?: string;
 }
 
 interface AddressMaterialEntry {
@@ -741,6 +752,9 @@ interface MutableWayfindingStation {
   name: string;
   secondaryName?: string;
   lines: MetroWayfindingExampleLine[];
+  exits?: MetroWayfindingExampleExit[];
+  lineExits?: MetroWayfindingExampleLineExits[];
+  overGround?: boolean;
 }
 
 interface SampleMaterialDataSet {
@@ -765,6 +779,7 @@ async function loadServerMaterialDataSet(needs: {
   address: boolean;
   transitLines: boolean;
   transitStations: boolean;
+  stationDetails: boolean;
 }): Promise<ServerMaterialDataSet> {
   const data: ServerMaterialDataSet = {};
   const tasks: Array<Promise<void>> = [];
@@ -804,6 +819,18 @@ async function loadServerMaterialDataSet(needs: {
       ),
     );
   }
+  if (needs.stationDetails) {
+    tasks.push(
+      readTransitStationDetails().then(
+        (value) => {
+          data.stationDetails = value.items;
+        },
+        (error: unknown) => {
+          data.stationDetailsError = describeError(error);
+        },
+      ),
+    );
+  }
   await Promise.all(tasks);
 
   if (needs.address) {
@@ -833,6 +860,7 @@ function refreshServerMaterialDataSet(input: {
     address: boolean;
     transitLines: boolean;
     transitStations: boolean;
+    stationDetails: boolean;
   };
   staleValue?: ServerMaterialDataSet;
 }): Promise<ServerMaterialDataSet> {
@@ -887,12 +915,14 @@ async function loadServerMaterialDataSetCached(needs: {
   address: boolean;
   transitLines: boolean;
   transitStations: boolean;
+  stationDetails: boolean;
 }): Promise<ServerMaterialDataSet> {
   const cacheKey = [
     needs.locations ? 'L' : '',
     needs.address ? 'A' : '',
     needs.transitLines ? 'T' : '',
     needs.transitStations ? 'S' : '',
+    needs.stationDetails ? 'D' : '',
   ].join('');
   const now = Date.now();
   const cached = qqBotServerMaterialDataSetCache.get(cacheKey);
@@ -1376,6 +1406,7 @@ function buildMetroCardSummary(input: {
 /** 服务器地铁站名合并（与物料面板的导视牌示例候选同口径）。 */
 function buildServerWayfindingStations(
   metroLines: readonly MaterialTransitLineOption[],
+  stationDetails: readonly TransitStationDetailSnapshot[] = [],
 ): MetroWayfindingExampleStation[] {
   const stationByName = new Map<string, MutableWayfindingStation>();
   for (const line of metroLines) {
@@ -1399,7 +1430,39 @@ function buildServerWayfindingStations(
       stationByName.set(name, current);
     }
   }
-  return Array.from(stationByName.values());
+  const detailsByName = new Map<string, TransitStationDetailSnapshot[]>();
+  for (const detail of stationDetails) {
+    const name = detail.stationName.trim();
+    const list = detailsByName.get(name) ?? [];
+    list.push(detail);
+    detailsByName.set(name, list);
+  }
+  return Array.from(stationByName.values()).map((station) => {
+    const details = detailsByName.get(station.name) ?? [];
+    const lineExits: MetroWayfindingExampleLineExits[] = station.lines.flatMap((line) => {
+      const detail = details.find((item) => item.lineName.trim() === line.name.trim());
+      if (!detail?.exits.length) return [];
+      const exits: MetroWayfindingExampleExit[] = detail.exits.map((exit) => ({
+        code: exit.code,
+        direction: exit.direction,
+        description: exit.description,
+        hasAccessibleElevator: exit.hasAccessibleElevator,
+      }));
+      return [
+        {
+          lineId: line.id,
+          lineName: line.name,
+          hasElevator: exits.some((exit) => exit.hasAccessibleElevator),
+          exits,
+        },
+      ];
+    });
+    return {
+      ...station,
+      overGround: details.some((detail) => detail.overGround),
+      lineExits,
+    };
+  });
 }
 
 function createServerWayfindingCandidates(
@@ -1411,7 +1474,7 @@ function createServerWayfindingCandidates(
     return { candidates: [], reason: `地铁线路数据不可用：${data.transitLinesError}` };
   }
   const metroLines = (data.transitLines ?? []).filter((line) => line.mode === 'metro');
-  const stations = buildServerWayfindingStations(metroLines);
+  const stations = buildServerWayfindingStations(metroLines, data.stationDetails ?? []);
   if (!stations.length) {
     return { candidates: [], reason: '没有可用于导视牌示例的地铁站点' };
   }
@@ -1542,6 +1605,23 @@ function buildSampleMaterialDataSet(sample: MaterialTransitNetworkSample): Sampl
         });
       }
       stationByName.set(name, current);
+      const profile =
+        getShenyangSampleStationProfileByNodeId(station.id) ??
+        getShenyangSampleStationProfile(name);
+      if (profile) {
+        current.overGround = isShenyangSampleGroundStation(name);
+        current.lineExits = profile.lineGroups.map((group) => ({
+          lineId: group.lineKey,
+          lineName: group.lineName,
+          hasElevator: group.exits.some((exit) => exit.hasAccessibleElevator),
+          exits: group.exits.map((exit) => ({
+            code: exit.code,
+            direction: exit.direction,
+            description: exit.description,
+            hasAccessibleElevator: exit.hasAccessibleElevator,
+          })),
+        }));
+      }
     }
   }
   return { sample, lines, wayfindingStations: Array.from(stationByName.values()) };
@@ -1673,6 +1753,7 @@ async function buildQqBotMaterialCandidatePool(input: {
     address: kinds.has('address_sign'),
     transitLines: kinds.has('metro_line') || kinds.has('custom'),
     transitStations: kinds.has('bus_stop'),
+    stationDetails: kinds.has('custom'),
   });
   const candidates: MaterialCandidate[] = [];
   const unavailableReasons: string[] = [];
