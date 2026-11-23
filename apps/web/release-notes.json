@@ -3,6 +3,35 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.27.0",
+      "releasedAt": "2026-11-23T13:24:28.763Z",
+      "sourceFingerprint": "e03ed5f079b4c11aed1135fa9eedfca23c2f3fed0cd4caeafea9b83b28848354",
+      "themes": ["qqbot", "materials", "transit", "deploy"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "QQ 机器人运维提醒改为私聊管理员：自动记录私聊好友，主动消息失败时保留待补发，私聊 /运维 可补发"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地铁导视示例支持终点站和换乘站，补齐出口与无障碍电梯资料"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "QQ 机器人物料出图接入车站资料与出口，可显示无障碍电梯和地面站信息"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "经典版地铁线路图中本站为终点站时不再叠加终点填充，避免方向箭头被盖住"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.26.0",
       "releasedAt": "2026-11-23T12:03:55.731Z",
       "sourceFingerprint": "336ffac5ef365bd5330507f84fb4fa94630efe46fffb9a6c496db7e9cda1d5bf",
