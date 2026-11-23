@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { Resvg } from '@resvg/resvg-js';
+import { renderAsync } from '@resvg/resvg-js';
 import type { MaterialCanvasConfig, MaterialTemplateVersion } from '@yct/contracts';
 import { createServerMaterialGlyphAssets } from './material-glyph-server-assets';
 import { composeMaterialTemplateSvg, type MaterialInputValidationOptions } from './material-svg';
@@ -44,6 +44,8 @@ export async function renderMaterialTemplateToPng(input: {
   watermark?: MaterialPreviewWatermark;
   /** 同 `renderMaterialTemplateToSvg`，透传给渲染前的字段复核。 */
   validation?: MaterialInputValidationOptions;
+  /** 中止信号：机器人断开或服务端超时时尽快停止等待。 */
+  signal?: AbortSignal;
 }): Promise<{ png: Buffer; widthPx: number; heightPx: number }> {
   const rendered = renderMaterialTemplateToSvg(input);
   const svg = input.watermark
@@ -56,19 +58,23 @@ export async function renderMaterialTemplateToPng(input: {
       )
     : rendered.svg;
   const fallbackFontFiles = resolveMaterialFallbackFontFiles();
-  const png = new Resvg(svg, {
-    font: {
-      fontFiles: [...resolveMaterialFontFiles(), ...fallbackFontFiles],
-      // 模板里的 Arial 单独加载，避免 resvg 每次扫描整个系统字体目录
-      // （Windows 上实测每次多花 0.5–1 秒，是出图超时的主要固定成本之一）。
-      loadSystemFonts: fallbackFontFiles.length === 0,
-      defaultFontFamily: 'HarmonyOS Sans SC',
-      sansSerifFamily: 'HarmonyOS Sans SC',
+  // 用 renderAsync 而不是同步 render：同步渲染会阻塞 Node 事件循环，
+  // 一个复杂线路图就能把整个 Web 进程卡住几十秒。
+  const image = await renderAsync(
+    svg,
+    {
+      font: {
+        fontFiles: [...resolveMaterialFontFiles(), ...fallbackFontFiles],
+        // 模板里的 Arial 单独加载，避免 resvg 每次扫描整个系统字体目录
+        // （Windows 上实测每次多花 0.5–1 秒，是出图超时的主要固定成本之一）。
+        loadSystemFonts: fallbackFontFiles.length === 0,
+        defaultFontFamily: 'HarmonyOS Sans SC',
+        sansSerifFamily: 'HarmonyOS Sans SC',
+      },
     },
-  })
-    .render()
-    .asPng();
-  return { png, widthPx: rendered.widthPx, heightPx: rendered.heightPx };
+    input.signal ?? null,
+  );
+  return { png: image.asPng(), widthPx: rendered.widthPx, heightPx: rendered.heightPx };
 }
 
 export function hashMaterialInput(input: Record<string, string>): string {

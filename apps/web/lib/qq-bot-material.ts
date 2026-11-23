@@ -198,6 +198,7 @@ export type QqBotMaterialErrorCode =
   | 'source_unavailable'
   | 'sample_unavailable'
   | 'source_scope_limited'
+  | 'render_timeout'
   | 'render_failed';
 
 const qqBotMaterialErrorStatus: Record<QqBotMaterialErrorCode, number> = {
@@ -206,6 +207,7 @@ const qqBotMaterialErrorStatus: Record<QqBotMaterialErrorCode, number> = {
   source_unavailable: 503,
   sample_unavailable: 503,
   source_scope_limited: 400,
+  render_timeout: 504,
   render_failed: 500,
 };
 
@@ -814,16 +816,71 @@ async function loadServerMaterialDataSet(needs: {
   return data;
 }
 
-const qqBotServerMaterialDataSetCacheTtlMs = 5 * 60 * 1000;
-const qqBotServerMaterialDataSetCache = new Map<
-  string,
-  { value: ServerMaterialDataSet; expiresAt: number }
->();
+interface CachedServerMaterialDataSet {
+  value?: ServerMaterialDataSet;
+  expiresAt: number;
+  promise?: Promise<ServerMaterialDataSet>;
+}
+
+const qqBotServerMaterialDataSetCacheTtlMs = 15 * 60 * 1000;
+const qqBotServerMaterialDataSetStaleRetryMs = 60 * 1000;
+const qqBotServerMaterialDataSetCache = new Map<string, CachedServerMaterialDataSet>();
+
+function refreshServerMaterialDataSet(input: {
+  cacheKey: string;
+  needs: {
+    locations: boolean;
+    address: boolean;
+    transitLines: boolean;
+    transitStations: boolean;
+  };
+  staleValue?: ServerMaterialDataSet;
+}): Promise<ServerMaterialDataSet> {
+  const { cacheKey, needs, staleValue } = input;
+  const promise = loadServerMaterialDataSet(needs)
+    .then((value) => {
+      if (canCacheServerMaterialDataSet(value, needs)) {
+        qqBotServerMaterialDataSetCache.set(cacheKey, {
+          value,
+          expiresAt: Date.now() + qqBotServerMaterialDataSetCacheTtlMs,
+        });
+      } else if (!staleValue) {
+        qqBotServerMaterialDataSetCache.delete(cacheKey);
+      } else {
+        // 刷新拿到降级结果时不要覆盖旧的可用数据，过一分钟再试。
+        qqBotServerMaterialDataSetCache.set(cacheKey, {
+          value: staleValue,
+          expiresAt: Date.now() + qqBotServerMaterialDataSetStaleRetryMs,
+        });
+      }
+      return value;
+    })
+    .catch((error: unknown) => {
+      if (staleValue) {
+        // 后台刷新失败时继续用旧数据，避免把下一次请求也拖进冷启动。
+        qqBotServerMaterialDataSetCache.set(cacheKey, {
+          value: staleValue,
+          expiresAt: Date.now() + qqBotServerMaterialDataSetStaleRetryMs,
+        });
+        console.warn('[qq-bot-material] 数据池后台刷新失败，继续使用旧缓存。', error);
+        return staleValue;
+      }
+      qqBotServerMaterialDataSetCache.delete(cacheKey);
+      throw error;
+    });
+  qqBotServerMaterialDataSetCache.set(cacheKey, {
+    value: staleValue,
+    expiresAt: staleValue ? Date.now() + qqBotServerMaterialDataSetStaleRetryMs : 0,
+    promise,
+  });
+  return promise;
+}
 
 /**
  * /盲盒 会同时要道路、楼牌、公交和地铁数据，冷读要拉地图标记、读线网库，
- * 实测一次要几秒；机器人出图不需要秒级新鲜度，成功加载后复用 5 分钟，
- * 把每次请求的等待时间留给渲染本身。
+ * 实测一次要几秒；机器人出图不需要秒级新鲜度，成功加载后复用 15 分钟。
+ * 过期时先返回旧数据、后台刷新，避免空闲后第一次请求又撞上完整冷启动；
+ * 同一个 cacheKey 的并发请求只跑一次加载，防止缓存击穿。
  */
 async function loadServerMaterialDataSetCached(needs: {
   locations: boolean;
@@ -837,20 +894,23 @@ async function loadServerMaterialDataSetCached(needs: {
     needs.transitLines ? 'T' : '',
     needs.transitStations ? 'S' : '',
   ].join('');
+  const now = Date.now();
   const cached = qqBotServerMaterialDataSetCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (cached?.value && cached.expiresAt > now) {
     return cached.value;
   }
-  const value = await loadServerMaterialDataSet(needs);
-  // 加载失败（例如地图服务临时超时）就不缓存，下一次请求还能重试；
-  // 地图标记静默降级成“只有 POI、没有道路”时也不能缓存，否则会锁住 5 分钟。
-  if (canCacheServerMaterialDataSet(value, needs)) {
-    qqBotServerMaterialDataSetCache.set(cacheKey, {
-      value,
-      expiresAt: Date.now() + qqBotServerMaterialDataSetCacheTtlMs,
-    });
+  if (cached?.promise) {
+    return cached.value ?? cached.promise;
   }
-  return value;
+  if (cached?.value) {
+    void refreshServerMaterialDataSet({
+      cacheKey,
+      needs,
+      staleValue: cached.value,
+    });
+    return cached.value;
+  }
+  return refreshServerMaterialDataSet({ cacheKey, needs });
 }
 
 function canCacheServerMaterialDataSet(
@@ -1773,9 +1833,50 @@ function shuffleWithRandom<T>(values: readonly T[], rng: QqBotMaterialRandom): T
   return list;
 }
 
+export interface QqBotMaterialRenderOptions {
+  /** 服务端/机器人断开时中止渲染；超时映射成 render_timeout。 */
+  signal?: AbortSignal;
+}
+
+/**
+ * Web 启动时预热物料候选池：避免机器人重启后的第一个 /盲盒 撞上
+ * 地图 + 地址 + 线网 + 字体的完整冷启动。
+ */
+export async function warmQqBotMaterialData(): Promise<void> {
+  for (const dataSource of ['server', 'sample'] as const) {
+    const startedAt = Date.now();
+    try {
+      await buildQqBotMaterialCandidatePool({
+        templateIds: qqBotMaterialTemplateIds,
+        dataSource,
+      });
+      console.info(
+        '[qq-bot-material]',
+        JSON.stringify({
+          event: 'material.warm',
+          dataSource,
+          ms: Date.now() - startedAt,
+        }),
+      );
+    } catch (error) {
+      console.warn('[qq-bot-material] 物料预热失败，等待首次请求时再加载。', dataSource, error);
+    }
+  }
+}
+
+/** 中止信号已触发时抛出可识别错误，避免路由把 AbortError 当成普通 500。 */
+function throwIfMaterialAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new QqBotMaterialError('render_timeout', '物料生成超时，请稍后重试。');
+  }
+}
+
 export async function renderQqBotMaterial(
   request: QqBotMaterialRenderRequest,
+  options: QqBotMaterialRenderOptions = {},
 ): Promise<QqBotMaterialRenderResult> {
+  const signal = options.signal;
+  throwIfMaterialAborted(signal);
   const normalized = normalizeQqBotMaterialRequest(request);
   const seed = normalized.seed ?? normalizeQqBotMaterialSeed();
   const rng = createQqBotMaterialRandom(seed, normalized.kind);
@@ -1784,6 +1885,7 @@ export async function renderQqBotMaterial(
     templateIds: normalized.templateIds,
     dataSource: normalized.dataSource,
   });
+  throwIfMaterialAborted(signal);
   const dataLoadMs = Date.now() - poolStartedAt;
   if (dataLoadMs >= 3_000) {
     // 数据源冷读是出图超时的主要来源，留给运维日志一个明确的拆分点。
@@ -1817,6 +1919,7 @@ export async function renderQqBotMaterial(
   let renderError: unknown;
   const maximumAttempts = Math.min(qqBotMaterialMaximumAttempts, orderedCandidateIndices.length);
   for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
+    throwIfMaterialAborted(signal);
     const candidate = pool.candidates[orderedCandidateIndices[attempt]!]!;
     let prepared: PreparedMaterial;
     try {
@@ -1828,15 +1931,31 @@ export async function renderQqBotMaterial(
       lastRejection = error;
       continue;
     }
+    throwIfMaterialAborted(signal);
     try {
       const canvas = resolveQqBotMaterialCanvas(candidate.template, prepared.canvasBase);
+      const renderStartedAt = Date.now();
       const rendered = await renderMaterialTemplateToPng({
         template: candidate.template,
         values: prepared.values,
         canvas,
         // 数据来源口径：用户填不了的派生字段允许为空（与工作台导出口径一致）。
         validation: { allowMissingServerDerivedValues: true },
+        signal,
       });
+      const renderMs = Date.now() - renderStartedAt;
+      if (renderMs >= 3_000) {
+        console.warn(
+          '[qq-bot-material]',
+          JSON.stringify({
+            event: 'material.render_slow',
+            templateId: candidate.templateId,
+            kind: resolveQqBotMaterialKind(candidate.templateId),
+            ms: renderMs,
+          }),
+        );
+      }
+      throwIfMaterialAborted(signal);
       const final = await postProcessQqBotMaterialPng({
         templateId: candidate.templateId,
         png: rendered.png,
@@ -1868,10 +1987,14 @@ export async function renderQqBotMaterial(
         input: prepared.values,
       };
     } catch (error) {
+      if (signal?.aborted || isMaterialAbortError(error)) {
+        throw new QqBotMaterialError('render_timeout', '物料生成超时，请稍后重试。');
+      }
       renderError = error;
     }
   }
 
+  throwIfMaterialAborted(signal);
   if (renderError) {
     throw new QqBotMaterialError('render_failed', `物料渲染失败：${describeError(renderError)}`);
   }
@@ -2039,6 +2162,10 @@ function describeError(error: unknown): string {
     return error.message || error.name;
   }
   return typeof error === 'string' ? error : '未知错误';
+}
+
+function isMaterialAbortError(error: unknown): boolean {
+  return error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError');
 }
 
 /**

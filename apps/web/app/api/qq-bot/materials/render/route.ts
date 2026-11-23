@@ -89,6 +89,16 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const renderController = new AbortController();
+  const renderTimeoutMs = 25_000;
+  let renderTimedOut = false;
+  const renderTimeout = setTimeout(() => {
+    renderTimedOut = true;
+    renderController.abort();
+  }, renderTimeoutMs);
+  const abortOnClientClose = () => renderController.abort();
+  request.signal.addEventListener('abort', abortOnClientClose, { once: true });
+
   try {
     let payload: unknown;
     try {
@@ -100,7 +110,9 @@ export async function POST(request: NextRequest) {
       return jsonError(400, 'invalid_request', '请求体必须是 JSON 对象。');
     }
     try {
-      const result = await renderQqBotMaterial(payload as QqBotMaterialRenderRequest);
+      const result = await renderQqBotMaterial(payload as QqBotMaterialRenderRequest, {
+        signal: renderController.signal,
+      });
       const share = await createMaterialShareLink({
         kind: result.kind,
         code: result.code,
@@ -167,7 +179,9 @@ export async function POST(request: NextRequest) {
       const materialError =
         error instanceof QqBotMaterialError
           ? error
-          : new QqBotMaterialError('render_failed', '物料渲染失败，请稍后重试。');
+          : renderTimedOut
+            ? new QqBotMaterialError('render_timeout', '物料生成超时，请稍后重试。')
+            : new QqBotMaterialError('render_failed', '物料渲染失败，请稍后重试。');
       if (!(error instanceof QqBotMaterialError)) {
         console.error('[qq-bot-material] 渲染异常：', error);
       }
@@ -184,6 +198,8 @@ export async function POST(request: NextRequest) {
       return jsonError(materialError.status, materialError.code, materialError.message);
     }
   } finally {
+    clearTimeout(renderTimeout);
+    request.signal.removeEventListener('abort', abortOnClientClose);
     release();
   }
 }

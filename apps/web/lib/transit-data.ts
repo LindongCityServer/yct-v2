@@ -29,9 +29,10 @@ const transitRealtimeOverviewCache = createTimedCache<TransitOverview>(30 * 1000
 /**
  * 物料目录也用同一份已发布线网快照，但读的是「含规划及关闭对象」的版本。
  * 这个读法没有公共接口的 30 秒缓存，而一次物料渲染会读它三四次；
- * 大一点的线网库会因此把出图拖到十几秒，所以这里单独缓存 30 秒。
+ * 大一点的线网库会因此把出图拖到十几秒，所以这里单独缓存 5 分钟。
+ * 物料出图不需要秒级新鲜度，长缓存比让每个请求重新构建线网目录重要。
  */
-const materialTransitOverviewCache = createTimedCache<TransitOverview>(30 * 1000);
+const materialTransitOverviewCache = createTimedCache<TransitOverview>(5 * 60 * 1000);
 
 export async function readTransitOverview(): Promise<TransitOverview> {
   return transitOverviewCache.read('transit-overview', readTransitOverviewUncached);

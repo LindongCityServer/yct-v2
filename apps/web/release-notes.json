@@ -3,6 +3,20 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.24.4",
+      "releasedAt": "2026-11-23T03:37:27.578Z",
+      "sourceFingerprint": "21762980b41cce40f6619aff7479c0790a6028404fd32b1cba82453eaa8fabf6",
+      "themes": ["materials", "qqbot"],
+      "changes": [
+        {
+          "category": "perf",
+          "breaking": false,
+          "summary": "物料出图改为异步渲染，数据池/线网目录支持 stale-while-revalidate 与 single-flight，并增加 25 秒服务端超时、断开取消和启动预热，缓解随机物料冷启动超时与 429"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.24.3",
       "releasedAt": "2026-11-21T03:16:46.943Z",
       "sourceFingerprint": "bfb710020de36c1889bdaff8de326d96a00e735d1b189b96c425ffbb7983dcf2",
