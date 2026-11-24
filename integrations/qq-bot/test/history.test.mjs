@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { clearHistoryCache, fetchTodayHistory } from '../src/history.mjs';
+import { clearHistoryCache, fetchTodayHistory, parseHistoryDateText } from '../src/history.mjs';
 
 function jsonResponse(payload) {
   return new Response(JSON.stringify(payload), {
@@ -58,5 +58,38 @@ test('没有事件时给出可读提示', async () => {
       fetchImpl: async () => jsonResponse({ 11: {} }),
     }),
     /没有查到历史事件/,
+  );
+});
+
+test('支持查询任意月日', async () => {
+  clearHistoryCache();
+  let requested = '';
+  const text = await fetchTodayHistory({
+    dateText: '3月5日',
+    fetchImpl: async (url) => {
+      requested = url;
+      return jsonResponse({
+        3: {
+          '0305': [{ year: '1963', title: '示例三月事件', type: 'event' }],
+        },
+      });
+    },
+  });
+  assert.match(requested, /eventsOnHistory\/3\.json/);
+  assert.match(text, /历史上的今天（3月5日）/);
+  assert.match(text, /1963年 示例三月事件/);
+});
+
+test('日期格式支持多种写法并拒绝非法日期', async () => {
+  assert.deepEqual(parseHistoryDateText('3月5日'), { month: 3, day: 5 });
+  assert.deepEqual(parseHistoryDateText('03-05'), { month: 3, day: 5 });
+  assert.deepEqual(parseHistoryDateText('2024/3/5'), { month: 3, day: 5 });
+  assert.deepEqual(parseHistoryDateText('2024年2月29日'), { month: 2, day: 29 });
+  assert.equal(parseHistoryDateText('2月30日'), null);
+  assert.equal(parseHistoryDateText('13月1日'), null);
+  assert.equal(parseHistoryDateText('不是日期'), null);
+  await assert.rejects(
+    fetchTodayHistory({ dateText: '2月30日', fetchImpl: async () => jsonResponse({}) }),
+    /日期格式不对/,
   );
 });

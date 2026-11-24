@@ -4,6 +4,7 @@ import type { MapGeometry, MapMarkerSnapshot } from '@yct/contracts';
 import { createApiMeta } from '../../../../lib/api-meta';
 import { appPath } from '../../../../lib/app-paths';
 import { readPublicMapMarkerSnapshot } from '../../../../lib/map-marker-public-snapshot-store';
+import { findPoiCategory, readPoiCategories } from '../../../../lib/poi-categories';
 import { isExplorablePoi } from '../../../../lib/random-explore';
 
 export const runtime = 'nodejs';
@@ -44,6 +45,10 @@ export async function GET(request: Request) {
   }
 
   const marker = pool[randomInt(pool.length)];
+  const categories = await readPoiCategories().catch(() => []);
+  const poiCategory = findPoiCategory(categories, marker.categoryId ?? '');
+  const iconFileName = marker.iconFileName?.trim() || poiCategory?.iconMapping.defaultIconFileName;
+  const iconPath = buildMarkerIconPath(iconFileName);
   return NextResponse.json(
     {
       meta: createApiMeta('ready', `从 ${candidates.length} 个公开地点中随机抽取。`),
@@ -51,6 +56,8 @@ export async function GET(request: Request) {
         id: marker.id,
         label: marker.label,
         categoryId: marker.categoryId,
+        categoryColor: poiCategory?.color?.trim() || fallbackCategoryColor(marker.categoryId),
+        iconUrl: iconPath ? appPath(`/api/map/marker-icons/${iconPath}`) : undefined,
         coordinates: getMarkerCenter(marker.geometry),
         description: marker.description,
         imageUrls: marker.imageUrls,
@@ -63,6 +70,53 @@ export async function GET(request: Request) {
     },
     { headers: { 'cache-control': 'no-store' } },
   );
+}
+
+function buildMarkerIconPath(fileName: string | undefined): string | undefined {
+  const text = String(fileName ?? '').trim();
+  if (!text || /^[a-z][a-z0-9+.-]*:/iu.test(text) || text.startsWith('/') || text.includes('\\')) {
+    return undefined;
+  }
+  const segments = text.split('/');
+  if (segments.length === 0 || segments.length > 6) {
+    return undefined;
+  }
+  if (!segments.every((segment) => segment && segment !== '.' && segment !== '..')) {
+    return undefined;
+  }
+  return segments.map((segment) => encodeURIComponent(segment).replace(/%2F/giu, '/')).join('/');
+}
+
+function fallbackCategoryColor(categoryId: string | undefined): string {
+  const text = String(categoryId ?? '').toLowerCase();
+  if (/food|restaurant|dining|cafe|bar|drink/u.test(text)) {
+    return '#E86A33';
+  }
+  if (/shop|mall|store|market|shopping/u.test(text)) {
+    return '#8B5CF6';
+  }
+  if (/scenic|attraction|park|tour|nature|sight/u.test(text)) {
+    return '#2E9E5B';
+  }
+  if (/hotel|accommodation|stay|hostel|lodging/u.test(text)) {
+    return '#B08948';
+  }
+  if (/culture|museum|library|theater|theatre|art|gallery/u.test(text)) {
+    return '#7C5CE0';
+  }
+  if (/transport|metro|bus|station|airport|port|rail/u.test(text)) {
+    return '#2584E8';
+  }
+  if (/medical|hospital|clinic|pharmacy|health/u.test(text)) {
+    return '#D64545';
+  }
+  if (/education|school|university|college/u.test(text)) {
+    return '#2F6FCB';
+  }
+  if (/sport|gym|fitness|stadium/u.test(text)) {
+    return '#16A085';
+  }
+  return '#168F78';
 }
 
 async function readMarkers(origin: string): Promise<Marker[] | undefined> {

@@ -205,7 +205,7 @@ export async function fetchWeatherReport({
   }
 
   const alertItems = includeAlerts ? await alertItemsPromise : [];
-  const alerts = includeAlerts ? pickWeatherAlerts(alertItems, report.alertKeywords) : [];
+  const alerts = includeAlerts ? pickWeatherAlerts(alertItems, report.alertLocation ?? {}) : [];
   // 天气本身缓存 10–60 分钟，但昼夜阶段必须按当前时刻重算，否则傍晚会继续用白天的主题色。
   const sun = report.sun
     ? { ...report.sun, phase: resolveDayPhase(report.sun, timestamp) }
@@ -231,6 +231,75 @@ function appendWeatherAlertText(text, alerts) {
   return lines.join('\n');
 }
 
+const weatherMunicipalities = new Set(['北京', '上海', '天津', '重庆']);
+
+function weatherDayLabel(day, index) {
+  if (index === 0) {
+    return '今天';
+  }
+  if (index === 1) {
+    return '明天';
+  }
+  const match = /^\d{4}-(\d{2})-(\d{2})/u.exec(textValue(day?.date));
+  return match ? `${match[1]}-${match[2]}` : `第 ${index + 1} 天`;
+}
+
+function stripWeatherAdminSuffix(value) {
+  return textValue(value).replace(
+    /(?:特别行政区|自治区|自治州|自治县|自治旗|新区|开发区|高新区|地区|盟|旗|省|市|区|县)$/u,
+    '',
+  );
+}
+
+/**
+ * 卡片标题只写地点本身，不写省；副标题用「省+市」补足上下文。
+ * 查询的是区名时标题写区名，否则写市名，这样「铁西区」能通过副标题的「辽宁沈阳」区分。
+ */
+function resolveWeatherLocationLabels(input) {
+  const province = stripWeatherAdminSuffix(input.province);
+  const city = stripWeatherAdminSuffix(input.city);
+  const district = stripWeatherAdminSuffix(input.district);
+  const query = String(input.query ?? '')
+    .replace(/\s+/gu, '')
+    .trim();
+  const queryName = stripWeatherAdminSuffix(query);
+  const titlePlace =
+    district &&
+    queryName &&
+    (queryName === district || queryName.includes(district) || district.includes(queryName))
+      ? district
+      : city || district || province || '当地';
+  const regionParts = [];
+  if (province && province !== city) {
+    regionParts.push(province);
+  }
+  if (city) {
+    regionParts.push(city);
+  } else if (district) {
+    regionParts.push(district);
+  }
+  const regionLabel = regionParts.join('') || province || city || district || '当地';
+  return {
+    cardPlace: titlePlace,
+    regionLabel,
+    location: {
+      province: textValue(input.province),
+      city: textValue(input.city),
+      district: textValue(input.district),
+    },
+  };
+}
+
+function resolveWttrLocationLabels(query, regionLabel, areaLabel) {
+  const isMunicipality = weatherMunicipalities.has(regionLabel);
+  return resolveWeatherLocationLabels({
+    query,
+    province: regionLabel,
+    city: isMunicipality ? regionLabel : areaLabel || regionLabel,
+    district: isMunicipality && areaLabel !== regionLabel ? areaLabel : '',
+  });
+}
+
 async function requestAmapWeather(city, amapKey, { timeoutMs, fetchImpl, now = Date.now }) {
   const location = await resolveAmapLocation(city, amapKey, { timeoutMs, fetchImpl });
   const [livePayload, forecastPayload] = await Promise.all([
@@ -246,7 +315,7 @@ async function requestAmapWeather(city, amapKey, { timeoutMs, fetchImpl, now = D
 
   const live = livePayload?.lives?.[0];
   const forecast = forecastPayload?.forecasts?.[0];
-  const casts = Array.isArray(forecast?.casts) ? forecast.casts.slice(0, 2) : [];
+  const casts = Array.isArray(forecast?.casts) ? forecast.casts.slice(0, 5) : [];
   const lines = [];
 
   if (live) {
@@ -266,7 +335,7 @@ async function requestAmapWeather(city, amapKey, { timeoutMs, fetchImpl, now = D
       cast.nightweather && cast.nightweather !== cast.dayweather ? `夜间${cast.nightweather}` : '',
       cast.daywind ? `${cast.daywind}风 ${cast.daypower}级` : '',
     ].filter(Boolean);
-    lines.push(`${index === 0 ? '今天' : '明天'} ${parts.join('、')}。`);
+    lines.push(`${weatherDayLabel(cast, index)} ${parts.join('、')}。`);
   }
 
   if (lines.length === 0) {
@@ -274,11 +343,20 @@ async function requestAmapWeather(city, amapKey, { timeoutMs, fetchImpl, now = D
   }
 
   const report = shortTime(live?.reporttime || forecast?.reporttime);
+  const provinceName = live?.province || forecast?.province || location.province;
+  const cityName = live?.city || forecast?.city || location.city;
+  const districtName = location.district;
   const place = formatAmapPlace({
-    province: live?.province || forecast?.province || location.province,
-    city: live?.city || forecast?.city || location.city,
-    district: location.district,
+    province: provinceName,
+    city: cityName,
+    district: districtName,
     fallback: city,
+  });
+  const labels = resolveWeatherLocationLabels({
+    query: city,
+    province: provinceName,
+    city: cityName,
+    district: districtName,
   });
   const coordinates = parseCoordinates(location.location);
   const date = textValue(casts[0]?.date) || localDateKey(now());
@@ -295,7 +373,7 @@ async function requestAmapWeather(city, amapKey, { timeoutMs, fetchImpl, now = D
     wind: live?.winddirection ? `${live.winddirection}风 ${live.windpower}级` : '',
   };
   const days = casts.map((cast, index) => ({
-    label: index === 0 ? '今天' : '明天',
+    label: weatherDayLabel(cast, index),
     low: textValue(cast.nighttemp),
     high: textValue(cast.daytemp),
     condition: textValue(cast.dayweather),
@@ -303,12 +381,16 @@ async function requestAmapWeather(city, amapKey, { timeoutMs, fetchImpl, now = D
   return {
     text: `${place}天气${report ? `（${report}更新）` : ''}：\n${lines.join('\n')}`,
     place,
+    cardPlace: labels.cardPlace,
+    regionLabel: labels.regionLabel,
+    location: labels.location,
+    alertLocation: labels.location,
     updated: report ? `${report}更新` : '',
     current,
     days,
     sun,
     coordinates,
-    alertKeywords: buildAlertKeywords(location.province, location.city, location.district, city),
+    alertKeywords: buildAlertKeywords(provinceName, cityName, districtName, city),
     source: 'amap',
   };
 }
@@ -410,7 +492,7 @@ async function requestWttrWeather(city, { timeoutMs, fetchImpl, now = Date.now }
   ].filter(Boolean);
   lines.push(`现在 ${currentParts.join('、')}。`);
 
-  const weatherDays = Array.isArray(payload.weather) ? payload.weather.slice(0, 2) : [];
+  const weatherDays = Array.isArray(payload.weather) ? payload.weather.slice(0, 5) : [];
   const days = [];
   for (const [index, day] of weatherDays.entries()) {
     const rain = maxRainChance(day?.hourly);
@@ -422,9 +504,9 @@ async function requestWttrWeather(city, { timeoutMs, fetchImpl, now = Date.now }
       condition,
       rain === null ? '' : `降水概率 ${rain}%`,
     ].filter(Boolean);
-    lines.push(`${index === 0 ? '今天' : '明天'} ${parts.join('、')}。`);
+    lines.push(`${weatherDayLabel(day, index)} ${parts.join('、')}。`);
     days.push({
-      label: index === 0 ? '今天' : '明天',
+      label: weatherDayLabel(day, index),
       low: String(round(day?.mintempC)),
       high: String(round(day?.maxtempC)),
       condition,
@@ -448,6 +530,9 @@ async function requestWttrWeather(city, { timeoutMs, fetchImpl, now = Date.now }
       : undefined;
   const areaName = nestedValue(payload?.nearest_area?.[0]?.areaName);
   const region = nestedValue(payload?.nearest_area?.[0]?.region);
+  const regionLabel = regionNames[region] || region;
+  const areaLabel = areaNames[areaName] || areaName;
+  const labels = resolveWttrLocationLabels(city, regionLabel, areaLabel);
   const feels = roundOrEmpty(current.FeelsLikeC);
   const humidity = roundOrEmpty(current.humidity);
   const windSpeed = roundOrEmpty(current.windspeedKmph);
@@ -460,6 +545,10 @@ async function requestWttrWeather(city, { timeoutMs, fetchImpl, now = Date.now }
   return {
     text: `${place}天气：\n${lines.join('\n')}`,
     place,
+    cardPlace: labels.cardPlace,
+    regionLabel: labels.regionLabel,
+    location: labels.location,
+    alertLocation: labels.location,
     updated: '',
     current: {
       temp: String(round(current.temp_C)),
@@ -471,12 +560,7 @@ async function requestWttrWeather(city, { timeoutMs, fetchImpl, now = Date.now }
     days,
     sun,
     coordinates,
-    alertKeywords: buildAlertKeywords(
-      regionNames[region] || region,
-      areaNames[areaName] || areaName,
-      '',
-      city,
-    ),
+    alertKeywords: buildAlertKeywords(regionLabel, areaLabel, '', city),
     source: 'wttr',
   };
 }
@@ -517,22 +601,18 @@ async function loadNmcAlarmItems({ fetchImpl, timeoutMs, now = Date.now }) {
   return items;
 }
 
-function pickWeatherAlerts(items, keywords) {
-  const normalizedKeywords = [
-    ...new Set(
-      (Array.isArray(keywords) ? keywords : [])
-        .map((keyword) => String(keyword ?? '').trim())
-        .filter((keyword) => Array.from(keyword).length >= 2),
-    ),
-  ];
-  if (normalizedKeywords.length === 0) {
+function pickWeatherAlerts(items, location) {
+  const province = stripWeatherAdminSuffix(location?.province);
+  const city = stripWeatherAdminSuffix(location?.city);
+  const district = stripWeatherAdminSuffix(location?.district);
+  if (!province && !city && !district) {
     return [];
   }
   const seen = new Set();
   const alerts = [];
   for (const item of Array.isArray(items) ? items : []) {
     const title = textValue(item?.title);
-    if (!title || !normalizedKeywords.some((keyword) => title.includes(keyword))) {
+    if (!title || !isAlertForLocation(title, { province, city, district })) {
       continue;
     }
     if (seen.has(title)) {
@@ -547,14 +627,41 @@ function pickWeatherAlerts(items, keywords) {
       type,
       issuedAt: textValue(item?.issuetime),
     });
-    if (alerts.length >= 2) {
-      break;
-    }
   }
   return alerts;
 }
 
-/** 行政区名去掉通用后缀，保留 2 字以上关键词，避免“市”“区”命中所有预警。 */
+/**
+ * 预警标题归属判断：
+ * - 标题命中城市：直接算本地；
+ * - 只命中区县：必须同时命中省或市，避免「铁西区」跨省重复；
+ * - 只命中省：若省名后面紧跟另一个市/区/县则排除，否则视为全省预警保留。
+ */
+function isAlertForLocation(title, { province, city, district }) {
+  const hasProvince = Boolean(province) && title.includes(province);
+  const hasCity = Boolean(city) && title.includes(city);
+  const hasDistrict = Boolean(district) && title.includes(district);
+  if (hasCity) {
+    return true;
+  }
+  if (hasDistrict) {
+    return hasProvince;
+  }
+  if (!hasProvince) {
+    return false;
+  }
+  const afterProvince = title.slice(title.indexOf(province) + province.length);
+  const otherPlace = /^([\u4e00-\u9fa5]{2,10}?(?:市|区|县|旗|盟|州))/u.exec(afterProvince)?.[1];
+  if (!otherPlace) {
+    return true;
+  }
+  return (
+    Boolean(city && otherPlace.startsWith(city)) ||
+    Boolean(district && otherPlace.startsWith(district))
+  );
+}
+
+/** 行政区名去掉通用后缀，保留 2 字以上关键词，用于兼容旧调用和排查。 */
 function buildAlertKeywords(...names) {
   const keywords = [];
   for (const name of names) {
@@ -562,7 +669,7 @@ function buildAlertKeywords(...names) {
     if (!text) {
       continue;
     }
-    const stripped = text.replace(/(?:新区|开发区|高新区|自治州|地区|盟|旗|省|市|区|县)$/u, '');
+    const stripped = stripWeatherAdminSuffix(text);
     for (const value of [stripped, text]) {
       if (Array.from(value).length >= 2) {
         keywords.push(value);

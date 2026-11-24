@@ -188,6 +188,8 @@ export interface WeatherSun {
 export interface WeatherCard {
   type: 'weather';
   place: string;
+  /** 省+市，例如“辽宁沈阳”“北京”；显示在日期前，区分重名区县。 */
+  region?: string;
   date: string;
   current: {
     temp: string;
@@ -230,6 +232,8 @@ export interface PoiCard {
   type: 'poi';
   label: string;
   category?: string;
+  /** 分类语义色，缺省用卡片主色。 */
+  color?: string;
   description?: string;
   address?: string;
   openingHours?: string;
@@ -237,6 +241,9 @@ export interface PoiCard {
   imageUrl?: string;
   /** 卡片路由预取后内嵌的图片，避免 resvg 访问外网。 */
   imageDataUri?: string;
+  /** POI 自己的地图图标；机器人侧预取后注入。 */
+  iconUrl?: string;
+  iconDataUri?: string;
   qrDataUrl?: string;
   shareUrl: string;
   date: string;
@@ -400,7 +407,7 @@ export function normalizeCard(input: unknown): QqBotCard | null {
           high: cleanText(row.high, 8),
           condition: cleanText(row.condition, 16),
         }),
-        2,
+        5,
       );
       const alerts = normalizeRows(
         card.alerts,
@@ -410,7 +417,7 @@ export function normalizeCard(input: unknown): QqBotCard | null {
           type: cleanText(row.type, 16),
           issuedAt: cleanText(row.issuedAt, 24),
         }),
-        2,
+        100,
       )?.filter((alert) => alert.title);
       const sun =
         card.sun && typeof card.sun === 'object'
@@ -423,6 +430,7 @@ export function normalizeCard(input: unknown): QqBotCard | null {
       return {
         type: 'weather',
         place: cleanText(card.place, 30) || '当地',
+        region: cleanText(card.region, 30),
         date,
         current: {
           temp: cleanText(current.temp, 8) || '--',
@@ -491,11 +499,13 @@ export function normalizeCard(input: unknown): QqBotCard | null {
         type: 'poi',
         label: cleanText(card.label, 40) || '随机地点',
         category: cleanText(card.category, 24),
+        color: normalizeSignageColor(card.color),
         description: cleanText(card.description, 220),
         address: cleanText(card.address, 80),
         openingHours: cleanText(card.openingHours, 60),
         coordinates,
         imageUrl: normalizeOptionalImageUrl(card.imageUrl),
+        iconUrl: normalizeOptionalImageUrl(card.iconUrl),
         shareUrl: cleanText(card.shareUrl, 500),
         date,
         footer: cleanText(card.footer, 80),
@@ -656,15 +666,15 @@ function buildWeatherCard(card: WeatherCard): string {
   const tempSize = !hasTemperature ? 96 : Array.from(temperature).length > 3 ? 90 : 112;
   // 负两位数（如 -15°）比一位数更宽，天气描述跟着温度右移，避免压到大号温度上。
   const summaryX = Math.max(250, Math.round(28 + estimateTextWidth(temperatureText, tempSize) + 8));
-  const alerts = (card.alerts ?? []).filter((alert) => alert.title.trim().length > 0).slice(0, 2);
+  const alerts = (card.alerts ?? []).filter((alert) => alert.title.trim().length > 0);
   // 预警放在当前天气和预报之间；没有预警时保持原卡片高度和位置。
   const alertBlockHeight = alerts.length > 0 ? alerts.length * 52 + 16 : 0;
   const alertStartX = 48;
   const alertStartY = 440;
+  const forecastDays = card.days.slice(0, 5);
   const forecastLabelY = 438 + alertBlockHeight;
   const daysStartY = 466 + alertBlockHeight;
-  const days = card.days
-    .slice(0, 2)
+  const days = forecastDays
     .map((day, index) => {
       const y = daysStartY + index * 70;
       return [
@@ -735,11 +745,11 @@ function buildWeatherCard(card: WeatherCard): string {
   ].join('');
 
   return buildFrame({
-    height: 700 + alertBlockHeight,
+    height: 700 + alertBlockHeight + Math.max(0, forecastDays.length - 2) * 70,
     color,
     icon: 'partly_cloudy_day',
     title: `${card.place}天气`,
-    eyebrow: `天气 · ${displayDate(card.date)}`,
+    eyebrow: `天气${card.region ? ` · ${card.region}` : ''} · ${displayDate(card.date)}`,
     footer: card.footer || '数据来自公开天气服务',
     body,
   });
@@ -963,7 +973,7 @@ function buildFortuneCard(card: FortuneCard): string {
 }
 
 function buildPoiCard(card: PoiCard): string {
-  const color = '#2584E8';
+  const color = normalizeSignageColor(card.color) ?? colors.secondary;
   const cover = card.imageDataUri ?? getCardTemplateDataUri('poi-placeholder.svg');
   const hasImage = Boolean(cover);
   const description = card.description || '在雨城通地图上发现的一个地点。';
@@ -1006,6 +1016,7 @@ function buildPoiCard(card: PoiCard): string {
     height,
     color,
     icon: 'explore',
+    iconDataUri: card.iconDataUri,
     title: shortText(card.label, 18),
     eyebrow: `随机地点 · ${displayDate(card.date)}`,
     footer: card.footer || '在雨城通地图查看',
@@ -1328,6 +1339,8 @@ function buildFrame(input: {
   height: number;
   color: string;
   icon: string;
+  /** 有 POI 自己的图标时替代 Material Symbol。 */
+  iconDataUri?: string;
   title: string;
   eyebrow: string;
   footer: string;
@@ -1349,6 +1362,7 @@ function buildFrame(input: {
     `<g font-family="${fontFamily}">`,
     renderHeader({
       icon: input.icon,
+      iconDataUri: input.iconDataUri,
       title: input.title,
       eyebrow: input.eyebrow,
       color: input.color,
@@ -1490,13 +1504,20 @@ function toView(card: QqBotCard): CardView {
 
 function renderHeader(header: {
   icon: string;
+  iconDataUri?: string;
   title: string;
   eyebrow: string;
   color: string;
 }): string {
+  const icon = header.iconDataUri?.startsWith('data:image/')
+    ? [
+        `<rect x="50" y="50" width="68" height="68" rx="16" fill="#FFFFFF" fill-opacity="0.94"/>`,
+        `<image x="58" y="58" width="52" height="52" href="${header.iconDataUri}" preserveAspectRatio="xMidYMid meet"/>`,
+      ].join('')
+    : renderMaterialIcon(header.icon, 40, 40, 88);
   return [
     `<rect x="40" y="40" width="88" height="88" rx="14" fill="${header.color}"/>`,
-    renderMaterialIcon(header.icon, 40, 40, 88),
+    icon,
     `<text x="152" y="78" font-size="34" font-weight="700" fill="${colors.text}">${escapeXml(clipTextToWidth(header.title, 528, 34))}</text>`,
     `<text x="152" y="108" font-size="14" font-weight="600" fill="${colors.textMuted}">${escapeXml(clipTextKeepingTail(header.eyebrow, 528, 14))}</text>`,
   ].join('');

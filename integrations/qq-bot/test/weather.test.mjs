@@ -405,3 +405,118 @@ test('预警接口不可用时天气报告照常返回', async () => {
   assert.equal(report.alerts.length, 0);
   assert.match(report.text, /上海附近天气/);
 });
+
+test('天气报告支持多地标题、5 天预报和按地点过滤的全部预警', async () => {
+  clearWeatherCache();
+  const now = () => Date.parse('2026-11-24T12:00:00+08:00');
+  const alerts = [
+    {
+      alertid: 'a1',
+      issuetime: '2026/11/24 10:00',
+      title: '辽宁省沈阳市铁西区气象台发布大风蓝色预警信号',
+    },
+    {
+      alertid: 'a2',
+      issuetime: '2026/11/24 09:00',
+      title: '辽宁省气象台发布寒潮橙色预警信号',
+    },
+    {
+      alertid: 'a3',
+      issuetime: '2026/11/24 08:00',
+      title: '辽宁省大连市气象台发布暴雨黄色预警信号',
+    },
+    {
+      alertid: 'a4',
+      issuetime: '2026/11/24 07:00',
+      title: '吉林省四平市铁西区气象台发布暴雨蓝色预警信号',
+    },
+    {
+      alertid: 'a5',
+      issuetime: '2026/11/24 06:00',
+      title: '辽宁省沈阳市气象台发布道路冰雪黄色预警信号',
+    },
+    {
+      alertid: 'a6',
+      issuetime: '2026/11/24 05:00',
+      title: '辽宁省沈阳市铁西区气象台发布大雾红色预警信号',
+    },
+    {
+      alertid: 'a7',
+      issuetime: '2026/11/24 04:00',
+      title: '上海市气象台发布大风蓝色预警信号',
+    },
+  ];
+  const casts = Array.from({ length: 5 }, (_, index) => ({
+    date: `2026-11-${String(24 + index).padStart(2, '0')}`,
+    dayweather: index % 2 ? '多云' : '晴',
+    nightweather: '晴',
+    daytemp: String(18 - index),
+    nighttemp: String(8 - index),
+    daywind: '西北',
+    daypower: '1-3',
+  }));
+  const fetchImpl = async (url) => {
+    if (url.includes('/geocode/geo')) {
+      return jsonResponse({
+        status: '1',
+        geocodes: [
+          {
+            adcode: '210106',
+            province: '辽宁省',
+            city: '沈阳市',
+            district: '铁西区',
+            location: '123.35,41.8',
+          },
+        ],
+      });
+    }
+    if (url.includes('extensions=base')) {
+      return jsonResponse({
+        status: '1',
+        lives: [
+          {
+            province: '辽宁',
+            city: '沈阳市',
+            weather: '晴',
+            temperature: '10',
+            humidity: '50',
+            reporttime: '2026-11-24 12:00:00',
+          },
+        ],
+      });
+    }
+    if (url.includes('nmc.cn/rest/findAlarm')) {
+      return jsonResponse({ code: 0, data: { page: { list: alerts }, provinceAlarms: [] } });
+    }
+    return jsonResponse({
+      status: '1',
+      forecasts: [
+        {
+          city: '沈阳市',
+          province: '辽宁',
+          reporttime: '2026-11-24 12:00:00',
+          casts,
+        },
+      ],
+    });
+  };
+
+  const report = await fetchWeatherReport({
+    city: '铁西区',
+    amapKey: 'amap-key',
+    fetchImpl,
+    now,
+  });
+  assert.equal(report.cardPlace, '铁西');
+  assert.equal(report.regionLabel, '辽宁沈阳');
+  assert.equal(report.days.length, 5);
+  assert.deepEqual(
+    report.days.map((day) => day.label),
+    ['今天', '明天', '11-26', '11-27', '11-28'],
+  );
+  assert.equal(report.alerts.length, 4);
+  assert.ok(report.alerts.every((alert) => !alert.title.includes('大连')));
+  assert.ok(report.alerts.every((alert) => !alert.title.includes('四平')));
+  assert.ok(report.alerts.every((alert) => !alert.title.includes('上海')));
+  assert.match(report.text, /辽宁.*沈阳市铁西区天气/u);
+});

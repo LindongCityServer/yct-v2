@@ -67,6 +67,44 @@ test('天气卡片显示预警、日出日落和夜间标签', () => {
   assert.ok(height > 728, `带预警的卡片应加高（实际 ${height}）`);
 });
 
+test('天气卡片标题不带省名，副标题带省市并支持多天和全部预警', () => {
+  const svg = buildQqBotCardSvg({
+    type: 'weather',
+    place: '铁西',
+    region: '辽宁沈阳',
+    date: '2026-11-24',
+    current: { temp: '10', condition: '晴' },
+    days: Array.from({ length: 5 }, (_, index) => ({
+      label: index < 2 ? ['今天', '明天'][index] : `11-${26 + index}`,
+      low: '5',
+      high: '15',
+      condition: '晴',
+    })),
+    alerts: Array.from({ length: 3 }, (_, index) => ({
+      title: `辽宁省沈阳市铁西区气象台发布第 ${index + 1} 条预警信号`,
+      level: '蓝色',
+      issuedAt: '11-24 10:00',
+    })),
+  });
+  assert.match(svg, />铁西天气<\/text>/u);
+  assert.match(svg, /天气 · 辽宁沈阳 · 2026\.11\.24/u);
+  assert.equal((svg.match(/data-alert-icon=/gu) ?? []).length, 3);
+  const height = Number(/<svg[^>]*height="(\d+)"/u.exec(svg)?.[1] ?? 0);
+  assert.ok(height > 900, `5 天预报加 3 条预警应继续加高（实际 ${height}）`);
+});
+
+test('预警列表带有左右和上下内边距', () => {
+  const svg = buildQqBotCardSvg({
+    type: 'weather',
+    place: '上海',
+    date: '2026-11-24',
+    current: { temp: '15', condition: '晴' },
+    days: [],
+    alerts: [{ title: '上海市气象台发布大风蓝色预警信号', level: '蓝色' }],
+  });
+  assert.match(svg, /<g transform="translate\(48,440\)" data-alert-icon="air">/u);
+});
+
 test('天气主题色随昼夜和气温变化', () => {
   const headerColor = (input) => {
     const svg = buildQqBotCardSvg({
@@ -121,6 +159,23 @@ test('天气预警按种类选择图标', () => {
   assert.match(svg, /data-alert-icon="water"/u);
   assert.doesNotMatch(svg, /stroke-opacity="0.28"/u);
   assert.doesNotMatch(svg, /<circle cx="26" cy="25"/u);
+});
+
+test('POI 卡片使用自己的图标和分类语义色', () => {
+  const icon =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2ZQAAAABJRU5ErkJggg==';
+  const svg = buildQqBotCardSvg({
+    type: 'poi',
+    label: '临东茶话会',
+    category: '餐饮',
+    color: '#E86A33',
+    iconDataUri: icon,
+    description: '测试地点',
+    shareUrl: 'https://yct.example.com/map?m=poi-1',
+    date: '2026-11-24',
+  });
+  assert.match(svg, /<rect x="40" y="40" width="88" height="88" rx="14" fill="#E86A33"\/>/u);
+  assert.match(svg, /<image x="58" y="58" width="52" height="52" href="data:image\/png;base64,/u);
 });
 
 test('GB2312 涂卡按 0-9 行对齐', () => {

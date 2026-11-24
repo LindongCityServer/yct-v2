@@ -5,7 +5,7 @@ import { evaluateExpression } from './calc.mjs';
 import { aboutText, helpText } from './answer.mjs';
 import { makeCouplet } from './couplet.mjs';
 import { shanghaiDateKey } from './community.mjs';
-import { fetchTodayHistory } from './history.mjs';
+import { fetchTodayHistory, parseHistoryDateText } from './history.mjs';
 import { lookupIp } from './ip.mjs';
 import { randomInteger, rollDice } from './random.mjs';
 import { fetchWeatherReport } from './weather.mjs';
@@ -490,7 +490,7 @@ export async function handleCommand({
         };
       }
       case 'history': {
-        const reply = await history({ fetchImpl });
+        const reply = await history({ fetchImpl, dateText: args });
         const [header = '', ...lines] = reply.split('\n');
         const day = /（([^）]+)）/u.exec(header)?.[1] ?? '';
         return {
@@ -669,6 +669,14 @@ export async function handleCommand({
             imageUrl = undefined;
           }
         }
+        let iconUrl;
+        if (typeof poi.iconUrl === 'string' && poi.iconUrl.trim()) {
+          try {
+            iconUrl = new URL(poi.iconUrl, publicBase).toString();
+          } catch {
+            iconUrl = undefined;
+          }
+        }
         const category = randomPlaceCategoryLabel(poi.categoryId);
         return {
           handled: true,
@@ -684,10 +692,12 @@ export async function handleCommand({
             type: 'poi',
             label: poi.label,
             category,
+            color: poi.categoryColor,
             description: poi.description,
             address: poi.address,
             openingHours: poi.openingHours,
             imageUrl,
+            iconUrl,
             coordinates:
               Array.isArray(poi.coordinates) && poi.coordinates.length >= 2
                 ? [Number(poi.coordinates[0]), Number(poi.coordinates[1])]
@@ -1412,8 +1422,18 @@ function parseNaturalCommand(raw) {
   if (/^(?:解绑|解除绑定)$/u.test(input)) {
     return { command: 'unlink', args: '', label: '解绑' };
   }
-  if (/^(?:历史上的今天|历史今天|今天历史)$/u.test(input)) {
-    return { command: 'history', args: '', label: '历史上的今天' };
+  const historyRest =
+    matchPrefix(input, '历史上的今天') ??
+    matchPrefix(input, '历史上今天') ??
+    matchPrefix(input, '历史今天') ??
+    matchPrefix(input, '今天历史') ??
+    matchPrefix(input, '历史');
+  if (historyRest !== null) {
+    const historyArgs = cleanArgs(historyRest).replace(/^的/u, '').trim();
+    if (historyArgs && !parseHistoryDateText(historyArgs)) {
+      return null;
+    }
+    return { command: 'history', args: historyArgs, label: '历史上的今天' };
   }
   if (/^(?:签到|打卡)$/u.test(input)) {
     return { command: 'signin', args: '', label: '签到' };
@@ -1751,7 +1771,8 @@ function buildWeatherCardFromReport(report, date) {
   const current = report?.current ?? {};
   return {
     type: 'weather',
-    place: String(report?.place ?? '当地'),
+    place: String(report?.cardPlace ?? report?.place ?? '当地'),
+    region: String(report?.regionLabel ?? ''),
     date,
     updated: String(report?.updated ?? ''),
     current: {
@@ -1762,7 +1783,7 @@ function buildWeatherCardFromReport(report, date) {
       wind: current.wind ? String(current.wind) : '',
     },
     days: Array.isArray(report?.days)
-      ? report.days.slice(0, 2).map((day) => ({
+      ? report.days.map((day) => ({
           label: String(day?.label ?? ''),
           low: day?.low === undefined ? '' : String(day.low),
           high: day?.high === undefined ? '' : String(day.high),
@@ -1770,7 +1791,7 @@ function buildWeatherCardFromReport(report, date) {
         }))
       : [],
     alerts: Array.isArray(report?.alerts)
-      ? report.alerts.slice(0, 2).map((alert) => ({
+      ? report.alerts.map((alert) => ({
           title: String(alert?.title ?? ''),
           level: String(alert?.level ?? ''),
           type: String(alert?.type ?? ''),

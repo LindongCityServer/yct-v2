@@ -8,12 +8,23 @@ const cacheTtlMs = 6 * 60 * 60 * 1000;
 
 export async function fetchTodayHistory({
   date = new Date(),
+  dateText = '',
   timeoutMs = 10_000,
   fetchImpl = fetch,
   now = Date.now,
   timeZone = 'Asia/Shanghai',
 } = {}) {
-  const { month, day, key } = shanghaiDateParts(date, timeZone);
+  const requested = dateText ? parseHistoryDateText(dateText) : undefined;
+  if (dateText && !requested) {
+    throw new Error('日期格式不对，试试“3月5日”“3-5”或“2024-03-05”。');
+  }
+  const { month, day, key } = requested
+    ? {
+        month: String(requested.month),
+        day: String(requested.day),
+        key: `${String(requested.month).padStart(2, '0')}${String(requested.day).padStart(2, '0')}`,
+      }
+    : shanghaiDateParts(date, timeZone);
   const cached = cache.get(key);
   const timestamp = now();
   if (cached && cached.expiresAt > timestamp) {
@@ -42,7 +53,7 @@ export async function fetchTodayHistory({
 
   const events = payload?.[String(month)]?.[key];
   if (!Array.isArray(events) || events.length === 0) {
-    throw new Error('今天没有查到历史事件，明天再试试。');
+    throw new Error(`${month}月${day}日没有查到历史事件，换一天试试。`);
   }
 
   const all = events.filter((event) => typeof event?.title === 'string' && event.title.trim());
@@ -59,12 +70,41 @@ export async function fetchTodayHistory({
   });
 
   if (lines.length === 0) {
-    throw new Error('今天没有查到历史事件，明天再试试。');
+    throw new Error(`${month}月${day}日没有查到历史事件，换一天试试。`);
   }
 
   const text = `历史上的今天（${month}月${day}日）：\n${lines.join('\n')}`;
   cache.set(key, { expiresAt: timestamp + cacheTtlMs, text });
   return text;
+}
+
+/** 解析“3月5日 / 3-5 / 2024-03-05”等日期，只取月日；返回 null 表示格式不合法。 */
+export function parseHistoryDateText(value) {
+  const text = String(value ?? '')
+    .trim()
+    .replace(/^历史上的?今天/u, '')
+    .replace(/^的/u, '')
+    .trim();
+  if (!text) {
+    return null;
+  }
+  let match = /^(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})\s*日?$/u.exec(text);
+  if (!match) {
+    match = /^(\d{1,2})\s*[-/.月]\s*(\d{1,2})\s*日?$/u.exec(text);
+  }
+  if (!match) {
+    return null;
+  }
+  const month = Number(match[match.length - 2]);
+  const day = Number(match[match.length - 1]);
+  if (!Number.isInteger(month) || !Number.isInteger(day)) {
+    return null;
+  }
+  const maxDay = new Date(Date.UTC(2024, month, 0)).getUTCDate();
+  if (month < 1 || month > 12 || day < 1 || day > maxDay) {
+    return null;
+  }
+  return { month, day };
 }
 
 function shanghaiDateParts(date, timeZone) {

@@ -171,6 +171,26 @@ test('IP 属地与历史上的今天指令', async () => {
     history: async () => '历史上的今天（11月17日）：\n· 1939年 冬季战争爆发',
   });
   assert.match(history.reply, /冬季战争/);
+
+  let askedDate = '';
+  const dated = await handleCommand({
+    ...base,
+    text: '/历史 3月5日',
+    history: async ({ dateText }) => {
+      askedDate = dateText;
+      return '历史上的今天（3月5日）：\n· 1963年 示例三月事件';
+    },
+  });
+  assert.equal(askedDate, '3月5日');
+  assert.equal(dated.card?.meta?.[0], '3月5日');
+  assert.match(dated.reply, /示例三月事件/);
+
+  const natural = await handleCommand({
+    ...base,
+    text: '历史上的今天 3-5',
+    history: async ({ dateText }) => `历史上的今天（${dateText}）：\n· 示例`,
+  });
+  assert.match(natural.reply, /3-5/);
 });
 
 test('对联指令把上联交给模型', async () => {
@@ -525,6 +545,8 @@ test('随机地点返回 POI 分享卡片', async () => {
             id: 'poi-1',
             label: '临东茶话会',
             categoryId: 'food',
+            categoryColor: '#E86A33',
+            iconUrl: '/api/map/marker-icons/food.png',
             description: '一个适合坐下来聊天的地方。',
             address: '临东市中区',
             coordinates: [120.5, -340.2],
@@ -538,6 +560,8 @@ test('随机地点返回 POI 分享卡片', async () => {
   assert.match(result.reply, /https:\/\/yct\.example\.com\/map\?m=poi-1/);
   assert.equal(result.card?.type, 'poi');
   assert.equal(result.card?.category, '餐饮');
+  assert.equal(result.card?.color, '#E86A33');
+  assert.equal(result.card?.iconUrl, 'https://yct.example.com/api/map/marker-icons/food.png');
 });
 
 test('版本指令返回机器人和网页版本', async () => {

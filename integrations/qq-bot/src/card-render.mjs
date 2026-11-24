@@ -16,18 +16,20 @@ async function enrichCard(card, allowedImageHosts) {
   if (!card || card.type !== 'poi') {
     return card;
   }
-  const [imageDataUri, qrDataUrl] = await Promise.all([
+  const [imageDataUri, iconDataUri, qrDataUrl] = await Promise.all([
     embedImage(card.imageUrl, allowedImageHosts),
+    embedImage(card.iconUrl, allowedImageHosts, { allowSvg: true }),
     createQrDataUrl(card.shareUrl),
   ]);
   return {
     ...card,
     imageDataUri: imageDataUri ?? card.imageDataUri,
+    iconDataUri: iconDataUri ?? card.iconDataUri,
     qrDataUrl: qrDataUrl ?? card.qrDataUrl,
   };
 }
 
-async function embedImage(raw, allowedImageHosts) {
+async function embedImage(raw, allowedImageHosts, { allowSvg = false } = {}) {
   if (!raw) {
     return null;
   }
@@ -49,7 +51,7 @@ async function embedImage(raw, allowedImageHosts) {
       return null;
     }
     const type = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? '';
-    if (!type.startsWith('image/') || type === 'image/svg+xml') {
+    if (!type.startsWith('image/') || (!allowSvg && type === 'image/svg+xml')) {
       return null;
     }
     const buffer = Buffer.from(await response.arrayBuffer());

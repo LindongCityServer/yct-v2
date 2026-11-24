@@ -159,7 +159,7 @@ function normalizeCard(input) {
           high: cleanText(row.high, 8),
           condition: cleanText(row.condition, 16)
         }),
-        2
+        5
       );
       const alerts = normalizeRows(
         card.alerts,
@@ -169,7 +169,7 @@ function normalizeCard(input) {
           type: cleanText(row.type, 16),
           issuedAt: cleanText(row.issuedAt, 24)
         }),
-        2
+        100
       )?.filter((alert) => alert.title);
       const sun = card.sun && typeof card.sun === "object" ? {
         sunrise: cleanText(card.sun.sunrise, 8),
@@ -179,6 +179,7 @@ function normalizeCard(input) {
       return {
         type: "weather",
         place: cleanText(card.place, 30) || "\u5F53\u5730",
+        region: cleanText(card.region, 30),
         date,
         current: {
           temp: cleanText(current.temp, 8) || "--",
@@ -245,11 +246,13 @@ function normalizeCard(input) {
         type: "poi",
         label: cleanText(card.label, 40) || "\u968F\u673A\u5730\u70B9",
         category: cleanText(card.category, 24),
+        color: normalizeSignageColor(card.color),
         description: cleanText(card.description, 220),
         address: cleanText(card.address, 80),
         openingHours: cleanText(card.openingHours, 60),
         coordinates,
         imageUrl: normalizeOptionalImageUrl(card.imageUrl),
+        iconUrl: normalizeOptionalImageUrl(card.iconUrl),
         shareUrl: cleanText(card.shareUrl, 500),
         date,
         footer: cleanText(card.footer, 80)
@@ -385,13 +388,14 @@ function buildWeatherCard(card) {
   const temperatureText = hasTemperature ? `${temperature}\xB0` : "\u2014";
   const tempSize = !hasTemperature ? 96 : Array.from(temperature).length > 3 ? 90 : 112;
   const summaryX = Math.max(250, Math.round(28 + estimateTextWidth(temperatureText, tempSize) + 8));
-  const alerts = (card.alerts ?? []).filter((alert) => alert.title.trim().length > 0).slice(0, 2);
+  const alerts = (card.alerts ?? []).filter((alert) => alert.title.trim().length > 0);
   const alertBlockHeight = alerts.length > 0 ? alerts.length * 52 + 16 : 0;
   const alertStartX = 48;
   const alertStartY = 440;
+  const forecastDays = card.days.slice(0, 5);
   const forecastLabelY = 438 + alertBlockHeight;
   const daysStartY = 466 + alertBlockHeight;
-  const days = card.days.slice(0, 2).map((day, index) => {
+  const days = forecastDays.map((day, index) => {
     const y = daysStartY + index * 70;
     return [
       `<g transform="translate(40,${y})">`,
@@ -443,11 +447,11 @@ function buildWeatherCard(card) {
     forecast
   ].join("");
   return buildFrame({
-    height: 700 + alertBlockHeight,
+    height: 700 + alertBlockHeight + Math.max(0, forecastDays.length - 2) * 70,
     color,
     icon: "partly_cloudy_day",
     title: `${card.place}\u5929\u6C14`,
-    eyebrow: `\u5929\u6C14 \xB7 ${displayDate(card.date)}`,
+    eyebrow: `\u5929\u6C14${card.region ? ` \xB7 ${card.region}` : ""} \xB7 ${displayDate(card.date)}`,
     footer: card.footer || "\u6570\u636E\u6765\u81EA\u516C\u5F00\u5929\u6C14\u670D\u52A1",
     body
   });
@@ -647,7 +651,7 @@ function buildFortuneCard(card) {
   });
 }
 function buildPoiCard(card) {
-  const color = "#2584E8";
+  const color = normalizeSignageColor(card.color) ?? colors.secondary;
   const cover = card.imageDataUri ?? getCardTemplateDataUri("poi-placeholder.svg");
   const hasImage = Boolean(cover);
   const description = card.description || "\u5728\u96E8\u57CE\u901A\u5730\u56FE\u4E0A\u53D1\u73B0\u7684\u4E00\u4E2A\u5730\u70B9\u3002";
@@ -678,6 +682,7 @@ function buildPoiCard(card) {
     height,
     color,
     icon: "explore",
+    iconDataUri: card.iconDataUri,
     title: shortText(card.label, 18),
     eyebrow: `\u968F\u673A\u5730\u70B9 \xB7 ${displayDate(card.date)}`,
     footer: card.footer || "\u5728\u96E8\u57CE\u901A\u5730\u56FE\u67E5\u770B",
@@ -955,6 +960,7 @@ function buildFrame(input) {
     `<g font-family="${fontFamily}">`,
     renderHeader({
       icon: input.icon,
+      iconDataUri: input.iconDataUri,
       title: input.title,
       eyebrow: input.eyebrow,
       color: input.color
@@ -1079,9 +1085,13 @@ function toView(card) {
   }
 }
 function renderHeader(header) {
+  const icon = header.iconDataUri?.startsWith("data:image/") ? [
+    `<rect x="50" y="50" width="68" height="68" rx="16" fill="#FFFFFF" fill-opacity="0.94"/>`,
+    `<image x="58" y="58" width="52" height="52" href="${header.iconDataUri}" preserveAspectRatio="xMidYMid meet"/>`
+  ].join("") : renderMaterialIcon(header.icon, 40, 40, 88);
   return [
     `<rect x="40" y="40" width="88" height="88" rx="14" fill="${header.color}"/>`,
-    renderMaterialIcon(header.icon, 40, 40, 88),
+    icon,
     `<text x="152" y="78" font-size="34" font-weight="700" fill="${colors.text}">${escapeXml(clipTextToWidth(header.title, 528, 34))}</text>`,
     `<text x="152" y="108" font-size="14" font-weight="600" fill="${colors.textMuted}">${escapeXml(clipTextKeepingTail(header.eyebrow, 528, 14))}</text>`
   ].join("");
