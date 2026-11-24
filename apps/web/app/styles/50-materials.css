@@ -1174,6 +1174,24 @@
   border-left: 1px dashed var(--yct-color-border-subtle);
 }
 
+/*
+  组合框子元素是「元素」下面的第四层：已经缩进过两次，这里只再让一小步，
+  避免深层缩进把子元素标签挤成一条窄缝。
+*/
+.transit-wayfinding-workspace .poi-visual-layer-points.is-combination-children {
+  margin-left: var(--yct-space-2);
+  padding-left: var(--yct-space-1);
+}
+
+.transit-wayfinding-workspace .poi-visual-layer-point.is-combination-child {
+  min-height: 28px;
+  font-size: var(--yct-font-size-12);
+}
+
+.transit-wayfinding-workspace .is-combination-children .poi-visual-layer-count {
+  font-size: var(--yct-font-size-11);
+}
+
 .transit-visual-inspector-section {
   display: grid;
   gap: var(--yct-space-2);

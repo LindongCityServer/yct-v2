@@ -149,6 +149,8 @@ export function TransitWayfindingWorkspace({
   const [activeTool, setActiveTool] = useState<'select' | 'pan'>('select');
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [dataSourceDialogOpen, setDataSourceDialogOpen] = useState(false);
+  // 图层树里选中的组合框子元素：选中仍落在组合框本身，这里只记录要在「组合框子元素」里定位的子项。
+  const [selectedCombinationChildId, setSelectedCombinationChildId] = useState<string | null>(null);
 
   useEditorShortcuts([
     defineShortcut('toolSelect', () => setActiveTool('select')),
@@ -191,6 +193,15 @@ export function TransitWayfindingWorkspace({
     lineColorOptions,
   );
 
+  // 选中别的元素、或子元素已随组合框一起删掉时，清掉子元素定位，避免高亮残留。
+  useEffect(() => {
+    setSelectedCombinationChildId((current) => {
+      if (!current) return current;
+      if (selectedElement?.type !== 'combination') return null;
+      return selectedElement.children.some((child) => child.id === current) ? current : null;
+    });
+  }, [selectedElement]);
+
   useEditorLayerScroll(
     treeRef,
     snapshot ? `${snapshot.rowIndex}:${snapshot.selectedElementId}` : null,
@@ -202,7 +213,12 @@ export function TransitWayfindingWorkspace({
       action: { ...action, rowIndex },
     });
   };
-  const selectElement = (rowIndex: number, elementId: string) => {
+  const selectElement = (
+    rowIndex: number,
+    elementId: string,
+    combinationChildId: string | null = null,
+  ) => {
+    setSelectedCombinationChildId(combinationChildId);
     dispatchMetroWayfindingCompositionAction({
       editorId,
       action: { type: 'select', rowIndex, elementId },
@@ -508,7 +524,13 @@ export function TransitWayfindingWorkspace({
                                 >
                                   <MetroWayfindingElementGlyph element={element} />
                                   <span className="poi-visual-layer-label">
-                                    {describeMetroWayfindingElementContent(element)}
+                                    {element.type === 'combination'
+                                      ? `组合框${
+                                          element.children.length
+                                            ? ` · ${element.children.length} 项`
+                                            : ''
+                                        }`
+                                      : describeMetroWayfindingElementContent(element)}
                                   </span>
                                   <span className="poi-visual-layer-count">{elementIndex + 1}</span>
                                 </button>
@@ -565,6 +587,50 @@ export function TransitWayfindingWorkspace({
                                   ]}
                                 />
                               </div>
+                              {element.type === 'combination' && element.children.length ? (
+                                // 组合框子元素作为组合框节点的子节点展开：
+                                // 选中仍落在组合框上（属性面板编辑的是整个框），
+                                // 子项高亮只用于把「组合框子元素」弹窗定位到对应子元素。
+                                <ul className="poi-visual-layer-points is-combination-children">
+                                  {element.children.map((child, childIndex) => {
+                                    const childActive =
+                                      isActive && selectedCombinationChildId === child.id;
+                                    return (
+                                      <li key={child.id}>
+                                        <div
+                                          className={`poi-visual-layer-row${
+                                            childActive ? ' is-active' : ''
+                                          }`}
+                                        >
+                                          <button
+                                            className={`poi-visual-layer-point is-combination-child${
+                                              childActive ? ' is-active' : ''
+                                            }`}
+                                            type="button"
+                                            title={`选中组合框第 ${childIndex + 1} 个子元素`}
+                                            onClick={() =>
+                                              selectElement(rowIndex, element.id, child.id)
+                                            }
+                                            onDoubleClick={() => {
+                                              selectElement(rowIndex, element.id, child.id);
+                                              openInspector();
+                                              focusInspector();
+                                            }}
+                                          >
+                                            <MetroWayfindingElementGlyph element={child} />
+                                            <span className="poi-visual-layer-label">
+                                              {describeMetroWayfindingElementContent(child)}
+                                            </span>
+                                            <span className="poi-visual-layer-count">
+                                              {childIndex + 1}
+                                            </span>
+                                          </button>
+                                        </div>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              ) : null}
                             </li>
                           );
                         })}
@@ -638,6 +704,7 @@ export function TransitWayfindingWorkspace({
                 />
                 <MetroWayfindingElementEditor
                   backgroundColorOptions={backgroundColorOptions}
+                  combinationChildId={selectedCombinationChildId ?? undefined}
                   disabled={disabled}
                   element={selectedElement}
                   inheritedBackgroundColor={layout.backgroundColor}

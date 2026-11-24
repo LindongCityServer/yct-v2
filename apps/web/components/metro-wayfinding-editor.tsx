@@ -2328,6 +2328,7 @@ export function MetroWayfindingElementEditor({
   inheritedBackgroundColor,
   inheritedForegroundColor,
   textSuggestions,
+  combinationChildId,
   onAction,
 }: Readonly<{
   element: MetroWayfindingElement;
@@ -2338,6 +2339,8 @@ export function MetroWayfindingElementEditor({
   inheritedBackgroundColor: string;
   inheritedForegroundColor: string;
   textSuggestions?: string[];
+  /** 图层树里点选的组合框子元素：打开「组合框子元素」弹窗时定位到它。 */
+  combinationChildId?: string;
   onAction: (action: MetroWayfindingElementAction) => void;
 }>) {
   const { t } = useI18n();
@@ -2394,6 +2397,7 @@ export function MetroWayfindingElementEditor({
           <CombinationElementFields
             element={element}
             disabled={disabled}
+            focusChildId={combinationChildId}
             lineColorOptions={lineColorOptions}
             backgroundColorOptions={backgroundColorOptions}
             inheritedBackgroundColor={inheritedBackgroundColor}
@@ -3047,12 +3051,22 @@ function MetroWayfindingSegmentFieldShell({
  *
  * 导视牌文本字段的提交要绕一圈事件总线（onChange → 编辑器状态 → 快照广播），
  * 受控 value 会比输入法组合串慢一拍；直接在 onChange 里回写会把拼音逐段固化进输入框，
- * 出现「cchchuchu…出口」这类重复。组合输入期间只维护本地草稿，组合结束才提交一次。
+ * 出现「cchchuchu…出口」这类重复。
+ *
+ * 因此这里始终用本地草稿承接用户输入：
+ * - 普通输入也写草稿，父级回传慢一拍时受控值不会把刚输入的字（空格 / 汉字）冲掉；
+ * - 组合输入开始时只改 ref、不写回 value prop（旧值写回会取消组合并吞掉已输入的字）；
+ * - 只有父级模型值**真的变化**时才同步草稿，避免自身提交引起的旧值重渲染清空草稿。
  */
 function ImeSafeTextField({
   autoSize = false,
   inputRef,
   onBlur,
+  onClick,
+  onFocus,
+  onKeyDown,
+  onKeyUp,
+  onSelect,
   onValueCommit,
   value,
   ...inputProps
@@ -3067,15 +3081,29 @@ function ImeSafeTextField({
   }
 >) {
   const composingRef = useRef(false);
+  const focusedRef = useRef(false);
   const [draftValue, setDraftValue] = useState<string | null>(null);
   const lastCommittedRef = useRef(value);
-  // 事件总线回传的值追上草稿后再丢弃草稿，避免组合结束瞬间闪回旧文本。
+  const lastValuePropRef = useRef(value);
+  // 只处理「父级模型值真的变了」：本组件提交后父级慢一拍的旧值重渲染不能清草稿。
   useEffect(() => {
-    lastCommittedRef.current = value;
-    if (draftValue !== null && value === draftValue) {
+    if (value === lastValuePropRef.current) return;
+    lastValuePropRef.current = value;
+    if (draftValue === null) {
+      lastCommittedRef.current = value;
+      return;
+    }
+    // 模型追上草稿 / 外部追加内容（如采纳光标建议）/ 已经失焦：以模型值为准。
+    if (
+      value === draftValue ||
+      !focusedRef.current ||
+      (draftValue.length > 0 && value.startsWith(draftValue))
+    ) {
+      lastCommittedRef.current = value;
       setDraftValue(null);
     }
   }, [draftValue, value]);
+
   const displayValue = draftValue ?? value;
   // 组合结束与随后的 input 事件可能各触发一次提交，值相同时只提交一次。
   const commit = (next: string, input: HTMLInputElement) => {
@@ -3094,15 +3122,14 @@ function ImeSafeTextField({
       size={autoSize ? Math.max(displayValue.length, 1) : inputProps.size}
       onChange={(event) => {
         const next = event.currentTarget.value;
-        if (composingRef.current) {
-          setDraftValue(next);
-          return;
-        }
+        setDraftValue(next);
+        if (composingRef.current) return;
         commit(next, event.currentTarget);
       }}
-      onCompositionStart={() => {
+      onCompositionStart={(event) => {
         composingRef.current = true;
-        setDraftValue(value);
+        // 用 DOM 当前值而不是 value prop：prop 可能还停在上一拍，写回会取消组合。
+        setDraftValue(event.currentTarget.value);
       }}
       onCompositionEnd={(event) => {
         composingRef.current = false;
@@ -3110,10 +3137,29 @@ function ImeSafeTextField({
         setDraftValue(next);
         commit(next, event.currentTarget);
       }}
+      onFocus={(event) => {
+        focusedRef.current = true;
+        onFocus?.(event);
+      }}
+      onClick={(event) => {
+        if (composingRef.current) return;
+        onClick?.(event);
+      }}
+      onSelect={(event) => {
+        if (composingRef.current) return;
+        onSelect?.(event);
+      }}
+      onKeyUp={(event) => {
+        if (composingRef.current) return;
+        onKeyUp?.(event);
+      }}
+      onKeyDown={(event) => {
+        // 组合期间 Backspace / 方向键属于输入法，不能交给段编辑逻辑。
+        if (composingRef.current) return;
+        onKeyDown?.(event);
+      }}
       onBlur={(event) => {
-        if (!composingRef.current) {
-          setDraftValue(null);
-        }
+        focusedRef.current = false;
         onBlur?.(event);
       }}
     />
@@ -4197,6 +4243,7 @@ function LargeTextElementFields({
 function CombinationElementFields({
   element,
   disabled,
+  focusChildId,
   lineColorOptions,
   backgroundColorOptions,
   inheritedBackgroundColor,
@@ -4206,6 +4253,8 @@ function CombinationElementFields({
 }: Readonly<{
   element: MetroWayfindingCombinationElement;
   disabled: boolean;
+  /** 图层树里选中的子元素：弹窗打开时直接定位到它。 */
+  focusChildId?: string;
   lineColorOptions: Array<{ value: string; label: string; aliases?: string[] }>;
   backgroundColorOptions: Array<{ value: string; label: string }>;
   inheritedBackgroundColor: string;
@@ -4218,6 +4267,17 @@ function CombinationElementFields({
   const [selectedChildId, setSelectedChildId] = useState(element.children[0]?.id ?? '');
   const selectedChild =
     element.children.find((child) => child.id === selectedChildId) ?? element.children[0];
+
+  // 图层树点选子元素后，弹窗里的子元素列表跟随定位（只响应外部定位，不打断用户在弹窗内的切换）。
+  useEffect(() => {
+    if (!focusChildId) {
+      // 直接选中组合框本身时回到第一个子元素，避免沿用上一次的子元素定位。
+      setSelectedChildId(element.children[0]?.id ?? '');
+      return;
+    }
+    setSelectedChildId((current) => (current === focusChildId ? current : focusChildId));
+    // element.children 只在没有 focusChildId 的分支里读取，这里不把它列进依赖。
+  }, [focusChildId]);
 
   useEffect(() => {
     if (!element.children.some((child) => child.id === selectedChildId)) {
