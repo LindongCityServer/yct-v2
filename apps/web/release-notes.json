@@ -5,7 +5,7 @@
     {
       "version": "2.28.0",
       "releasedAt": "2026-11-23T14:16:09.105Z",
-      "sourceFingerprint": "6543d68b2772eb27672e65eb9c393a58faadff7b058f5adac50db2a06e104fce",
+      "sourceFingerprint": "4c8a9b9f5f1d11dadff8233fe54f92820e2833cddfbb1d387b574acb2d3ec92d",
       "themes": ["qqbot", "materials", "transit"],
       "changes": [
         {
@@ -49,7 +49,32 @@
           "breaking": false,
           "summary": "GB2312 涂卡改用 0-9 排列并对齐底图行位"
         },
-        { "category": "feat", "breaking": false, "summary": "物料卡主题色优先跟随线路色和牌面颜色" }
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "物料卡主题色优先跟随线路色和牌面颜色"
+        },
+        { "category": "feat", "breaking": false, "summary": "历史上的今天支持查询任意日期" },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "天气卡片标题去掉省名，副标题显示省市，预警按地点过滤并展示全部，预报最多 5 天"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "导视牌「线路与出口方向」改为显示当前线路全部出口"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "随机 POI 卡片显示地点自己的图标和分类语义色"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "天气预警条按种类显示图标并增加列表内边距"
+        }
       ],
       "bump": "minor"
     },
