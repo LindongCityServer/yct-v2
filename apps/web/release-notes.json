@@ -5,7 +5,7 @@
     {
       "version": "2.28.0",
       "releasedAt": "2026-11-23T14:16:09.105Z",
-      "sourceFingerprint": "54b7c00034fb7755961f356f3b38dc25dc4bd282889cfed6d76feda768fe96ad",
+      "sourceFingerprint": "13b86aee90c2da1573b7734d0ba253ce736f7d10d0621c7e9847e20c3cec3eed",
       "themes": ["qqbot", "materials", "transit"],
       "changes": [
         {
