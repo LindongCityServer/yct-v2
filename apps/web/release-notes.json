@@ -5,7 +5,7 @@
     {
       "version": "2.28.0",
       "releasedAt": "2026-11-23T14:16:09.105Z",
-      "sourceFingerprint": "4c8a9b9f5f1d11dadff8233fe54f92820e2833cddfbb1d387b574acb2d3ec92d",
+      "sourceFingerprint": "54b7c00034fb7755961f356f3b38dc25dc4bd282889cfed6d76feda768fe96ad",
       "themes": ["qqbot", "materials", "transit"],
       "changes": [
         {
@@ -74,6 +74,16 @@
           "category": "fix",
           "breaking": false,
           "summary": "天气预警条按种类显示图标并增加列表内边距"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "导视牌工作台组合框子元素展开到图层树，可单独定位子元素"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "导视牌文本输入法输入不再吞字，副文本与主文本共用输入框并支持点击空白聚焦"
         }
       ],
       "bump": "minor"
