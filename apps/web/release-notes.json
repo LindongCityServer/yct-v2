@@ -3,6 +3,57 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.28.0",
+      "releasedAt": "2026-11-23T14:16:09.105Z",
+      "sourceFingerprint": "6543d68b2772eb27672e65eb9c393a58faadff7b058f5adac50db2a06e104fce",
+      "themes": ["qqbot", "materials", "transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "沈阳示例线网补全 144 站出入口与车站结构资料，导视牌可按线路与地上/地下站填充"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "导视牌模板库新增地上站空调候车室进站牌和其他站出口与上楼出站牌，并完善双侧出口、出口编号与站内设施等模板"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "导视牌出口描述支持中英分段与河流方位合并，A1/A2 合并为 A，带框大文本保持原尺寸，单侧出口自动去掉空侧和分割线"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "QQ 机器人服务器/示例线网补全站内出口资料，新增出口牌可被 /盲盒 抽到"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "车站资料弹窗读取示例/本机草稿的出口和结构资料，不再误报缺数据"
+        },
+        { "category": "fix", "breaking": false, "summary": "修复旧版地铁方向牌长站名被画布裁切" },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "天气卡片增加预警、日出日落与昼夜/气温主题色"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "盲盒改为对象、版式、样式三层抽样，并新增抽样预览与审计命令"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "GB2312 涂卡改用 0-9 排列并对齐底图行位"
+        },
+        { "category": "feat", "breaking": false, "summary": "物料卡主题色优先跟随线路色和牌面颜色" }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.27.0",
       "releasedAt": "2026-11-23T13:24:28.763Z",
       "sourceFingerprint": "e03ed5f079b4c11aed1135fa9eedfca23c2f3fed0cd4caeafea9b83b28848354",
