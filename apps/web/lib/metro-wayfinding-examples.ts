@@ -501,6 +501,11 @@ function normalizeExitEnglish(text: string): string {
 
 /** 单段中文 → 英文/拼音：优先把「XX路东」转成「XX East-side」。 */
 function buildEnglishExitDescription(text: string): string {
+  const riverBank = /^(.*?(?:河|江))\s*(?:河)?([东南西北])(?:岸|侧|边|部|面)?$/u.exec(text);
+  const bankDirection = riverBank?.[2] ? exitDirectionEnglish[riverBank[2]] : undefined;
+  if (riverBank?.[1] && bankDirection) {
+    return `${toUppercasePinyin(riverBank[1].trim())} ${bankDirection}-side`.trim();
+  }
   const match = /^(.*?)\s*路?\s*(东|南|西|北)\s*侧?$/u.exec(text);
   const direction = match?.[2] ? exitDirectionEnglish[match[2]] : undefined;
   if (match?.[1] && direction) {
@@ -522,6 +527,27 @@ function splitMixedExitDescription(segment: string): { han: string; latin: strin
  * - 多段中文（如「建业街 路东/普济路 路北」）→ 两对，各自生成英文。
  * - 没有描述 → 一对「出口 / EXIT」。
  */
+function splitSpacedDescription(part: string): string[] {
+  const tokens = part.split(/\s+/u).filter(Boolean);
+  if (tokens.length < 2) return [part];
+  const segments: string[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    let segment = tokens[index]!;
+    const next = tokens[index + 1];
+    const nextIsRoadSide = next && /^(?:路[东南西北]|路[东南西北]侧|[东南西北]侧)$/u.test(next);
+    const nextIsRiverBank =
+      next &&
+      /(?:河|江|湖|山|海|岛|桥)$/u.test(segment) &&
+      /^(?:河)?[东南西北](?:岸|侧|边|部|面)?$/u.test(next);
+    if (nextIsRoadSide || nextIsRiverBank) {
+      segment += ` ${next}`;
+      index += 1;
+    }
+    segments.push(segment);
+  }
+  return segments;
+}
+
 function buildExitDescriptionRows(
   description?: string,
 ): Array<{ main: string; secondary: string }> {
@@ -529,7 +555,10 @@ function buildExitDescriptionRows(
   if (!text || isPlaceholderExitDescription(text)) {
     return [{ main: '出口', secondary: 'EXIT' }];
   }
-  const parts = text.split(/\s*[/／]\s*/u).filter(Boolean);
+  const parts = text
+    .split(/\s*[/／]\s*/u)
+    .filter(Boolean)
+    .flatMap((part) => (/[A-Za-z]/.test(part) ? [part] : splitSpacedDescription(part)));
   const rows: Array<{ main: string; secondary: string }> = [];
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index]!;
@@ -851,7 +880,7 @@ export function buildMetroWayfindingTemplateExamples(
         b.divider(),
         b.space(),
         b.text('出口', 'EXIT', 'right'),
-        ...buildExitSlots(groupedOtherExitCodes, b),
+        ...buildExitSlots(groupedCurrentExitCodes, b),
         b.facility('exit', 'up'),
         b.arrow('north'),
       ],

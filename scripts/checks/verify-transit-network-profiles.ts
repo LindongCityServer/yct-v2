@@ -269,9 +269,9 @@ const serverStation = {
 const serverExamples = buildMetroWayfindingTemplateExamples(serverStation, 'L1');
 const serverByRemark = new Map(serverExamples.map((example) => [example.source.remark, example]));
 
-check('线路与出口方向只填当前线路没有的出口，宽度够时保留大文本', () => {
+check('线路与出口方向填当前线路的全部出口，宽度够时保留大文本', () => {
   const example = serverByRemark.get('线路与出口方向');
-  assert.deepEqual(largeTextValues(example), ['D', 'E', 'F', 'G']);
+  assert.deepEqual(largeTextValues(example), ['A', 'B', 'C']);
   assert.deepEqual(boxedGridCodes(example), []);
 });
 
@@ -436,8 +436,8 @@ const customByRemark = new Map(
   ]),
 );
 
-check('自定义线网没有「其它线路出口」时不留下空大文本', () => {
-  assert.deepEqual(largeTextValues(customByRemark.get('线路与出口方向')), []);
+check('自定义线网「线路与出口方向」填当前线路全部出口，换乘出口不受影响', () => {
+  assert.deepEqual(largeTextValues(customByRemark.get('线路与出口方向')), ['A', 'B', 'C']);
   assert.deepEqual(largeTextValues(customByRemark.get('线路色换乘出口')), []);
 });
 
@@ -871,7 +871,7 @@ check('出口编号的第一段字母/数字作主字，后续部分作下标', 
   }
 });
 
-check('方框/圆框大文本横向不够时等比缩小，不再压成瘦长条', () => {
+check('带框大文本保持原尺寸，只横向压缩一般文本', () => {
   const examples = buildMetroWayfindingTemplateExamples(
     {
       name: '测试站',
@@ -907,11 +907,44 @@ check('方框/圆框大文本横向不够时等比缩小，不再压成瘦长条
   const sizing = resolveMetroWayfindingLayoutSizing(layout.rows[0]!, 300);
   assert.ok(sizing.textScaleX < 1);
   const svg = renderMetroWayfindingSvg(JSON.stringify(layout), 300, 128, {} as never);
-  const scales = [...svg.matchAll(/translate\([-\d.]+ [-\d.]+\) scale\(([-\d.]+) ([-\d.]+)\)/g)]
-    .map((match) => [Number(match[1]), Number(match[2])])
-    .filter(([scaleX]) => scaleX > 0 && scaleX < 1);
-  assert.ok(scales.length > 0);
-  assert.equal(scales[0]![0], scales[0]![1]);
+  const transforms = [
+    ...svg.matchAll(/translate\([-\d.]+ [-\d.]+\) scale\(([-\d.]+) ([-\d.]+)\)/g),
+  ].map((match) => [Number(match[1]), Number(match[2])]);
+  assert.deepEqual(transforms[0], [1, 1]);
+  assert.equal(
+    transforms.some(([scaleX, scaleY]) => scaleX < 1 && scaleY === 1),
+    true,
+  );
+});
+
+check('空格分隔的多段出口描述拆成多个主行', () => {
+  const profile = getShenyangSampleStationProfile('五里河');
+  assert.ok(profile);
+  const examples = buildMetroWayfindingTemplateExamples(
+    {
+      name: profile.stationName,
+      lines: profile.lineGroups.map((group) => ({
+        id: group.lineKey,
+        name: group.lineName,
+        color: '#B63F1F',
+      })),
+      lineExits: profile.lineGroups.map((group) => ({
+        lineId: group.lineKey,
+        lineName: group.lineName,
+        hasElevator: group.exits.some((exit) => exit.hasAccessibleElevator),
+        exits: group.exits,
+      })),
+    },
+    profile.lineGroups[0]!.lineKey,
+  );
+  const card = examples.find((item) => item.source.remark === '出口编号与站内设施 · D');
+  const rows = descriptionRows(card);
+  assert.deepEqual(
+    rows?.rows.map((row) => row.main),
+    ['青年大街路东', '浑河 河北', '博览馆参展公众入口'],
+  );
+  assert.equal(rows?.rows.length, 3);
+  assert.equal(rows?.rows[1]?.secondary, 'HUNHE North-side');
 });
 
 check('地上站加空调候车室进站模板，其他站加出口与上楼出站模板', () => {

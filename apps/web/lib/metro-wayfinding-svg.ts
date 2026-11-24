@@ -221,13 +221,11 @@ function renderMetroWayfindingRow(
     const elementWidth =
       element.type === 'text' ? intrinsicElementWidth * sizing.textScaleX : intrinsicElementWidth;
     const isFramedLargeText = element.type === 'largeText' && element.frameShape !== 'none';
-    const elementScaleX =
-      sizing.layoutScale *
-      (element.type === 'largeText' || element.type === 'combination' ? sizing.textScaleX : 1);
-    // 方框/圆框大文本只做等比缩小，避免把 A 压成瘦长条；等比缩小时在行内垂直居中。
-    const elementScaleY = isFramedLargeText
-      ? sizing.layoutScale * sizing.textScaleX
-      : sizing.layoutScale;
+    const elementScaleX = isFramedLargeText
+      ? 1
+      : sizing.layoutScale *
+        (element.type === 'largeText' || element.type === 'combination' ? sizing.textScaleX : 1);
+    const elementScaleY = isFramedLargeText ? 1 : sizing.layoutScale;
     const displayWidth = elementWidth * elementScaleX;
     const output = renderMetroWayfindingElement(
       element,

@@ -942,6 +942,9 @@ export function resolveMetroWayfindingLayoutSizing(
   elements.forEach((element, index) => {
     if (element.type === 'space' && element.mode === 'flex') {
       flexCount += 1;
+    } else if (element.type === 'largeText' && element.frameShape !== 'none') {
+      // 带方框/圆框的大文本保持原尺寸，宽度不足时只压一般文本。
+      nonTextWidth += naturalElementWidths[index] ?? 0;
     } else if (
       element.type === 'text' ||
       element.type === 'largeText' ||
