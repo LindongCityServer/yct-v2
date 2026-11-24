@@ -137,9 +137,8 @@ export const qqBotMaterialTemplateIds = [
 export type QqBotMaterialTemplateId = (typeof qqBotMaterialTemplateIds)[number];
 
 /**
- * 第一层模板入口：与工作台「模板与版式」的 templateGroups 保持一致。
- * `/盲盒` 先在这些入口之间等概率抽，再在入口内按内部模板等概率抽。
- * 指定族指令（/站牌、/地铁 等）仍按内部模板等概率，不经过这一层。
+ * 第一层模板入口：与工作台「模板与版式」的 templateGroups 保持一致，仅用于展示分组；
+ * /盲盒 实际抽样按「真实对象 → 版式 → 样式」三层等概率（见 orderQqBotMaterialCandidates）。
  */
 export const qqBotMaterialTemplateEntries = [
   {
@@ -191,12 +190,6 @@ export const qqBotMaterialTemplateEntries = [
   id: string;
   templateIds: readonly QqBotMaterialTemplateId[];
 }>;
-
-const qqBotMaterialEntryIdByTemplateId = new Map<QqBotMaterialTemplateId, string>(
-  qqBotMaterialTemplateEntries.flatMap((entry) =>
-    entry.templateIds.map((templateId) => [templateId, entry.id] as const),
-  ),
-);
 
 /** 数据源：server = 服务器真实公开数据；sample = 沈阳示例线网。 */
 export type QqBotMaterialDataSource = 'server' | 'sample';
@@ -379,6 +372,24 @@ const qqBotMaterialColorByKind: Record<QqBotMaterialResolvedKind, string> = {
   bus_stop: '#108433',
   metro_line: '#0A124D',
   custom: '#262626',
+};
+
+/** 物料卡主题色的最终兜底：与站内项目强调色一致。 */
+const QQ_BOT_MATERIAL_PROJECT_ACCENT = '#168F78';
+
+/**
+ * 模板自带的固定主色：楼牌、公交站牌等模板没有颜色字段，
+ * 但牌面本身有稳定的底色，抽中时卡面主题色优先跟随牌面。
+ */
+const qqBotMaterialOwnColorByTemplateId: Partial<Record<QqBotMaterialTemplateId, string>> = {
+  [BUILDING_ADDRESS_TEMPLATE_ID]: '#0054C2',
+  [NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID]: '#000099',
+  [BUS_STOP_TERMINAL_TEMPLATE_ID]: '#108433',
+  [BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID]: '#E28336',
+  [BUS_STOP_OVERVIEW_TEMPLATE_ID]: '#073764',
+  [BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID]: '#E28336',
+  [BUS_STOP_DETAIL_TEMPLATE_ID]: '#1D2F78',
+  [BUS_STOP_HORIZONTAL_DETAIL_TEMPLATE_ID]: '#E28336',
 };
 
 export const QQ_BOT_MATERIAL_FOOTER = '雨城通 · 随机生成，非正式物料';
@@ -641,6 +652,38 @@ function formatQqBotMaterialMonthDay(date: Date): string {
   return `${parts.month ?? '1'}月${parts.day ?? '1'}日`;
 }
 
+function normalizeMaterialHexColor(value: unknown): string | undefined {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return /^#[0-9a-fA-F]{6}$/u.test(text) ? text.toLowerCase() : undefined;
+}
+
+/**
+ * 卡面主题色优先级：
+ * 1. 线路色（地铁 / 公交线路素材）；
+ * 2. 物料自己的颜色或背景色（路牌 signColor、导视牌 backgroundColor、模板固定底色）；
+ * 3. 项目强调色兜底。
+ */
+export function resolveQqBotMaterialThemeColor(input: {
+  templateId: QqBotMaterialTemplateId;
+  values?: Record<string, string>;
+  lineColor?: string;
+  backgroundColor?: string;
+}): string {
+  const fromValues = input.values
+    ? [input.values.accentColor, input.values.signColor, input.values.backgroundColor]
+    : [];
+  const candidates = [input.lineColor, ...fromValues, input.backgroundColor];
+  for (const candidate of candidates) {
+    const color = normalizeMaterialHexColor(candidate);
+    if (color) {
+      return color;
+    }
+  }
+  return (
+    qqBotMaterialOwnColorByTemplateId[input.templateId] ?? QQ_BOT_MATERIAL_PROJECT_ACCENT
+  ).toLowerCase();
+}
+
 function buildQqBotMaterialCard(input: {
   template: MaterialTemplateVersion;
   kind: QqBotMaterialResolvedKind;
@@ -661,7 +704,7 @@ function buildQqBotMaterialCard(input: {
     subline: input.summary.subline,
     meta,
     footer: QQ_BOT_MATERIAL_FOOTER,
-    color: input.summary.color ?? qqBotMaterialColorByKind[input.kind],
+    color: normalizeMaterialHexColor(input.summary.color) ?? QQ_BOT_MATERIAL_PROJECT_ACCENT,
   };
 }
 
@@ -692,7 +735,61 @@ function formatBusStopDirectionLabel(direction: MaterialTransitDirection): strin
 interface MaterialCandidate {
   templateId: QqBotMaterialTemplateId;
   template: MaterialTemplateVersion;
+  /**
+   * 第一层抽样对象：道路、带门牌号的地点、公交站方向、地铁线路或导视牌站点。
+   * 同一条数据对象只出现一次，保证「先抽对象」时不会被模板候选数量加权。
+   */
+  objectKey: string;
+  /** 第二层版式：同一对象可套用的不同版式（如公交始发终到 / 线路概览 / 线路详情）。 */
+  layoutKey: string;
+  /** 第三层样式：同一版式的新旧、方块 / 拟真、默认 / 怀旧等变体。 */
+  styleKey: string;
   prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial>;
+}
+
+/** 版式 → 样式：一个版式下的新旧 / 拟真等变体再等概率抽取。 */
+const qqBotMaterialLayoutStyleByTemplateId: Record<
+  QqBotMaterialTemplateId,
+  { layoutKey: string; styleKey: string }
+> = {
+  [ROAD_NAME_DIRECTION_TEMPLATE_ID]: { layoutKey: 'road-name', styleKey: 'default' },
+  [BUILDING_ADDRESS_TEMPLATE_ID]: { layoutKey: 'building-address', styleKey: 'default' },
+  [NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID]: {
+    layoutKey: 'building-address',
+    styleKey: 'nostalgic',
+  },
+  [BUS_STOP_TERMINAL_TEMPLATE_ID]: { layoutKey: 'bus-terminal', styleKey: 'block' },
+  [BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID]: { layoutKey: 'bus-terminal', styleKey: 'realistic' },
+  [BUS_STOP_OVERVIEW_TEMPLATE_ID]: { layoutKey: 'bus-overview', styleKey: 'block' },
+  [BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID]: { layoutKey: 'bus-overview', styleKey: 'realistic' },
+  [BUS_STOP_DETAIL_TEMPLATE_ID]: { layoutKey: 'bus-detail', styleKey: 'vertical' },
+  [BUS_STOP_HORIZONTAL_DETAIL_TEMPLATE_ID]: {
+    layoutKey: 'bus-detail-horizontal',
+    styleKey: 'horizontal',
+  },
+  [METRO_LINE_MAP_NEW_TEMPLATE_ID]: { layoutKey: 'metro-line-map', styleKey: 'new' },
+  [METRO_LINE_MAP_OLD_TEMPLATE_ID]: { layoutKey: 'metro-line-map', styleKey: 'classic' },
+  [METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID]: {
+    layoutKey: 'metro-line-map-vertical',
+    styleKey: 'new',
+  },
+  [METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID]: {
+    layoutKey: 'metro-line-map-vertical',
+    styleKey: 'classic',
+  },
+  [METRO_STATION_NAME_NEW_TEMPLATE_ID]: { layoutKey: 'metro-station-name', styleKey: 'new' },
+  [METRO_STATION_NAME_OLD_TEMPLATE_ID]: { layoutKey: 'metro-station-name', styleKey: 'classic' },
+  [METRO_DIRECTION_NEW_TEMPLATE_ID]: { layoutKey: 'metro-direction', styleKey: 'new' },
+  [METRO_DIRECTION_OLD_TEMPLATE_ID]: { layoutKey: 'metro-direction', styleKey: 'classic' },
+  [METRO_PLATFORM_SIGN_TEMPLATE_ID]: { layoutKey: 'metro-platform', styleKey: 'single' },
+  [METRO_WAYFINDING_TEMPLATE_ID]: { layoutKey: 'metro-wayfinding', styleKey: 'library' },
+};
+
+export function resolveQqBotMaterialSamplingKeys(templateId: QqBotMaterialTemplateId): {
+  layoutKey: string;
+  styleKey: string;
+} {
+  return qqBotMaterialLayoutStyleByTemplateId[templateId];
 }
 
 /** 候选项在数据层面被排除（例如没有门牌号 / 导视牌示例为空）：换一个候选重试。 */
@@ -1053,6 +1150,8 @@ function createServerRoadSignCandidates(
   const candidates = roads.map((road) => ({
     templateId,
     template,
+    objectKey: `road:${road.id}`,
+    ...resolveQqBotMaterialSamplingKeys(templateId),
     async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
       const coordinate = road.coordinate!;
       const resolved = await resolveRoadCoordinateMaterialInput({
@@ -1072,7 +1171,7 @@ function createServerRoadSignCandidates(
             .filter(Boolean)
             .join(' · '),
           meta: [`道路 ${values.roadName ?? road.label}`],
-          color: values.signColor,
+          color: resolveQqBotMaterialThemeColor({ templateId, values }),
         },
       };
     },
@@ -1104,6 +1203,8 @@ function createServerAddressCandidates(
   const candidates = filtered.map((entry) => ({
     templateId,
     template,
+    objectKey: `address:${entry.locationId}`,
+    ...resolveQqBotMaterialSamplingKeys(templateId),
     async prepare(): Promise<PreparedMaterial> {
       const resolved = await resolveMaterialLocationInput({
         locationId: entry.locationId,
@@ -1125,7 +1226,7 @@ function createServerAddressCandidates(
             ? `怀旧楼牌 · 门牌 ${buildingNumber}${buildingSuffix}`
             : `邮政编码 ${values.postalCode ?? ''} · 门牌 ${buildingNumber}${buildingSuffix}`,
           meta: [`门牌 ${buildingNumber}${buildingSuffix}`],
-          color: qqBotMaterialColorByKind.address_sign,
+          color: resolveQqBotMaterialThemeColor({ templateId, values }),
         },
       };
     },
@@ -1184,6 +1285,8 @@ function createServerBusStopCandidates(
     const candidates = terminalGroups.map((group) => ({
       templateId,
       template,
+      objectKey: `bus:${group.station.markerId}:${group.direction}`,
+      ...resolveQqBotMaterialSamplingKeys(templateId),
       async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
         const eligible = group.lines.filter(
           (line) => line.isOriginAtStation || line.isTerminalAtStation,
@@ -1208,7 +1311,7 @@ function createServerBusStopCandidates(
               `线路 ${line.name} · ${formatBusStopDirectionLabel(group.direction)}`,
               resolved.values.routeNumber ? `线路编号 ${resolved.values.routeNumber}` : '',
             ].filter(Boolean),
-            color: qqBotMaterialColorByKind.bus_stop,
+            color: resolveQqBotMaterialThemeColor({ templateId, values: resolved.values }),
           },
         };
       },
@@ -1225,6 +1328,8 @@ function createServerBusStopCandidates(
     const candidates = overviewGroups.map((group) => ({
       templateId,
       template,
+      objectKey: `bus:${group.station.markerId}:${group.direction}`,
+      ...resolveQqBotMaterialSamplingKeys(templateId),
       async prepare(): Promise<PreparedMaterial> {
         const selectedLines = group.lines.slice(0, 6);
         const resolved = await resolveTransitStationMaterialInput({
@@ -1242,7 +1347,7 @@ function createServerBusStopCandidates(
             headline: group.station.stationName,
             subline: `同向停靠 ${selectedLines.length} 条线路${routeNumbers.length ? ` · ${routeNumbers.join(' / ')}` : ''}`,
             meta: [`线路 ${routeNumbers.join(' / ')}`],
-            color: qqBotMaterialColorByKind.bus_stop,
+            color: resolveQqBotMaterialThemeColor({ templateId, values: resolved.values }),
           },
         };
       },
@@ -1256,6 +1361,8 @@ function createServerBusStopCandidates(
   const candidates = groups.map((group) => ({
     templateId,
     template,
+    objectKey: `bus:${group.station.markerId}:${group.direction}`,
+    ...resolveQqBotMaterialSamplingKeys(templateId),
     async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
       const line = pickSeeded(rng, group.lines);
       const resolved = await resolveTransitStationMaterialInput({
@@ -1275,7 +1382,7 @@ function createServerBusStopCandidates(
             `线路 ${line.name} · ${formatBusStopDirectionLabel(group.direction)}`,
             resolved.values.nextStation ? `下一站 ${resolved.values.nextStation}` : '',
           ].filter(Boolean),
-          color: qqBotMaterialColorByKind.bus_stop,
+          color: resolveQqBotMaterialThemeColor({ templateId, values: resolved.values }),
         },
       };
     },
@@ -1300,6 +1407,8 @@ function createServerMetroCandidates(
   const candidates = metroLines.map((line) => ({
     templateId,
     template,
+    objectKey: `metro:${line.id}`,
+    ...resolveQqBotMaterialSamplingKeys(templateId),
     async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
       // 站名 / 方向 / 站台版式需要「下一站」，尽量避开线路终点站，避免牌面出现「下一站 终点站」。
       const stationCandidates =
@@ -1341,7 +1450,7 @@ function buildMetroCardSummary(input: {
   values: Record<string, string>;
 }): MaterialCardSummary {
   const { templateId, template, line, stationName, values } = input;
-  const color = values.accentColor || qqBotMaterialColorByKind.metro_line;
+  const color = resolveQqBotMaterialThemeColor({ templateId, values });
   const lineName = line.name || values.lineLabel || '地铁';
   const vertical =
     templateId === METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID ||
@@ -1481,6 +1590,8 @@ function createServerWayfindingCandidates(
   const candidates = stations.map((station) => ({
     templateId,
     template,
+    objectKey: `wayfinding:${station.name}`,
+    ...resolveQqBotMaterialSamplingKeys(templateId),
     async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
       const line = pickSeeded(rng, station.lines);
       const examples = buildMetroWayfindingTemplateExamples(station, line.id);
@@ -1491,6 +1602,7 @@ function createServerWayfindingCandidates(
       return buildWayfindingPreparedMaterial({
         station,
         lineName: line.name,
+        lineColor: line.color,
         example,
         template,
       });
@@ -1502,6 +1614,7 @@ function createServerWayfindingCandidates(
 function buildWayfindingPreparedMaterial(input: {
   station: MetroWayfindingExampleStation;
   lineName: string;
+  lineColor?: string;
   example: MetroWayfindingExample;
   template: MaterialTemplateVersion;
 }): PreparedMaterial {
@@ -1520,7 +1633,11 @@ function buildWayfindingPreparedMaterial(input: {
             ? '进站'
             : '出站',
       ],
-      color: qqBotMaterialColorByKind.custom,
+      color: resolveQqBotMaterialThemeColor({
+        templateId: METRO_WAYFINDING_TEMPLATE_ID,
+        lineColor: input.lineColor,
+        backgroundColor: example.project.layout.backgroundColor,
+      }),
     },
   };
 }
@@ -1635,6 +1752,8 @@ function buildSampleMetroCandidate(
   return data.lines.map((line) => ({
     templateId,
     template,
+    objectKey: `metro:${line.lineKey}`,
+    ...resolveQqBotMaterialSamplingKeys(templateId),
     async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
       const stationCandidates =
         templateUsesNextStation(template) && line.stations.length > 1
@@ -1670,6 +1789,8 @@ function buildSampleWayfindingCandidates(
   return data.wayfindingStations.map((station) => ({
     templateId,
     template,
+    objectKey: `wayfinding:${station.name}`,
+    ...resolveQqBotMaterialSamplingKeys(templateId),
     async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
       const line = pickSeeded(rng, station.lines);
       const examples = buildMetroWayfindingTemplateExamples(station, line.id);
@@ -1680,6 +1801,7 @@ function buildSampleWayfindingCandidates(
       return buildWayfindingPreparedMaterial({
         station,
         lineName: line.name,
+        lineColor: line.color,
         example,
         template,
       });
@@ -1874,35 +1996,69 @@ function normalizeQqBotMaterialRequest(
 // ---------------------------------------------------------------------------
 
 /**
- * 抽取并渲染一张随机物料。
+ * 盲盒抽样顺序分三层：
+ * 1. 先按真实数据对象等概率（道路 / 带门牌号地点 / 公交站方向 / 地铁线路 / 导视牌站点）；
+ * 2. 同一对象内按版式等概率（如地铁线路的横版图、竖版图、站名、方向、站台牌）；
+ * 3. 同一版式内按样式等概率（新版 / 旧版、方块 / 拟真、默认 / 怀旧）。
  *
- * 失败时抛 `QqBotMaterialError`（可识别错误码；sample 拉取失败抛 sample_unavailable），
- * 其余异常说明渲染链路本身出错，由路由按 500 render_failed 处理。
+ * 这样候选多的模板不会因为「候选数量」占掉额外概率；指定族指令（/站牌、/地铁 等）
+ * 只是在对象集合里按 kind 过滤，规则不变。
  */
-/**
- * 抽样顺序分两层：
- * 1. 先按工作台模板入口等概率（路牌、门牌、公交站牌、公交横版、地铁竖版、地铁横版、站台牌、导视牌）；
- * 2. 入口内直接按候选等概率，因此内部模板按可用候选数量加权，
- *    不再把始发终到 / 同向概览 / 线路详情强行等分。
- * 指定族指令（/站牌、/地铁 等）也走入口层，只是入口集合被 kind 过滤后变小。
- */
-function orderCandidateIndicesByTemplateEntry(
-  candidates: readonly MaterialCandidate[],
+export interface QqBotMaterialSamplingCandidate {
+  objectKey: string;
+  layoutKey: string;
+  styleKey: string;
+}
+
+export function orderQqBotMaterialCandidates<T extends QqBotMaterialSamplingCandidate>(
+  candidates: readonly T[],
   rng: QqBotMaterialRandom,
-): number[] {
-  const entries = new Map<string, number[]>();
-  candidates.forEach((candidate, index) => {
-    const entryId =
-      qqBotMaterialEntryIdByTemplateId.get(candidate.templateId) ?? candidate.templateId;
-    const list = entries.get(entryId);
+): T[] {
+  const objectOrder: string[] = [];
+  const byObject = new Map<string, T[]>();
+  for (const candidate of candidates) {
+    const list = byObject.get(candidate.objectKey);
     if (list) {
-      list.push(index);
+      list.push(candidate);
     } else {
-      entries.set(entryId, [index]);
+      objectOrder.push(candidate.objectKey);
+      byObject.set(candidate.objectKey, [candidate]);
     }
-  });
-  const entryIds = shuffleWithRandom([...entries.keys()], rng);
-  return entryIds.flatMap((entryId) => shuffleWithRandom(entries.get(entryId) ?? [], rng));
+  }
+
+  const ordered: T[] = [];
+  for (const objectKey of shuffleWithRandom(objectOrder, rng)) {
+    const objectCandidates = byObject.get(objectKey) ?? [];
+    const layoutOrder: string[] = [];
+    const byLayout = new Map<string, T[]>();
+    for (const candidate of objectCandidates) {
+      const list = byLayout.get(candidate.layoutKey);
+      if (list) {
+        list.push(candidate);
+      } else {
+        layoutOrder.push(candidate.layoutKey);
+        byLayout.set(candidate.layoutKey, [candidate]);
+      }
+    }
+    for (const layoutKey of shuffleWithRandom(layoutOrder, rng)) {
+      const layoutCandidates = byLayout.get(layoutKey) ?? [];
+      const styleOrder: string[] = [];
+      const byStyle = new Map<string, T[]>();
+      for (const candidate of layoutCandidates) {
+        const list = byStyle.get(candidate.styleKey);
+        if (list) {
+          list.push(candidate);
+        } else {
+          styleOrder.push(candidate.styleKey);
+          byStyle.set(candidate.styleKey, [candidate]);
+        }
+      }
+      for (const styleKey of shuffleWithRandom(styleOrder, rng)) {
+        ordered.push(...shuffleWithRandom(byStyle.get(styleKey) ?? [], rng));
+      }
+    }
+  }
+  return ordered;
 }
 
 function shuffleWithRandom<T>(values: readonly T[], rng: QqBotMaterialRandom): T[] {
@@ -1917,6 +2073,165 @@ function shuffleWithRandom<T>(values: readonly T[], rng: QqBotMaterialRandom): T
 export interface QqBotMaterialRenderOptions {
   /** 服务端/机器人断开时中止渲染；超时映射成 render_timeout。 */
   signal?: AbortSignal;
+}
+
+/** `pnpm qqbot:material:preview` 用的抽样预览结果（不渲染图片）。 */
+export interface QqBotMaterialSamplingPreview {
+  kind: QqBotMaterialKind;
+  dataSource: QqBotMaterialDataSource;
+  rounds: number;
+  source: QqBotMaterialSourceDescriptor;
+  /** 候选池规模：用于判断对象级等概率是否会被人力/数据量倾斜。 */
+  pool: {
+    objectCount: number;
+    candidateCount: number;
+    objectTypeCounts: Record<string, number>;
+    objectCandidateCounts: Record<string, number>;
+    templateObjectCounts: Record<string, number>;
+    templateCandidateCounts: Record<string, number>;
+    layoutObjectCounts: Record<string, number>;
+    layoutCandidateCounts: Record<string, number>;
+    styleObjectCounts: Record<string, number>;
+    styleCandidateCounts: Record<string, number>;
+    layoutCountByObject: Record<string, number>;
+  };
+  objectTypeCounts: Record<string, number>;
+  objectCounts: Record<string, number>;
+  templateCounts: Record<string, number>;
+  layoutCounts: Record<string, number>;
+  styleCounts: Record<string, number>;
+  samples: Array<{
+    seed: string;
+    objectKey: string;
+    templateId: QqBotMaterialTemplateId;
+    kind: QqBotMaterialResolvedKind;
+    layoutKey: string;
+    styleKey: string;
+  }>;
+}
+
+/**
+ * 预览当前抽取方案：只装配候选池并模拟第一轮抽样，不渲染 PNG。
+ * 用于快速观察对象 / 版式 / 样式分布；真实出图仍以 renderQqBotMaterial 为准。
+ */
+export async function previewQqBotMaterialSampling(
+  input: {
+    kind?: string;
+    dataSource?: string;
+    rounds?: number;
+    seedPrefix?: string;
+  } = {},
+): Promise<QqBotMaterialSamplingPreview> {
+  const normalized = normalizeQqBotMaterialRequest({
+    kind: input.kind ?? 'random',
+    dataSource: input.dataSource ?? 'server',
+  });
+  const pool = await buildQqBotMaterialCandidatePool({
+    templateIds: normalized.templateIds,
+    dataSource: normalized.dataSource,
+  });
+  if (pool.candidates.length === 0) {
+    throw new QqBotMaterialError(
+      'no_candidate',
+      `暂时抽不到可用的物料：${pool.unavailableReasons[0] ?? '没有满足模板条件的数据'}。`,
+    );
+  }
+
+  const rounds = Math.max(1, Math.min(1000, Math.round(Number(input.rounds ?? 100)) || 100));
+  const seedPrefix = String(input.seedPrefix ?? 'preview').trim() || 'preview';
+  const poolObjectKeys = new Set<string>();
+  const poolObjectTypeCounts: Record<string, number> = {};
+  const poolObjectCandidateCounts: Record<string, number> = {};
+  const templateObjectSets = new Map<string, Set<string>>();
+  const layoutObjectSets = new Map<string, Set<string>>();
+  const styleObjectSets = new Map<string, Set<string>>();
+  const objectLayoutSets = new Map<string, Set<string>>();
+  const templateCandidateCounts: Record<string, number> = {};
+  const layoutCandidateCounts: Record<string, number> = {};
+  const styleCandidateCounts: Record<string, number> = {};
+  const addObjectToSet = (map: Map<string, Set<string>>, key: string, objectKey: string) => {
+    const set = map.get(key) ?? new Set<string>();
+    set.add(objectKey);
+    map.set(key, set);
+  };
+  for (const candidate of pool.candidates) {
+    const objectType = candidate.objectKey.split(':', 1)[0] || candidate.objectKey;
+    poolObjectCandidateCounts[objectType] = (poolObjectCandidateCounts[objectType] ?? 0) + 1;
+    if (!poolObjectKeys.has(candidate.objectKey)) {
+      poolObjectKeys.add(candidate.objectKey);
+      poolObjectTypeCounts[objectType] = (poolObjectTypeCounts[objectType] ?? 0) + 1;
+    }
+    addObjectToSet(templateObjectSets, candidate.templateId, candidate.objectKey);
+    addObjectToSet(layoutObjectSets, candidate.layoutKey, candidate.objectKey);
+    addObjectToSet(styleObjectSets, candidate.styleKey, candidate.objectKey);
+    addObjectToSet(objectLayoutSets, candidate.objectKey, candidate.layoutKey);
+    templateCandidateCounts[candidate.templateId] =
+      (templateCandidateCounts[candidate.templateId] ?? 0) + 1;
+    layoutCandidateCounts[candidate.layoutKey] =
+      (layoutCandidateCounts[candidate.layoutKey] ?? 0) + 1;
+    styleCandidateCounts[candidate.styleKey] = (styleCandidateCounts[candidate.styleKey] ?? 0) + 1;
+  }
+  const setCounts = (map: Map<string, Set<string>>): Record<string, number> =>
+    Object.fromEntries([...map.entries()].map(([key, set]) => [key, set.size]));
+  const layoutCountByObject: Record<string, number> = {};
+  for (const layouts of objectLayoutSets.values()) {
+    const key = String(layouts.size);
+    layoutCountByObject[key] = (layoutCountByObject[key] ?? 0) + 1;
+  }
+  const objectTypeCounts: Record<string, number> = {};
+  const objectCounts: Record<string, number> = {};
+  const templateCounts: Record<string, number> = {};
+  const layoutCounts: Record<string, number> = {};
+  const styleCounts: Record<string, number> = {};
+  const samples: QqBotMaterialSamplingPreview['samples'] = [];
+
+  for (let index = 0; index < rounds; index += 1) {
+    const seed = `${seedPrefix}-${index}`;
+    const rng = createQqBotMaterialRandom(seed, normalized.kind);
+    const candidate = orderQqBotMaterialCandidates(pool.candidates, rng)[0]!;
+    const objectType = candidate.objectKey.split(':', 1)[0] || candidate.objectKey;
+    objectTypeCounts[objectType] = (objectTypeCounts[objectType] ?? 0) + 1;
+    objectCounts[candidate.objectKey] = (objectCounts[candidate.objectKey] ?? 0) + 1;
+    templateCounts[candidate.templateId] = (templateCounts[candidate.templateId] ?? 0) + 1;
+    layoutCounts[candidate.layoutKey] = (layoutCounts[candidate.layoutKey] ?? 0) + 1;
+    styleCounts[candidate.styleKey] = (styleCounts[candidate.styleKey] ?? 0) + 1;
+    if (samples.length < 10) {
+      samples.push({
+        seed,
+        objectKey: candidate.objectKey,
+        templateId: candidate.templateId,
+        kind: resolveQqBotMaterialKind(candidate.templateId),
+        layoutKey: candidate.layoutKey,
+        styleKey: candidate.styleKey,
+      });
+    }
+  }
+
+  return {
+    kind: normalized.kind,
+    dataSource: normalized.dataSource,
+    rounds,
+    source: pool.source,
+    pool: {
+      objectCount: poolObjectKeys.size,
+      candidateCount: pool.candidates.length,
+      objectTypeCounts: poolObjectTypeCounts,
+      objectCandidateCounts: poolObjectCandidateCounts,
+      templateObjectCounts: setCounts(templateObjectSets),
+      templateCandidateCounts,
+      layoutObjectCounts: setCounts(layoutObjectSets),
+      layoutCandidateCounts,
+      styleObjectCounts: setCounts(styleObjectSets),
+      styleCandidateCounts,
+      layoutCountByObject,
+    },
+    objectTypeCounts,
+    objectCounts,
+    templateCounts,
+    layoutCounts,
+    styleCounts,
+    samples,
+  };
 }
 
 /**
@@ -1952,6 +2267,12 @@ function throwIfMaterialAborted(signal?: AbortSignal): void {
   }
 }
 
+/**
+ * 抽取并渲染一张随机物料。
+ *
+ * 失败时抛 `QqBotMaterialError`（可识别错误码；sample 拉取失败抛 sample_unavailable），
+ * 其余异常说明渲染链路本身出错，由路由按 500 render_failed 处理。
+ */
 export async function renderQqBotMaterial(
   request: QqBotMaterialRenderRequest,
   options: QqBotMaterialRenderOptions = {},
@@ -1993,15 +2314,14 @@ export async function renderQqBotMaterial(
     );
   }
 
-  // 先按模板分组、再组内打乱：否则候选多的模板（如地铁导视牌示例）会
-  // 在 /盲盒 里占掉大部分概率，19 个模板就不再是“均匀抽模板”。
-  const orderedCandidateIndices = orderCandidateIndicesByTemplateEntry(pool.candidates, rng);
+  // 先按真实对象、版式、样式分层打乱，避免候选多的模板在 /盲盒 里占掉额外概率。
+  const orderedCandidates = orderQqBotMaterialCandidates(pool.candidates, rng);
   let lastRejection: unknown;
   let renderError: unknown;
-  const maximumAttempts = Math.min(qqBotMaterialMaximumAttempts, orderedCandidateIndices.length);
+  const maximumAttempts = Math.min(qqBotMaterialMaximumAttempts, orderedCandidates.length);
   for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
     throwIfMaterialAborted(signal);
-    const candidate = pool.candidates[orderedCandidateIndices[attempt]!]!;
+    const candidate = orderedCandidates[attempt]!;
     let prepared: PreparedMaterial;
     try {
       prepared = await candidate.prepare(rng);

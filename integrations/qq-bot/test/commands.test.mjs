@@ -133,6 +133,26 @@ test('天气指令使用配置中的城市', async () => {
   assert.equal(fullWidthMinus.card?.current.temp, '-8');
   assert.equal(fullWidthMinus.card?.current.condition, '晴');
   assert.equal(fullWidthMinus.card?.current.feels, '-13');
+
+  const report = await handleCommand({
+    ...base,
+    text: '/天气 上海',
+    context: { kind: 'group', groupId: 'g1', userId: 'u1', userName: '测试' },
+    weatherReport: async () => ({
+      text: '上海市天气：\n预警：上海市气象台发布大风蓝色预警信号\n现在 8℃、晴。',
+      place: '上海市',
+      updated: '',
+      current: { temp: '8', condition: '晴', humidity: '76', wind: '西北风 3级' },
+      days: [{ label: '今天', low: '6', high: '12', condition: '晴' }],
+      alerts: [
+        { title: '上海市气象台发布大风蓝色预警信号', level: '蓝色', issuedAt: '11-24 10:00' },
+      ],
+      sun: { sunrise: '06:32', sunset: '16:58', phase: 'night' },
+    }),
+  });
+  assert.equal(report.card?.alerts?.[0]?.level, '蓝色');
+  assert.equal(report.card?.sun?.phase, 'night');
+  assert.equal(report.card?.sun?.sunrise, '06:32');
   assert.equal(fullWidthMinus.card?.current.humidity, '76');
   assert.equal(fullWidthMinus.card?.current.wind, '风 4 km/h');
 });

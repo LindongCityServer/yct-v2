@@ -45,6 +45,8 @@
     "qqbot:test": "node --test \"integrations/qq-bot/test/*.test.mjs\"",
     "qqbot:card:build": "node scripts/build-qq-bot-card-renderer.mjs",
     "qqbot:card:check": "node scripts/build-qq-bot-card-renderer.mjs --check",
+    "qqbot:material:preview": "tsx scripts/preview-qq-bot-material-sampling.ts",
+    "qqbot:material:audit": "tsx scripts/audit-qq-bot-material-sampling.ts",
     "qqbot:package": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/package-qq-bot.ps1",
     "qqbot:card:assets": "node scripts/sync-qq-bot-card-assets.mjs",
     "qqbot:check": "node integrations/qq-bot/src/index.mjs --check",

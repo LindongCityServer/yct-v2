@@ -60,6 +60,8 @@ const cacheTtlMs = 10 * 60 * 1000;
 // 高德每月 5000 次，天气按小时缓存即可，避免多问几次就把额度用掉。
 const amapCacheTtlMs = 60 * 60 * 1000;
 const adcodeCache = new Map();
+const alertCache = new Map();
+const alertCacheTtlMs = 10 * 60 * 1000;
 
 const regionNames = {
   Anhui: '安徽',
@@ -151,12 +153,26 @@ const areaNames = {
   Zhengzhou: '郑州',
 };
 
-export async function fetchWeather({
+/**
+ * 兼容旧调用：只返回格式化文本。
+ * 新代码（天气卡片）用 `fetchWeatherReport` 拿结构化数据，文本与旧版保持一致。
+ */
+export async function fetchWeather(options = {}) {
+  const report = await fetchWeatherReport({ ...options, includeAlerts: false });
+  return report.text;
+}
+
+/**
+ * 天气查询结构化结果：卡片直接使用 current / days / alerts / sun，
+ * 不再从格式化文本里正则反解。文本仍保留给群聊回复。
+ */
+export async function fetchWeatherReport({
   city,
   amapKey = '',
   timeoutMs = 12_000,
   fetchImpl = fetch,
   now = Date.now,
+  includeAlerts = true,
 } = {}) {
   const name = String(city ?? '').trim();
   if (!name) {
@@ -169,21 +185,53 @@ export async function fetchWeather({
   const cacheKey = `${key ? 'amap' : 'wttr'}:${name}`;
   const cached = cache.get(cacheKey);
   const timestamp = now();
-  if (cached && cached.expiresAt > timestamp) {
-    return cached.text;
+  // 预警列表和天气请求并行拉取：预警接口慢时不会叠加到天气查询耗时上。
+  const alertItemsPromise = includeAlerts
+    ? loadNmcAlarmItems({
+        fetchImpl,
+        timeoutMs: Math.min(timeoutMs, 6_000),
+        now,
+      })
+    : Promise.resolve([]);
+  let report = cached && cached.expiresAt > timestamp ? cached.report : undefined;
+  if (!report) {
+    report = key
+      ? await requestAmapWeather(name, key, { timeoutMs, fetchImpl, now })
+      : await requestWttrWeather(name, { timeoutMs, fetchImpl, now });
+    cache.set(cacheKey, {
+      expiresAt: timestamp + (key ? amapCacheTtlMs : cacheTtlMs),
+      report,
+    });
   }
 
-  const text = key
-    ? await requestAmapWeather(name, key, { timeoutMs, fetchImpl })
-    : await requestWttrWeather(name, { timeoutMs, fetchImpl });
-  cache.set(cacheKey, {
-    expiresAt: timestamp + (key ? amapCacheTtlMs : cacheTtlMs),
-    text,
-  });
-  return text;
+  const alertItems = includeAlerts ? await alertItemsPromise : [];
+  const alerts = includeAlerts ? pickWeatherAlerts(alertItems, report.alertKeywords) : [];
+  // 天气本身缓存 10–60 分钟，但昼夜阶段必须按当前时刻重算，否则傍晚会继续用白天的主题色。
+  const sun = report.sun
+    ? { ...report.sun, phase: resolveDayPhase(report.sun, timestamp) }
+    : undefined;
+  return {
+    ...report,
+    sun,
+    alerts,
+    text: appendWeatherAlertText(report.text, alerts),
+  };
 }
 
-async function requestAmapWeather(city, amapKey, { timeoutMs, fetchImpl }) {
+/** 预警插在标题行之后，保持原有“现在 / 今天 / 明天”行不变。 */
+function appendWeatherAlertText(text, alerts) {
+  if (!Array.isArray(alerts) || alerts.length === 0) {
+    return text;
+  }
+  const lines = text.split('\n');
+  const alertLines = alerts.map(
+    (alert) => `预警：${alert.title}${alert.issuedAt ? `（${alert.issuedAt} 发布）` : ''}`,
+  );
+  lines.splice(1, 0, ...alertLines);
+  return lines.join('\n');
+}
+
+async function requestAmapWeather(city, amapKey, { timeoutMs, fetchImpl, now = Date.now }) {
   const location = await resolveAmapLocation(city, amapKey, { timeoutMs, fetchImpl });
   const [livePayload, forecastPayload] = await Promise.all([
     getAmapJson(
@@ -232,7 +280,37 @@ async function requestAmapWeather(city, amapKey, { timeoutMs, fetchImpl }) {
     district: location.district,
     fallback: city,
   });
-  return `${place}天气${report ? `（${report}更新）` : ''}：\n${lines.join('\n')}`;
+  const coordinates = parseCoordinates(location.location);
+  const date = textValue(casts[0]?.date) || localDateKey(now());
+  const sunTimes = coordinates ? computeSunTimes(coordinates, date) : {};
+  const sun =
+    sunTimes.sunrise && sunTimes.sunset
+      ? { ...sunTimes, phase: resolveDayPhase(sunTimes, now()) }
+      : undefined;
+  const current = {
+    temp: textValue(live?.temperature) || '--',
+    condition: textValue(live?.weather) || '天气未知',
+    feels: '',
+    humidity: textValue(live?.humidity),
+    wind: live?.winddirection ? `${live.winddirection}风 ${live.windpower}级` : '',
+  };
+  const days = casts.map((cast, index) => ({
+    label: index === 0 ? '今天' : '明天',
+    low: textValue(cast.nighttemp),
+    high: textValue(cast.daytemp),
+    condition: textValue(cast.dayweather),
+  }));
+  return {
+    text: `${place}天气${report ? `（${report}更新）` : ''}：\n${lines.join('\n')}`,
+    place,
+    updated: report ? `${report}更新` : '',
+    current,
+    days,
+    sun,
+    coordinates,
+    alertKeywords: buildAlertKeywords(location.province, location.city, location.district, city),
+    source: 'amap',
+  };
 }
 
 async function resolveAmapLocation(city, amapKey, options) {
@@ -254,6 +332,7 @@ async function resolveAmapLocation(city, amapKey, options) {
     province: textValue(geocode?.province),
     city: textValue(geocode?.city),
     district: textValue(geocode?.district),
+    location: textValue(geocode?.location),
   };
   adcodeCache.set(city, location);
   return location;
@@ -292,7 +371,7 @@ function shortTime(value) {
   return match ? `${match[2]}-${match[3]} ${match[4]}` : '';
 }
 
-async function requestWttrWeather(city, { timeoutMs, fetchImpl }) {
+async function requestWttrWeather(city, { timeoutMs, fetchImpl, now = Date.now }) {
   let response;
   try {
     response = await fetchImpl(`https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=zh`, {
@@ -331,15 +410,25 @@ async function requestWttrWeather(city, { timeoutMs, fetchImpl }) {
   ].filter(Boolean);
   lines.push(`现在 ${currentParts.join('、')}。`);
 
-  const days = Array.isArray(payload.weather) ? payload.weather.slice(0, 2) : [];
-  for (const [index, day] of days.entries()) {
+  const weatherDays = Array.isArray(payload.weather) ? payload.weather.slice(0, 2) : [];
+  const days = [];
+  for (const [index, day] of weatherDays.entries()) {
     const rain = maxRainChance(day?.hourly);
+    const condition = describeWeather(
+      day?.hourly?.[4]?.weatherCode ?? day?.hourly?.[0]?.weatherCode,
+    );
     const parts = [
       `${round(day?.mintempC)}~${round(day?.maxtempC)}℃`,
-      describeWeather(day?.hourly?.[4]?.weatherCode ?? day?.hourly?.[0]?.weatherCode),
+      condition,
       rain === null ? '' : `降水概率 ${rain}%`,
     ].filter(Boolean);
     lines.push(`${index === 0 ? '今天' : '明天'} ${parts.join('、')}。`);
+    days.push({
+      label: index === 0 ? '今天' : '明天',
+      low: String(round(day?.mintempC)),
+      high: String(round(day?.maxtempC)),
+      condition,
+    });
   }
 
   const place = formatWttrPlace({
@@ -348,7 +437,263 @@ async function requestWttrWeather(city, { timeoutMs, fetchImpl }) {
     country: nestedValue(payload?.nearest_area?.[0]?.country),
     fallback: city,
   });
-  return `${place}天气：\n${lines.join('\n')}`;
+  const astronomy = weatherDays[0]?.astronomy?.[0];
+  const sunTimes = {
+    sunrise: convertTo24Hour(astronomy?.sunrise),
+    sunset: convertTo24Hour(astronomy?.sunset),
+  };
+  const sun =
+    sunTimes.sunrise && sunTimes.sunset
+      ? { ...sunTimes, phase: resolveDayPhase(sunTimes, now()) }
+      : undefined;
+  const areaName = nestedValue(payload?.nearest_area?.[0]?.areaName);
+  const region = nestedValue(payload?.nearest_area?.[0]?.region);
+  const feels = roundOrEmpty(current.FeelsLikeC);
+  const humidity = roundOrEmpty(current.humidity);
+  const windSpeed = roundOrEmpty(current.windspeedKmph);
+  const coordinates = parseCoordinates(
+    [
+      nestedValue(payload?.nearest_area?.[0]?.latitude),
+      nestedValue(payload?.nearest_area?.[0]?.longitude),
+    ].join(','),
+  );
+  return {
+    text: `${place}天气：\n${lines.join('\n')}`,
+    place,
+    updated: '',
+    current: {
+      temp: String(round(current.temp_C)),
+      condition: describeWeather(current.weatherCode),
+      feels,
+      humidity,
+      wind: windSpeed ? `风 ${windSpeed} km/h` : '',
+    },
+    days,
+    sun,
+    coordinates,
+    alertKeywords: buildAlertKeywords(
+      regionNames[region] || region,
+      areaNames[areaName] || areaName,
+      '',
+      city,
+    ),
+    source: 'wttr',
+  };
+}
+
+/**
+ * 国家气象中心公开预警列表：不依赖高德 Key，失败时静默降级为空。
+ * 只取最新 100 条，再按省 / 市 / 区关键词过滤标题；城市级预警通常都在这一页里。
+ */
+async function loadNmcAlarmItems({ fetchImpl, timeoutMs, now = Date.now }) {
+  const cached = alertCache.get('national');
+  const timestamp = now();
+  if (cached && cached.expiresAt > timestamp) {
+    return cached.items;
+  }
+
+  let items = [];
+  try {
+    const response = await fetchImpl('https://www.nmc.cn/rest/findAlarm?pageNo=1&pageSize=100', {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0 (compatible; yct-qq-bot/1.0)',
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (response.ok) {
+      const payload = await response.json();
+      const data = payload?.data;
+      items = [
+        ...(Array.isArray(data?.page?.list) ? data.page.list : []),
+        ...(Array.isArray(data?.provinceAlarms) ? data.provinceAlarms : []),
+      ];
+    }
+  } catch {
+    // 预警是附加信息：接口不可用时天气卡片仍然照常出。
+    items = [];
+  }
+  alertCache.set('national', { expiresAt: timestamp + alertCacheTtlMs, items });
+  return items;
+}
+
+function pickWeatherAlerts(items, keywords) {
+  const normalizedKeywords = [
+    ...new Set(
+      (Array.isArray(keywords) ? keywords : [])
+        .map((keyword) => String(keyword ?? '').trim())
+        .filter((keyword) => Array.from(keyword).length >= 2),
+    ),
+  ];
+  if (normalizedKeywords.length === 0) {
+    return [];
+  }
+  const seen = new Set();
+  const alerts = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const title = textValue(item?.title);
+    if (!title || !normalizedKeywords.some((keyword) => title.includes(keyword))) {
+      continue;
+    }
+    if (seen.has(title)) {
+      continue;
+    }
+    seen.add(title);
+    const level = /(蓝色|黄色|橙色|红色)预警/u.exec(title)?.[1] ?? '';
+    const type = /发布(.+?)(?:蓝色|黄色|橙色|红色)预警/u.exec(title)?.[1]?.trim() ?? '';
+    alerts.push({
+      title,
+      level,
+      type,
+      issuedAt: textValue(item?.issuetime),
+    });
+    if (alerts.length >= 2) {
+      break;
+    }
+  }
+  return alerts;
+}
+
+/** 行政区名去掉通用后缀，保留 2 字以上关键词，避免“市”“区”命中所有预警。 */
+function buildAlertKeywords(...names) {
+  const keywords = [];
+  for (const name of names) {
+    const text = textValue(name);
+    if (!text) {
+      continue;
+    }
+    const stripped = text.replace(/(?:新区|开发区|高新区|自治州|地区|盟|旗|省|市|区|县)$/u, '');
+    for (const value of [stripped, text]) {
+      if (Array.from(value).length >= 2) {
+        keywords.push(value);
+      }
+    }
+  }
+  return [...new Set(keywords)];
+}
+
+function parseCoordinates(value) {
+  const text = textValue(value);
+  if (!text) {
+    return undefined;
+  }
+  const [longitudeText, latitudeText] = text.split(',');
+  const longitude = Number(longitudeText);
+  const latitude = Number(latitudeText);
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+    return undefined;
+  }
+  return { longitude, latitude };
+}
+
+function convertTo24Hour(value) {
+  const text = textValue(value);
+  const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)?$/iu.exec(text);
+  if (!match) {
+    return '';
+  }
+  let hour = Number(match[1]);
+  const minute = match[2];
+  const meridiem = match[3]?.toUpperCase();
+  if (meridiem === 'PM' && hour < 12) {
+    hour += 12;
+  } else if (meridiem === 'AM' && hour === 12) {
+    hour = 0;
+  }
+  if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
+    return '';
+  }
+  return `${String(hour).padStart(2, '0')}:${minute}`;
+}
+
+/** 主要城市都在 UTC+8；这里用固定偏移算当地日期 / 分钟，避免依赖运行机器时区。 */
+function localDateKey(nowMs) {
+  const date = new Date(nowMs + 8 * 60 * 60 * 1000);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function localMinuteOfDay(nowMs) {
+  const date = new Date(nowMs + 8 * 60 * 60 * 1000);
+  return date.getUTCHours() * 60 + date.getUTCMinutes();
+}
+
+/**
+ * 用 NOAA 的近似公式按经纬度和日期算日出日落（当地时间，UTC+8）。
+ * 误差通常在一两分钟内，足够决定卡片主题色和“夜间”标签。
+ */
+function computeSunTimes({ longitude, latitude }, dateText) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(textValue(dateText));
+  if (!match) {
+    return {};
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const dayOfYear =
+    Math.floor((Date.UTC(year, month - 1, day, 12) - Date.UTC(year, 0, 1, 12)) / 86_400_000) + 1;
+  const gamma = ((2 * Math.PI) / 365) * (dayOfYear - 1 + 0.5);
+  const equationOfTime =
+    229.18 *
+    (0.000075 +
+      0.001868 * Math.cos(gamma) -
+      0.032077 * Math.sin(gamma) -
+      0.014615 * Math.cos(2 * gamma) -
+      0.040849 * Math.sin(2 * gamma));
+  const declination =
+    0.006918 -
+    0.399912 * Math.cos(gamma) +
+    0.070257 * Math.sin(gamma) -
+    0.006758 * Math.cos(2 * gamma) +
+    0.000907 * Math.sin(2 * gamma) -
+    0.002697 * Math.cos(3 * gamma) +
+    0.00148 * Math.sin(3 * gamma);
+  const latitudeRadians = (latitude * Math.PI) / 180;
+  const zenith = (90.833 * Math.PI) / 180;
+  const cosHourAngle =
+    Math.cos(zenith) / (Math.cos(latitudeRadians) * Math.cos(declination)) -
+    Math.tan(latitudeRadians) * Math.tan(declination);
+  if (cosHourAngle < -1 || cosHourAngle > 1) {
+    return {};
+  }
+  const hourAngle = (Math.acos(cosHourAngle) * 180) / Math.PI;
+  const sunriseUtcMinutes = 720 - 4 * (longitude + hourAngle) - equationOfTime;
+  const sunsetUtcMinutes = 720 - 4 * (longitude - hourAngle) - equationOfTime;
+  return {
+    sunrise: formatLocalMinutes(sunriseUtcMinutes + 8 * 60),
+    sunset: formatLocalMinutes(sunsetUtcMinutes + 8 * 60),
+  };
+}
+
+function formatLocalMinutes(value) {
+  const minutes = ((Math.round(value) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+function parseClockMinutes(value) {
+  const match = /^(\d{2}):(\d{2})$/u.exec(textValue(value));
+  if (!match) {
+    return null;
+  }
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function resolveDayPhase(sun, nowMs) {
+  const sunrise = parseClockMinutes(sun?.sunrise);
+  const sunset = parseClockMinutes(sun?.sunset);
+  if (sunrise === null || sunset === null) {
+    return undefined;
+  }
+  const current = localMinuteOfDay(nowMs);
+  if (current < sunrise - 45 || current > sunset + 45) {
+    return 'night';
+  }
+  if (current < sunrise + 45) {
+    return 'dawn';
+  }
+  if (current > sunset - 45) {
+    return 'dusk';
+  }
+  return 'day';
 }
 
 function maxRainChance(hourly) {
@@ -452,8 +797,15 @@ function round(value) {
   return Number.isFinite(numeric) ? Math.round(numeric * 10) / 10 : '--';
 }
 
+/** 卡片字段缺数据时留空，不把占位符渲染成“体感 --°”。 */
+function roundOrEmpty(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? String(Math.round(numeric * 10) / 10) : '';
+}
+
 /** 测试和手动排查时可以清缓存。 */
 export function clearWeatherCache() {
   cache.clear();
   adcodeCache.clear();
+  alertCache.clear();
 }

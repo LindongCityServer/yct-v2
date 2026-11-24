@@ -45,7 +45,14 @@ var materialIconPaths = {
   rainy: "M558-84q-15 8-30.5 2.5T504-102l-60-120q-8-15-2.5-30.5T462-276q15-8 30.5-2.5T516-258l60 120q8 15 2.5 30.5T558-84Zm240 0q-15 8-30.5 2.5T744-102l-60-120q-8-15-2.5-30.5T702-276q15-8 30.5-2.5T756-258l60 120q8 15 2.5 30.5T798-84Zm-480 0q-15 8-30.5 2.5T264-102l-60-120q-8-15-2.5-30.5T222-276q15-8 30.5-2.5T276-258l60 120q8 15 2.5 30.5T318-84Zm-18-236q-91 0-155.5-64.5T80-540q0-83 55-145t136-73q32-57 87.5-89.5T480-880q90 0 156.5 57.5T717-679q69 6 116 57t47 122q0 75-52.5 127.5T700-320H300Zm0-80h400q42 0 71-29t29-71q0-42-29-71t-71-29h-60v-40q0-66-47-113t-113-47q-48 0-87.5 26T333-704l-10 24h-25q-57 2-97.5 42.5T160-540q0 58 41 99t99 41Zm180-200Z",
   weather_snowy: "M224.5-214.5Q210-229 210-250t14.5-35.5Q239-300 260-300t35.5 14.5Q310-271 310-250t-14.5 35.5Q281-200 260-200t-35.5-14.5Zm120 120Q330-109 330-130t14.5-35.5Q359-180 380-180t35.5 14.5Q430-151 430-130t-14.5 35.5Q401-80 380-80t-35.5-14.5Zm120-120Q450-229 450-250t14.5-35.5Q479-300 500-300t35.5 14.5Q550-271 550-250t-14.5 35.5Q521-200 500-200t-35.5-14.5Zm240 0Q690-229 690-250t14.5-35.5Q719-300 740-300t35.5 14.5Q790-271 790-250t-14.5 35.5Q761-200 740-200t-35.5-14.5Zm-120 120Q570-109 570-130t14.5-35.5Q599-180 620-180t35.5 14.5Q670-151 670-130t-14.5 35.5Q641-80 620-80t-35.5-14.5ZM300-360q-91 0-155.5-64.5T80-580q0-83 55-145t136-73q32-57 87.5-89.5T480-920q90 0 156.5 57.5T717-719q69 6 116 57t47 122q0 75-52.5 127.5T700-360H300Zm0-80h400q42 0 71-29t29-71q0-42-29-71t-71-29h-60v-40q0-66-47-113t-113-47q-48 0-87.5 26T333-744l-10 24h-25q-57 2-97.5 42.5T160-580q0 58 41 99t99 41Zm180-100Z",
   foggy: "M720-200q-17 0-28.5-11.5T680-240q0-17 11.5-28.5T720-280q17 0 28.5 11.5T760-240q0 17-11.5 28.5T720-200ZM280-80q-17 0-28.5-11.5T240-120q0-17 11.5-28.5T280-160q17 0 28.5 11.5T320-120q0 17-11.5 28.5T280-80Zm-40-120q-17 0-28.5-11.5T200-240q0-17 11.5-28.5T240-280h360q17 0 28.5 11.5T640-240q0 17-11.5 28.5T600-200H240ZM400-80q-17 0-28.5-11.5T360-120q0-17 11.5-28.5T400-160h280q17 0 28.5 11.5T720-120q0 17-11.5 28.5T680-80H400ZM300-320q-91 0-155.5-64.5T80-540q0-83 55-145t136-73q32-57 87.5-89.5T480-880q90 0 156.5 57.5T717-679q69 6 116 57t47 122q0 75-52.5 127.5T700-320H300Zm0-80h400q42 0 71-29t29-71q0-42-29-71t-71-29h-60v-40q0-66-47-113t-113-47q-48 0-87.5 26T333-704l-10 24h-25q-57 2-97.5 42.5T160-540q0 58 41 99t99 41Zm180-200Z",
-  thunderstorm: "m300-40 36-100h-76l50-140h100l-43 100h83L340-40h-40Zm270-40 28-80h-78l43-120h100l-35 80h82L610-80h-40ZM300-320q-91 0-155.5-64.5T80-540q0-83 55-145t136-73q32-57 87.5-89.5T480-880q90 0 156.5 57.5T717-679q69 6 116 57t47 122q0 75-52.5 127.5T700-320H300Zm0-80h400q42 0 71-29t29-71q0-42-29-71t-71-29h-60v-40q0-66-47-113t-113-47q-48 0-87.5 26T333-704l-10 24h-25q-57 2-97.5 42.5T160-540q0 58 41 99t99 41Zm180-200Z"
+  thunderstorm: "m300-40 36-100h-76l50-140h100l-43 100h83L340-40h-40Zm270-40 28-80h-78l43-120h100l-35 80h82L610-80h-40ZM300-320q-91 0-155.5-64.5T80-540q0-83 55-145t136-73q32-57 87.5-89.5T480-880q90 0 156.5 57.5T717-679q69 6 116 57t47 122q0 75-52.5 127.5T700-320H300Zm0-80h400q42 0 71-29t29-71q0-42-29-71t-71-29h-60v-40q0-66-47-113t-113-47q-48 0-87.5 26T333-704l-10 24h-25q-57 2-97.5 42.5T160-540q0 58 41 99t99 41Zm180-200Z",
+  air: "M460-160q-50 0-85-35t-35-85h80q0 17 11.5 28.5T460-240q17 0 28.5-11.5T500-280q0-17-11.5-28.5T460-320H80v-80h380q50 0 85 35t35 85q0 50-35 85t-85 35ZM80-560v-80h540q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43h-80q0-59 40.5-99.5T620-840q59 0 99.5 40.5T760-700q0 59-40.5 99.5T620-560H80Zm660 320v-80q26 0 43-17t17-43q0-26-17-43t-43-17H80v-80h660q59 0 99.5 40.5T880-380q0 59-40.5 99.5T740-240Z",
+  warning: "m40-120 440-760 440 760H40Zm138-80h604L480-720 178-200Zm330.5-51.5Q520-263 520-280t-11.5-28.5Q497-320 480-320t-28.5 11.5Q440-297 440-280t11.5 28.5Q463-240 480-240t28.5-11.5ZM440-360h80v-200h-80v200Zm40-100Z",
+  thermostat: "M520-520v-80h200v80H520Zm0-160v-80h320v80H520ZM178.5-178.5Q120-237 120-320q0-48 21-89.5t59-70.5v-240q0-50 35-85t85-35q50 0 85 35t35 85v240q38 29 59 70.5t21 89.5q0 83-58.5 141.5T320-120q-83 0-141.5-58.5ZM200-320h240q0-29-12.5-54T392-416l-32-24v-280q0-17-11.5-28.5T320-760q-17 0-28.5 11.5T280-720v280l-32 24q-23 17-35.5 42T200-320Z",
+  waves: "M80-146v-78q29 0 49.5-9t41.5-19.5q21-10.5 46.5-19t63-8.5q37.5 0 62 8.5t45.5 19q21 10.5 42 19.5t50 9q29 0 50-9t42-19.5q21-10.5 46-19t62.5-8.5q37.5 0 62.5 8.5t46 19q21 10.5 42 19.5t49 9v78q-38 0-63.5-9T770-174.5q-21-10.5-41-19t-49-8.5q-28 0-48.5 8.5t-41 19Q570-164 544.5-155t-64.5 9q-39 0-64.5-9t-46-19.5Q349-185 329-193.5t-48.5-8.5q-28.5 0-49 8.5t-41.5 19Q169-164 143.5-155T80-146Zm0-178v-78q29 0 49.5-9t41.5-19.5q21-10.5 46.5-19t63-8.5q37.5 0 62 8.5t45.5 19q21 10.5 42 19.5t50 9q29 0 50-9t42-19.5q21-10.5 46-19t62-8.5q38 0 63 8.5t46 19q21 10.5 42 19.5t49 9v78q-38 0-63.5-9T770-352.5q-21-10.5-41-19t-49-8.5q-29 0-49.5 8.5t-41 19Q569-342 544-333t-64 9q-39 0-64.5-9t-46-19.5Q349-363 329-371.5t-48.5-8.5q-28.5 0-49 8.5t-41.5 19Q169-342 143.5-333T80-324Zm0-178v-78q29 0 49.5-9t41.5-19.5q21-10.5 46.5-19t63-8.5q37.5 0 62 8.5t45.5 19q21 10.5 42 19.5t50 9q29 0 50-9t42-19.5q21-10.5 46-19t62-8.5q38 0 63 8.5t46 19q21 10.5 42 19.5t49 9v78q-38 0-63.5-9T770-530.5q-21-10.5-41-19t-49-8.5q-28 0-48.5 8.5t-41 19Q570-520 544.5-511t-64.5 9q-39 0-64.5-9t-46-19.5Q349-541 329-549.5t-48.5-8.5q-28.5 0-49 8.5t-41.5 19Q169-520 143.5-511T80-502Zm0-178v-78q29 0 49.5-9t41.5-19.5q21-10.5 46.5-19t63-8.5q37.5 0 62 8.5t45.5 19q21 10.5 42 19.5t50 9q29 0 50-9t42-19.5q21-10.5 46-19t62-8.5q38 0 63 8.5t46 19q21 10.5 42 19.5t49 9v78q-38 0-63.5-9T770-708.5q-21-10.5-41-19t-49-8.5q-28 0-48.5 8.5t-41 19Q570-698 544.5-689t-64.5 9q-39 0-64.5-9t-46-19.5Q349-719 329-727.5t-48.5-8.5q-28.5 0-49 8.5t-41.5 19Q169-698 143.5-689T80-680Z",
+  water: "M80-240v-80q38 0 56.5-20t77.5-20q59 0 77.5 20t54.5 20q38 0 56.5-20t77.5-20q57 0 77.5 20t56.5 20q38 0 55.5-20t76.5-20q59 0 77.5 20t56.5 20v80q-57 0-77.5-20T746-280q-36 0-54.5 20T614-240q-57 0-77.5-20T480-280q-38 0-56.5 20T346-240q-59 0-76.5-20T214-280q-38 0-56.5 20T80-240Zm0-160v-80q38 0 56.5-20t77.5-20q57 0 76.5 20t55.5 20q38 0 56.5-20t77.5-20q57 0 77 20t55 20q38 0 56.5-20t77.5-20q57 0 77.5 20t56.5 20v80q-59 0-78.5-20T746-440q-36 0-54.5 20T614-400q-57 0-77.5-20T480-440q-38 0-55.5 20T348-400q-59 0-78.5-20T214-440q-36 0-56.5 20T80-400Zm0-160v-80q38 0 56.5-20t77.5-20q57 0 76.5 20t55.5 20q38 0 56.5-20t77.5-20q57 0 77 20t55 20q38 0 56.5-20t77.5-20q57 0 77.5 20t56.5 20v80q-59 0-78.5-20T746-600q-36 0-54.5 20T614-560q-57 0-77.5-20T480-600q-38 0-55.5 20T348-560q-59 0-78.5-20T214-600q-36 0-56.5 20T80-560Z",
+  local_fire_department: "M240-400q0 52 21 98.5t60 81.5q-1-5-1-9v-9q0-32 12-60t35-51l113-111 113 111q23 23 35 51t12 60v9q0 4-1 9 39-35 60-81.5t21-98.5q0-50-18.5-94.5T648-574q-20 13-42 19.5t-45 6.5q-62 0-107.5-41T401-690q-39 33-69 68.5t-50.5 72Q261-513 250.5-475T240-400Zm240 52-57 56q-11 11-17 25t-6 29q0 32 23.5 55t56.5 23q33 0 56.5-23t23.5-55q0-16-6-29.5T537-292l-57-56Zm0-492v132q0 34 23.5 57t57.5 23q18 0 33.5-7.5T622-658l18-22q74 42 117 117t43 163q0 134-93 227T480-80q-134 0-227-93t-93-227q0-129 86.5-245T480-840Z",
+  severe_cold: "M800-560q-17 0-28.5-11.5T760-600q0-17 11.5-28.5T800-640q17 0 28.5 11.5T840-600q0 17-11.5 28.5T800-560ZM400-80v-144L296-120l-56-56 160-160v-64h-64L176-240l-56-56 104-104H80v-80h144L120-584l56-56 160 160h64v-64L240-704l56-56 104 104v-144h80v144l104-104 56 56-160 160v64h320v80H656l104 104-56 56-160-160h-64v64l160 160-56 56-104-104v144h-80Zm360-600v-200h80v200h-80Z"
 };
 function parseQqBotCardPayload(payload) {
   if (!payload || payload.length > 4096) {
@@ -154,6 +161,21 @@ function normalizeCard(input) {
         }),
         2
       );
+      const alerts = normalizeRows(
+        card.alerts,
+        (row) => ({
+          title: cleanText(row.title, 80),
+          level: cleanText(row.level, 8),
+          type: cleanText(row.type, 16),
+          issuedAt: cleanText(row.issuedAt, 24)
+        }),
+        2
+      )?.filter((alert) => alert.title);
+      const sun = card.sun && typeof card.sun === "object" ? {
+        sunrise: cleanText(card.sun.sunrise, 8),
+        sunset: cleanText(card.sun.sunset, 8),
+        phase: cleanText(card.sun.phase, 8)
+      } : void 0;
       return {
         type: "weather",
         place: cleanText(card.place, 30) || "\u5F53\u5730",
@@ -166,6 +188,8 @@ function normalizeCard(input) {
           wind: cleanText(current.wind, 24)
         },
         days: days ?? [],
+        alerts: alerts ?? [],
+        sun,
         updated: cleanText(card.updated, 24),
         footer: cleanText(card.footer, 80)
       };
@@ -349,10 +373,8 @@ function buildResultCard(card) {
   });
 }
 function buildWeatherCard(card) {
-  const color = weatherColor(
-    card.current.condition,
-    ...card.days.map((day) => day.condition ?? "")
-  );
+  const theme = resolveWeatherTheme(card);
+  const color = theme.color;
   const details = [
     card.current.feels ? `\u4F53\u611F ${card.current.feels}\xB0` : "",
     card.current.humidity ? `\u6E7F\u5EA6 ${card.current.humidity}%` : "",
@@ -363,8 +385,14 @@ function buildWeatherCard(card) {
   const temperatureText = hasTemperature ? `${temperature}\xB0` : "\u2014";
   const tempSize = !hasTemperature ? 96 : Array.from(temperature).length > 3 ? 90 : 112;
   const summaryX = Math.max(250, Math.round(28 + estimateTextWidth(temperatureText, tempSize) + 8));
+  const alerts = (card.alerts ?? []).filter((alert) => alert.title.trim().length > 0).slice(0, 2);
+  const alertBlockHeight = alerts.length > 0 ? alerts.length * 52 + 16 : 0;
+  const alertStartX = 48;
+  const alertStartY = 440;
+  const forecastLabelY = 438 + alertBlockHeight;
+  const daysStartY = 466 + alertBlockHeight;
   const days = card.days.slice(0, 2).map((day, index) => {
-    const y = 466 + index * 70;
+    const y = daysStartY + index * 70;
     return [
       `<g transform="translate(40,${y})">`,
       `<text x="0" y="28" font-size="22" font-weight="700" fill="${colors.text}">${escapeXml(day.label)}</text>`,
@@ -381,22 +409,41 @@ function buildWeatherCard(card) {
       "</g>"
     ].join("");
   }).join("");
-  const forecast = days || `<text x="40" y="466" font-size="16" fill="${colors.textMuted}">\u6682\u65E0\u9884\u62A5\u6570\u636E</text>`;
+  const forecast = days || `<text x="40" y="${daysStartY}" font-size="16" fill="${colors.textMuted}">\u6682\u65E0\u9884\u62A5\u6570\u636E</text>`;
+  const sunText = card.sun?.sunrise && card.sun?.sunset ? `\u65E5\u51FA ${card.sun.sunrise} \xB7 \u65E5\u843D ${card.sun.sunset}` : "";
+  const alertSvg = alerts.map((alert, index) => {
+    const levelColor = weatherAlertColor(alert.level);
+    const iconName = weatherAlertIconName(alert);
+    const meta = [
+      alert.issuedAt ? `${alert.issuedAt} \u53D1\u5E03` : "",
+      alert.level ? `${alert.level}\u9884\u8B66` : "\u6C14\u8C61\u9884\u8B66"
+    ].filter(Boolean).join(" \xB7 ");
+    return [
+      `<g transform="translate(${alertStartX},${alertStartY + index * 52})" data-alert-icon="${iconName}">`,
+      // 不加底色、边框或左侧色条：只保留彩色图标 + 两行文字，避免预警区看起来比正文还重。
+      renderMaterialIconPath(iconName, 0, 4, 20, levelColor),
+      `<text x="28" y="16" font-size="15" font-weight="700" fill="${levelColor}">${escapeXml(shortText(alert.title, 36))}</text>`,
+      `<text x="28" y="35" font-size="12" fill="${colors.textSecondary}">${escapeXml(meta)}</text>`,
+      "</g>"
+    ].join("");
+  }).join("");
   const body = [
     `<g transform="translate(40,160)">`,
     `<rect width="640" height="260" rx="22" fill="${color}" fill-opacity="0.09"/>`,
     `<text x="28" y="42" font-size="14" font-weight="600" fill="${colors.textMuted}">\u73B0\u5728</text>`,
     `<text x="28" y="170" font-size="${tempSize}" font-weight="700" fill="${hasTemperature ? colors.text : colors.textMuted}">${escapeXml(temperatureText)}</text>`,
-    `<text x="${summaryX}" y="122" font-size="30" font-weight="700" fill="${colors.text}">${escapeXml(card.current.condition)}</text>`,
+    `<text x="${summaryX}" y="122" font-size="30" font-weight="700" fill="${colors.text}">${escapeXml(theme.conditionLabel)}</text>`,
     details ? `<text x="${summaryX}" y="164" font-size="16" fill="${colors.textSecondary}">${escapeXml(details)}</text>` : "",
+    sunText ? `<text x="28" y="238" font-size="14" fill="${colors.textSecondary}">${escapeXml(sunText)}</text>` : "",
     renderMaterialIconPath(weatherIconName(card.current.condition), 520, 190, 104, color),
     card.updated ? `<text x="612" y="42" text-anchor="end" font-size="13" fill="${colors.textMuted}">${escapeXml(card.updated)}</text>` : "",
     "</g>",
-    `<text x="40" y="438" font-size="13" font-weight="700" letter-spacing="2" fill="${colors.textMuted}">\u5929\u6C14\u9884\u62A5</text>`,
+    alertSvg,
+    `<text x="40" y="${forecastLabelY}" font-size="13" font-weight="700" letter-spacing="2" fill="${colors.textMuted}">\u5929\u6C14\u9884\u62A5</text>`,
     forecast
   ].join("");
   return buildFrame({
-    height: 700,
+    height: 700 + alertBlockHeight,
     color,
     icon: "partly_cloudy_day",
     title: `${card.place}\u5929\u6C14`,
@@ -536,9 +583,9 @@ function buildGb2312Card(card) {
         entry.position % 10
       ];
       return digits.map((digit, column) => {
-        const x = startX + (6 + 16 * (group * 4 + column) + 8) * scale;
-        const rowIndex = digit === 0 ? 9 : digit - 1;
-        const y = baseY + (38 + rowIndex * 9.4 + 4.7) * scale;
+        const x = startX + (6 + 16 * (group * 4 + column) + 7.6) * scale;
+        const rowIndex = digit;
+        const y = baseY + (45.1 + rowIndex * 9) * scale;
         return `<rect x="${x - 5 * scale}" y="${y - 1.6 * scale}" width="${10 * scale}" height="${3.2 * scale}" rx="1" fill="#111817"/>`;
       }).join("");
     }).join("");
@@ -1276,6 +1323,112 @@ function weatherColor(...conditions) {
     return "#D98A1E";
   }
   return "#2584E8";
+}
+function resolveWeatherTheme(card) {
+  const base = weatherColor(card.current.condition, ...card.days.map((day) => day.condition ?? ""));
+  const phase = String(card.sun?.phase ?? "");
+  let color = base;
+  if (phase === "night") {
+    color = blendHexColor("#22304A", base, 0.22);
+  } else if (phase === "dawn") {
+    color = blendHexColor("#C96F52", base, 0.38);
+  } else if (phase === "dusk") {
+    color = blendHexColor("#9C5570", base, 0.38);
+  }
+  const temperature = Number.parseFloat(card.current.temp.replace(/[−－]/gu, "-"));
+  const temperatureColor = Number.isFinite(temperature) ? weatherTemperatureColor(temperature) : color;
+  if (Number.isFinite(temperature)) {
+    color = blendHexColor(color, temperatureColor, 0.2);
+  }
+  const phaseLabel = phase === "night" ? "\u591C\u95F4" : phase === "dawn" ? "\u6E05\u6668" : phase === "dusk" ? "\u508D\u665A" : "";
+  return {
+    color,
+    phaseLabel,
+    conditionLabel: phaseLabel ? `${card.current.condition} \xB7 ${phaseLabel}` : card.current.condition
+  };
+}
+function weatherTemperatureColor(temperature) {
+  if (temperature <= -10) {
+    return "#3E8FCC";
+  }
+  if (temperature <= 0) {
+    return "#4A9AD4";
+  }
+  if (temperature <= 10) {
+    return "#3D7EDB";
+  }
+  if (temperature <= 18) {
+    return "#2E9E8F";
+  }
+  if (temperature <= 25) {
+    return "#2F9D6F";
+  }
+  if (temperature <= 30) {
+    return "#D98A2B";
+  }
+  return "#D9543F";
+}
+function weatherAlertColor(level) {
+  switch (String(level ?? "").trim()) {
+    case "\u84DD\u8272":
+      return "#2F7FD1";
+    case "\u9EC4\u8272":
+      return "#C99512";
+    case "\u6A59\u8272":
+      return "#E07A26";
+    case "\u7EA2\u8272":
+      return "#D64545";
+    default:
+      return colors.accentGray;
+  }
+}
+function weatherAlertIconName(alert) {
+  const text = `${alert.type ?? ""} ${alert.title ?? ""}`;
+  if (/台风|飓风|龙卷|大风|风暴/u.test(text)) {
+    return /海上|海浪|浪潮|风暴潮|海区|海洋/u.test(text) ? "waves" : "air";
+  }
+  if (/海浪|大浪|风暴潮|海啸/u.test(text)) {
+    return "waves";
+  }
+  if (/暴雨|洪水|山洪|渍涝|积水|地质灾害|泥石流|滑坡/u.test(text)) {
+    return "water";
+  }
+  if (/雷电|雷雨|冰雹|强对流/u.test(text)) {
+    return "thunderstorm";
+  }
+  if (/暴雪|大雪|道路冰雪|结冰|霜冻|寒潮|低温|严寒|冰冻|冻害/u.test(text)) {
+    return "severe_cold";
+  }
+  if (/高温|中暑|热浪|酷热/u.test(text)) {
+    return "thermostat";
+  }
+  if (/大雾|雾|霾|沙尘|扬沙|浮尘|能见度/u.test(text)) {
+    return "foggy";
+  }
+  if (/森林|草原|火险|火灾/u.test(text)) {
+    return "local_fire_department";
+  }
+  if (/干旱|旱情/u.test(text)) {
+    return "sunny";
+  }
+  return "warning";
+}
+function blendHexColor(from, to, weightTo) {
+  const parse = (value) => {
+    const match = /^#([0-9a-fA-F]{6})$/u.exec(value);
+    if (!match) {
+      return [0, 0, 0];
+    }
+    const numeric = Number.parseInt(match[1], 16);
+    return [numeric >> 16 & 255, numeric >> 8 & 255, numeric & 255];
+  };
+  const weight = Math.max(0, Math.min(1, weightTo));
+  const fromRgb = parse(from);
+  const toRgb = parse(to);
+  const mixed = fromRgb.map(
+    (channel, index) => Math.round(channel + (toRgb[index] - channel) * weight)
+  );
+  return `#${mixed.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 function wrapDescription(description) {
   const lines = [];

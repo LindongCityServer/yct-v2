@@ -30,6 +30,7 @@ import {
   createQqBotMaterialRandom,
   createQqBotMaterialSignature,
   normalizeQqBotMaterialSeed,
+  orderQqBotMaterialCandidates,
   postProcessQqBotMaterialPng,
   qqBotMaterialTemplateEntries,
   qqBotMaterialTemplateIds,
@@ -40,6 +41,7 @@ import {
   resolveQqBotMaterialKind,
   resolveQqBotMaterialSlug,
   resolveQqBotMaterialTemplate,
+  resolveQqBotMaterialThemeColor,
   tryAcquireQqBotMaterialRenderSlot,
   verifyQqBotMaterialSignature,
   type QqBotMaterialKind,
@@ -67,7 +69,10 @@ import {
   NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID,
   ROAD_NAME_DIRECTION_TEMPLATE_ID,
 } from '../../apps/web/lib/material-template-ids';
-import { renderMaterialTemplateToPng } from '../../apps/web/lib/material-renderer';
+import {
+  renderMaterialTemplateToPng,
+  renderMaterialTemplateToSvg,
+} from '../../apps/web/lib/material-renderer';
 import {
   METRO_WAYFINDING_TEMPLATE_ID,
   serializeMetroWayfindingLayout,
@@ -607,6 +612,111 @@ test('seed 派生 xorshift：同 seed + kind 可复现', () => {
   assert.throws(() => first.nextInt(0));
 });
 
+test('盲盒按对象 → 版式 → 样式等概率，候选数量不影响对象权重', () => {
+  interface SampleCandidate {
+    id: string;
+    objectKey: string;
+    layoutKey: string;
+    styleKey: string;
+  }
+  const make = (
+    objectKey: string,
+    layoutKey: string,
+    styleKey: string,
+    id: string,
+  ): SampleCandidate => ({ id, objectKey, layoutKey, styleKey });
+
+  // 对象 A 有 60 个候选，对象 B 只有 1 个；先抽对象时两者应各约 50%。
+  const skewed: SampleCandidate[] = [
+    ...Array.from({ length: 60 }, (_, index) => make('road:a', 'road', 'default', `a${index}`)),
+    make('road:b', 'road', 'default', 'b'),
+  ];
+  let objectACount = 0;
+  for (let index = 0; index < 600; index += 1) {
+    const ordered = orderQqBotMaterialCandidates(
+      skewed,
+      createQqBotMaterialRandom(`object${index}`, 'random'),
+    );
+    assert.equal(ordered.length, skewed.length, '排序不应丢失候选');
+    assert.equal(new Set(ordered.map((candidate) => candidate.id)).size, skewed.length);
+    if (ordered[0]!.objectKey === 'road:a') {
+      objectACount += 1;
+    }
+  }
+  assert.ok(
+    objectACount >= 240 && objectACount <= 360,
+    `两个对象的首次抽取应接近 1:1（实际 A=${objectACount}/600）`,
+  );
+
+  // 同一对象有 3 个版式（线路图 2 种样式、站名、方向），各版式应约 1/3。
+  const layouts: SampleCandidate[] = [
+    make('metro:x', 'line-map', 'new', 'map-new'),
+    make('metro:x', 'line-map', 'classic', 'map-classic'),
+    make('metro:x', 'station-name', 'new', 'name'),
+    make('metro:x', 'direction', 'new', 'direction'),
+  ];
+  const layoutCounts = new Map<string, number>();
+  for (let index = 0; index < 600; index += 1) {
+    const ordered = orderQqBotMaterialCandidates(
+      layouts,
+      createQqBotMaterialRandom(`layout${index}`, 'metro_line'),
+    );
+    const firstLayout = ordered[0]!.layoutKey;
+    layoutCounts.set(firstLayout, (layoutCounts.get(firstLayout) ?? 0) + 1);
+  }
+  for (const layoutKey of ['line-map', 'station-name', 'direction']) {
+    const count = layoutCounts.get(layoutKey) ?? 0;
+    assert.ok(
+      count >= 140 && count <= 260,
+      `版式 ${layoutKey} 首次抽取应接近 1/3（实际 ${count}/600）`,
+    );
+  }
+});
+
+test('物料卡主题色：线路色 → 物料色 → 项目强调色', () => {
+  // 线路色（accentColor）优先级最高。
+  assert.equal(
+    resolveQqBotMaterialThemeColor({
+      templateId: METRO_DIRECTION_OLD_TEMPLATE_ID,
+      values: { accentColor: '#E4007F' },
+    }),
+    '#e4007f',
+  );
+  // 显式传入的线路色高于模板里的颜色字段。
+  assert.equal(
+    resolveQqBotMaterialThemeColor({
+      templateId: METRO_DIRECTION_OLD_TEMPLATE_ID,
+      values: { accentColor: '#E4007F' },
+      lineColor: '#00AA00',
+    }),
+    '#00aa00',
+  );
+  // 路牌使用牌面自己的 signColor。
+  assert.equal(
+    resolveQqBotMaterialThemeColor({
+      templateId: ROAD_NAME_DIRECTION_TEMPLATE_ID,
+      values: { signColor: '#004796' },
+    }),
+    '#004796',
+  );
+  // 没有颜色字段的模板使用牌面固定底色。
+  assert.equal(
+    resolveQqBotMaterialThemeColor({
+      templateId: NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID,
+      values: {},
+    }),
+    '#000099',
+  );
+  // 都没有时回退项目强调色。
+  assert.equal(
+    resolveQqBotMaterialThemeColor({
+      templateId: METRO_DIRECTION_OLD_TEMPLATE_ID,
+      values: {},
+    }),
+    '#168f78',
+  );
+});
+
 test('HMAC 签名：格式、时间窗与篡改拒绝', () => {
   const secret = 'verify-secret';
   const body = JSON.stringify({ kind: 'random', templateId: 'x' });
@@ -1066,6 +1176,53 @@ test('渲染接口：HMAC 验签、错误码与响应契约', async () => {
       process.env.YCT_QQ_MATERIAL_SECRET = previousSecret;
     }
   }
+});
+
+test('旧版地铁方向牌的长站名不会画出画布右缘', () => {
+  const template = resolveQqBotMaterialTemplate(METRO_DIRECTION_OLD_TEMPLATE_ID);
+  const canvas = resolveQqBotMaterialCanvas(template);
+  const values = filterTemplateFixture(template, {
+    ...createMetroDirectionFixture(),
+    nextStationName: '中科院金属研究所',
+    nextStationPinyin: 'ZHONGKEYUANJINSHUYANJIUSUO',
+    doorDirection: 'left',
+  });
+  const rendered = renderMaterialTemplateToSvg({
+    template,
+    values,
+    canvas,
+    validation: { allowMissingServerDerivedValues: true },
+  });
+  assert.equal(rendered.widthPx, 1020);
+
+  const readText = (content: string): { x: number; fontSize: number; spacing: number } => {
+    const tag = new RegExp(
+      `<text\\b([^>]*)>${content.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}</text>`,
+      'u',
+    ).exec(rendered.svg)?.[1];
+    assert.ok(tag, `SVG 里应包含 ${content}`);
+    return {
+      x: Number(/\bx="([^"]+)"/u.exec(tag)?.[1] ?? 0),
+      fontSize: Number(/\bfont-size="([^"]+)"/u.exec(tag)?.[1] ?? 0),
+      spacing: Number(/\bletter-spacing="([^"]+)"/u.exec(tag)?.[1] ?? 0),
+    };
+  };
+
+  const station = readText('中科院金属研究所');
+  const stationWidth =
+    Array.from('中科院金属研究所').length * station.fontSize +
+    (Array.from('中科院金属研究所').length - 1) * station.spacing;
+  assert.ok(
+    station.x + stationWidth <= rendered.widthPx - 1,
+    `站名右缘 ${station.x + stationWidth} 超出画布 ${rendered.widthPx}`,
+  );
+
+  const pinyin = readText('ZHONGKEYUANJINSHUYANJIUSUO');
+  const pinyinWidth = Array.from('ZHONGKEYUANJINSHUYANJIUSUO').length * pinyin.fontSize * 0.62;
+  assert.ok(
+    pinyin.x + pinyinWidth <= rendered.widthPx - 1,
+    `拼音右缘 ${pinyin.x + pinyinWidth} 超出画布 ${rendered.widthPx}`,
+  );
 });
 
 process.on('exit', () => {

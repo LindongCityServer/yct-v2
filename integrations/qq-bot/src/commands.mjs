@@ -8,7 +8,7 @@ import { shanghaiDateKey } from './community.mjs';
 import { fetchTodayHistory } from './history.mjs';
 import { lookupIp } from './ip.mjs';
 import { randomInteger, rollDice } from './random.mjs';
-import { fetchWeather } from './weather.mjs';
+import { fetchWeatherReport } from './weather.mjs';
 import { getBotVersion } from './version.mjs';
 import { QqLinkClient } from './ldpass-link.mjs';
 import { handleSignageCommand, signageCommands } from './signage.mjs';
@@ -166,7 +166,8 @@ export async function handleCommand({
   context,
   community,
   fetchImpl = fetch,
-  weather = fetchWeather,
+  weather = null,
+  weatherReport = fetchWeatherReport,
   couplet = makeCouplet,
   ipLookup = lookupIp,
   history = fetchTodayHistory,
@@ -435,29 +436,29 @@ export async function handleCommand({
       }
       case 'weather': {
         const city = args || config?.weather?.city || '';
-        const reply = await weather({
+        const date = contextDate(context);
+        if (typeof weather === 'function') {
+          // 兼容测试 / 旧调用：注入的函数只返回文本，卡片仍从文本解析。
+          const reply = await weather({
+            city,
+            amapKey: config?.weather?.amapKey,
+            fetchImpl,
+          });
+          return {
+            handled: true,
+            reply,
+            card: buildWeatherCardFromText(reply, { city, date }),
+          };
+        }
+        const report = await weatherReport({
           city,
           amapKey: config?.weather?.amapKey,
           fetchImpl,
         });
-        const [header = '', ...lines] = reply.split('\n');
-        const place = header.replace(/天气.*$/u, '').trim() || city || '当地';
-        const updated = /（([^）]*更新)）/u.exec(header)?.[1] ?? '';
-        const currentLine = lines.find((line) => /^现在/u.test(line)) ?? '';
-        const dayLines = lines.filter((line) => /^(今天|明天)/u.test(line));
-        const current = parseWeatherCurrent(currentLine);
         return {
           handled: true,
-          reply,
-          card: {
-            type: 'weather',
-            place,
-            date: contextDate(context),
-            updated,
-            current,
-            days: dayLines.map(parseWeatherDay).filter(Boolean),
-            footer: '数据来自公开天气服务',
-          },
+          reply: report.text,
+          card: buildWeatherCardFromReport(report, date),
         };
       }
       case 'ip': {
@@ -1727,6 +1728,64 @@ function parseDiceSpec(rawArgs) {
 // 天气服务通常返回 ASCII 负号，少数镜像会用全角或数学负号；统一成半角再拼卡片。
 function normalizeSignedNumber(value) {
   return value.replace(/[−－]/gu, '-');
+}
+
+function buildWeatherCardFromText(reply, { city, date }) {
+  const [header = '', ...lines] = String(reply ?? '').split('\n');
+  const place = header.replace(/天气.*$/u, '').trim() || city || '当地';
+  const updated = /（([^）]*更新)）/u.exec(header)?.[1] ?? '';
+  const currentLine = lines.find((line) => /^现在/u.test(line)) ?? '';
+  const dayLines = lines.filter((line) => /^(今天|明天)/u.test(line));
+  return {
+    type: 'weather',
+    place,
+    date,
+    updated,
+    current: parseWeatherCurrent(currentLine),
+    days: dayLines.map(parseWeatherDay).filter(Boolean),
+    footer: '数据来自公开天气服务',
+  };
+}
+
+function buildWeatherCardFromReport(report, date) {
+  const current = report?.current ?? {};
+  return {
+    type: 'weather',
+    place: String(report?.place ?? '当地'),
+    date,
+    updated: String(report?.updated ?? ''),
+    current: {
+      temp: String(current.temp ?? '--'),
+      condition: String(current.condition ?? '天气未知'),
+      feels: current.feels ? String(current.feels) : '',
+      humidity: current.humidity ? String(current.humidity) : '',
+      wind: current.wind ? String(current.wind) : '',
+    },
+    days: Array.isArray(report?.days)
+      ? report.days.slice(0, 2).map((day) => ({
+          label: String(day?.label ?? ''),
+          low: day?.low === undefined ? '' : String(day.low),
+          high: day?.high === undefined ? '' : String(day.high),
+          condition: String(day?.condition ?? ''),
+        }))
+      : [],
+    alerts: Array.isArray(report?.alerts)
+      ? report.alerts.slice(0, 2).map((alert) => ({
+          title: String(alert?.title ?? ''),
+          level: String(alert?.level ?? ''),
+          type: String(alert?.type ?? ''),
+          issuedAt: String(alert?.issuedAt ?? ''),
+        }))
+      : [],
+    sun: report?.sun
+      ? {
+          sunrise: String(report.sun.sunrise ?? ''),
+          sunset: String(report.sun.sunset ?? ''),
+          phase: String(report.sun.phase ?? ''),
+        }
+      : undefined,
+    footer: '数据来自公开天气服务',
+  };
 }
 
 function parseWeatherCurrent(line) {

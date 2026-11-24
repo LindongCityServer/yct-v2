@@ -1201,9 +1201,7 @@ function renderMetroLineMapVertical(
     8,
   );
   const labelRowScale = layoutScale * (isBoth ? classicStationScale : 1);
-  const labelRowMaxWidth = isBoth
-    ? (isClassicBoth ? 30 : 28) * widthScale
-    : singleMaxLabelWidth;
+  const labelRowMaxWidth = isBoth ? (isClassicBoth ? 30 : 28) * widthScale : singleMaxLabelWidth;
   // 当前站高亮框左右各有内边距，正文可用宽度更窄。
   const currentPaddingUnits = isClassicBoth ? 0 : isBoth ? 3 : 4;
   let stationTextFit = 1;
@@ -1970,7 +1968,10 @@ function renderMetroVerticalLineMapHeader(input: {
     textMaxWidth,
   );
   const englishWidth = englishText
-    ? Math.min(estimateMetroLineMapTextWidth(englishText, englishFontSize) * headerFit, textMaxWidth)
+    ? Math.min(
+        estimateMetroLineMapTextWidth(englishText, englishFontSize) * headerFit,
+        textMaxWidth,
+      )
     : 0;
   const textWidth = Math.max(titleWidth, englishWidth, 1);
   const hasBadge = Boolean(lineLabel);
@@ -2720,10 +2721,7 @@ export function resolveMetroSignTextRegions(
   );
   const badgeRadius = style === 'classic' ? 21 : 18;
   const badgeCy = style === 'classic' ? 56 : 43.5;
-  const classicDestinationWidth = estimateMetroLineMapTextWidth(
-    `开往${terminalName}`,
-    32 * yScale,
-  );
+  const classicDestinationWidth = estimateMetroLineMapTextWidth(`开往${terminalName}`, 32 * yScale);
   const badgeCx =
     style === 'classic'
       ? doorRight
@@ -2731,8 +2729,7 @@ export function resolveMetroSignTextRegions(
         : 106 + destinationShift + classicDestinationWidth + 24 + badgeRadius
       : (doorRight ? 133 : 392) + infoShift;
   const destinationX =
-    (style === 'classic' ? (doorRight ? 463.6 : 106) : doorRight ? 421 : 160.87) +
-    destinationShift;
+    (style === 'classic' ? (doorRight ? 463.6 : 106) : doorRight ? 421 : 160.87) + destinationShift;
   const destinationBaseline = (style === 'classic' ? 60.84 : 58.34) * yScale;
   const destinationEnglishBaseline = (style === 'classic' ? 81.5 : 80.48) * yScale;
   const stationColumnWidth = doorRight ? 150 : 138;
@@ -2747,8 +2744,26 @@ export function resolveMetroSignTextRegions(
     ),
     80,
   );
-  const stationLabelTextX =
-    style === 'modern' && doorRight ? 206 + infoShift - estimatedStationWidth : stationColumnX;
+  const classicLeftStationBlock =
+    style === 'classic' && !doorRight
+      ? resolveClassicLeftStationBlock({
+          canvasWidth: width,
+          yScale,
+          nextStationName,
+          nextStationPinyin,
+          stationColumnX,
+          badgeCx,
+          badgeRadius,
+        })
+      : undefined;
+  const stationLabelTextX = classicLeftStationBlock
+    ? classicLeftStationBlock.stationX
+    : style === 'modern' && doorRight
+      ? 206 + infoShift - estimatedStationWidth
+      : stationColumnX;
+  const stationRegionWidth = classicLeftStationBlock
+    ? classicLeftStationBlock.stationWidth
+    : Math.min(stationColumnWidth, width);
   const regions: MetroSignTextRegion[] = [
     {
       id: 'direction-destination',
@@ -2775,9 +2790,9 @@ export function resolveMetroSignTextRegions(
       fieldKey: 'nextStationName',
       groupKey: 'next-station',
       // 旧版左开门时信息列贴着画布右缘，热区需要收回到画布内。
-      x: Math.max(0, Math.min(stationLabelTextX, width - stationColumnWidth)),
+      x: Math.max(0, Math.min(stationLabelTextX, width - stationRegionWidth)),
       y: (style === 'classic' ? 90.06 : 94.36) * yScale - 14 * yScale,
-      width: Math.min(stationColumnWidth, width),
+      width: stationRegionWidth,
       height: 30 * yScale,
     },
   ];
@@ -2794,6 +2809,58 @@ export function resolveMetroSignTextRegions(
     });
   }
   return regions;
+}
+
+/**
+ * 旧版左开门方向牌的「下一站」信息块。
+ *
+ * 设计稿里站名从 506 开始、画布只有 576 宽，短站名刚好落在右缘留白里；
+ * 画布加长到 6:1 后如果仍把起点固定在 506，长站名会直接画出画布。
+ * 这里先保持设计位置，只有站名 / 拼音会越过右缘时才把整块（下一站 + 站名）
+ * 一起左移；仍然放不下时再按可用宽度缩字号（由 renderMetroSignText 的 maxWidth 完成）。
+ */
+function resolveClassicLeftStationBlock(input: {
+  canvasWidth: number;
+  yScale: number;
+  nextStationName: string;
+  nextStationPinyin: string;
+  stationColumnX: number;
+  badgeCx: number;
+  badgeRadius: number;
+}): {
+  stationX: number;
+  stationWidth: number;
+  labelX: number;
+  labelWidth: number;
+  labelGap: number;
+} {
+  const { canvasWidth, yScale, nextStationName, nextStationPinyin } = input;
+  const labelWidth =
+    estimateMetroLineMapTextWidth('下一站', 12 * yScale) + Math.max(1, 2) * 1 * yScale;
+  const labelGap = 22 * yScale;
+  const nameWidth =
+    estimateMetroLineMapTextWidth(nextStationName, 12 * yScale) +
+    Math.max(Array.from(nextStationName).length - 1, 0) * 1 * yScale;
+  const pinyinWidth = estimateMetroLineMapTextWidth(nextStationPinyin, 6 * yScale);
+  const desiredWidth = Math.max(nameWidth, pinyinWidth, 20 * yScale);
+  // 右缘留白随画布高度缩放，避免大画布上文字贴着边框。
+  const rightEdge = canvasWidth - 8 * yScale;
+  // 左界：线路标右侧再留一点空隙，长站名最多退到这里。
+  const leftBound = input.badgeCx + input.badgeRadius * yScale + 16 * yScale;
+  const availableFromDesignX = rightEdge - input.stationColumnX;
+  const availableFromLeft = rightEdge - leftBound - labelWidth - labelGap;
+  const stationWidth = Math.max(20 * yScale, Math.min(desiredWidth, availableFromLeft));
+  const stationX =
+    desiredWidth <= availableFromDesignX
+      ? input.stationColumnX
+      : Math.max(leftBound + labelWidth + labelGap, rightEdge - stationWidth);
+  return {
+    stationX,
+    stationWidth: Math.max(20 * yScale, Math.min(desiredWidth, rightEdge - stationX)),
+    labelX: Math.max(leftBound, stationX - labelGap - labelWidth),
+    labelWidth,
+    labelGap,
+  };
 }
 
 /**
@@ -2874,7 +2941,7 @@ function renderMetroDirectionSign(
 
   // 新版右开门时，线路标与下一站信息作为一组整体右对齐（统一右端），组内仍左对齐避免重叠。
   const modernRightAligned = style === 'modern' && doorRight;
-  const stationTextWidth = Math.min(
+  const estimatedStationTextWidth = Math.min(
     Math.max(
       estimateMetroLineMapTextWidth(nextStationName, 12 * yScale) +
         Math.max(nextStationName.length - 1, 0) * 1 * yScale,
@@ -2883,10 +2950,34 @@ function renderMetroDirectionSign(
     ),
     80,
   );
-  const stationLabelTextX = modernRightAligned
-    ? 206 + infoShift - stationTextWidth
-    : stationColumnX;
-  const nextLabelTextX = modernRightAligned ? stationLabelTextX - 4 - 44 : nextLabelX;
+  const classicLeftStationBlock =
+    style === 'classic' && !doorRight
+      ? resolveClassicLeftStationBlock({
+          canvasWidth,
+          yScale,
+          nextStationName,
+          nextStationPinyin,
+          stationColumnX,
+          badgeCx,
+          badgeRadius,
+        })
+      : undefined;
+  const stationTextWidth = classicLeftStationBlock
+    ? classicLeftStationBlock.stationWidth
+    : estimatedStationTextWidth;
+  const stationLabelTextX = classicLeftStationBlock
+    ? classicLeftStationBlock.stationX
+    : modernRightAligned
+      ? 206 + infoShift - stationTextWidth
+      : stationColumnX;
+  const nextLabelTextX = classicLeftStationBlock
+    ? classicLeftStationBlock.labelX
+    : modernRightAligned
+      ? stationLabelTextX - 4 - 44
+      : nextLabelX;
+  const stationTextMaxWidth = classicLeftStationBlock
+    ? classicLeftStationBlock.stationWidth
+    : stationColumnWidth;
 
   const nextLabel = renderMetroSignText({
     value: '下一站',
@@ -2915,7 +3006,7 @@ function renderMetroDirectionSign(
     color: '#000000',
     weight: 400,
     letterSpacing: 1 * yScale,
-    maxWidth: stationColumnWidth,
+    maxWidth: stationTextMaxWidth,
   });
   const stationPinyinLabel = renderMetroSignText({
     value: nextStationPinyin,
@@ -2924,7 +3015,7 @@ function renderMetroDirectionSign(
     fontSize: (style === 'classic' ? 6 : 7) * yScale,
     color: '#000000',
     weight: 400,
-    maxWidth: stationColumnWidth,
+    maxWidth: stationTextMaxWidth,
   });
   const destinationAnchor = doorRight ? 'end' : 'start';
   const destinationX =

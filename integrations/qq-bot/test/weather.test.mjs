@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { clearWeatherCache, fetchWeather } from '../src/weather.mjs';
+import { clearWeatherCache, fetchWeather, fetchWeatherReport } from '../src/weather.mjs';
 
 function jsonResponse(payload, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -247,4 +247,161 @@ test('天气服务失败时给出可读错误', async () => {
     fetchWeather({ city: '上海', fetchImpl: async () => jsonResponse({}, 503) }),
     /HTTP 503/,
   );
+});
+
+test('天气报告带日出日落、昼夜阶段和预警信息', async () => {
+  clearWeatherCache();
+  const now = () => Date.parse('2026-11-24T12:00:00+08:00');
+  const fetchImpl = async (url) => {
+    if (url.startsWith('https://wttr.in/')) {
+      return jsonResponse({
+        current_condition: [
+          {
+            temp_C: '15',
+            FeelsLikeC: '13',
+            humidity: '68',
+            windspeedKmph: '11',
+            weatherCode: '113',
+          },
+        ],
+        nearest_area: [
+          {
+            areaName: [{ value: 'Pudong' }],
+            region: [{ value: 'Shanghai' }],
+            country: [{ value: 'China' }],
+            latitude: '31.2304',
+            longitude: '121.4737',
+          },
+        ],
+        weather: [
+          {
+            mintempC: '13',
+            maxtempC: '18',
+            astronomy: [{ sunrise: '06:30 AM', sunset: '04:58 PM' }],
+            hourly: hourly(10, 113),
+          },
+          {
+            mintempC: '9',
+            maxtempC: '14',
+            astronomy: [{ sunrise: '06:31 AM', sunset: '04:57 PM' }],
+            hourly: hourly(20, 116),
+          },
+        ],
+      });
+    }
+    if (url.includes('nmc.cn/rest/findAlarm')) {
+      return jsonResponse({
+        code: 0,
+        data: {
+          page: {
+            list: [
+              {
+                alertid: 'a1',
+                issuetime: '2026/11/24 10:00',
+                title: '上海市气象台发布大风蓝色预警信号',
+              },
+            ],
+          },
+          provinceAlarms: [],
+        },
+      });
+    }
+    throw new Error(`unexpected ${url}`);
+  };
+
+  const report = await fetchWeatherReport({ city: '上海', fetchImpl, now });
+  assert.equal(report.place, '上海（浦东，中国）');
+  assert.equal(report.current.temp, '15');
+  assert.equal(report.days.length, 2);
+  assert.deepEqual(report.sun, {
+    sunrise: '06:30',
+    sunset: '16:58',
+    phase: 'day',
+  });
+  assert.equal(report.alerts.length, 1);
+  assert.equal(report.alerts[0].level, '蓝色');
+  assert.equal(report.alerts[0].type, '大风');
+  assert.match(report.text, /预警：上海市气象台发布大风蓝色预警信号（2026\/11\/24 10:00 发布）/);
+});
+
+test('高德报告按经纬度计算日出日落', async () => {
+  clearWeatherCache();
+  const fetchImpl = async (url) => {
+    if (url.includes('/geocode/geo')) {
+      return jsonResponse({
+        status: '1',
+        geocodes: [
+          {
+            adcode: '310000',
+            province: '上海市',
+            city: '上海市',
+            district: '浦东新区',
+            location: '121.473701,31.230416',
+          },
+        ],
+      });
+    }
+    if (url.includes('extensions=base')) {
+      return jsonResponse({
+        status: '1',
+        lives: [
+          {
+            province: '上海',
+            city: '上海市',
+            weather: '晴',
+            temperature: '15',
+            reporttime: '2026-11-24 12:00:00',
+          },
+        ],
+      });
+    }
+    return jsonResponse({
+      status: '1',
+      forecasts: [
+        {
+          city: '上海市',
+          province: '上海',
+          reporttime: '2026-11-24 12:00:00',
+          casts: [
+            {
+              date: '2026-11-24',
+              dayweather: '晴',
+              nightweather: '晴',
+              daytemp: '18',
+              nighttemp: '13',
+            },
+          ],
+        },
+      ],
+    });
+  };
+  const now = () => Date.parse('2026-11-24T12:00:00+08:00');
+  const report = await fetchWeatherReport({
+    city: '上海',
+    amapKey: 'amap-key',
+    fetchImpl,
+    now,
+    includeAlerts: false,
+  });
+  assert.match(report.sun.sunrise, /^06:\d\d$/);
+  assert.match(report.sun.sunset, /^16:\d\d$/);
+  assert.equal(report.sun.phase, 'day');
+  assert.ok(report.alertKeywords.includes('上海'));
+  assert.ok(report.alertKeywords.includes('浦东'));
+});
+
+test('预警接口不可用时天气报告照常返回', async () => {
+  clearWeatherCache();
+  const fetchImpl = async (url) => {
+    if (url.startsWith('https://wttr.in/')) {
+      return jsonResponse({
+        current_condition: [{ temp_C: '15', weatherCode: '113' }],
+        weather: [],
+      });
+    }
+    throw new Error('alarm service down');
+  };
+  const report = await fetchWeatherReport({ city: '上海', fetchImpl });
+  assert.equal(report.alerts.length, 0);
+  assert.match(report.text, /上海附近天气/);
 });

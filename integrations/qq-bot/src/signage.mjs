@@ -43,14 +43,16 @@ export const SAMPLE_LICENSE_MISSING_TEXT =
   '示例线网数据缺少许可信息，暂时不能生成物料，请稍后再试。';
 
 const MATERIAL_FOOTER = '雨城通 · 随机生成，非正式物料';
+/** 卡面主题色兜底：与站内项目强调色一致。 */
+const MATERIAL_PROJECT_ACCENT = '#168F78';
 
 /** 指令 → 网页渲染 kind / 本地卡片兜底样式。 */
 const renderCommandSpecs = {
-  blindbox: { kind: 'random', title: '随机物料', icon: 'auto_awesome', color: '#168F78' },
-  roadsign: { kind: 'road_sign', title: '随机路牌', icon: 'explore', color: '#2584E8' },
-  buildingsign: { kind: 'address_sign', title: '随机楼牌', icon: 'location_on', color: '#F59B22' },
-  stopsign: { kind: 'bus_stop', title: '随机站牌', icon: 'public', color: '#168F78' },
-  metro: { kind: 'metro_line', title: '随机地铁', icon: 'assignment', color: '#0A124D' },
+  blindbox: { kind: 'random', title: '随机物料', icon: 'auto_awesome' },
+  roadsign: { kind: 'road_sign', title: '随机路牌', icon: 'explore' },
+  buildingsign: { kind: 'address_sign', title: '随机楼牌', icon: 'location_on' },
+  stopsign: { kind: 'bus_stop', title: '随机站牌', icon: 'public' },
+  metro: { kind: 'metro_line', title: '随机地铁', icon: 'assignment' },
 };
 
 /** 全部物料指令 id；commands.mjs 用它判断是否交给本模块。 */
@@ -448,7 +450,7 @@ function buildSignageCard({ spec, context, payload, qrDataUrl }) {
     type: 'signage',
     title: cleanText(card.title, 24) || spec.title,
     eyebrow: cleanText(card.eyebrow, 40) || `城市物料盲盒 · ${displayDate(context)}`,
-    color: normalizeColor(card.color) ?? spec.color,
+    color: normalizeColor(card.color) ?? MATERIAL_PROJECT_ACCENT,
     icon: iconByKind[kind] ?? spec.icon,
     headline: cleanText(card.headline, 40) || spec.title,
     subline: cleanText(card.subline, 60),
