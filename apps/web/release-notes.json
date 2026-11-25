@@ -5,7 +5,7 @@
     {
       "version": "2.28.0",
       "releasedAt": "2026-11-23T14:16:09.105Z",
-      "sourceFingerprint": "20e449d213cb1f5a056ebba643ab162b99d8226f164e5699073ecf5ca9e3953a",
+      "sourceFingerprint": "120d063e6fa8cbb820fd689f00e020e724c6ba2e2f72f4ee026f718f9e652a0e",
       "themes": ["qqbot", "materials", "transit"],
       "changes": [
         {
@@ -150,6 +150,11 @@
           "category": "fix",
           "breaking": false,
           "summary": "微调旧版样式里的绿底出口图标改为撑满牌面高度"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复 Next 开发服务启动时 instrument 预热把原生 resvg 模块打进浏览器导致的构建报错"
         }
       ],
       "bump": "minor"
