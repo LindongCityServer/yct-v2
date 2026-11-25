@@ -5,7 +5,7 @@
     {
       "version": "2.28.0",
       "releasedAt": "2026-11-23T14:16:09.105Z",
-      "sourceFingerprint": "13b86aee90c2da1573b7734d0ba253ce736f7d10d0621c7e9847e20c3cec3eed",
+      "sourceFingerprint": "b40050d6897746703f23893a62c7666b97a8e758d809da795ec3ac39213ff261",
       "themes": ["qqbot", "materials", "transit"],
       "changes": [
         {
@@ -84,6 +84,52 @@
           "category": "fix",
           "breaking": false,
           "summary": "导视牌文本输入法输入不再吞字，副文本与主文本共用输入框并支持点击空白聚焦"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "恢复竖向导视牌时宽度收敛为 1 米，避免旧草稿把宽度带回 4 米"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "导视牌组合框子元素支持上移、下移、副本与删除，并可直接编辑"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "组合框上下内边距减半，相同倍数的默认外框高度保持不变"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "导视牌文本与大文本增加字号倍数参数，默认 1"
+        },
+        { "category": "feat", "breaking": false, "summary": "导视牌增加首边距与尾边距开关" },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "导视牌箭头支持新版与旧版八方向切换，图标库增加绿底旧版出口图标"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "双向出口宽度不足时先去掉出口/EXIT 文本，再降级为双行方框"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "导视牌模板库增加默认新版与微调旧版样式选项"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "盲盒抽到地铁站时先按 50% 决定是否抽导视牌"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "导视牌行内上下移快捷键改为 Ctrl+[ / Ctrl+]"
         }
       ],
       "bump": "minor"
