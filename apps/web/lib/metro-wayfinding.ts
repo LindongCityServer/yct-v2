@@ -1006,6 +1006,7 @@ export function applyMetroWayfindingTemplateStyle(
         return {
           ...element,
           iconId: 'exit-classic',
+          scale: 1,
           direction: undefined,
           frameShape: 'none',
           frameFillMode: 'none',

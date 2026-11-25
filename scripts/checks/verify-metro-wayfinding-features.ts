@@ -240,6 +240,7 @@ check(
     styledArrow.style === 'classic' &&
     styledExit?.type === 'facility' &&
     styledExit.iconId === 'exit-classic' &&
+    styledExit.scale === 1 &&
     !styledRow.some((element) => element.type === 'text' && element.id === 't'),
 );
 check(
