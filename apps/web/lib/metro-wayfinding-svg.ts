@@ -15,7 +15,6 @@ import {
   estimateMetroWayfindingLargeTextWidth,
   estimateMetroWayfindingTextWidth,
   hasMetroWayfindingTextRowContent,
-  hasMetroWayfindingFixedTextSegments,
   measureMetroWayfindingMainSegments,
   measureMetroWayfindingSecondaryText,
   metroWayfindingIconOptions,
@@ -172,7 +171,12 @@ function renderMetroWayfindingVerticalElement(
   const contentWidth = usesRowWidthCompression
     ? Math.min(naturalWidth, availableWidth)
     : naturalWidth;
-  const scaleX = usesRowWidthCompression ? 1 : Math.min(1, availableWidth / naturalWidth);
+  const scaleX =
+    element.type === 'combination'
+      ? 1
+      : usesRowWidthCompression
+        ? 1
+        : Math.min(1, availableWidth / naturalWidth);
   const displayWidth = contentWidth * scaleX;
   const x = (width - displayWidth) / 2;
   const centeredElement =
@@ -188,6 +192,7 @@ function renderMetroWayfindingVerticalElement(
     element.type === 'text',
     contentHeight,
     element.type === 'facility' || element.type === 'arrow' ? -21.5 : 0,
+    false,
   );
   return `<g transform="translate(0 ${formatNumber(y)})"><rect width="${formatNumber(width)}" height="${formatNumber(height)}" fill="${background}"/>${content}</g>`;
 }
@@ -227,8 +232,9 @@ function renderMetroWayfindingRow(
         ? sizing.flexWidth
         : sizing.elementWidths[index]!;
     const elementWidth =
-      element.type === 'text' && !hasMetroWayfindingFixedTextSegments(element)
-        ? intrinsicElementWidth * sizing.textScaleX
+      element.type === 'text'
+        ? (sizing.textFixedWidths[index] ?? 0) +
+          (sizing.textFlexibleWidths[index] ?? 0) * sizing.textScaleX
         : intrinsicElementWidth;
     const isFramedLargeText = element.type === 'largeText' && element.frameShape !== 'none';
     const elementScaleX = isFramedLargeText
@@ -245,6 +251,10 @@ function renderMetroWayfindingRow(
       elementScaleX,
       elementScaleY,
       assets,
+      false,
+      METRO_WAYFINDING_HEIGHT,
+      0,
+      false,
     );
     const nextElement = elements[index + 1];
     const gap = nextElement
@@ -659,9 +669,31 @@ function renderMetroTextRows(
   if (rows.length === 0) {
     return '';
   }
-  const visibleElement = rows.length === element.rows.length ? element : { ...element, rows };
   const metrics = resolveMetroWayfindingTextMetrics(rows, element.scale);
-  const rowScales = resolveMetroTextRowScales(visibleElement, width, metrics);
+  // 主文本与副文本分别计算各自可压缩比例，避免短副文本跟着主文本一起被压扁。
+  const rowScales = rows.map((row) => {
+    const fontSize = row.kind === 'main' ? metrics.mainFontSize : metrics.secondaryFontSize;
+    if (row.kind === 'secondary') {
+      const naturalWidth = measureMetroWayfindingSecondaryText(row.value, fontSize, row.bold);
+      return naturalWidth > width && naturalWidth > 0 ? width / naturalWidth : 1;
+    }
+    let fixed = 0;
+    let flexible = 0;
+    row.segments.forEach((segment, index) => {
+      if (index > 0) flexible += fontSize * 0.12;
+      if (segment.kind === 'line') {
+        fixed += fontSize * 1.12;
+      } else if (segment.kind === 'boxed') {
+        fixed += Math.max(
+          fontSize * 1.05,
+          estimateMetroWayfindingTextWidth(segment.value, fontSize) + fontSize * 0.32,
+        );
+      } else {
+        flexible += estimateMetroWayfindingTextWidth(segment.value, fontSize);
+      }
+    });
+    return flexible > 0 ? Math.max(0, Math.min(1, (width - fixed) / flexible)) : 1;
+  });
   const blockHeight = rows.reduce(
     (height, row, index) =>
       height +
@@ -669,7 +701,7 @@ function renderMetroTextRows(
       (index < rows.length - 1 ? metrics.spacing : 0),
     0,
   );
-  let rowTop = topAligned ? 0 : Math.max(0, (elementHeight - blockHeight) / 2 + metrics.spacing);
+  let rowTop = topAligned ? 0 : Math.max(0, (elementHeight - blockHeight) / 2);
   return rows
     .map((row, index) => {
       const fontSize = row.kind === 'main' ? metrics.mainFontSize : metrics.secondaryFontSize;
@@ -711,11 +743,26 @@ function renderMetroMainSegments(
   textX: number,
   textAnchor: string,
   baseline: number,
-  contentScale: number,
+  flexScale: number,
 ): string {
-  const totalWidth = measureMetroWayfindingMainSegments(segments, fontSize);
-  const renderedWidth = totalWidth * contentScale;
   const segmentGap = fontSize * 0.12;
+  const widths = segments.map((segment) => {
+    if (segment.kind === 'line') return fontSize * 1.12;
+    const textWidth = estimateMetroWayfindingTextWidth(segment.value, fontSize);
+    if (segment.kind === 'boxed') {
+      return Math.max(fontSize * 1.05, textWidth + fontSize * 0.32);
+    }
+    return textWidth;
+  });
+  const renderedWidth = segments.reduce((total, segment, index) => {
+    const width = widths[index] ?? 0;
+    const fixed = segment.kind !== 'text';
+    return (
+      total +
+      (fixed ? width : width * flexScale) +
+      (index < segments.length - 1 ? segmentGap * flexScale : 0)
+    );
+  }, 0);
   const startX =
     textAnchor === 'start'
       ? textX
@@ -725,9 +772,10 @@ function renderMetroMainSegments(
   let cursor = 0;
   const content = segments
     .map((segment, index) => {
-      const trailingGap = index < segments.length - 1 ? segmentGap : 0;
+      const segmentWidth = widths[index] ?? 0;
+      const trailingGap = index < segments.length - 1 ? segmentGap * flexScale : 0;
       if (segment.kind === 'line') {
-        const diameter = fontSize * 1.12;
+        const diameter = segmentWidth;
         const centerX = cursor + diameter / 2;
         const lineColor = normalizeColor(segment.color, '#2F80ED');
         const shouldInvert = lineColor.toUpperCase() === background.toUpperCase();
@@ -736,23 +784,20 @@ function renderMetroMainSegments(
         cursor += diameter + trailingGap;
         return `<g transform="translate(${formatNumber(centerX)} ${formatNumber(baseline - fontSize * 0.32)})"><circle r="${formatNumber(diameter / 2)}" fill="${badgeBackground}"/><text x="${formatNumber(fontSize * -0.035)}" y="${formatNumber(fontSize * 0.9 * 0.34)}" fill="${badgeForeground}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}" data-yct-spacing="glyph-middle">${escapeXml(segment.value)}</text></g>`;
       }
-      const textWidth = estimateMetroWayfindingTextWidth(segment.value, fontSize);
-      const horizontalPadding = segment.kind === 'boxed' ? fontSize * 0.16 : 0;
-      const segmentWidth =
-        segment.kind === 'boxed'
-          ? Math.max(fontSize * 1.05, textWidth + horizontalPadding * 2)
-          : textWidth;
-      const textX = cursor + (segmentWidth - textWidth) / 2;
-      const frame =
-        segment.kind === 'boxed'
-          ? `<rect x="${formatNumber(cursor + fontSize * 0.02)}" y="${formatNumber(baseline - fontSize * 0.84)}" width="${formatNumber(segmentWidth - fontSize * 0.04)}" height="${formatNumber(fontSize * 1.05)}" rx="${formatNumber(fontSize * 0.11)}" fill="none" stroke="${color}" stroke-width="${formatNumber(Math.max(1, fontSize * 0.04))}"/>`
-          : '';
-      const output = `${frame}<text x="${formatNumber(textX)}" y="${formatNumber(baseline)}" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400">${escapeXml(segment.value)}</text>`;
-      cursor += segmentWidth + trailingGap;
+      if (segment.kind === 'boxed') {
+        const textWidth = estimateMetroWayfindingTextWidth(segment.value, fontSize);
+        const textStartX = cursor + (segmentWidth - textWidth) / 2;
+        const frame = `<rect x="${formatNumber(cursor + fontSize * 0.02)}" y="${formatNumber(baseline - fontSize * 0.84)}" width="${formatNumber(segmentWidth - fontSize * 0.04)}" height="${formatNumber(fontSize * 1.05)}" rx="${formatNumber(fontSize * 0.11)}" fill="none" stroke="${color}" stroke-width="${formatNumber(Math.max(1, fontSize * 0.04))}"/>`;
+        const text = `<text x="${formatNumber(textStartX)}" y="${formatNumber(baseline)}" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400">${escapeXml(segment.value)}</text>`;
+        cursor += segmentWidth + trailingGap;
+        return `${frame}${text}`;
+      }
+      const output = `<g transform="translate(${formatNumber(cursor)} ${formatNumber(baseline)}) scale(${formatNumber(flexScale)} 1)"><text x="0" y="0" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400">${escapeXml(segment.value)}</text></g>`;
+      cursor += segmentWidth * flexScale + trailingGap;
       return output;
     })
     .join('');
-  return `<g transform="translate(${formatNumber(startX)} 0) scale(${formatNumber(contentScale)} 1)">${content}</g>`;
+  return `<g transform="translate(${formatNumber(startX)} 0)">${content}</g>`;
 }
 
 function renderMetroText(
@@ -767,34 +812,6 @@ function renderMetroText(
   fontWeight: 400 | 700 = 400,
 ): string {
   return `<g transform="translate(${formatNumber(x)} 0) scale(${formatNumber(scale)} 1) translate(-${formatNumber(x)} 0)"><text x="${formatNumber(x)}" y="${formatNumber(y || fontSize)}" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="${fontWeight}" text-anchor="${textAnchor}">${escapeXml(value)}</text></g>`;
-}
-
-function resolveMetroTextRowScales(
-  element: Extract<MetroWayfindingElement, { type: 'text' }>,
-  width: number,
-  metrics: ReturnType<typeof resolveMetroWayfindingTextMetrics>,
-): number[] {
-  const rowWidths = element.rows.map((row) =>
-    row.kind === 'main'
-      ? measureMetroWayfindingMainSegments(row.segments, metrics.mainFontSize)
-      : measureMetroWayfindingSecondaryText(row.value, metrics.secondaryFontSize, row.bold),
-  );
-  const scales = element.rows.map(() => 1);
-  let groupStart = 0;
-
-  while (groupStart < element.rows.length) {
-    const kind = element.rows[groupStart]!.kind;
-    let groupEnd = groupStart + 1;
-    while (groupEnd < element.rows.length && element.rows[groupEnd]!.kind === kind) {
-      groupEnd += 1;
-    }
-    const groupWidth = Math.max(...rowWidths.slice(groupStart, groupEnd), 0);
-    const groupScale = groupWidth > width && groupWidth > 0 ? width / groupWidth : 1;
-    scales.fill(groupScale, groupStart, groupEnd);
-    groupStart = groupEnd;
-  }
-
-  return scales;
 }
 
 /**
@@ -1065,7 +1082,7 @@ function renderMetroClassicArrow(
     : '';
   const angle = metroClassicArrowAngles[iconId] ?? 0;
   const scaleTransform = resolveMetroIconScaleTransform(framed ? 0.9 : 1);
-  return `${frame}<g transform="${scaleTransform}"><g transform="translate(42.5 64) rotate(${angle}) scale(1.4) translate(-20.92 -20.92)"><path d="${metroClassicArrowPath}" fill="${color}"/></g></g>`;
+  return `${frame}<g transform="${scaleTransform}"><g transform="translate(42.5 64) rotate(${angle}) scale(1.55) translate(-20.92 -20.92)"><path d="${metroClassicArrowPath}" fill="${color}"/></g></g>`;
 }
 
 function renderMetroArrowAsset(

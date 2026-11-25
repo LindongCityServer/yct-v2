@@ -10,6 +10,9 @@ import {
   METRO_LINE_MAP_OLD_TEMPLATE_ID,
   METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID,
   METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID,
+  METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID,
+  METRO_TERMINUS_NEW_TEMPLATE_ID,
+  METRO_TERMINUS_OLD_TEMPLATE_ID,
   METRO_PLATFORM_SIGN_TEMPLATE_ID,
   METRO_STATION_NAME_NEW_TEMPLATE_ID,
   METRO_STATION_NAME_OLD_TEMPLATE_ID,
@@ -266,8 +269,12 @@ function createMetroLineMapFields(
 
 /** 地铁竖版线路图（新版 / 旧版）共用的字段定义，数据口径与横版一致。 */
 function createMetroVerticalLineMapFields(
-  renderer: 'metro_line_map_vertical_modern' | 'metro_line_map_vertical_classic',
+  renderer:
+    | 'metro_line_map_vertical_modern'
+    | 'metro_line_map_vertical_classic'
+    | 'metro_line_map_vertical_transition',
 ): MaterialTemplateVersion['fields'] {
+  const transition = renderer === 'metro_line_map_vertical_transition';
   return [
     {
       key: 'accentColor',
@@ -307,16 +314,18 @@ function createMetroVerticalLineMapFields(
     },
     {
       key: 'trackPosition',
-      label: '轨道位置',
+      label: transition ? '轨道位置（过渡版固定两侧）' : '轨道位置',
       kind: 'select',
       required: true,
-      defaultValue: 'left',
+      defaultValue: transition ? 'both' : 'left',
       serverOverride: true,
-      options: [
-        { value: 'left', label: '左侧' },
-        { value: 'right', label: '右侧' },
-        { value: 'both', label: '两侧' },
-      ],
+      options: transition
+        ? [{ value: 'both', label: '两侧' }]
+        : [
+            { value: 'left', label: '左侧' },
+            { value: 'right', label: '右侧' },
+            { value: 'both', label: '两侧' },
+          ],
     },
     {
       key: 'travelDirection',
@@ -384,6 +393,66 @@ function createMetroStationNameFields(
       maxLength: 120,
     },
   ];
+}
+
+/** 地铁终点站版式：新版复用站名版式，旧版复用方向版式的排版但去掉箭头和下一站。 */
+function createMetroTerminusFields(style: 'modern' | 'classic'): MaterialTemplateVersion['fields'] {
+  const fields: MaterialTemplateVersion['fields'] = [
+    {
+      key: 'accentColor',
+      label: '线路颜色',
+      kind: 'color',
+      required: true,
+      defaultValue: '#C11111',
+    },
+    {
+      key: 'terminusLabel',
+      label: '中文标注',
+      kind: 'text',
+      required: true,
+      defaultValue: '终点站',
+      maxLength: 20,
+      glyph: {
+        renderer: style === 'classic' ? 'metro_terminus_classic' : 'metro_terminus_modern',
+        layoutWidth: 768,
+        layoutHeight: 128,
+        colorFieldKey: 'accentColor',
+      },
+    },
+    {
+      key: 'terminusEnglish',
+      label: '英文标注',
+      kind: 'text',
+      defaultValue: style === 'classic' ? 'Terminal Station' : 'Terminus',
+      maxLength: 60,
+    },
+  ];
+  if (style === 'classic') {
+    fields.push(
+      {
+        key: 'terminalName',
+        label: '终点站名（中文）',
+        kind: 'text',
+        maxLength: 60,
+        serverOverride: true,
+      },
+      {
+        key: 'terminalNamePinyin',
+        label: '终点站名拼音 / 英文名',
+        kind: 'text',
+        maxLength: 120,
+        serverOverride: true,
+      },
+      {
+        key: 'lineLabel',
+        label: '线路编号',
+        kind: 'text',
+        maxLength: 16,
+        serverOverride: true,
+      },
+    );
+  }
+  return fields;
 }
 
 /** 地铁方向及下一站版式（新版 / 旧版）：箭头 + 开往方向 + 线路标识 + 下一站。 */
@@ -842,7 +911,8 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
         version: 2,
         status: 'published',
         title: '公交站牌（方块）',
-        description: '公交站牌线路概览的方块样式：按原始模板复现的六线路概览版，仅标注本站站名和停靠线路。',
+        description:
+          '公交站牌线路概览的方块样式：按原始模板复现的六线路概览版，仅标注本站站名和停靠线路。',
         family: 'bus_stop',
         source: busStopOverviewSource,
         fields: [
@@ -1221,7 +1291,8 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
         version: 2,
         status: 'published',
         title: '公交站牌（方块）',
-        description: '公交站牌始发终到的方块样式：按原始模板复现的单线路版，仅允许标注本站始发或终到的线路。',
+        description:
+          '公交站牌始发终到的方块样式：按原始模板复现的单线路版，仅允许标注本站始发或终到的线路。',
         family: 'bus_stop',
         source: busStopTerminalSource,
         fields: [
@@ -1340,9 +1411,9 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
       {
         version: 1,
         status: 'published',
-        title: '地铁横版线路图（新版）',
+        title: '地铁横版线路图（新版·沈阳2019至今）',
         description:
-          '新版地铁横版线路图：站名上下交替排布，换乘线路以彩色徽标标注，支持开门方向与终点站方位联动。',
+          '新版（沈阳2019至今）地铁横版线路图：站名上下交替排布，换乘线路以彩色徽标标注，支持开门方向与终点站方位联动。',
         family: 'metro_line',
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
   <g>{{glyph.routeStations}}</g>
@@ -1368,9 +1439,9 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
       {
         version: 1,
         status: 'published',
-        title: '地铁横版线路图（旧版）',
+        title: '地铁横版线路图（旧版·沈阳2010风）',
         description:
-          '旧版地铁横版线路图：保留左下角图例，换乘站以换乘线路文字标注，支持开门方向与终点站方位联动。',
+          '旧版（沈阳2010风）地铁横版线路图：保留左下角图例，换乘站以换乘线路文字标注，支持开门方向与终点站方位联动。',
         family: 'metro_line',
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
   <g>{{glyph.routeStations}}</g>
@@ -1396,9 +1467,9 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
       {
         version: 1,
         status: 'published',
-        title: '地铁竖版线路图（新版）',
+        title: '地铁竖版线路图（新版·沈阳2019至今）',
         description:
-          '新版地铁竖版线路图：页头显示开往方向与线路编号，支持左侧、右侧或两侧轨道；两侧时并列显示两个方向，站点自上而下排列，当前站高亮，已过站置灰，换乘线路以彩色徽标标注。',
+          '新版（沈阳2019至今）地铁竖版线路图：页头显示开往方向与线路编号，支持左侧、右侧或两侧轨道；两侧时并列显示两个方向，站点自上而下排列，当前站高亮，已过站置灰，换乘线路以彩色徽标标注。',
         family: 'metro_line',
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
   <g>{{glyph.routeStations}}</g>
@@ -1424,9 +1495,9 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
       {
         version: 1,
         status: 'published',
-        title: '地铁竖版线路图（旧版）',
+        title: '地铁竖版线路图（旧版·沈阳2010风）',
         description:
-          '旧版地铁竖版线路图：保留旧版浅色页头与文字换乘标注，支持左侧、右侧或两侧轨道；站点自上而下排列，当前站高亮，已过站置灰。',
+          '旧版（沈阳2010风）地铁竖版线路图：保留旧版浅色页头与文字换乘标注，支持左侧、右侧或两侧轨道；站点自上而下排列，当前站高亮，已过站置灰。',
         family: 'metro_line',
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
   <g>{{glyph.routeStations}}</g>
@@ -1544,6 +1615,90 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
   <g>{{glyph.nextStationName}}</g>
 </svg>`,
         fields: createMetroDirectionFields('metro_direction_classic'),
+        defaultCanvas: {
+          widthM: 6,
+          heightM: 1,
+          pxPerMeter: 128,
+          alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID,
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '地铁竖版线路图（过渡·沈阳2019-2024）',
+        description:
+          '过渡（沈阳2019-2024）地铁竖版线路图：页头使用新版样式，两侧轨道时补线路圆标；线路图主体沿用旧版浅色样式，但本站和起讫站不额外标注。',
+        family: 'metro_line',
+        source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
+  <g>{{glyph.routeStations}}</g>
+</svg>`,
+        fields: createMetroVerticalLineMapFields('metro_line_map_vertical_transition'),
+        defaultCanvas: {
+          widthM: 1,
+          heightM: 2.5,
+          pxPerMeter: 128,
+          alignToTile: false,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: METRO_TERMINUS_NEW_TEMPLATE_ID,
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '地铁终点站标志（新版·沈阳2019至今）',
+        description:
+          '新版（沈阳2019至今）地铁终点站标志：沿用站名版式，将站名位置替换为「终点站 / Terminus」。',
+        family: 'metro_line',
+        source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
+  <g>{{glyph.terminusLabel}}</g>
+</svg>`,
+        fields: createMetroTerminusFields('modern'),
+        defaultCanvas: {
+          widthM: 6,
+          heightM: 1,
+          pxPerMeter: 128,
+          alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: METRO_TERMINUS_OLD_TEMPLATE_ID,
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '地铁终点站标志（旧版·沈阳2010风）',
+        description:
+          '旧版（沈阳2010风）地铁终点站标志：沿用方向版式，去掉箭头和下一站区域，将开往信息拆成「终点站 / Terminal Station」和终点站名两段。',
+        family: 'metro_line',
+        source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
+  <g>{{glyph.terminusLabel}}</g>
+</svg>`,
+        fields: createMetroTerminusFields('classic'),
         defaultCanvas: {
           widthM: 6,
           heightM: 1,

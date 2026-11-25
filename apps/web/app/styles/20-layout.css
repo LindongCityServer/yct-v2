@@ -4611,11 +4611,7 @@
   padding: var(--yct-space-3);
   border: 0;
   border-radius: var(--yct-radius-md);
-  background: color-mix(
-    in srgb,
-    var(--yct-color-warning) 10%,
-    var(--yct-color-surface-panel)
-  );
+  background: color-mix(in srgb, var(--yct-color-warning) 10%, var(--yct-color-surface-panel));
   color: var(--yct-color-warning-strong);
   font-size: var(--yct-font-size-12);
   line-height: 1.5;
@@ -5026,10 +5022,10 @@
 }
 
 .metro-wayfinding-main-segments-chip-input {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   width: auto;
   min-width: 1ch;
-  max-width: 100%;
+  max-width: 12ch;
   height: 22px;
   padding: 0 2px;
   border: 0;
@@ -5120,6 +5116,7 @@
 .metro-wayfinding-main-segments-text-flow {
   display: inline-flex;
   flex: 0 1 auto;
+  flex-wrap: wrap;
   align-items: center;
   min-width: 0;
   max-width: 100%;
@@ -5162,7 +5159,9 @@
 .metro-wayfinding-main-segments-caret-actions {
   display: inline-flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   align-items: center;
+  max-width: 100%;
   gap: 4px;
 }
 

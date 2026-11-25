@@ -22,6 +22,9 @@ import {
   METRO_LINE_MAP_OLD_TEMPLATE_ID,
   METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID,
   METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID,
+  METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID,
+  METRO_TERMINUS_NEW_TEMPLATE_ID,
+  METRO_TERMINUS_OLD_TEMPLATE_ID,
   METRO_STATION_NAME_NEW_TEMPLATE_ID,
   METRO_STATION_NAME_OLD_TEMPLATE_ID,
 } from '../../../lib/material-template-ids';
@@ -72,7 +75,11 @@ const transitMaterialTemplateGroups: MaterialTemplateGroup[] = [
     id: 'metro_line_map_vertical',
     titleKey: 'materialStudio.group.metroLineMapVertical',
     variantLabelKey: 'materialStudio.group.style',
-    templateIds: [METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID, METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID],
+    templateIds: [
+      METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID,
+      METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID,
+      METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID,
+    ],
   },
   {
     id: 'metro_line_map_merged',
@@ -82,6 +89,8 @@ const transitMaterialTemplateGroups: MaterialTemplateGroup[] = [
     templateIds: [
       METRO_LINE_MAP_NEW_TEMPLATE_ID,
       METRO_LINE_MAP_OLD_TEMPLATE_ID,
+      METRO_TERMINUS_NEW_TEMPLATE_ID,
+      METRO_TERMINUS_OLD_TEMPLATE_ID,
       METRO_STATION_NAME_NEW_TEMPLATE_ID,
       METRO_STATION_NAME_OLD_TEMPLATE_ID,
       METRO_DIRECTION_NEW_TEMPLATE_ID,
@@ -92,6 +101,11 @@ const transitMaterialTemplateGroups: MaterialTemplateGroup[] = [
         id: 'line_map',
         labelKey: 'materialStudio.layout.lineMap',
         templateIds: [METRO_LINE_MAP_NEW_TEMPLATE_ID, METRO_LINE_MAP_OLD_TEMPLATE_ID],
+      },
+      {
+        id: 'terminus',
+        labelKey: 'materialStudio.layout.terminus',
+        templateIds: [METRO_TERMINUS_NEW_TEMPLATE_ID, METRO_TERMINUS_OLD_TEMPLATE_ID],
       },
       {
         id: 'station_name',

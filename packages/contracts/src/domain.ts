@@ -1678,10 +1678,13 @@ export interface MaterialGlyphConfig {
     | 'metro_line_map_classic'
     | 'metro_line_map_vertical_modern'
     | 'metro_line_map_vertical_classic'
+    | 'metro_line_map_vertical_transition'
     | 'metro_station_name_modern'
     | 'metro_station_name_classic'
     | 'metro_direction_modern'
     | 'metro_direction_classic'
+    | 'metro_terminus_modern'
+    | 'metro_terminus_classic'
     | 'metro_platform_sign';
   layoutWidth: number;
   layoutHeight: number;

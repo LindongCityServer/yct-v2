@@ -18,6 +18,11 @@ export interface MaterialOfflineDraftTransitSelection {
   projectLineKey?: string;
   projectNodeId?: string;
   terminalRole?: 'origin' | 'terminal' | '';
+  /**
+   * 线路图换乘字段的来源：`true` 表示用户手改过，恢复时原样保留；
+   * 缺省 / `false` 表示自动推导，恢复时按「数据源 + 线路 + RMP 快照」重建。
+   */
+  transferLinesManual?: boolean;
 }
 
 export interface MaterialOfflineDraftRecord {

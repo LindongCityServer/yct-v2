@@ -353,13 +353,13 @@ export function TransitWayfindingWorkspace({
 
   // 7 种元素各一个添加按钮，平铺在工具栏；新增元素永远落在当前选中行。
   const addElementItems: EditorToolbarOverflowItem[] = [
-    addElementItem('facility', 'apps', '设施图标', 'facility'),
+    addElementItem('facility', 'category', '设施图标', 'facility'),
     addElementItem('arrow', 'arrow_forward', '箭头', 'arrow'),
     addElementItem('text', 'text_fields', '文字', 'text'),
     addElementItem('largeText', 'title', '大文字', 'largeText'),
     addElementItem('space', 'space_bar', '空白', 'space'),
-    addElementItem('divider', 'splitscreen', '分割线', 'divider'),
-    addElementItem('combination', 'widgets', '组合框', 'combination'),
+    addElementItem('divider', 'horizontal_rule', '分割线', 'divider'),
+    addElementItem('combination', 'layers', '组合框', 'combination'),
   ];
 
   const arrangeItems: EditorToolbarOverflowItem[] = [

@@ -39,6 +39,7 @@ export const metroWayfindingBackgroundPalette = [
   { value: '#4A4E54', label: '灰色' },
   { value: '#0A124D', label: '深蓝色' },
   { value: '#085E41', label: '深绿色' },
+  { value: '#009F3C', label: '绿色（旧版出口）' },
 ] as const;
 
 export const metroWayfindingForegroundPalette = [
@@ -240,7 +241,7 @@ export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
   { id: 'exit', label: '出口', symbol: 'logout', group: 'facility', assetName: 'exit' },
   {
     id: 'exit-classic',
-    label: '出口（旧版）',
+    label: '出字标',
     symbol: 'logout',
     group: 'facility',
     assetName: 'exit-classic',
@@ -566,6 +567,52 @@ export function hasMetroWayfindingFixedTextSegments(element: MetroWayfindingElem
         row.segments.some((segment) => segment.kind === 'line' || segment.kind === 'boxed'),
     )
   );
+}
+
+/**
+ * 文本元素宽度拆成固定部分（线路 chip / 方框文本）和可压缩部分（普通文字）。
+ * 横向空间不足时只压缩 flexible 部分，固定信息点保持原尺寸。
+ */
+export interface MetroWayfindingTextWidthParts {
+  fixed: number;
+  flexible: number;
+  total: number;
+}
+
+export function resolveMetroWayfindingTextWidthParts(
+  element: MetroWayfindingTextElement,
+): MetroWayfindingTextWidthParts {
+  const metrics = resolveMetroWayfindingTextMetrics(element.rows, element.scale);
+  let fixed = 0;
+  let flexible = 0;
+  for (const row of element.rows) {
+    if (row.kind !== 'main') {
+      flexible = Math.max(
+        flexible,
+        measureMetroWayfindingSecondaryText(row.value, metrics.secondaryFontSize, row.bold),
+      );
+      continue;
+    }
+    let rowFixed = 0;
+    let rowFlexible = 0;
+    row.segments.forEach((segment, index) => {
+      if (index > 0) rowFlexible += metrics.mainFontSize * 0.12;
+      if (segment.kind === 'line') {
+        rowFixed += metrics.mainFontSize * 1.12;
+      } else if (segment.kind === 'boxed') {
+        rowFixed += Math.max(
+          metrics.mainFontSize * 1.05,
+          estimateMetroWayfindingTextWidth(segment.value, metrics.mainFontSize) +
+            metrics.mainFontSize * 0.32,
+        );
+      } else {
+        rowFlexible += estimateMetroWayfindingTextWidth(segment.value, metrics.mainFontSize);
+      }
+    });
+    fixed = Math.max(fixed, rowFixed);
+    flexible = Math.max(flexible, rowFlexible);
+  }
+  return { fixed, flexible, total: fixed + flexible };
 }
 
 export type MetroWayfindingFrameShape = 'none' | 'rectangle' | 'circle';
@@ -910,6 +957,10 @@ export interface MetroWayfindingLayoutSummary {
 
 export interface MetroWayfindingLayoutSizing {
   elementWidths: number[];
+  /** 每个文本元素的固定宽度（线路 chip / 方框文本）。 */
+  textFixedWidths: number[];
+  /** 每个文本元素的可压缩宽度（普通主/副文本）。 */
+  textFlexibleWidths: number[];
   flexWidth: number;
   textScaleX: number;
   layoutScale: number;
@@ -997,7 +1048,19 @@ function isExitOnlyTextElement(element: MetroWayfindingElement): boolean {
 export function applyMetroWayfindingTemplateStyle(
   layout: MetroWayfindingLayout,
   style: MetroWayfindingTemplateStyle,
-  options: { remark?: string; lineColor?: string } = {},
+  options: {
+    remark?: string;
+    lineColor?: string;
+    exitSides?: {
+      left: Array<{ code: string; description?: string; hasAccessibleElevator?: boolean }>;
+      right: Array<{ code: string; description?: string; hasAccessibleElevator?: boolean }>;
+    };
+    currentExits?: Array<{
+      code: string;
+      description?: string;
+      hasAccessibleElevator?: boolean;
+    }>;
+  } = {},
 ): MetroWayfindingLayout {
   if (style !== 'classic') {
     return layout;
@@ -1029,6 +1092,8 @@ export function applyMetroWayfindingTemplateStyle(
           frameShape: 'none',
           frameFillMode: 'none',
           frameStroke: false,
+          backgroundColor: '#009F3C',
+          foregroundColor: '#FFFFFF',
         };
       }
       if (element.iconId === 'subway' && singleLineColor) {
@@ -1039,7 +1104,7 @@ export function applyMetroWayfindingTemplateStyle(
           frameShape: element.frameShape === 'none' ? 'rectangle' : element.frameShape,
           frameFillMode: 'color',
           frameFillColor: singleLineColor,
-          frameStroke: false,
+          frameStroke: true,
         };
       }
       return element;
@@ -1061,30 +1126,189 @@ export function applyMetroWayfindingTemplateStyle(
       return mapped ? [mapped] : [];
     }),
   );
+  const normalizeClassicGroupCode = (code: string): string => {
+    const match = /^([A-Za-z])(\d+)$/u.exec(code.trim());
+    return match && match[1]!.toUpperCase() !== 'L' ? match[1]!.toUpperCase() : code.trim();
+  };
+  const mergedClassicExits = (() => {
+    const byCode = new Map<string, { code: string; description?: string }>();
+    for (const exit of options.currentExits ?? []) {
+      const code = normalizeClassicGroupCode(exit.code);
+      const current = byCode.get(code);
+      const isBase = /^[A-Za-z]$/u.test(exit.code.trim());
+      if (!current || (isBase && /^[A-Za-z]\d+$/u.test(current.code))) {
+        byCode.set(code, { code, description: exit.description?.trim() });
+      }
+    }
+    const seenDescriptions = new Set<string>();
+    return Array.from(byCode.values()).map((exit) => {
+      const description = exit.description?.trim() ?? '';
+      if (!description || seenDescriptions.has(description)) {
+        return { ...exit, description: '' };
+      }
+      seenDescriptions.add(description);
+      return exit;
+    });
+  })();
+  const makeClassicDescriptionGroups = (): MetroWayfindingTextElement[] => {
+    const groups: MetroWayfindingTextElement[] = [];
+    for (let start = 0; start < mergedClassicExits.length; start += 2) {
+      const chunk = mergedClassicExits.slice(start, start + 2);
+      const rows: MetroWayfindingTextRow[] = [0, 1].map((rowIndex) => ({
+        id: `classic-description-${start}-${rowIndex}`,
+        kind: 'main',
+        segments:
+          chunk[rowIndex] === undefined
+            ? [{ kind: 'text', value: '' }]
+            : [
+                { kind: 'boxed', value: chunk[rowIndex]!.code },
+                ...(chunk[rowIndex]!.description
+                  ? [{ kind: 'text' as const, value: chunk[rowIndex]!.description }]
+                  : []),
+              ],
+      }));
+      groups.push({
+        id: `classic-description-group-${start}`,
+        type: 'text',
+        align: 'left',
+        writingMode: 'horizontal',
+        rows,
+      });
+    }
+    return groups;
+  };
   if (options.remark === '双侧出口编号') {
-    // 旧版双侧出口：两端不放出图标，把中间分割线换成一个旧版出口标识。
-    const classicExit = (id: string): MetroWayfindingFacilityElement => ({
+    // 旧版双侧出口：两边保留绿底出字标（位于箭头和出口文本之间），中间保留分割线；
+    // 连续大文本出口编号换成「双行方框编号 + 描述」，并按站厅侧补电梯图标。
+    const classicElevator = (id: string): MetroWayfindingFacilityElement => ({
       id,
       type: 'facility',
-      iconId: 'exit-classic',
-      scale: 0.9,
-      frameShape: 'none',
+      iconId: 'elevator',
+      scale: METRO_WAYFINDING_ICON_SCALE_DEFAULT,
+      frameShape: 'rectangle',
       frameFillMode: 'none',
       frameStroke: false,
     });
+    const isExitSlot = (
+      element: MetroWayfindingElement,
+    ): element is MetroWayfindingLargeTextElement =>
+      element.type === 'largeText' &&
+      element.frameShape === 'rectangle' &&
+      /^[A-Za-z]\d*$/u.test(element.value);
+    const makeDescriptionGroup = (
+      side: 'left' | 'right',
+      codes: string[],
+      id: string,
+    ): MetroWayfindingTextElement => {
+      const infos =
+        side === 'left' ? (options.exitSides?.left ?? []) : (options.exitSides?.right ?? []);
+      const infoByCode = new Map(infos.map((info) => [info.code, info]));
+      const rows: MetroWayfindingTextRow[] = [[], []].map((_unused, rowIndex) => ({
+        id: `${id}-row-${rowIndex}`,
+        kind: 'main',
+        segments: [],
+      }));
+      codes.forEach((code, index) => {
+        const info = infoByCode.get(code);
+        const description = info?.description?.trim() ?? '';
+        const target = rows[index % 2] as MetroWayfindingMainTextRow;
+        if (side === 'right' && description) {
+          target.segments.push({ kind: 'text', value: description });
+          target.segments.push({ kind: 'boxed', value: code });
+        } else {
+          target.segments.push({ kind: 'boxed', value: code });
+          if (description) {
+            target.segments.push({ kind: 'text', value: description });
+          }
+        }
+      });
+      return {
+        id,
+        type: 'text',
+        align: side,
+        writingMode: 'horizontal',
+        // 每组固定两行；只有一侧一个出口时第二行也保留为空主文本行。
+        rows: rows.map((row, index) => ({
+          ...row,
+          id: `${id}-row-${index}`,
+          segments:
+            (row as MetroWayfindingMainTextRow).segments.length > 0
+              ? (row as MetroWayfindingMainTextRow).segments
+              : [{ kind: 'text', value: '' }],
+        })),
+      };
+    };
     return {
       ...layout,
-      rows: styledRows.map((row) =>
-        row.flatMap((element) => {
+      rows: styledRows.map((row) => {
+        const output: MetroWayfindingElement[] = [];
+        let sideIndex = 0;
+        const leftElevator = options.exitSides?.left.some((exit) => exit.hasAccessibleElevator);
+        const rightElevator = options.exitSides?.right.some((exit) => exit.hasAccessibleElevator);
+        for (let index = 0; index < row.length; index += 1) {
+          const element = row[index]!;
           if (element.type === 'facility' && element.iconId === 'exit-classic') {
-            return [];
+            // 绿底出字标保持在箭头与出口文本之间；设施图标挪到出口文本与中间分割线之间。
+            output.push(element);
+            continue;
           }
           if (element.type === 'divider') {
-            return [classicExit(`classic-divider-${element.id}`)];
+            if (leftElevator) {
+              output.push(classicElevator(`classic-left-elevator-${element.id}`));
+            }
+            output.push(element);
+            if (rightElevator) {
+              output.push(classicElevator(`classic-right-elevator-${element.id}`));
+            }
+            continue;
           }
-          return [element];
-        }),
-      ),
+          if (isExitSlot(element)) {
+            const codes: string[] = [];
+            while (index < row.length && isExitSlot(row[index]!)) {
+              codes.push((row[index] as MetroWayfindingLargeTextElement).value);
+              index += 1;
+            }
+            index -= 1;
+            output.push(
+              makeDescriptionGroup(
+                sideIndex === 0 ? 'left' : 'right',
+                codes,
+                `classic-exit-group-${sideIndex}`,
+              ),
+            );
+            sideIndex += 1;
+            continue;
+          }
+          output.push(element);
+        }
+        return output;
+      }),
+    };
+  }
+  if (options.remark === '出口与上楼') {
+    const groups = makeClassicDescriptionGroups();
+    return {
+      ...layout,
+      rows: styledRows.map((row) => {
+        const output: MetroWayfindingElement[] = [];
+        let inserted = false;
+        for (const element of row) {
+          output.push(element);
+          if (!inserted && element.type === 'facility' && element.iconId === 'exit-classic') {
+            output.push(...groups);
+            if (groups.length > 0) {
+              output.push({
+                id: 'classic-exit-description-space',
+                type: 'space',
+                mode: 'flex',
+                units: 1,
+              });
+            }
+            inserted = true;
+          }
+        }
+        return output;
+      }),
     };
   }
   return { ...layout, rows: styledRows };
@@ -1188,6 +1412,8 @@ export function resolveMetroWayfindingLayoutSizing(
   const safeCanvasWidth = Math.max(Number.isFinite(canvasWidth) ? canvasWidth : 0, 0);
   const innerWidth = Math.max(0, safeCanvasWidth - padding.start - padding.end);
   const naturalElementWidths = elements.map(resolveMetroWayfindingElementWidth);
+  const textFixedWidths = elements.map(() => 0);
+  const textFlexibleWidths = elements.map(() => 0);
   const gapWidth = Math.max(elements.length - 1, 0) * METRO_WAYFINDING_GAP;
   let textWidth = 0;
   let nonTextWidth = 0;
@@ -1200,14 +1426,14 @@ export function resolveMetroWayfindingLayoutSizing(
     } else if (element.type === 'largeText' && element.frameShape !== 'none') {
       // 带方框/圆框的大文本保持原尺寸，宽度不足时只压一般文本。
       nonTextWidth += naturalElementWidths[index] ?? 0;
-    } else if (hasMetroWayfindingFixedTextSegments(element)) {
-      // 线路编号 chip / 方框出口编号不参与横向压缩。
-      nonTextWidth += naturalElementWidths[index] ?? 0;
-    } else if (
-      element.type === 'text' ||
-      element.type === 'largeText' ||
-      element.type === 'combination'
-    ) {
+    } else if (element.type === 'text') {
+      const parts = resolveMetroWayfindingTextWidthParts(element);
+      textFixedWidths[index] = parts.fixed;
+      textFlexibleWidths[index] = parts.flexible;
+      // 固定段（线路 chip / 方框文本）始终不压；普通主/副文本分配到压缩宽度。
+      nonTextWidth += parts.fixed;
+      textWidth += parts.flexible;
+    } else if (element.type === 'largeText' || element.type === 'combination') {
       textWidth += naturalElementWidths[index] ?? 0;
       if (
         element.type === 'combination' &&
@@ -1225,8 +1451,9 @@ export function resolveMetroWayfindingLayoutSizing(
   const textScaleX = isWidthInsufficient
     ? Math.max(0, Math.min(1, (innerWidth - nonTextWidth - gapWidth) / textWidth))
     : 1;
+  const hasFixedText = textFixedWidths.some((width) => width > 0);
   const layoutScale =
-    textWidth === 0 && naturalFixedWidth > innerWidth && naturalFixedWidth > 0
+    textWidth === 0 && naturalFixedWidth > innerWidth && naturalFixedWidth > 0 && !hasFixedText
       ? innerWidth / naturalFixedWidth
       : 1;
   const displayedFixedWidth = (nonTextWidth + textWidth * textScaleX + gapWidth) * layoutScale;
@@ -1242,6 +1469,8 @@ export function resolveMetroWayfindingLayoutSizing(
 
   return {
     elementWidths,
+    textFixedWidths,
+    textFlexibleWidths,
     flexWidth,
     textScaleX,
     layoutScale,
@@ -1804,7 +2033,8 @@ export function createMetroWayfindingElement(
       frameShape: iconId === 'no-entry' || iconId === 'exit-classic' ? 'none' : 'rectangle',
       frameFillMode: 'none',
       frameStroke: false,
-      foregroundColor: icon?.defaultForegroundColor,
+      backgroundColor: iconId === 'exit-classic' ? '#009F3C' : undefined,
+      foregroundColor: iconId === 'exit-classic' ? '#FFFFFF' : icon?.defaultForegroundColor,
     };
   }
   if (type === 'arrow') {

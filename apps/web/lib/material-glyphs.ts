@@ -203,13 +203,26 @@ export function renderMaterialGlyph(
   }
   if (
     config.renderer === 'metro_line_map_vertical_modern' ||
-    config.renderer === 'metro_line_map_vertical_classic'
+    config.renderer === 'metro_line_map_vertical_classic' ||
+    config.renderer === 'metro_line_map_vertical_transition'
   ) {
     return renderMetroLineMapVertical(
       value,
       config,
       values,
-      config.renderer === 'metro_line_map_vertical_classic' ? 'classic' : 'modern',
+      config.renderer === 'metro_line_map_vertical_classic'
+        ? 'classic'
+        : config.renderer === 'metro_line_map_vertical_transition'
+          ? 'transition'
+          : 'modern',
+    );
+  }
+  if (config.renderer === 'metro_terminus_modern' || config.renderer === 'metro_terminus_classic') {
+    return renderMetroTerminusSign(
+      value,
+      config,
+      values,
+      config.renderer === 'metro_terminus_classic' ? 'classic' : 'modern',
     );
   }
   if (
@@ -1114,8 +1127,10 @@ function renderMetroLineMapVertical(
   value: string,
   config: MaterialGlyphConfig,
   values: Record<string, string>,
-  style: 'modern' | 'classic',
+  style: 'modern' | 'classic' | 'transition',
 ): string {
+  const mapStyle = style === 'transition' ? 'classic' : style;
+  const isTransition = style === 'transition';
   const stations = value
     .split(/\r?\n|\s*\/\s*/u)
     .map((station) => station.replace(/[\s\u3000]+/gu, '').trim())
@@ -1144,7 +1159,7 @@ function renderMetroLineMapVertical(
   // 旧版竖版线路图只有「两侧轨道」这一种合法版式；
   // 即使草稿里残留单侧取值，也统一按两侧渲染。
   const trackPosition: MetroVerticalTrackPosition =
-    style === 'classic'
+    mapStyle === 'classic'
       ? 'both'
       : values.trackPosition === 'both' ||
           values.trackPosition === 'right' ||
@@ -1165,7 +1180,8 @@ function renderMetroLineMapVertical(
     secondaryDirection = primaryDirection === 'first' ? 'last' : 'first';
   }
   const isBoth = trackPosition === 'both';
-  const isClassicBoth = style === 'classic' && isBoth;
+  const isClassicBoth = mapStyle === 'classic' && isBoth;
+  const isClassicCurrent = isClassicBoth && !isTransition;
   // 两侧轨道时，页头左侧方向对应的终点站在上方，右侧方向对应下方。
   const displayStations = primaryDirection === 'first' ? stations : [...stations].reverse();
   const displayCurrentIndex =
@@ -1175,7 +1191,8 @@ function renderMetroLineMapVertical(
   const lineNumber = extractMetroVerticalLineNumber(lineLabel);
 
   // 旧版两侧版式带标题栏和方向栏，首站从方向栏下方开始。
-  const headerHeight = (isClassicBoth ? 50 : metroVerticalHeaderHeight) * widthScale;
+  const headerHeight =
+    (isClassicBoth && !isTransition ? 50 : metroVerticalHeaderHeight) * widthScale;
   const margin = 12 * widthScale;
   const firstY = headerHeight + margin;
   const lastY = Math.max(canvasHeight - margin, firstY);
@@ -1232,14 +1249,16 @@ function renderMetroLineMapVertical(
     `<rect width="${formatNumber(canvasWidth)}" height="${formatNumber(canvasHeight)}" fill="#FFFFFF"/>`,
   ];
   parts.push(
-    isClassicBoth
-      ? `<rect x="0" y="0" width="${formatNumber(canvasWidth)}" height="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" fill="${accentColor}"/><rect x="0" y="${formatNumber(3 * widthScale)}" width="${formatNumber(canvasWidth)}" height="${formatNumber(29 * widthScale)}" fill="${metroVerticalHeaderBackground}"/>`
-      : style === 'classic'
-        ? `<rect x="0" y="0" width="${formatNumber(canvasWidth)}" height="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" fill="${accentColor}"/>`
-        : `<rect x="0" y="0" width="${formatNumber(canvasWidth)}" height="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" fill="${accentColor}"/><rect x="0" y="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" width="${formatNumber(canvasWidth)}" height="${formatNumber((metroVerticalHeaderHeight - metroVerticalHeaderAccentHeight) * widthScale)}" fill="${metroVerticalHeaderBackground}"/>`,
+    isTransition
+      ? `<rect x="0" y="0" width="${formatNumber(canvasWidth)}" height="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" fill="${accentColor}"/><rect x="0" y="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" width="${formatNumber(canvasWidth)}" height="${formatNumber((metroVerticalHeaderHeight - metroVerticalHeaderAccentHeight) * widthScale)}" fill="${metroVerticalHeaderBackground}"/>`
+      : isClassicBoth && !isTransition
+        ? `<rect x="0" y="0" width="${formatNumber(canvasWidth)}" height="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" fill="${accentColor}"/><rect x="0" y="${formatNumber(3 * widthScale)}" width="${formatNumber(canvasWidth)}" height="${formatNumber(29 * widthScale)}" fill="${metroVerticalHeaderBackground}"/>`
+        : mapStyle === 'classic'
+          ? `<rect x="0" y="0" width="${formatNumber(canvasWidth)}" height="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" fill="${accentColor}"/>`
+          : `<rect x="0" y="0" width="${formatNumber(canvasWidth)}" height="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" fill="${accentColor}"/><rect x="0" y="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" width="${formatNumber(canvasWidth)}" height="${formatNumber((metroVerticalHeaderHeight - metroVerticalHeaderAccentHeight) * widthScale)}" fill="${metroVerticalHeaderBackground}"/>`,
   );
   parts.push(
-    isClassicBoth
+    isClassicBoth && !isTransition
       ? renderMetroVerticalClassicBothHeader({
           canvasWidth,
           widthScale,
@@ -1252,11 +1271,12 @@ function renderMetroLineMapVertical(
           canvasWidth,
           widthScale,
           accentColor,
-          style,
+          style: isTransition ? 'modern' : mapStyle,
           trackPosition,
           primaryName: displayStations[0]!,
           secondaryName: displayStations[displayStations.length - 1]!,
           lineLabel: lineNumber,
+          showLineBadge: isTransition && isBoth,
         }),
   );
 
@@ -1307,9 +1327,43 @@ function renderMetroLineMapVertical(
       const stationLayoutScale = layoutScale * classicStationScale;
       // 本站落在终点时不再叠加终点实心填充：既会把本站方向箭头埋进色块里，
       // 又让两侧填充色不一致；直接沿用「本站」图标（白底圆点 + 方向箭头）。
-      const showsCurrentStationIcon = isClassicBoth && isCurrent;
-      if (isCurrent) {
-        if (isClassicBoth) {
+      const showsCurrentStationIcon = isClassicCurrent && isCurrent;
+      if (isTransition && isCurrent) {
+        // 过渡版本站标签沿用新版样式（高亮框 + 方向箭头），但起讫站仍不额外标注。
+        currentParts.push(
+          renderMetroVerticalCurrentLabel({
+            station,
+            pinyin,
+            x: 37.5 * widthScale,
+            y,
+            anchor: 'end',
+            accentColor,
+            widthScale,
+            layoutScale,
+            maxWidth: 28 * widthScale,
+            fit: stationTextFit,
+            padding: 1.5,
+            arrowGap: 3,
+            arrowDirection: 'up',
+          }),
+          renderMetroVerticalCurrentLabel({
+            station,
+            pinyin,
+            x: 90.5 * widthScale,
+            y,
+            anchor: 'start',
+            accentColor,
+            widthScale,
+            layoutScale,
+            maxWidth: 28 * widthScale,
+            fit: stationTextFit,
+            padding: 1.5,
+            arrowGap: 3,
+            arrowDirection: 'down',
+          }),
+        );
+      } else if (isCurrent) {
+        if (isClassicCurrent) {
           // 旧版不画实心框：本站站名用线路色，中间标注「本站」。
           // 本站同时是换乘站时，中间留给换乘线路文字，避免「本站」盖住换乘信息。
           const currentPartsMarkup = [
@@ -1449,16 +1503,16 @@ function renderMetroLineMapVertical(
               ? metroVerticalPassedColor
               : '#000000',
           widthScale,
-          style,
+          style: mapStyle,
           innerRadius: isClassicBoth ? 1 * widthScale : undefined,
-          currentArrow: isClassicBoth && isCurrent ? 'up' : undefined,
+          currentArrow: isClassicCurrent && isCurrent ? 'up' : undefined,
           terminalFill:
-            !showsCurrentStationIcon && style === 'classic' && displayIndex === 0
+            !showsCurrentStationIcon && isClassicCurrent && displayIndex === 0
               ? leftPassed
                 ? metroVerticalPassedColor
                 : accentColor
               : !showsCurrentStationIcon &&
-                  style === 'classic' &&
+                  isClassicCurrent &&
                   displayIndex === displayStations.length - 1
                 ? metroVerticalPassedColor
                 : undefined,
@@ -1475,17 +1529,17 @@ function renderMetroLineMapVertical(
               ? metroVerticalPassedColor
               : '#000000',
           widthScale,
-          style,
+          style: mapStyle,
           innerRadius: isClassicBoth ? 1 * widthScale : undefined,
-          currentArrow: isClassicBoth && isCurrent ? 'down' : undefined,
+          currentArrow: isClassicCurrent && isCurrent ? 'down' : undefined,
           terminalFill:
             !showsCurrentStationIcon &&
-            style === 'classic' &&
+            isClassicCurrent &&
             displayIndex === displayStations.length - 1
               ? rightPassed
                 ? metroVerticalPassedColor
                 : accentColor
-              : !showsCurrentStationIcon && style === 'classic' && displayIndex === 0
+              : !showsCurrentStationIcon && isClassicCurrent && displayIndex === 0
                 ? metroVerticalPassedColor
                 : undefined,
         }),
@@ -1558,9 +1612,10 @@ function renderMetroLineMapVertical(
         radius: markerRadius,
         inkColor: passed ? metroVerticalPassedColor : '#000000',
         widthScale,
-        style,
+        style: mapStyle,
         terminalFill:
-          style === 'classic' && (displayIndex === 0 || displayIndex === displayStations.length - 1)
+          mapStyle === 'classic' &&
+          (displayIndex === 0 || displayIndex === displayStations.length - 1)
             ? displayIndex === 0 && !passed
               ? accentColor
               : metroVerticalPassedColor
@@ -1864,6 +1919,8 @@ function renderMetroVerticalLineMapHeader(input: {
   primaryName: string;
   secondaryName: string;
   lineLabel: string;
+  /** 过渡版两侧轨道：新版页头中间补一个线路圆标。 */
+  showLineBadge?: boolean;
 }): string {
   const {
     canvasWidth,
@@ -1874,6 +1931,7 @@ function renderMetroVerticalLineMapHeader(input: {
     primaryName,
     secondaryName,
     lineLabel,
+    showLineBadge = false,
   } = input;
   const arrowColor = style === 'classic' ? accentColor : '#FFFFFF';
   const textColor = style === 'classic' ? '#000000' : '#FFFFFF';
@@ -1881,34 +1939,45 @@ function renderMetroVerticalLineMapHeader(input: {
   const parts: string[] = [];
 
   if (trackPosition === 'both') {
-    // 两侧轨道：左右方向文案分别贴住两端箭头，中间留弹性空格。
-    const arrowWidth = 16 * widthScale;
-    const leftArrow = 2 * widthScale;
-    const rightArrow = canvasWidth - 2 * widthScale - arrowWidth;
-    parts.push(
-      renderMetroVerticalHeaderArrow(leftArrow, widthScale, arrowColor, false),
-      renderMetroVerticalHeaderArrow(rightArrow, widthScale, arrowColor, true),
-    );
-    const textMaxWidth = 42 * widthScale;
-    const leftX = 20 * widthScale;
-    const rightX = canvasWidth - 20 * widthScale;
+    // 两侧轨道：箭头、方向文案、线路圆标共用同一个缩放比例，并按表头高度垂直居中。
+    const arrowWidth = 14 * widthScale;
+    const leftArrow = 3 * widthScale;
+    const rightArrow = canvasWidth - 3 * widthScale - arrowWidth;
+    const textMaxWidth = (showLineBadge ? 34 : 40) * widthScale;
+    const leftX = 21 * widthScale;
+    const rightX = canvasWidth - 21 * widthScale;
     const leftTitle = `${primaryName}方向`;
     const leftEnglish = `To ${toUppercasePinyin(primaryName)}`;
     const rightTitle = `${secondaryName}方向`;
     const rightEnglish = `To ${toUppercasePinyin(secondaryName)}`;
     // 左右两侧方向信息共用一个缩放比例：任一侧超宽时整体同比缩小。
     const headerFit = Math.min(
-      resolveMetroSignTextFit(leftTitle, 8 * widthScale, textMaxWidth),
-      resolveMetroSignTextFit(leftEnglish, 4 * widthScale, textMaxWidth),
-      resolveMetroSignTextFit(rightTitle, 8 * widthScale, textMaxWidth),
-      resolveMetroSignTextFit(rightEnglish, 4 * widthScale, textMaxWidth),
+      resolveMetroSignTextFit(leftTitle, 9 * widthScale, textMaxWidth),
+      resolveMetroSignTextFit(leftEnglish, 4.2 * widthScale, textMaxWidth),
+      resolveMetroSignTextFit(rightTitle, 9 * widthScale, textMaxWidth),
+      resolveMetroSignTextFit(rightEnglish, 4.2 * widthScale, textMaxWidth),
     );
+    const headerCenterY = 18 * widthScale;
+    // 中英文基线距固定，不随字号缩放；整组文字围绕表头中心垂直居中。
+    const baselineGap = 5.2 * widthScale;
+    const titleFontSize = 9 * widthScale * headerFit;
+    const englishFontSize = 4.2 * widthScale * headerFit;
+    const textTop = headerCenterY - baselineGap / 2 - titleFontSize * 0.72;
+    const textBottom = headerCenterY + baselineGap / 2 + englishFontSize * 0.2;
+    const verticalOffset = headerCenterY - (textTop + textBottom) / 2;
+    const titleBaseline = headerCenterY - baselineGap / 2 + verticalOffset;
+    const englishBaseline = headerCenterY + baselineGap / 2 + verticalOffset;
+    const lineDigits = Array.from(lineLabel).length;
+    const lineBadgeFontSize =
+      (lineDigits > 2 ? 10 : lineDigits > 1 ? 11.5 : 14) * widthScale * headerFit;
     parts.push(
+      renderMetroVerticalHeaderArrow(leftArrow, widthScale, arrowColor, false, headerFit),
+      renderMetroVerticalHeaderArrow(rightArrow, widthScale, arrowColor, true, headerFit),
       renderMetroSignText({
         value: leftTitle,
         x: leftX,
-        y: 17.6 * widthScale,
-        fontSize: 8 * widthScale,
+        y: titleBaseline,
+        fontSize: 9 * widthScale,
         color: textColor,
         weight: 400,
         anchor: 'start',
@@ -1918,8 +1987,8 @@ function renderMetroVerticalLineMapHeader(input: {
       renderMetroSignText({
         value: leftEnglish,
         x: leftX,
-        y: 23.8 * widthScale,
-        fontSize: 4 * widthScale,
+        y: englishBaseline,
+        fontSize: 4.2 * widthScale,
         color: englishColor,
         weight: 400,
         anchor: 'start',
@@ -1929,8 +1998,8 @@ function renderMetroVerticalLineMapHeader(input: {
       renderMetroSignText({
         value: rightTitle,
         x: rightX,
-        y: 17.6 * widthScale,
-        fontSize: 8 * widthScale,
+        y: titleBaseline,
+        fontSize: 9 * widthScale,
         color: textColor,
         weight: 400,
         anchor: 'end',
@@ -1940,14 +2009,20 @@ function renderMetroVerticalLineMapHeader(input: {
       renderMetroSignText({
         value: rightEnglish,
         x: rightX,
-        y: 23.8 * widthScale,
-        fontSize: 4 * widthScale,
+        y: englishBaseline,
+        fontSize: 4.2 * widthScale,
         color: englishColor,
         weight: 400,
         anchor: 'end',
         maxWidth: textMaxWidth,
         fit: headerFit,
       }),
+      ...(showLineBadge && lineLabel
+        ? [
+            `<circle cx="${formatNumber(canvasWidth / 2)}" cy="${formatNumber(headerCenterY)}" r="${formatNumber(8 * widthScale * headerFit)}" fill="${accentColor}"/>`,
+            `<text x="${formatNumber(canvasWidth / 2)}" y="${formatNumber(headerCenterY + lineBadgeFontSize * 0.36)}" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="${formatNumber(lineBadgeFontSize)}" font-weight="400" text-anchor="middle">${escapeXml(lineLabel)}</text>`,
+          ]
+        : []),
     );
     return parts.join('');
   }
@@ -2032,11 +2107,14 @@ function renderMetroVerticalHeaderArrow(
   widthScale: number,
   color: string,
   mirrored: boolean,
+  fit = 1,
 ): string {
   const transform = mirrored
     ? `translate(${formatNumber(left + 16 * widthScale)} 0) scale(${formatNumber(-widthScale)} ${formatNumber(widthScale)}) translate(${formatNumber(-13.9382 * widthScale)} 0)`
     : `translate(${formatNumber(left - 13.9382 * widthScale)} 0) scale(${formatNumber(widthScale)})`;
-  return `<g transform="${transform}"><path d="${metroVerticalHeaderArrowPath}" fill="${color}"/></g>`;
+  const centerX = left + 8 * widthScale;
+  const centerY = 18 * widthScale;
+  return `<g transform="translate(${formatNumber(centerX)} ${formatNumber(centerY)}) scale(${formatNumber(fit)}) translate(${formatNumber(-centerX)} ${formatNumber(-centerY)})"><g transform="${transform}"><path d="${metroVerticalHeaderArrowPath}" fill="${color}"/></g></g>`;
 }
 
 function renderMetroVerticalTransferIcon(input: {
@@ -2583,6 +2661,115 @@ function renderMetroPlatformSign(
  * 设计稿为 576×128 单行版面：居中站名 + 拼音，底部线路色条。
  * 旧版站名与拼音使用线路色，新版使用黑色；旧版拼音按字分空格暂未实现。
  */
+/**
+ * 地铁横版终点站版式。
+ * 新版复用站名版式，只把站名位置换成「终点站 / Terminus」；
+ * 旧版基于方向版式去掉箭头与下一站区域，把开往信息拆成「终点站 / Terminal Station」和终点站名两段。
+ */
+function renderMetroTerminusSign(
+  value: string,
+  config: MaterialGlyphConfig,
+  values: Record<string, string>,
+  style: 'modern' | 'classic',
+): string {
+  const label = value.trim() || (values.terminusLabel ?? '').trim() || '终点站';
+  const english = (values.terminusEnglish ?? '').trim();
+  if (style === 'modern') {
+    return renderMetroStationNameSign(
+      label,
+      config,
+      { ...values, stationNamePinyin: english || 'Terminus' },
+      'modern',
+    );
+  }
+  const canvasWidth = Math.max(
+    Number(values['canvas.logicalWidthPx']) || config.layoutWidth || metroSignReferenceWidth,
+    320,
+  );
+  const canvasHeight = Math.max(
+    Number(values['canvas.logicalHeightPx']) || config.layoutHeight || metroSignReferenceHeight,
+    32,
+  );
+  const yScale = canvasHeight / metroSignReferenceHeight;
+  const accentColor = resolveMetroSignAccentColor(config, values);
+  const terminalName = (values.terminalName ?? '').trim();
+  const terminalPinyin = (values.terminalNamePinyin ?? '').trim();
+  const lineLabel = (values.lineLabel ?? '').trim();
+  const englishText = english || 'Terminal Station';
+  const labelX = 40;
+  const stationX = Math.min(Math.max(canvasWidth * 0.34, 250), canvasWidth - 260);
+  const badgeRadius = 21 * yScale;
+  const badgeCx = Math.min(
+    canvasWidth - badgeRadius - 20,
+    stationX + Math.max(estimateMetroLineMapTextWidth(terminalName, 32 * yScale), 180) + 58,
+  );
+  const badge = lineLabel
+    ? `<circle cx="${formatNumber(badgeCx)}" cy="${formatNumber(56 * yScale)}" r="${formatNumber(badgeRadius)}" fill="${accentColor}"/>${renderMetroSignText(
+        {
+          value: lineLabel,
+          x: badgeCx,
+          y: 68.7 * yScale,
+          fontSize: 28 * yScale,
+          color: '#FFFFFF',
+          weight: 400,
+          anchor: 'middle',
+          letterSpacing: -3 * yScale,
+          maxWidth: (badgeRadius * 2 - 8) * yScale,
+        },
+      )}`
+    : '';
+  return `<g data-metro-terminus="classic">${[
+    `<rect width="${formatNumber(canvasWidth)}" height="${formatNumber(canvasHeight)}" fill="#FFFFFF"/>`,
+    `<rect x="0.5" y="0.5" width="${formatNumber(Math.max(canvasWidth - 1, 1))}" height="${formatNumber(Math.max(canvasHeight - 1, 1))}" fill="none" stroke="#CCCCCC" stroke-width="1"/>`,
+    renderMetroSignText({
+      value: label,
+      x: labelX,
+      y: 60.84 * yScale,
+      fontSize: 32 * yScale,
+      color: '#000000',
+      weight: 500,
+      anchor: 'start',
+      maxWidth: 180,
+    }),
+    renderMetroSignText({
+      value: englishText,
+      x: labelX,
+      y: 81.5 * yScale,
+      fontSize: 16 * yScale,
+      color: '#000000',
+      weight: 400,
+      anchor: 'start',
+      maxWidth: 180,
+    }),
+    terminalName
+      ? renderMetroSignText({
+          value: terminalName,
+          x: stationX,
+          y: 60.84 * yScale,
+          fontSize: 32 * yScale,
+          color: '#000000',
+          weight: 500,
+          anchor: 'start',
+          maxWidth: 200,
+        })
+      : '',
+    terminalPinyin
+      ? renderMetroSignText({
+          value: terminalPinyin,
+          x: stationX,
+          y: 81.5 * yScale,
+          fontSize: 16 * yScale,
+          color: '#000000',
+          weight: 400,
+          anchor: 'start',
+          maxWidth: 200,
+        })
+      : '',
+    badge,
+    `<rect x="0" y="${formatNumber(112 * yScale)}" width="${formatNumber(canvasWidth)}" height="${formatNumber(16 * yScale)}" fill="${accentColor}"/>`,
+  ].join('')}</g>`;
+}
+
 function renderMetroStationNameSign(
   value: string,
   config: MaterialGlyphConfig,
@@ -2661,6 +2848,66 @@ export function resolveMetroSignTextRegions(
   const width = Math.max(1, Math.round(canvas.widthM * 128));
   const height = Math.max(1, Math.round(canvas.heightM * 128));
   const yScale = height / 128;
+  if (renderer.startsWith('metro_terminus')) {
+    const classic = renderer.endsWith('_classic');
+    return [
+      {
+        id: 'terminus-label',
+        label: '终点站标注',
+        fieldKey: 'terminusLabel',
+        groupKey: 'terminus',
+        x: classic ? 40 : 0,
+        y: 16 * yScale,
+        width: classic ? 180 : width,
+        height: 48 * yScale,
+      },
+      {
+        id: 'terminus-english',
+        label: '英文标注',
+        fieldKey: 'terminusEnglish',
+        groupKey: 'terminus',
+        x: classic ? 40 : 0,
+        y: (classic ? 70 : 74) * yScale,
+        width: classic ? 200 : width,
+        height: 20 * yScale,
+      },
+      ...(classic
+        ? [
+            {
+              id: 'terminus-name',
+              label: '终点站名',
+              fieldKey: 'terminalName',
+              groupKey: 'terminus',
+              x: Math.round(width * 0.34),
+              y: 44 * yScale,
+              width: 200,
+              height: 46 * yScale,
+            },
+            {
+              id: 'terminus-line',
+              label: '线路编号',
+              fieldKey: 'lineLabel',
+              groupKey: 'terminus',
+              x: width - 80,
+              y: 34 * yScale,
+              width: 60,
+              height: 46 * yScale,
+            },
+          ]
+        : [
+            {
+              id: 'terminus-color',
+              label: '线路颜色',
+              fieldKey: 'accentColor',
+              groupKey: 'terminus',
+              x: 0,
+              y: 110 * yScale,
+              width,
+              height: 18 * yScale,
+            },
+          ]),
+    ];
+  }
   if (renderer.startsWith('metro_station_name')) {
     return [
       {

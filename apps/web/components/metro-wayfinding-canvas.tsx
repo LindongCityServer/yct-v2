@@ -216,7 +216,10 @@ function buildElementBoxes(
           ? sizing.flexWidth
           : sizing.elementWidths[index]!;
       const elementWidth =
-        element.type === 'text' ? intrinsicWidth * sizing.textScaleX : intrinsicWidth;
+        element.type === 'text'
+          ? (sizing.textFixedWidths[index] ?? 0) +
+            (sizing.textFlexibleWidths[index] ?? 0) * sizing.textScaleX
+          : intrinsicWidth;
       const elementScaleX =
         sizing.layoutScale *
         (element.type === 'largeText' || element.type === 'combination' ? sizing.textScaleX : 1);

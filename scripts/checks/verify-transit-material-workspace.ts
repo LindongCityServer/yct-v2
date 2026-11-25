@@ -114,5 +114,69 @@ check(
   ),
 );
 
+console.log('\n── 4. 线路图换乘：线路口径 + 单一解析层 + auto/manual ───────');
+
+const TRANSIT_SOURCE = readFileSync(
+  new URL('../../apps/web/lib/material-transit-source.ts', import.meta.url),
+  'utf8',
+);
+const LINE_MAP_TRANSFERS = readFileSync(
+  new URL('../../apps/web/lib/line-map-transfers.ts', import.meta.url),
+  'utf8',
+);
+
+check(
+  '工作台引用独立换乘解析层',
+  /import \{\s*resolveLineMapTransfers,/.test(PANEL) &&
+    /from '\.\.\/lib\/line-map-transfers'/.test(PANEL),
+);
+check(
+  '服务端线路解析复用同一换乘解析层（不再各写一套）',
+  /import \{ resolveLineMapTransfers \} from '\.\/line-map-transfers'/.test(TRANSIT_SOURCE) &&
+    !/buildTransitLineTransferEntries/.test(TRANSIT_SOURCE),
+);
+check(
+  '换乘按「线路」推导：解析层一次构建 stationId → lineKeys 索引',
+  /createRmpNodeLineKeyIndex/.test(LINE_MAP_TRANSFERS) &&
+    /createRmpStationNameLineKeyIndex/.test(LINE_MAP_TRANSFERS),
+);
+check(
+  '线路口径按目标模板家族解析（不回落到公交线路）',
+  /resolveLineForSourceKind\(sourceKind\)/.test(PANEL) &&
+    /resolveLineForSourceKind\('transit_line'\)/.test(PANEL),
+);
+check(
+  '模板库切换线路图时只沿用轨道线路',
+  /carryTransitSelectionToSourceKind[\s\S]*?railTransitLineOptions\.some/.test(PANEL),
+);
+check(
+  '刷新按钮直接调线路解析层，不要求先选当前站',
+  /const refreshLineMapTransferLines = \(\) => \{[\s\S]*?computeLineMapTransfers\(\)/.test(PANEL) &&
+    !/const refreshLineMapTransferLines = \(\) => \{[\s\S]{0,400}?buildTransitNetworkFieldValues/.test(
+      PANEL,
+    ),
+);
+check(
+  '换乘来源 auto/manual 有显式状态并写入本机草稿',
+  /const \[transferLinesManual, setTransferLinesManual\] = useState\(false\)/.test(PANEL) &&
+    /transferLinesManual: transferLinesManual \|\| undefined/.test(PANEL) &&
+    /transferLinesManual\?: boolean/.test(
+      readFileSync(
+        new URL('../../apps/web/lib/client-material-offline-drafts.ts', import.meta.url),
+        'utf8',
+      ),
+    ),
+);
+check(
+  '草稿恢复不再用文本过滤修补换乘（改为按线路重建）',
+  !/sanitizeRestoredTransferLines/.test(PANEL),
+);
+check(
+  '换乘自动同步受 manual 开关约束',
+  /if \(!localDraftReady \|\| !selected \|\| transferLinesManual\) \{[\s\S]*?computeLineMapTransfers\(\)/.test(
+    PANEL,
+  ),
+);
+
 console.log(`\n${passed}/${passed + failed} 通过`);
 if (failed > 0) process.exit(1);

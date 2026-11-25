@@ -2,7 +2,7 @@
  * QQ 机器人随机物料出图核心。
  *
  * 方案见 docs/QQ_BOT_MATERIALS_PLAN.md 第 3.2 / 4.3 / 4.4 / 4.6 / 4.7 / 4.8 节：
- * - 候选池：19 个系统模板 × 当前数据可满足的条件；随机只抽真实对象，不做词库拼字；
+ * - 候选池：22 个系统模板 × 当前数据可满足的条件；随机只抽真实对象，不做词库拼字；
  * - 确定性：`sha256(seed + kind)` 派生 xorshift128，同一 seed 抽到同一对象、同一牌面；
  * - server 数据源复用工作台的「套用数据」resolver；
  * - sample 数据源只用 `loadDefaultMaterialTransitNetworkSample()`（进程内缓存 1 小时），
@@ -46,6 +46,9 @@ import {
   METRO_LINE_MAP_OLD_TEMPLATE_ID,
   METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID,
   METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID,
+  METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID,
+  METRO_TERMINUS_NEW_TEMPLATE_ID,
+  METRO_TERMINUS_OLD_TEMPLATE_ID,
   METRO_PLATFORM_SIGN_TEMPLATE_ID,
   METRO_STATION_NAME_NEW_TEMPLATE_ID,
   METRO_STATION_NAME_OLD_TEMPLATE_ID,
@@ -109,7 +112,7 @@ export type QqBotMaterialKind = (typeof qqBotMaterialKinds)[number];
 export type QqBotMaterialResolvedKind = Exclude<QqBotMaterialKind, 'random'>;
 
 /**
- * 19 个系统模板的稳定 id 列表，同时也是候选池的全集。
+ * 22 个系统模板的稳定 id 列表，同时也是候选池的全集。
  * 顺序固定：候选池按这个顺序构造，保证同一 seed 的结果可复现。
  */
 export const qqBotMaterialTemplateIds = [
@@ -126,6 +129,9 @@ export const qqBotMaterialTemplateIds = [
   METRO_LINE_MAP_OLD_TEMPLATE_ID,
   METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID,
   METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID,
+  METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID,
+  METRO_TERMINUS_NEW_TEMPLATE_ID,
+  METRO_TERMINUS_OLD_TEMPLATE_ID,
   METRO_STATION_NAME_NEW_TEMPLATE_ID,
   METRO_STATION_NAME_OLD_TEMPLATE_ID,
   METRO_DIRECTION_NEW_TEMPLATE_ID,
@@ -166,13 +172,19 @@ export const qqBotMaterialTemplateEntries = [
   },
   {
     id: 'metro_line_map_vertical',
-    templateIds: [METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID, METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID],
+    templateIds: [
+      METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID,
+      METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID,
+      METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID,
+    ],
   },
   {
     id: 'metro_line_map',
     templateIds: [
       METRO_LINE_MAP_NEW_TEMPLATE_ID,
       METRO_LINE_MAP_OLD_TEMPLATE_ID,
+      METRO_TERMINUS_NEW_TEMPLATE_ID,
+      METRO_TERMINUS_OLD_TEMPLATE_ID,
       METRO_STATION_NAME_NEW_TEMPLATE_ID,
       METRO_STATION_NAME_OLD_TEMPLATE_ID,
       METRO_DIRECTION_NEW_TEMPLATE_ID,
@@ -302,6 +314,9 @@ const qqBotMaterialKindByTemplateId: Record<QqBotMaterialTemplateId, QqBotMateri
   [METRO_LINE_MAP_OLD_TEMPLATE_ID]: 'metro_line',
   [METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID]: 'metro_line',
   [METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID]: 'metro_line',
+  [METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID]: 'metro_line',
+  [METRO_TERMINUS_NEW_TEMPLATE_ID]: 'metro_line',
+  [METRO_TERMINUS_OLD_TEMPLATE_ID]: 'metro_line',
   [METRO_STATION_NAME_NEW_TEMPLATE_ID]: 'metro_line',
   [METRO_STATION_NAME_OLD_TEMPLATE_ID]: 'metro_line',
   [METRO_DIRECTION_NEW_TEMPLATE_ID]: 'metro_line',
@@ -328,6 +343,9 @@ const qqBotMaterialSlugByTemplateId: Record<QqBotMaterialTemplateId, string> = {
   [METRO_LINE_MAP_OLD_TEMPLATE_ID]: 'metro-line-map-old',
   [METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID]: 'metro-line-map-vertical',
   [METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID]: 'metro-line-map-vertical-old',
+  [METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID]: 'metro-line-map-vertical-transition',
+  [METRO_TERMINUS_NEW_TEMPLATE_ID]: 'metro-terminus',
+  [METRO_TERMINUS_OLD_TEMPLATE_ID]: 'metro-terminus-old',
   [METRO_STATION_NAME_NEW_TEMPLATE_ID]: 'metro-station-name',
   [METRO_STATION_NAME_OLD_TEMPLATE_ID]: 'metro-station-name-old',
   [METRO_DIRECTION_NEW_TEMPLATE_ID]: 'metro-direction',
@@ -351,6 +369,9 @@ const qqBotMaterialCodePrefixByTemplateId: Record<QqBotMaterialTemplateId, strin
   [METRO_LINE_MAP_OLD_TEMPLATE_ID]: 'ML',
   [METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID]: 'ML',
   [METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID]: 'ML',
+  [METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID]: 'ML',
+  [METRO_TERMINUS_NEW_TEMPLATE_ID]: 'ML',
+  [METRO_TERMINUS_OLD_TEMPLATE_ID]: 'ML',
   [METRO_STATION_NAME_NEW_TEMPLATE_ID]: 'MS',
   [METRO_STATION_NAME_OLD_TEMPLATE_ID]: 'MS',
   [METRO_DIRECTION_NEW_TEMPLATE_ID]: 'MS',
@@ -778,6 +799,12 @@ const qqBotMaterialLayoutStyleByTemplateId: Record<
     layoutKey: 'metro-line-map-vertical',
     styleKey: 'classic',
   },
+  [METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID]: {
+    layoutKey: 'metro-line-map-vertical',
+    styleKey: 'transition',
+  },
+  [METRO_TERMINUS_NEW_TEMPLATE_ID]: { layoutKey: 'metro-terminus', styleKey: 'new' },
+  [METRO_TERMINUS_OLD_TEMPLATE_ID]: { layoutKey: 'metro-terminus', styleKey: 'classic' },
   [METRO_STATION_NAME_NEW_TEMPLATE_ID]: { layoutKey: 'metro-station-name', styleKey: 'new' },
   [METRO_STATION_NAME_OLD_TEMPLATE_ID]: { layoutKey: 'metro-station-name', styleKey: 'classic' },
   [METRO_DIRECTION_NEW_TEMPLATE_ID]: { layoutKey: 'metro-direction', styleKey: 'new' },
@@ -1455,16 +1482,26 @@ function buildMetroCardSummary(input: {
   const lineName = line.name || values.lineLabel || '地铁';
   const vertical =
     templateId === METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID ||
-    templateId === METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID;
+    templateId === METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID ||
+    templateId === METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID;
   switch (templateId) {
     case METRO_LINE_MAP_NEW_TEMPLATE_ID:
     case METRO_LINE_MAP_OLD_TEMPLATE_ID:
     case METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID:
     case METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID:
+    case METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID:
       return {
         headline: lineName,
         subline: `${line.stationCount} 站 · ${vertical ? '竖版' : '横版'}线路图 · 当前站 ${stationName}`,
         meta: [`线路图 · 当前站 ${stationName}`, `${line.stationCount} 站`],
+        color,
+      };
+    case METRO_TERMINUS_NEW_TEMPLATE_ID:
+    case METRO_TERMINUS_OLD_TEMPLATE_ID:
+      return {
+        headline: '终点站',
+        subline: [values.terminalName, lineName].filter(Boolean).join(' · '),
+        meta: ['终点站标志', lineName],
         color,
       };
     case METRO_STATION_NAME_NEW_TEMPLATE_ID:

@@ -1730,6 +1730,19 @@
   border-radius: 18px 18px 6px 6px;
 }
 
+.material-layout-thumb.is-rendered {
+  padding: 0;
+  background: #ffffff;
+}
+
+.material-layout-thumb-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+
 .material-layout-thumb-sign {
   display: flex;
   flex-direction: column;

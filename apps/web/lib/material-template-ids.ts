@@ -5,22 +5,39 @@ export const BUS_STOP_DETAIL_TEMPLATE_ID = 'system_material_bus_stop_detail';
 export const BUS_STOP_HORIZONTAL_DETAIL_TEMPLATE_ID = 'system_material_bus_stop_horizontal_detail';
 
 /** 公交站牌的拟真样式：始发终到与线路概览各有方块、拟真两种样式。 */
-export const BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID = 'system_material_bus_stop_terminal_realistic';
-export const BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID = 'system_material_bus_stop_overview_realistic';
+export const BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID =
+  'system_material_bus_stop_terminal_realistic';
+export const BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID =
+  'system_material_bus_stop_overview_realistic';
 
 /** 地铁横版线路图：新版 / 旧版共用同一个入口，通过样式切换。 */
 export const METRO_LINE_MAP_NEW_TEMPLATE_ID = 'system_material_metro_line_map_new';
 export const METRO_LINE_MAP_OLD_TEMPLATE_ID = 'system_material_metro_line_map_old';
+/** 横版线路图的终点站版式：新版 / 旧版。 */
+export const METRO_TERMINUS_NEW_TEMPLATE_ID = 'system_material_metro_terminus_new';
+export const METRO_TERMINUS_OLD_TEMPLATE_ID = 'system_material_metro_terminus_old';
 
-/** 地铁竖版线路图：宽度固定 1 米、高度可调，新版 / 旧版共用同一个入口。 */
-export const METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID = 'system_material_metro_line_map_vertical_new';
-export const METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID = 'system_material_metro_line_map_vertical_old';
+/** 地铁竖版线路图：宽度固定 1 米、高度可调，新版 / 旧版 / 过渡版共用同一个入口。 */
+export const METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID =
+  'system_material_metro_line_map_vertical_new';
+export const METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID =
+  'system_material_metro_line_map_vertical_old';
+export const METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID =
+  'system_material_metro_line_map_vertical_transition';
 
 /** 判断模板是否属于竖版地铁线路图（画布需锁定宽度）。 */
 export function isMetroLineMapVerticalTemplateId(templateId: string): boolean {
   return (
     templateId === METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID ||
-    templateId === METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID
+    templateId === METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID ||
+    templateId === METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID
+  );
+}
+
+/** 判断模板是否属于地铁横版终点站版式。 */
+export function isMetroTerminusTemplateId(templateId: string): boolean {
+  return (
+    templateId === METRO_TERMINUS_NEW_TEMPLATE_ID || templateId === METRO_TERMINUS_OLD_TEMPLATE_ID
   );
 }
 
@@ -36,5 +53,4 @@ export const METRO_PLATFORM_SIGN_TEMPLATE_ID = 'system_material_metro_platform_s
 /** 路牌与门牌模板：路牌一个入口，门牌含旧版 / 怀旧两种样式。 */
 export const ROAD_NAME_DIRECTION_TEMPLATE_ID = 'system_material_road_name_direction';
 export const BUILDING_ADDRESS_TEMPLATE_ID = 'system_material_building_address';
-export const NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID =
-  'system_material_nostalgic_building_address';
+export const NOSTALGIC_BUILDING_ADDRESS_TEMPLATE_ID = 'system_material_nostalgic_building_address';

@@ -4,7 +4,7 @@
  * 运行：`pnpm exec tsx --test scripts/checks/verify-qq-bot-materials.ts`
  *
  * 覆盖：
- * 1. 19 个系统模板的固定映射（slug / 编号前缀 / 族）与画布尺寸策略；
+ * 1. 22 个系统模板的固定映射（slug / 编号前缀 / 族）与画布尺寸策略；
  * 2. seed 确定性（同 seed + kind 得到同一序列、同模板同编号同像素）；
  * 3. HMAC 签名格式与 ±60 秒时间窗；
  * 4. 进程内限流（全局 60 次/分钟、并发 2）；
@@ -488,7 +488,7 @@ function recordCoverage(
 }
 
 function printCoverageMatrix(): void {
-  console.log('\n=== 19 个系统模板覆盖矩阵 ===');
+  console.log('\n=== 22 个系统模板覆盖矩阵 ===');
   const header = ['模板 ID', 'kind', '数据来源', '状态', '详情'];
   console.log(header.join(' | '));
   for (const row of coverageRows) {
@@ -500,8 +500,8 @@ function printCoverageMatrix(): void {
 // 测试
 // ---------------------------------------------------------------------------
 
-test('19 个系统模板与固定映射完整（slug / 编号前缀 / 族）', () => {
-  assert.equal(qqBotMaterialTemplateIds.length, 19, '模板 id 数量应为 19');
+test('22 个系统模板与固定映射完整（slug / 编号前缀 / 族）', () => {
+  assert.equal(qqBotMaterialTemplateIds.length, 22, '模板 id 数量应为 22');
   const slugs = new Set<string>();
   const prefixes = new Set(['LD', 'BL', 'BS', 'MS', 'ML', 'MW']);
   const kindCounts = new Map<QqBotMaterialResolvedKind, number>();
@@ -521,20 +521,20 @@ test('19 个系统模板与固定映射完整（slug / 编号前缀 / 族）', (
   assert.equal(kindCounts.get('road_sign'), 1, '路牌模板数量');
   assert.equal(kindCounts.get('address_sign'), 2, '楼牌模板数量');
   assert.equal(kindCounts.get('bus_stop'), 6, '公交站牌模板数量');
-  assert.equal(kindCounts.get('metro_line'), 9, '地铁模板数量');
+  assert.equal(kindCounts.get('metro_line'), 12, '地铁模板数量');
   assert.equal(kindCounts.get('custom'), 1, '导视牌模板数量');
 });
 
-test('第一层模板入口覆盖 19 个内部模板且不重叠', () => {
+test('第一层模板入口覆盖 22 个内部模板且不重叠', () => {
   const entryTemplateIds = qqBotMaterialTemplateEntries.flatMap((entry) => entry.templateIds);
   assert.equal(qqBotMaterialTemplateEntries.length, 8);
-  assert.equal(entryTemplateIds.length, 19);
-  assert.equal(new Set(entryTemplateIds).size, 19);
+  assert.equal(entryTemplateIds.length, 22);
+  assert.equal(new Set(entryTemplateIds).size, 22);
   assert.deepEqual(new Set(entryTemplateIds), new Set(qqBotMaterialTemplateIds));
   const busEntry = qqBotMaterialTemplateEntries.find((entry) => entry.id === 'bus_stop');
   assert.equal(busEntry?.templateIds.length, 5);
   const metroEntry = qqBotMaterialTemplateEntries.find((entry) => entry.id === 'metro_line_map');
-  assert.equal(metroEntry?.templateIds.length, 6);
+  assert.equal(metroEntry?.templateIds.length, 8);
 });
 
 test('seed 归一化、编号前缀与画布尺寸策略', () => {
@@ -874,7 +874,7 @@ test('错误码口径：invalid_request 与 source_scope_limited', async () => {
 });
 
 /** 逐个模板渲染：server → sample → 字段示例（fixture）降级。 */
-test('19 个模板逐个渲染 + 随机抽样 3 次', async () => {
+test('22 个模板逐个渲染 + 随机抽样 3 次', async () => {
   for (const [index, templateId] of qqBotMaterialTemplateIds.entries()) {
     const kind = resolveQqBotMaterialKind(templateId);
     const seed = `verify${index.toString(16).padStart(2, '0')}`;
@@ -1254,7 +1254,7 @@ process.on('exit', () => {
     : 0;
   const maximumMs = timings.length ? Math.max(...timings) : 0;
   console.log(
-    `\n=== 汇总 === 覆盖 ${coverageRows.length}/19 个模板：PASS ${countByStatus('PASS')}、` +
+    `\n=== 汇总 === 覆盖 ${coverageRows.length}/22 个模板：PASS ${countByStatus('PASS')}、` +
       `FIXTURE ${countByStatus('FIXTURE')}、FAIL ${countByStatus('FAIL')}；` +
       `渲染 ${renderTimings.length} 次（平均 ${averageMs}ms，最慢 ${maximumMs}ms），` +
       `脚本耗时 ${(elapsedMs / 1000).toFixed(1)}s。`,

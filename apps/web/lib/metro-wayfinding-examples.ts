@@ -7,6 +7,7 @@ import type {
   MetroWayfindingProjectFile,
 } from './metro-wayfinding';
 import {
+  createMetroWayfindingId,
   extractMetroWayfindingLineNumber,
   METRO_WAYFINDING_FOREGROUND,
   METRO_WAYFINDING_PROJECT_FORMAT,
@@ -24,12 +25,23 @@ export interface MetroWayfindingExampleSource {
   category: 'entry' | 'transfer' | 'exit';
 }
 
+export interface MetroWayfindingExampleExitSide {
+  left: MetroWayfindingExampleExit[];
+  right: MetroWayfindingExampleExit[];
+}
+
 export interface MetroWayfindingExample {
   source: MetroWayfindingExampleSource;
   project: MetroWayfindingProjectFile;
   summary: MetroWayfindingLayoutSummary;
   /** 当前线路色：模板库旧版样式给单线路地铁图标填外框用。 */
   lineColor?: string;
+  /** 双侧出口信息，供旧版样式生成「方框编号 + 描述」和电梯设施图标。 */
+  exitSides?: MetroWayfindingExampleExitSide;
+  /** 当前线路可用出口，供旧版「出口与上楼」生成描述组。 */
+  currentExits?: MetroWayfindingExampleExit[];
+  /** 某些旧版模板直接使用独立工程（例如站外线路标识的 1×6 竖向版）。 */
+  classicProject?: MetroWayfindingProjectFile;
 }
 
 export interface MetroWayfindingExampleLine {
@@ -668,6 +680,164 @@ function buildExitDescriptionElement(
   return element;
 }
 
+/**
+ * 旧版出口与上楼模板的出口描述：双行方框编号 +「 / 中文描述」，每组后留空格。
+ */
+function buildClassicExitDescriptionGroups(
+  exits: readonly MetroWayfindingExampleExit[],
+  b: MetroExampleBuilder,
+): Array<Extract<MetroWayfindingElement, { type: 'text' }>> {
+  if (!exits.length) return [];
+  const groups: Array<Extract<MetroWayfindingElement, { type: 'text' }>> = [];
+  for (let start = 0; start < exits.length; start += 2) {
+    const chunk = exits.slice(start, start + 2);
+    const rows: Array<Array<{ kind: 'boxed'; value: string } | { kind: 'text'; value: string }>> = [
+      [],
+      [],
+    ];
+    chunk.forEach((exit, index) => {
+      const description = isPlaceholderExitDescription(exit.description ?? '')
+        ? ''
+        : (exit.description ?? '').trim();
+      rows[index]!.push(
+        { kind: 'boxed', value: exit.code },
+        { kind: 'text', value: ` / ${description || '出口'} ` },
+      );
+    });
+    // 每份固定两行；不足两个出口时补一个空主文本行，保证多组之间高度一致。
+    const element = b.text(rows[0]!, '', 'left');
+    element.rows = rows.map((segments, index) => ({
+      id: `${element.id}-row-${index}`,
+      kind: 'main' as const,
+      segments: segments.length > 0 ? segments : [{ kind: 'text' as const, value: '' }],
+    }));
+    groups.push(element);
+  }
+  return groups;
+}
+
+/** 旧版站外线路标识：按 1×6 竖向工程还原（灰色底、地铁组合框、站名和线路色块）。 */
+function buildClassicStationExteriorProject(input: {
+  stationName: string;
+  stationSecondaryName?: string;
+  lines: readonly MetroWayfindingExampleLine[];
+  selectedLine?: MetroWayfindingExampleLine;
+}): MetroWayfindingProjectFile {
+  const stationMain = Array.from(input.stationName.replace(/站$/u, '') || input.stationName).join(
+    ' ',
+  );
+  const stationSecondary =
+    input.stationSecondaryName?.trim() || toUppercasePinyin(input.stationName.replace(/站$/u, ''));
+  const lineLabels = input.lines.slice(0, 2).map((line) => ({
+    id: createMetroWayfindingId('classic-exterior-line'),
+    type: 'text' as const,
+    align: 'center' as const,
+    writingMode: 'horizontal' as const,
+    scale: 0.6,
+    rows: [
+      {
+        id: createMetroWayfindingId('classic-exterior-line-row'),
+        kind: 'secondary' as const,
+        value:
+          `${line.name} ${line.secondaryName || buildMetroExampleLineSecondary([line])}`.trim(),
+        bold: false,
+      },
+    ],
+    backgroundColor: line.color,
+    foregroundColor: '#FFFFFF',
+  }));
+  const layout: MetroWayfindingLayout = {
+    backgroundColor: '#A6A8AB',
+    foregroundColor: '#585555',
+    mode: 'vertical',
+    dividerBetweenRows: false,
+    paddingStart: false,
+    paddingEnd: true,
+    rows: [
+      [
+        {
+          id: createMetroWayfindingId('classic-exterior-combination'),
+          type: 'combination',
+          scale: 1,
+          children: [
+            {
+              id: createMetroWayfindingId('classic-exterior-subway'),
+              type: 'facility',
+              iconId: 'subway',
+              scale: 0.7,
+              frameShape: 'rectangle',
+              frameFillMode: 'none',
+              frameStroke: false,
+            },
+          ],
+          frameFillMode: 'none',
+          frameStroke: false,
+          stripePosition: 'left',
+          backgroundColor: '#E53935',
+          foregroundColor: '#FFFFFF',
+        },
+        { id: createMetroWayfindingId('classic-exterior-divider'), type: 'divider' },
+        {
+          id: createMetroWayfindingId('classic-exterior-space'),
+          type: 'space',
+          mode: 'fixed',
+          units: 1,
+        },
+        { id: createMetroWayfindingId('classic-exterior-divider'), type: 'divider' },
+        {
+          id: createMetroWayfindingId('classic-exterior-station'),
+          type: 'text',
+          align: 'center',
+          writingMode: 'horizontal',
+          scale: 0.5,
+          rows: [
+            {
+              id: createMetroWayfindingId('classic-exterior-station-main'),
+              kind: 'main',
+              segments: [{ kind: 'text', value: stationMain }],
+            },
+            {
+              id: createMetroWayfindingId('classic-exterior-station-secondary'),
+              kind: 'secondary',
+              value: stationSecondary,
+              bold: false,
+            },
+          ],
+          foregroundColor: '#E53935',
+        },
+        { id: createMetroWayfindingId('classic-exterior-divider'), type: 'divider' },
+        ...lineLabels,
+        {
+          id: createMetroWayfindingId('classic-exterior-empty-slot'),
+          type: 'largeText',
+          value: '',
+          scale: 1,
+          suffix: '',
+          suffixes: [],
+          frameShape: 'rectangle',
+          frameFillMode: 'none',
+          frameStroke: false,
+          foregroundColor: '#E53935',
+        },
+      ],
+    ],
+  };
+  return {
+    format: METRO_WAYFINDING_PROJECT_FORMAT,
+    schemaVersion: METRO_WAYFINDING_PROJECT_SCHEMA_VERSION,
+    template: { id: METRO_WAYFINDING_TEMPLATE_ID, version: 1 },
+    canvas: {
+      widthM: 1,
+      heightM: 6,
+      pxPerMeter: 128,
+      alignToTile: false,
+      tileSizePx: 128,
+    },
+    layout,
+    exportedAt: '',
+  };
+}
+
 export function buildMetroWayfindingTemplateExamples(
   station: MetroWayfindingExampleStation | undefined,
   selectedLineId?: string,
@@ -693,10 +863,25 @@ export function buildMetroWayfindingTemplateExamples(
   const groupedOtherExitCodes = mergeExitCodesForGrouping(otherExitCodes);
   const exitSides = mergeExitSides(splitExitCodesByDirection(exitContext.current));
   const sortedCurrentExits = sortedUsableExits(exitContext.current);
+  const exitInfoByGroupedCode = new Map<string, MetroWayfindingExampleExit>();
+  for (const exit of sortedCurrentExits) {
+    const key = mergeExitCodeForGrouping(exit.code);
+    if (!exitInfoByGroupedCode.has(key)) {
+      exitInfoByGroupedCode.set(key, exit);
+    }
+  }
+  const sideExitInfos = {
+    left: exitSides.left.flatMap((code) => {
+      const exit = exitInfoByGroupedCode.get(code);
+      return exit ? [{ ...exit, code }] : [];
+    }),
+    right: exitSides.right.flatMap((code) => {
+      const exit = exitInfoByGroupedCode.get(code);
+      return exit ? [{ ...exit, code }] : [];
+    }),
+  };
   const elevatorExit = sortedCurrentExits.find(hasAccessibleElevatorExit)?.code;
   const firstExitCode = currentExitCodes[0] ?? '';
-  const firstExit = sortedCurrentExits[0];
-  const firstExitDescription = firstExit?.description?.trim() ?? '';
   const examples: MetroWayfindingExample[] = [];
   let index = 0;
   const add = (
@@ -726,8 +911,11 @@ export function buildMetroWayfindingTemplateExamples(
       project,
       summary: summarizeMetroWayfindingLayout(layout, project.canvas),
       lineColor: selectedLine?.color,
+      exitSides: sideExitInfos,
+      currentExits: sortedCurrentExits,
     });
     index += 1;
+    return examples.at(-1)!;
   };
 
   // 进站相关
@@ -833,7 +1021,7 @@ export function buildMetroWayfindingTemplateExamples(
       );
     }
   }
-  add(
+  const stationExteriorExample = add(
     'entry',
     '站外线路标识',
     (() => {
@@ -843,6 +1031,7 @@ export function buildMetroWayfindingTemplateExamples(
         subwayMark.foregroundColor = '#E53935';
       }
       const subwayWordmark = b.text('地 铁', 'METRO', 'center');
+      subwayWordmark.scale = 0.7;
       subwayWordmark.foregroundColor = '#E53935';
       const graySpace = b.space('fixed');
       if (graySpace.type === 'space') graySpace.backgroundColor = '#4A4E54';
@@ -865,6 +1054,7 @@ export function buildMetroWayfindingTemplateExamples(
           'center',
         );
         label.rows = label.rows.filter((row) => row.kind === 'secondary');
+        label.scale = 0.6;
         label.backgroundColor = line.color;
         return label;
       });
@@ -883,6 +1073,12 @@ export function buildMetroWayfindingTemplateExamples(
     1,
     8,
   );
+  stationExteriorExample.classicProject = buildClassicStationExteriorProject({
+    stationName,
+    stationSecondaryName: station?.secondaryName,
+    lines: linePair,
+    selectedLine,
+  });
 
   // 只有换乘站才提供换乘相关模板。
   if (lines.length > 1 && selectedLine) {
@@ -1025,26 +1221,12 @@ export function buildMetroWayfindingTemplateExamples(
     4,
   );
   if (!station?.overGround) {
-    const exitDescription = isPlaceholderExitDescription(firstExitDescription)
-      ? '出口'
-      : firstExitDescription || '出口';
-    const exitDescriptionText = firstExitCode
-      ? b.text(
-          [
-            { kind: 'boxed' as const, value: firstExitCode },
-            { kind: 'text' as const, value: ` / ${exitDescription} ` },
-          ],
-          '',
-          'left',
-        )
-      : undefined;
     add(
       'exit',
       '出口与上楼',
       [
         b.arrow('north'),
         b.facility('exit', 'up'),
-        ...(exitDescriptionText ? [exitDescriptionText, b.space('fixed'), b.space()] : []),
         b.facility('escalator', 'left'),
         b.text('出口', 'EXIT', 'left'),
       ],

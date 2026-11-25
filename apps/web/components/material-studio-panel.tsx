@@ -69,6 +69,7 @@ import {
   METRO_LINE_MAP_NEW_TEMPLATE_ID,
   METRO_LINE_MAP_OLD_TEMPLATE_ID,
   METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID,
+  METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID,
   METRO_PLATFORM_SIGN_TEMPLATE_ID,
   ROAD_NAME_DIRECTION_TEMPLATE_ID,
   BUILDING_ADDRESS_TEMPLATE_ID,
@@ -110,6 +111,7 @@ import {
   listMaterialTransitNetworkNodeLines,
   type MaterialTransitNetworkNodeLineOption,
 } from '../lib/rmp-transit-network';
+import { resolveLineMapTransfers, type LineMapTransferResult } from '../lib/line-map-transfers';
 import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { publishToastRequested } from '../lib/client-toast-events';
@@ -417,6 +419,15 @@ export function MaterialStudioPanel({
     'origin',
   );
   const [selectedTransitLineIds, setSelectedTransitLineIds] = useState<string[]>([]);
+  /**
+   * 线路图换乘字段的来源：
+   * - `false`（auto）：由「线路 + 线网」推导，切模板 / 切样式 / 恢复草稿时自动重建；
+   * - `true`（manual）：用户明确改过文本，保留用户值，点「刷新换乘信息」恢复自动值。
+   *
+   * `transferLines` 同时是模板字段和派生数据，没有这层来源标记就只能靠猜，
+   * 历史上因此出现「派生值被当普通文本覆盖 / 用户改动被静默重算」两类问题。
+   */
+  const [transferLinesManual, setTransferLinesManual] = useState(false);
   const [selectedLocationId, setSelectedLocationId] = useState('');
   const [locationQuery, setLocationQuery] = useState('');
   const [roadCoordinate, setRoadCoordinate] = useState<[number, number] | null>(null);
@@ -499,6 +510,8 @@ export function MaterialStudioPanel({
   const { t, locale } = useI18n();
   const panelTitle = titleKey ? t(titleKey) : title;
   const localDraftRef = useRef<MaterialOfflineDraftRecord | null>(null);
+  /** 记录上一次实际生效的线路色，避免草稿恢复后被初始化数据覆盖。 */
+  const lastAccentLineColorRef = useRef<string | null>(null);
   // 路牌 / 门牌来回切样式时，目标模板没有的同名字段（如怀旧没有拼音）靠这里保留。
   const materialFieldMemoryRef = useRef<Record<string, string>>({});
   const transitNetworkSourceIntentRevisionRef = useRef(0);
@@ -793,22 +806,43 @@ export function MaterialStudioPanel({
     [drafts],
   );
   // 地铁线路图 / 导视牌也允许套用有轨与专用线；换乘信息在解析时只取同类型线路。
-  const serverTransitLineOptions = useMemo(
+  /** 轨道类线路：线路口径（线路图 / 站名 / 方向）只认这些线路，公交线路不得进入。 */
+  const railTransitLineOptions = useMemo(
     () =>
-      isMetroLineMap
-        ? transitLines.filter(
-            (line) => line.mode === 'metro' || line.mode === 'tram' || line.mode === 'custom',
-          )
-        : transitLines,
-    [isMetroLineMap, transitLines],
+      transitLines.filter(
+        (line) => line.mode === 'metro' || line.mode === 'tram' || line.mode === 'custom',
+      ),
+    [transitLines],
+  );
+  const serverTransitLineOptions = useMemo(
+    () => (isMetroLineMap ? railTransitLineOptions : transitLines),
+    [isMetroLineMap, railTransitLineOptions, transitLines],
   );
   /** 模板库跨家族套用时的线路候选：目标为地铁线路图时只列轨道类线路。 */
   const resolveStudioSourceLineOptions = (sourceKindOverride?: MaterialServerSource) =>
     sourceKindOverride === 'transit_line' && !isMetroLineMap
-      ? transitLines.filter(
-          (line) => line.mode === 'metro' || line.mode === 'tram' || line.mode === 'custom',
-        )
+      ? railTransitLineOptions
       : serverTransitLineOptions;
+  /**
+   * 按**目标模板**的数据来源口径解析线路。
+   * 关键：`selectedLine` 里的过滤依赖「当前模板」，跨模板套用时当前模板还停在旧家族
+   * （例如导视牌），会把公交线路当成线路图的线路。这里按目标来源重新取候选。
+   */
+  const resolveLineOptionsForSourceKind = (sourceKind: MaterialServerSource | undefined) =>
+    sourceKind === 'transit_line' ? railTransitLineOptions : transitLines;
+  const resolveLineForSourceKind = (sourceKind: MaterialServerSource | undefined) => {
+    const options = resolveLineOptionsForSourceKind(sourceKind);
+    return (
+      options.find((line) => line.id === selectedLineId) ??
+      // 线路口径下没选线路时，与「切到线路图自动选第一条轨道线路」的既有行为保持一致。
+      (sourceKind === 'transit_line' ? options[0] : undefined)
+    );
+  };
+  /** 当前站必须属于所选线路：草稿残留的其它来源站点 ID 回落到该线路首站。 */
+  const resolveStationSourceIdForLine = (line: TransitLineOption | undefined) =>
+    line?.stations.some((station) => station.stationSourceId === selectedStationSourceId)
+      ? selectedStationSourceId
+      : (line?.stations[0]?.stationSourceId ?? '');
   const selectedLine =
     serverTransitLineOptions.find((line) => line.id === selectedLineId) ??
     (isMetroLineMap ? undefined : transitLines.find((line) => line.id === selectedLineId));
@@ -820,6 +854,8 @@ export function MaterialStudioPanel({
       return;
     }
     const firstLine = serverTransitLineOptions[0];
+    // 从其它家族切到线路图时自动落到第一条轨道线路：这属于换线路，换乘回到自动推导。
+    setTransferLinesManual(false);
     setSelectedLineId(firstLine.id);
     setSelectedStationSourceId(firstLine.stations[0]?.stationSourceId ?? '');
   }, [isMetroLineMap, selectedLineId, serverTransitLineOptions]);
@@ -1116,19 +1152,26 @@ export function MaterialStudioPanel({
   const selectedImportedTransitStation = importedTransitStations.find(
     (station) => station.markerId === selectedImportedStationNodeId,
   );
-  const metroLineMapProjectLines = useMemo(
-    () =>
-      isMetroLineMap && importedTransitNetwork
-        ? listMaterialTransitNetworkLines(importedTransitNetwork)
-        : [],
-    [importedTransitNetwork, isMetroLineMap],
+  /**
+   * RMP 全部线路（不受当前模板族限制）：线路图套用发生在切换模板之前，
+   * 此时 `isMetroLineMap` 还是旧模板的取值，不能拿它过滤候选线路。
+   */
+  const rmpLineOptions = useMemo(
+    () => (importedTransitNetwork ? listMaterialTransitNetworkLines(importedTransitNetwork) : []),
+    [importedTransitNetwork],
   );
+  const metroLineMapProjectLines = useMemo(
+    () => (isMetroLineMap ? rmpLineOptions : []),
+    [isMetroLineMap, rmpLineOptions],
+  );
+  /** 当前 RMP 线路键：未显式选择时回落到第一条，保证线路口径始终有一条可解析的线路。 */
+  const resolvedRmpLineKey = metroLineMapProjectLineKey || rmpLineOptions[0]?.lineKey || '';
   const metroLineMapProjectLine = useMemo(
     () =>
-      importedTransitNetwork && metroLineMapProjectLineKey
-        ? findMaterialTransitNetworkLineByKey(importedTransitNetwork, metroLineMapProjectLineKey)
+      importedTransitNetwork && resolvedRmpLineKey
+        ? findMaterialTransitNetworkLineByKey(importedTransitNetwork, resolvedRmpLineKey)
         : undefined,
-    [importedTransitNetwork, metroLineMapProjectLineKey],
+    [importedTransitNetwork, resolvedRmpLineKey],
   );
   const metroLineMapProjectStations = useMemo(() => {
     if (!importedTransitNetwork || !metroLineMapProjectLine) {
@@ -1143,12 +1186,13 @@ export function MaterialStudioPanel({
     if (!metroLineMapProjectLines.length) {
       return;
     }
-    setMetroLineMapProjectLineKey((current) =>
-      metroLineMapProjectLines.some((line) => line.lineKey === current)
-        ? current
-        : metroLineMapProjectLines[0].lineKey,
-    );
-  }, [metroLineMapProjectLines]);
+    if (metroLineMapProjectLines.some((line) => line.lineKey === metroLineMapProjectLineKey)) {
+      return;
+    }
+    // 自动切到第一条线路属于「换线路」：换乘回到自动推导，用户手改值不再保留。
+    setMetroLineMapProjectLineKey(metroLineMapProjectLines[0].lineKey);
+    setTransferLinesManual(false);
+  }, [metroLineMapProjectLineKey, metroLineMapProjectLines]);
   useEffect(() => {
     setMetroLineMapProjectNodeId((current) =>
       metroLineMapProjectStations.some((station) => station.id === current)
@@ -1470,7 +1514,9 @@ export function MaterialStudioPanel({
     : undefined;
   const isVerticalBothTracks = verticalTrackPosition === 'both';
   // 旧版竖版线路图只提供「两侧」轨道样式，其余取值统一收敛到两侧。
-  const isVerticalOldLineMap = selected?.id === METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID;
+  const isVerticalOldLineMap =
+    selected?.id === METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID ||
+    selected?.id === METRO_LINE_MAP_VERTICAL_TRANSITION_TEMPLATE_ID;
   const trackPositionOptions = isVerticalOldLineMap
     ? [{ value: 'both', label: '两侧' }]
     : undefined;
@@ -1511,6 +1557,10 @@ export function MaterialStudioPanel({
     value: string,
     options?: { keepPreview?: boolean },
   ) => {
+    // 换乘是派生字段：用户一旦直接编辑文本，就转为 manual，后续不再被自动推导覆盖。
+    if (key === 'transferLines') {
+      setTransferLinesManual(true);
+    }
     setInput((current) => {
       const next = { ...current, [key]: value };
       if (!isMetroVerticalLineMap) {
@@ -1649,21 +1699,61 @@ export function MaterialStudioPanel({
   }, [applyWizardVariants, isApplyWizardOpen, selected?.id, selected?.template.fields]);
   const usesSingleTransitLineSelection = maximumTransitLineCount === 1;
 
-  /** 当前线网来源下的线路站序与当前站在站序里的位置（线路类模板共用）。 */
+  /**
+   * 当前线网来源下的线路站序与当前站在站序里的位置（线路类模板共用）。
+   * 线路一律按「轨道线路」口径解析；当前站不属于该线路时回落到首站，
+   * 避免跨模板切换后残留别的来源（如公交站）的站点 ID 让当前站变成 -1。
+   */
   const resolveTransitLineStationSelection = () => {
+    const line =
+      transitNetworkSource === 'rmp' ? undefined : resolveLineForSourceKind('transit_line');
+    const serverStations = line?.stations ?? [];
     const stationNames =
       transitNetworkSource === 'rmp'
         ? metroLineMapProjectStations.map((station) => station.name)
-        : (selectedLine?.stations.map((station) => station.stationName) ?? []);
-    const currentIndex =
+        : serverStations.map((station) => station.stationName);
+    const resolvedIndex =
       transitNetworkSource === 'rmp'
         ? metroLineMapProjectStations.findIndex(
             (station) => station.id === metroLineMapProjectNodeId,
           )
-        : (selectedLine?.stations.findIndex(
+        : serverStations.findIndex(
             (station) => station.stationSourceId === selectedStationSourceId,
-          ) ?? -1);
+          );
+    const currentIndex = resolvedIndex >= 0 ? resolvedIndex : stationNames.length ? 0 : -1;
     return { stationNames, currentIndex };
+  };
+
+  /**
+   * 线路图换乘的单一入口：只按「线路 + 线网」推导。
+   * - 服务器线网：接口线路对象没有换乘字段，按「同类型线路 + 同名站点」做一次覆盖判定；
+   * - 自定义 RMP：用导入快照构建 stationId → lineKeys 索引，一次判定整条线路。
+   * 结果不依赖 `selectedImportedTransitStation` / 当前站，切模板、恢复草稿、刷新按钮共用。
+   */
+  const computeLineMapTransfers = (): LineMapTransferResult => {
+    if (transitNetworkSource === 'rmp') {
+      return resolveLineMapTransfers({
+        source: 'rmp',
+        lineKey: resolvedRmpLineKey,
+        snapshot: importedTransitNetwork,
+      });
+    }
+    const toLineInput = (item: TransitLineOption) => ({
+      id: item.id,
+      name: item.name,
+      mode: item.mode,
+      color: item.color,
+      stations: item.stations.map((station) => ({
+        stationId: station.stationSourceId,
+        stationName: station.stationName,
+      })),
+    });
+    const line = resolveLineForSourceKind('transit_line');
+    return resolveLineMapTransfers({
+      source: 'server',
+      line: line ? toLineInput(line) : undefined,
+      lines: transitLines.map(toLineInput),
+    });
   };
 
   /** 套用线网数据后记住站序，供方向版式在切换行车方向时重推开往终点。 */
@@ -1714,10 +1804,14 @@ export function MaterialStudioPanel({
 
     // 线路图 / 线路类模板：数据来源是「线路」，不是站点。
     if (sourceKind === 'transit_line') {
+      // 线路一律按目标来源的「轨道线路」口径解析：跨模板套用时不能拿当前模板的
+      // 公交线路当线路图的线路（否则站序和换乘会整块变成公交数据）。
+      const resolvedServerLine =
+        transitNetworkSource === 'rmp' ? undefined : resolveLineForSourceKind(sourceKind);
       const lineName =
         transitNetworkSource === 'rmp'
           ? (metroLineMapProjectLine?.lineName ?? '')
-          : (selectedLine?.name ?? '');
+          : (resolvedServerLine?.name ?? '');
       const lineNumber = resolveMetroLineNumber(lineName);
       const lineEnglish =
         transitNetworkSource === 'rmp'
@@ -1745,26 +1839,11 @@ export function MaterialStudioPanel({
       setField('routeNumber', lineNumber);
       setField('stationName', stationNames[currentIndex]);
       setField('routeStations', stationNames.join('\n'));
-      // 换乘线路：用同站名出现在其它线路里的事实推导，格式「站名=编号:颜色」。
-      if (transitNetworkSource !== 'rmp') {
-        const transferEntries = stationNames.flatMap((stationName) => {
-          // 换乘只写与当前线路同类型的线路（地铁不写公交接驳，公交不写地铁）。
-          const otherLines = transitLines.filter(
-            (line) =>
-              line.id !== selectedLine?.id &&
-              line.mode === selectedLine?.mode &&
-              line.stations.some((station) => station.stationName === stationName),
-          );
-          if (!otherLines.length) {
-            return [];
-          }
-          const tokens = otherLines.map((line) => {
-            const display = parseMaterialTransitLineDisplay(line.name);
-            return line.color ? `${display.number}:${line.color.toUpperCase()}` : display.number;
-          });
-          return [`${stationName}=${tokens.join(',')}`];
-        });
-        setField('transferLines', transferEntries.join(';'));
+      // 换乘线路：交给纯解析层按「整条线路」一次判定；与当前站是否被选中无关。
+      // 线路解析成功时才写（含空串），避免线网还没加载时把用户/草稿里的换乘清掉。
+      const transferResult = computeLineMapTransfers();
+      if (transferResult.hasLine) {
+        setField('transferLines', transferResult.transferLines);
       }
       if (currentIndex >= 0) {
         setField('currentStationIndex', currentIndex);
@@ -1779,10 +1858,10 @@ export function MaterialStudioPanel({
         'accentColor',
         (transitNetworkSource === 'rmp'
           ? metroLineMapProjectLine?.color
-          : selectedLine?.color
+          : resolvedServerLine?.color
         )?.toUpperCase(),
       );
-      setField('operator', selectedLine?.operator);
+      setField('operator', resolvedServerLine?.operator);
       return values;
     }
 
@@ -1922,12 +2001,47 @@ export function MaterialStudioPanel({
       return;
     }
     rememberAppliedMetroSignStations(selected.template.fields, selected.template.family);
+    setTransferLinesManual(false);
     setInput((current) => ({ ...current, ...values }));
     clearPreview();
     publishToastRequested({
       message: `已从线网套用 ${Object.keys(values).length} 个字段。`,
       tone: 'success',
     });
+  };
+
+  /**
+   * 线路图专用：只重算换乘字段，作为草稿换乘丢失 / 用户手改后的显式恢复入口。
+   * 直接调纯解析层，不要求用户先选「当前站」；线路没解析出来与「该线路没有换乘站」
+   * 是两种不同结果，提示必须分开。
+   */
+  const refreshLineMapTransferLines = () => {
+    if (!selected || !selected.template.fields.some((field) => field.key === 'transferLines')) {
+      return;
+    }
+    const result = computeLineMapTransfers();
+    if (!result.hasLine) {
+      blockAction('没有可解析的线路：请先在数据来源中选择线路。');
+      return;
+    }
+    setTransferLinesManual(false);
+    setInput((current) =>
+      (current.transferLines ?? '').trim() === result.transferLines
+        ? current
+        : { ...current, transferLines: result.transferLines },
+    );
+    clearPreview();
+    publishToastRequested(
+      result.transferLines
+        ? {
+            message: `已刷新换乘信息（${result.stationTransfers.length} 个换乘站）。`,
+            tone: 'success',
+          }
+        : {
+            message: `该线路没有换乘站（共 ${result.stationCount} 站），已清空换乘信息。`,
+            tone: 'info',
+          },
+    );
   };
 
   const loadWorkspace = async () => {
@@ -2148,6 +2262,8 @@ export function MaterialStudioPanel({
       setLocalDraft(record);
       setSelectedTemplateId(record.templateId);
       setMode('manual');
+      // 分享链接里的文本是「被分享的那一块牌子」本身：按 manual 处理，不自动重算换乘。
+      setTransferLinesManual(true);
       setLocalDraftReady(true);
       publishToastRequested({
         message: `已载入分享物料 ${initialMaterial.code}`,
@@ -2200,6 +2316,8 @@ export function MaterialStudioPanel({
           if (selection.terminalRole !== undefined) {
             setTransitTerminalRole(selection.terminalRole);
           }
+          // 换乘来源随草稿一起恢复：auto 会在输入恢复后按线路重建，manual 保留用户文本。
+          setTransferLinesManual(Boolean(selection.transferLinesManual));
         }
       }
       setLocalDraftReady(true);
@@ -2263,6 +2381,8 @@ export function MaterialStudioPanel({
             setTransitProjectOrigin('none');
           }
           setSelectedTransitLineIds([]);
+          // 换数据来源后换乘必须重新推导，不能沿用上一个来源的手改值。
+          setTransferLinesManual(false);
           clearPreview();
         },
       ),
@@ -2274,6 +2394,7 @@ export function MaterialStudioPanel({
       subscribeTransitNetworkProjectSnapshotChanged(studioId, ({ snapshot }) => {
         setImportedTransitNetwork(snapshot);
         setSelectedTransitLineIds([]);
+        setTransferLinesManual(false);
         clearPreview();
       }),
     [studioId],
@@ -2341,6 +2462,9 @@ export function MaterialStudioPanel({
       Object.fromEntries(
         selected.template.fields.map((field) => [field.key, field.defaultValue ?? '']),
       );
+    // 换乘字段不再对草稿文本做“按站名过滤”的修补：auto 模式下由后面的换乘同步 effect
+    // 按「数据源 + 线路 + RMP 快照」整体重建；manual 模式原样保留用户文本。
+    setTransferLinesManual(Boolean(savedDraft?.transitSelection?.transferLinesManual));
     setInput(nextInput);
     // 初始化 / 恢复草稿即视为「套用完成」，此刻的文本就是免审核基线。
     setMaterialBaseline({
@@ -2401,6 +2525,8 @@ export function MaterialStudioPanel({
         studioId,
         templateId: selected.id,
         templateVersion: selected.template.version,
+        // 换乘是派生字段：草稿保存当前实际渲染值即可，来源（auto / manual）随记录一起存，
+        // 恢复时按来源决定「原样保留」还是「按线路重建」。
         input,
         canvas: activeCanvas,
         mode,
@@ -2415,6 +2541,7 @@ export function MaterialStudioPanel({
           projectLineKey: metroLineMapProjectLineKey || undefined,
           projectNodeId: metroLineMapProjectNodeId || undefined,
           terminalRole: transitTerminalRole,
+          transferLinesManual: transferLinesManual || undefined,
         },
         createdAt: isDifferentTemplate || !current ? now : current.createdAt,
         updatedAt: now,
@@ -2440,6 +2567,7 @@ export function MaterialStudioPanel({
     selectedTransitLineIds,
     selectedTransitStationMarkerId,
     studioId,
+    transferLinesManual,
     transitDirection,
     transitNetworkSource,
     transitTerminalRole,
@@ -2572,10 +2700,22 @@ export function MaterialStudioPanel({
   }, [activeTransitStation, transitDirection]);
 
   useEffect(() => {
+    // 换模板后第一帧不要拿当前线路色覆盖模板默认值 / 草稿值。
+    lastAccentLineColorRef.current = null;
+  }, [selected?.id]);
+
+  useEffect(() => {
     if (
       !activeTransitLineColor ||
       !selected?.template.fields.some((field) => field.key === 'accentColor')
     ) {
+      return;
+    }
+    const previousColor = lastAccentLineColorRef.current;
+    lastAccentLineColorRef.current = activeTransitLineColor;
+    // 首次拿到线路数据（尤其是恢复草稿时）不要覆盖草稿里保存的线路色；
+    // 只有用户真正切换线路导致颜色变化时才同步到 accentColor。
+    if (previousColor === null || previousColor === activeTransitLineColor) {
       return;
     }
     setInput((current) =>
@@ -2585,6 +2725,43 @@ export function MaterialStudioPanel({
     );
     clearPreview();
   }, [activeTransitLineColor, selected?.id]);
+
+  /**
+   * 换乘字段自动同步（auto 模式）。
+   *
+   * 只要模板带有 `transferLines` 且用户没有手改过，就按「当前线路 + 线网」重建：
+   * 切换样式 / 版式、恢复本机草稿、切换线路或数据来源后都不再依赖旧文本残留。
+   * 线路还没解析出来时保留原值（等数据加载完这次 effect 会再跑），
+   * 线路解析成功但没有换乘站时写入空串，避免把上一条线路的换乘留在画布上。
+   */
+  useEffect(() => {
+    if (!localDraftReady || !selected || transferLinesManual) {
+      return;
+    }
+    if (!selected.template.fields.some((field) => field.key === 'transferLines')) {
+      return;
+    }
+    const result = computeLineMapTransfers();
+    if (!result.hasLine) {
+      return;
+    }
+    const nextTransferLines = result.transferLines.trim();
+    setInput((current) =>
+      (current.transferLines ?? '').trim() === nextTransferLines
+        ? current
+        : { ...current, transferLines: nextTransferLines },
+    );
+  }, [
+    importedTransitNetwork,
+    localDraftReady,
+    metroLineMapProjectLineKey,
+    resolvedRmpLineKey,
+    selected?.id,
+    selectedLineId,
+    transitLines,
+    transitNetworkSource,
+    transferLinesManual,
+  ]);
 
   useEffect(() => {
     if (!isMetroVerticalLineMap || input.trackPosition !== 'both') {
@@ -2721,6 +2898,17 @@ export function MaterialStudioPanel({
     if (!nextSourceKind || nextSourceKind === activeServerSource) {
       return;
     }
+    if (nextSourceKind === 'transit_line' && transitNetworkSource === 'rmp') {
+      // 项目线网：导视牌正在查看的线路就是项目线路键，优先把它带到线路图。
+      const candidateLineKey =
+        (isMetroWayfinding ? selectedMetroExampleLineId : '') ||
+        (activeServerSource === 'transit_line' ? metroLineMapProjectLineKey : '');
+      if (candidateLineKey && rmpLineOptions.some((line) => line.lineKey === candidateLineKey)) {
+        setMetroLineMapProjectLineKey(candidateLineKey);
+        setTransferLinesManual(false);
+      }
+      return;
+    }
     // 项目线网与服务器线网是两套数据，无法按名称可靠映射。
     if (transitNetworkSource !== 'server') {
       return;
@@ -2758,15 +2946,26 @@ export function MaterialStudioPanel({
       return;
     }
     if (nextSourceKind === 'transit_line') {
-      const station = selectedTransitStation;
-      const lineId = primarySelectedTransitLine?.lineId ?? station?.lines[0]?.lineId;
+      // 线路图口径只接受轨道线路。导视牌正在查看的示例线路优先；否则只有在当前
+      // 数据来源本来就是「线路」时才沿用已选线路。绝不能把公交站默认线路带进线路图。
+      const candidateLineIds = [
+        isMetroWayfinding ? selectedMetroExampleLineId : '',
+        activeServerSource === 'transit_line' ? selectedLineId : '',
+      ].filter(Boolean);
+      const lineId = candidateLineIds.find((candidate) =>
+        railTransitLineOptions.some((line) => line.id === candidate),
+      );
       if (!lineId) {
+        // 目标线路图没有可沿用的轨道线路：清空让线路图按自己的口径选线，
+        // 而不是继续沿用公交站 / 公交线路的状态。
+        setSelectedLineId('');
+        setSelectedStationSourceId('');
         return;
       }
       setSelectedLineId(lineId);
-      if (station?.stationSourceId) {
-        setSelectedStationSourceId(station.stationSourceId);
-      }
+      const line = railTransitLineOptions.find((item) => item.id === lineId);
+      setSelectedStationSourceId(line?.stations[0]?.stationSourceId ?? '');
+      setTransferLinesManual(false);
     }
   };
 
@@ -2862,6 +3061,8 @@ export function MaterialStudioPanel({
       ...buildTransitNetworkFieldValues(target.template.fields, target.template.family),
     };
     rememberAppliedMetroSignStations(target.template.fields, target.template.family);
+    // 换样式 / 版式视为重新套用线网：换乘回到 auto，由同步 effect 按新模板重建。
+    setTransferLinesManual(false);
     setPendingWizardApply({ templateId, values });
     setMode('manual');
     selectTemplate(templateId);
@@ -2870,30 +3071,29 @@ export function MaterialStudioPanel({
   // 样式维度：方块 / 拟真、新版 / 旧版等，取自模板标题后缀。
   // 只从「含多个样式变体」的版式组里取，避免把「线路详情」这种版式名误当成样式。
   const applyWizardStyleOptions = useMemo(() => {
-    const labels = new Map<string, number>();
-    // 没有版式分组时（如门牌），样式变体就是入口下的全部模板。
+    // 样式维度必须只产生一组选项。横版线路图入口下同时有「线路图 / 站名 / 方向」三个版式，
+    // 线路图标题带「沈阳2019/2010」后缀，若把所有版式的标题后缀都收集进来会出现两组
+    // 「新版/旧版」控件；这里固定取第一个有多个样式变体的版式组作为样式轴。
     const styleGroups = applyWizardLayoutGroups?.length
       ? applyWizardLayoutGroups
       : [{ id: 'all', templateIds: applyWizardVariants?.map((item) => item.id) ?? [] }];
-    for (const group of styleGroups) {
-      if (group.templateIds.length < 2) {
-        continue;
-      }
-      group.templateIds.forEach((templateId, index) => {
-        const item = applyWizardVariants?.find((candidate) => candidate.id === templateId);
-        const label = item?.template.title.match(/（([^）]+)）\s*$/u)?.[1];
-        if (label && !labels.has(label)) {
-          labels.set(label, index);
-        }
-      });
-    }
-    if (!labels.size) {
+    const styleGroup = styleGroups.find((group) => group.templateIds.length > 1);
+    if (!styleGroup) {
       return [{ value: '0', label: '默认样式' }];
     }
-    return [...labels.entries()].map(([label, index]) => ({
-      value: String(index),
-      label,
-    }));
+    return styleGroup.templateIds.map((templateId, index) => {
+      const item = applyWizardVariants?.find((candidate) => candidate.id === templateId);
+      const rawLabel = item?.template.title.match(/（(.+)）\s*$/u)?.[1];
+      const label =
+        rawLabel === '新版·沈阳2019至今'
+          ? '新版（沈阳2019至今）'
+          : rawLabel === '旧版·沈阳2010风'
+            ? '旧版（沈阳2010风）'
+            : rawLabel === '过渡·沈阳2019-2024'
+              ? '过渡（沈阳2019-2024）'
+              : rawLabel;
+      return { value: String(index), label: label ?? `样式 ${index + 1}` };
+    });
   }, [applyWizardLayoutGroups, applyWizardVariants]);
 
   const applyWizardLayoutCards = useMemo(() => {
@@ -2955,19 +3155,25 @@ export function MaterialStudioPanel({
             kind: 'transit_line',
             lineId: metroLineMapProjectLine.lineKey,
             networkLineKey: metroLineMapProjectLine.lineKey,
-            networkNodeId: metroLineMapProjectNodeId || undefined,
+            // 当前站必须属于所选线路；草稿残留的其它线路节点 ID 回落到该线路首站。
+            networkNodeId: metroLineMapProjectStations.some(
+              (station) => station.id === metroLineMapProjectNodeId,
+            )
+              ? metroLineMapProjectNodeId
+              : metroLineMapProjectStations[0]?.id,
           },
           networkGeometry,
         };
       }
-      if (!selectedLine) {
+      const targetLine = resolveLineForSourceKind(sourceKind);
+      if (!targetLine) {
         return undefined;
       }
       return {
         source: {
           kind: 'transit_line',
-          lineId: selectedLine.id,
-          stationSourceId: selectedStationSourceId || undefined,
+          lineId: targetLine.id,
+          stationSourceId: resolveStationSourceIdForLine(targetLine) || undefined,
         },
       };
     }
@@ -3047,6 +3253,8 @@ export function MaterialStudioPanel({
       return;
     }
     rememberAppliedMetroSignStations(card.template.fields, card.template.family);
+    // 套用 / 切换模板后换乘回到 auto：由同步 effect 按目标模板与当前线路重建。
+    setTransferLinesManual(false);
     setIsApplyWizardOpen(false);
     setMode('manual');
     if (!isSwitching && selected) {
@@ -3075,6 +3283,10 @@ export function MaterialStudioPanel({
       mode: 'reset',
     });
     selectTemplate(card.templateId);
+    // RMP 自定义线网的字段已经由客户端解析；不再请求服务器线网补充，避免异步结果覆盖换乘。
+    if (transitNetworkSource === 'rmp') {
+      return;
+    }
     const targetSource = buildServerSourceForFamily(card.template.family, card.template.fields);
     if (!targetSource) {
       return;
@@ -3115,7 +3327,11 @@ export function MaterialStudioPanel({
       setPendingWizardApply(null);
       return;
     }
-    const appliedValues = pendingWizardApply.values;
+    const appliedValues: Record<string, string> = { ...pendingWizardApply.values };
+    // 服务端补充值偶尔会返回空换乘；不要让一次异步合并把当前 RMP 换乘清掉。
+    if (pendingWizardApply.mode === 'merge' && !(appliedValues.transferLines ?? '').trim()) {
+      delete appliedValues.transferLines;
+    }
     // reset：以新模板默认值为底再合并，避免跨模板切换时带入旧模板字段。
     // merge：模板已经切换完成，服务端补充值只增量覆盖到当前输入上。
     const next =
@@ -3128,6 +3344,9 @@ export function MaterialStudioPanel({
             ...appliedValues,
           };
     materialFieldMemoryRef.current = { ...materialFieldMemoryRef.current, ...next };
+    // apply 路径统一把换乘交回自动推导。草稿恢复 effect 可能在本 effect 之前把旧草稿的
+    // manual 标记带回来，这里必须再覆盖一次，否则切样式后换乘不会自动刷新。
+    setTransferLinesManual(false);
     setInput(next);
     setMaterialBaseline({
       signature: buildMaterialTemplateTextSignature(selected.template, next),
@@ -3296,14 +3515,19 @@ export function MaterialStudioPanel({
           kind: 'transit_line' as const,
           lineId: metroLineMapProjectLine.lineKey,
           networkLineKey: metroLineMapProjectLine.lineKey,
-          networkNodeId: metroLineMapProjectNodeId || undefined,
+          networkNodeId: metroLineMapProjectStations.some(
+            (station) => station.id === metroLineMapProjectNodeId,
+          )
+            ? metroLineMapProjectNodeId
+            : metroLineMapProjectStations[0]?.id,
         };
       }
-      if (selectedLine) {
+      const targetLine = resolveLineForSourceKind(activeServerSource);
+      if (targetLine) {
         return {
           kind: 'transit_line' as const,
-          lineId: selectedLine.id,
-          stationSourceId: selectedStationSourceId || undefined,
+          lineId: targetLine.id,
+          stationSourceId: resolveStationSourceIdForLine(targetLine) || undefined,
         };
       }
     }
@@ -3387,6 +3611,8 @@ export function MaterialStudioPanel({
       }
       const nextInput = { ...input, ...data.values };
       rememberAppliedMetroSignStations(selected.template.fields, selected.template.family);
+      // 显式套用线网数据：换乘回到 auto（套用结果本身就是当前线路的推导值）。
+      setTransferLinesManual(false);
       setInput(nextInput);
       // 套用后的文本就是新的免审核基线。
       setMaterialBaseline({
@@ -3451,6 +3677,7 @@ export function MaterialStudioPanel({
         projectLineKey: metroLineMapProjectLineKey || undefined,
         projectNodeId: metroLineMapProjectNodeId || undefined,
         terminalRole: transitTerminalRole,
+        transferLinesManual: transferLinesManual || undefined,
       },
       createdAt: current?.createdAt ?? now,
       updatedAt: now,
@@ -4699,7 +4926,11 @@ export function MaterialStudioPanel({
           <Field label={t('materialStudio.projectLines')}>
             <Select
               value={metroLineMapProjectLineKey}
-              onChange={(event) => setMetroLineMapProjectLineKey(event.currentTarget.value)}
+              onChange={(event) => {
+                // 换线路：换乘回到自动推导，避免上一条线路的手改值留在新线路上。
+                setTransferLinesManual(false);
+                setMetroLineMapProjectLineKey(event.currentTarget.value);
+              }}
               disabled={isBusy || !metroLineMapProjectLines.length}
             >
               {metroLineMapProjectLines.map((line) => (
@@ -4731,6 +4962,8 @@ export function MaterialStudioPanel({
               onChange={(event) => {
                 const lineId = event.currentTarget.value;
                 const line = transitLines.find((item) => item.id === lineId);
+                // 换线路：换乘回到自动推导。
+                setTransferLinesManual(false);
                 setSelectedLineId(lineId);
                 setSelectedStationSourceId(line?.stations[0]?.stationSourceId ?? '');
                 clearPreview();
@@ -5026,7 +5259,7 @@ export function MaterialStudioPanel({
                     onClick={() => applyTemplateDirect(item.id)}
                     disabled={isBusy}
                   >
-                    {item.template.title.match(/（([^）]+)）\s*$/u)?.[1] ?? item.template.title}
+                    {formatMaterialStyleLabel(item.template.title)}
                   </button>
                 ))}
               </div>
@@ -5251,7 +5484,7 @@ export function MaterialStudioPanel({
             value={selected?.id ?? ''}
             options={layoutStyleVariants.map((item) => ({
               value: item.id,
-              label: item.template.title.match(/（([^）]+)）\s*$/u)?.[1] ?? item.template.title,
+              label: formatMaterialStyleLabel(item.template.title),
             }))}
             onChange={applyTemplateDirect}
             wrapperClassName=""
@@ -5292,6 +5525,25 @@ export function MaterialStudioPanel({
           </Button>
         </>
       )}
+      {isMetroLineMap &&
+      selected?.template.fields.some((field) => field.key === 'transferLines') ? (
+        <div className="transit-material-source-apply">
+          <Button
+            variant="secondary"
+            icon="sync"
+            className="material-source-apply"
+            disabled={isBusy}
+            onClick={refreshLineMapTransferLines}
+          >
+            刷新换乘信息
+          </Button>
+          <p className="muted">
+            {transferLinesManual
+              ? '换乘信息已手动修改；点击上方按钮恢复按线路自动生成。'
+              : '换乘信息按当前线路自动生成（与是否选中当前站无关）。'}
+          </p>
+        </div>
+      ) : null}
     </>
   );
 
@@ -5303,9 +5555,7 @@ export function MaterialStudioPanel({
   const wizardTargetFamily = wizardTargetCard?.template.family;
   // 模板库的目标家族可能和当前画布不同，线路候选必须按目标家族过滤，
   // 否则公交模板切地铁时会列出公交线路。
-  const wizardMetroLineOptions = transitLines.filter(
-    (line) => line.mode === 'metro' || line.mode === 'tram' || line.mode === 'custom',
-  );
+  const wizardMetroLineOptions = railTransitLineOptions;
   // 数据来源优先：先选线网来源与线路 / 车站（路牌则为地点），再看样式与版式。
   const wizardStyleStep = 2;
   const wizardLayoutStep = 3;
@@ -5317,6 +5567,7 @@ export function MaterialStudioPanel({
             value={transitNetworkSource === 'rmp' ? metroLineMapProjectLineKey : selectedLineId}
             onChange={(event) => {
               const lineId = event.currentTarget.value;
+              setTransferLinesManual(false);
               if (transitNetworkSource === 'rmp') {
                 setMetroLineMapProjectLineKey(lineId);
                 return;
@@ -5639,6 +5890,10 @@ export function MaterialStudioPanel({
       const canonicalIndex = toCanonicalStationIndex(index);
       const previousName = names[canonicalIndex] ?? '';
       names[canonicalIndex] = nextName;
+      if (previousName && previousName !== nextName) {
+        // 改站名会同步改换乘条目的站名，此时文本已偏离线网：转 manual。
+        setTransferLinesManual(true);
+      }
       setInput((current) => {
         let transfer = current.transferLines ?? '';
         if (previousName && previousName !== nextName) {
@@ -5649,6 +5904,8 @@ export function MaterialStudioPanel({
     };
 
     const updateWorkspaceStationTransfer = (stationName: string, lines: string) => {
+      // 站内换乘编辑属于用户明确修改：转 manual，保留用户文本直到点「刷新换乘信息」。
+      setTransferLinesManual(true);
       setInput((current) => ({
         ...current,
         transferLines: setMaterialTransferLine(current.transferLines ?? '', stationName, lines),
@@ -6102,17 +6359,32 @@ function groupMaterialFormFields(
       );
       groups.push(add('next-station', '下一站', 'place', ['nextStationName', 'nextStationPinyin']));
     } else {
-      groups.push(
-        add('line-info', '线路编号', 'route', ['lineLabel', 'lineEnglishLabel', 'accentColor']),
-      );
-      groups.push(
-        add('direction-info', '行车方向', 'explore', [
-          'travelDirection',
-          'travelDirectionSecondary',
-          'doorDirection',
-          'trackPosition',
-        ]),
-      );
+      // 竖版线路图把线路编号与行车方向合并成一个「表头」节点，属性面板同步合并。
+      if (isMetroLineMapVerticalTemplateId(templateId)) {
+        groups.push(
+          add('header', '表头', 'table_rows', [
+            'lineLabel',
+            'lineEnglishLabel',
+            'accentColor',
+            'travelDirection',
+            'travelDirectionSecondary',
+            'doorDirection',
+            'trackPosition',
+          ]),
+        );
+      } else {
+        groups.push(
+          add('line-info', '线路编号', 'route', ['lineLabel', 'lineEnglishLabel', 'accentColor']),
+        );
+        groups.push(
+          add('direction-info', '行车方向', 'explore', [
+            'travelDirection',
+            'travelDirectionSecondary',
+            'doorDirection',
+            'trackPosition',
+          ]),
+        );
+      }
       groups.push(
         add('stations', '站点列表', 'list_alt', ['routeStations', 'currentStationIndex']),
       );
@@ -6375,20 +6647,22 @@ function buildMaterialFormRegions(
     const renderer =
       template.fields.find((field) => field.key === 'routeStations')?.glyph?.renderer ?? '';
     const isVertical = renderer.startsWith('metro_line_map_vertical');
-    const isClassic = renderer.endsWith('_classic');
+    const isClassic =
+      renderer.endsWith('_classic') || renderer === 'metro_line_map_vertical_transition';
+    const isTransition = renderer === 'metro_line_map_vertical_transition';
     const travelDirection = values.travelDirection === 'first' ? 'first' : 'last';
     const doorDirection = values.doorDirection === 'right' ? 'right' : 'left';
     // 旧版竖版线路图固定按两侧轨道渲染，热区同步按两侧计算。
     const isBoth = isClassic || values.trackPosition === 'both';
     if (isVertical) {
       const widthScale = width / 128;
-      const headerHeight = (isClassic && isBoth ? 50 : 32) * widthScale;
+      const headerHeight = (isClassic && isBoth && !isTransition ? 50 : 32) * widthScale;
       const margin = 12 * widthScale;
       const firstY = headerHeight + margin;
       const lastY = Math.max(height - margin, firstY);
       const spacing = stationCount > 1 ? (lastY - firstY) / (stationCount - 1) : 0;
-      pushRegion('line-info', '线路信息', 0, 0, width, Math.max(headerHeight, 1), {
-        groupKey: 'line-info',
+      pushRegion('header', '表头', 0, 0, width, Math.max(headerHeight, 1), {
+        groupKey: 'header',
         fieldKey: 'lineLabel',
         fontSize: 16,
       });
@@ -6705,6 +6979,18 @@ function resolveTemplateThumbnailPalette(
   return { accent, background, foreground };
 }
 
+/** 模板标题末尾括号里的样式名；沈阳版式使用更长的展示文案。 */
+function formatMaterialStyleLabel(title: string): string {
+  const raw = title.match(/（(.+)）\s*$/u)?.[1];
+  if (!raw) {
+    return title;
+  }
+  if (raw === '新版·沈阳2019至今') return '新版（沈阳2019至今）';
+  if (raw === '旧版·沈阳2010风') return '旧版（沈阳2010风）';
+  if (raw === '过渡·沈阳2019-2024') return '过渡（沈阳2019-2024）';
+  return raw;
+}
+
 /**
  * 版式卡片里的低仿真预览：不请求服务端出图，只用真实站点 / 线路值拼一个比例正确的牌面示意。
  */
@@ -6727,11 +7013,79 @@ function MaterialLayoutThumbnail({
     () => resolveTemplateThumbnailPalette(template, source),
     [source, template],
   );
+  const thumbnailAssets = useMemo(() => createBrowserMaterialGlyphAssets(), []);
+  const renderedSvg = useMemo(() => {
+    if (!source) {
+      return '';
+    }
+    const defaults = Object.fromEntries(
+      template.fields.map((field) => [field.key, field.defaultValue ?? '']),
+    );
+    const valuesWithDefaults: Record<string, string> = {
+      ...defaults,
+      ...values,
+    };
+    const isMetroLineTemplate = template.family === 'metro_line';
+    const hasField = (key: string) => template.fields.some((field) => field.key === key);
+    // 版式卡片没有真正的站点时也给一点可识别内容，避免整块黑底。
+    if (isMetroLineTemplate && hasField('stationName') && !valuesWithDefaults.stationName) {
+      valuesWithDefaults.stationName = '示例站';
+    }
+    if (
+      isMetroLineTemplate &&
+      hasField('stationNamePinyin') &&
+      !valuesWithDefaults.stationNamePinyin
+    ) {
+      valuesWithDefaults.stationNamePinyin = 'SHILI ZHAN';
+    }
+    if (isMetroLineTemplate && hasField('routeStations') && !valuesWithDefaults.routeStations) {
+      valuesWithDefaults.routeStations = '人民广场\n青年大街\n奥体中心\n桃仙机场';
+      valuesWithDefaults.currentStationIndex = '2';
+    }
+    if (isMetroLineTemplate && hasField('nextStationName') && !valuesWithDefaults.nextStationName) {
+      valuesWithDefaults.nextStationName = '奥体中心';
+    }
+    if (
+      isMetroLineTemplate &&
+      hasField('nextStationPinyin') &&
+      !valuesWithDefaults.nextStationPinyin
+    ) {
+      valuesWithDefaults.nextStationPinyin = 'AOTIZHONGXIN';
+    }
+    if (isMetroLineTemplate && hasField('lineLabel') && !valuesWithDefaults.lineLabel) {
+      valuesWithDefaults.lineLabel = '2';
+    }
+    if (
+      isMetroLineTemplate &&
+      hasField('lineEnglishLabel') &&
+      !valuesWithDefaults.lineEnglishLabel
+    ) {
+      valuesWithDefaults.lineEnglishLabel = 'Line 2';
+    }
+    if (isMetroLineTemplate && hasField('terminalName') && !valuesWithDefaults.terminalName) {
+      valuesWithDefaults.terminalName = '桃仙机场';
+    }
+    try {
+      return composeMaterialTemplateSvg({
+        template: { source, fields: template.fields, typographyProfile: undefined },
+        values: valuesWithDefaults,
+        canvas: template.defaultCanvas,
+        assets: thumbnailAssets,
+        validation: { allowMissingRequiredValues: true },
+        tolerateFieldErrors: true,
+      }).svg;
+    } catch {
+      return '';
+    }
+  }, [source, template, thumbnailAssets, values]);
+  const svgDataUrl = renderedSvg
+    ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(renderedSvg)}`
+    : '';
   return (
     <span
       className={`material-layout-thumb${styleLabel.includes('拟真') ? ' is-realistic' : ''}${
         hasOverview ? ' is-overview' : hasDetail ? ' is-detail' : ' is-generic'
-      }`}
+      }${svgDataUrl ? ' is-rendered' : ''}`}
       style={
         {
           aspectRatio: `${width} / ${height}`,
@@ -6743,30 +7097,34 @@ function MaterialLayoutThumbnail({
       role="img"
       aria-label={template.title}
     >
-      <span className="material-layout-thumb-sign">
-        <strong>{station}</strong>
-        {hasOverview ? (
-          <span className="material-layout-thumb-routes">
-            {routeNumbers.map((route, index) => (
-              <i key={`route-${index}`}>{route}</i>
-            ))}
-          </span>
-        ) : null}
-        {hasDetail ? (
-          <span className="material-layout-thumb-detail">
-            {primaryRoute ? <i>{primaryRoute}</i> : null}
-            <span>{values.nextStation || ''}</span>
-            <span>
-              {values.routeOrigin || ''}
-              {values.routeOrigin || values.routeTerminal ? ' → ' : ''}
-              {values.routeTerminal || ''}
+      {svgDataUrl ? (
+        <img className="material-layout-thumb-svg" src={svgDataUrl} alt="" />
+      ) : (
+        <span className="material-layout-thumb-sign">
+          <strong>{station}</strong>
+          {hasOverview ? (
+            <span className="material-layout-thumb-routes">
+              {routeNumbers.map((route, index) => (
+                <i key={`route-${index}`}>{route}</i>
+              ))}
             </span>
-          </span>
-        ) : null}
-        {!hasOverview && !hasDetail ? (
-          <span className="material-layout-thumb-generic">{styleLabel || template.title}</span>
-        ) : null}
-      </span>
+          ) : null}
+          {hasDetail ? (
+            <span className="material-layout-thumb-detail">
+              {primaryRoute ? <i>{primaryRoute}</i> : null}
+              <span>{values.nextStation || ''}</span>
+              <span>
+                {values.routeOrigin || ''}
+                {values.routeOrigin || values.routeTerminal ? ' → ' : ''}
+                {values.routeTerminal || ''}
+              </span>
+            </span>
+          ) : null}
+          {!hasOverview && !hasDetail ? (
+            <span className="material-layout-thumb-generic">{styleLabel || template.title}</span>
+          ) : null}
+        </span>
+      )}
     </span>
   );
 }

@@ -107,10 +107,13 @@ export const materialTemplateFieldSchema = z
           'metro_line_map_classic',
           'metro_line_map_vertical_modern',
           'metro_line_map_vertical_classic',
+          'metro_line_map_vertical_transition',
           'metro_station_name_modern',
           'metro_station_name_classic',
           'metro_direction_modern',
           'metro_direction_classic',
+          'metro_terminus_modern',
+          'metro_terminus_classic',
           'metro_platform_sign',
         ]),
         layoutWidth: z.number().positive().max(32_768),
@@ -216,6 +219,7 @@ export const materialTemplateFieldSchema = z
         'metro_line_map_classic',
         'metro_line_map_vertical_modern',
         'metro_line_map_vertical_classic',
+        'metro_line_map_vertical_transition',
       ].includes(field.glyph?.renderer ?? '') &&
       !field.glyph?.currentIndexFieldKey
     ) {
@@ -232,10 +236,13 @@ export const materialTemplateFieldSchema = z
         'metro_line_map_classic',
         'metro_line_map_vertical_modern',
         'metro_line_map_vertical_classic',
+        'metro_line_map_vertical_transition',
         'metro_station_name_modern',
         'metro_station_name_classic',
         'metro_direction_modern',
         'metro_direction_classic',
+        'metro_terminus_modern',
+        'metro_terminus_classic',
         'metro_platform_sign',
       ].includes(field.glyph?.renderer ?? '') &&
       !field.glyph?.colorFieldKey

@@ -28,13 +28,12 @@ import {
   findMaterialTransitNetworkNodeByName,
   findMaterialTransitNetworkPath,
   getMaterialTransitNetworkEdgePoints,
-  listMaterialTransitNetworkLines,
   listMaterialTransitNetworkLineStations,
   resolveMaterialTransitNetworkRoute,
   type MaterialTransitNetworkLineMatch,
   type MaterialTransitNetworkRoute,
 } from './rmp-transit-network';
-import { extractMetroWayfindingLineNumber } from './metro-wayfinding';
+import { resolveLineMapTransfers } from './line-map-transfers';
 import { resolveMetroLineEnglishName } from './metro-wayfinding-import';
 import {
   buildVisualRoadGraph,
@@ -329,7 +328,13 @@ export async function resolveTransitLineMaterialInput(input: {
       Math.max(selectedStop ? line.stationStops.indexOf(selectedStop) : 0, 0),
     );
     if (input.fields.some((field) => field.key === 'transferLines')) {
-      candidates.transferLines = buildTransitLineTransferEntries(overview.lines, line);
+      // 换乘推导走独立的线路解析层：服务端与工作台共用同一套规则，
+      // 不再在这里维护第二份「同名站点 + 同类型线路」遍历。
+      candidates.transferLines = resolveLineMapTransfers({
+        source: 'server',
+        line: toLineMapServerLine(line),
+        lines: overview.lines.map(toLineMapServerLine),
+      }).transferLines;
     }
   }
   return {
@@ -361,38 +366,14 @@ function resolveProjectTransitLineMaterialInput(input: {
     stations.findIndex((station) => station.id === input.nodeId),
     0,
   );
-  const lineOptions = listMaterialTransitNetworkLines(input.networkGeometry);
-  const optionByKey = new Map(lineOptions.map((option) => [option.lineKey, option] as const));
   const nodeById = new Map(input.networkGeometry.nodes.map((node) => [node.id, node] as const));
-  const transferLines = stations
-    .flatMap((station) => {
-      const node = nodeById.get(station.id);
-      if (!node) {
-        return [];
-      }
-      const others = node.lineKeys
-        .filter((lineKey) => lineKey !== line.lineKey)
-        .flatMap((lineKey) => {
-          const option = optionByKey.get(lineKey);
-          return option ? [option] : [];
-        })
-        .slice(0, 4);
-      if (!others.length) {
-        return [];
-      }
-      return [
-        `${station.name}=${others
-          .map((option) => {
-            const number =
-              extractMetroWayfindingLineNumber(
-                option.hasConfiguredName ? option.label : option.lineKey,
-              ) || option.label;
-            return `${number}:${option.color.toUpperCase()}`;
-          })
-          .join(',')}`,
-      ];
-    })
-    .join(';');
+  // 换乘推导交给线路解析层：一次判定整条线路，索引（节点 → 线路键、站名 → 线路键）
+  // 在那里统一构建，避免这里每个站再遍历一遍整张线网。
+  const transferLines = resolveLineMapTransfers({
+    source: 'rmp',
+    lineKey: input.lineKey,
+    snapshot: input.networkGeometry,
+  }).transferLines;
   const candidates: Record<string, string> = {
     lineName: line.lineName ?? line.lineKey,
     stationName: stations[currentStationIndex]?.name ?? '',
@@ -433,38 +414,15 @@ function resolveProjectTransitLineMaterialInput(input: {
   };
 }
 
-function buildTransitLineTransferEntries(
-  lines: TransitLineSummary[],
-  selectedLine: TransitLineSummary,
-): string {
-  const entries: string[] = [];
-  for (const stationName of selectedLine.stationNames) {
-    const transfers = new Map<string, string>();
-    for (const line of lines) {
-      if (
-        line.id === selectedLine.id ||
-        line.mode !== selectedLine.mode ||
-        !line.stationNames.includes(stationName)
-      ) {
-        continue;
-      }
-      const number = parseMaterialTransitLineDisplay(line.name).number.trim();
-      if (!number) {
-        continue;
-      }
-      const color = /^#[0-9A-Fa-f]{6}$/u.test(line.color ?? '') ? line.color!.toUpperCase() : '';
-      transfers.set(number, color);
-    }
-    if (transfers.size) {
-      entries.push(
-        `${stationName}=${Array.from(transfers.entries())
-          .slice(0, 4)
-          .map(([number, color]) => (color ? `${number}:${color}` : number))
-          .join(',')}`,
-      );
-    }
-  }
-  return entries.join(';');
+/** 服务器线路 → 换乘解析层输入：站序、类型、编号与颜色口径都在解析层统一处理。 */
+function toLineMapServerLine(line: TransitLineSummary) {
+  return {
+    id: line.id,
+    name: line.name,
+    mode: line.mode,
+    color: line.color,
+    stationNames: line.stationNames,
+  };
 }
 
 export async function resolveTransitStationMaterialInput(
@@ -1319,8 +1277,6 @@ async function resolveMaterialTransitLineDisplay(
   }
   return parseMaterialTransitLineDisplay(lineName);
 }
-
-
 
 function getMarkerId(locationId: string): string {
   return locationId.startsWith('marker:') ? locationId.slice('marker:'.length) : locationId;

@@ -51,7 +51,8 @@ function collectAssetRequests(layout: MetroWayfindingLayout): AssetRequest[] {
         requests.push({
           kind: 'facility',
           key: `${variant}/${assetName}`,
-          url: appPath(`/metro-facilities/${variant}/${assetName}.svg`),
+          // 带版本号绕过浏览器对旧版出口图标（曾为绿底）的强缓存。
+          url: appPath(`/metro-facilities/${variant}/${assetName}.svg?v=20261125`),
         });
         return;
       }

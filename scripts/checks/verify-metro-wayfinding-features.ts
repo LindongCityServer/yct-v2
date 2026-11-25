@@ -252,6 +252,7 @@ check(
   styledSubway?.type === 'facility' &&
     styledSubway.frameFillMode === 'color' &&
     styledSubway.frameFillColor === '#E4002B' &&
+    styledSubway.frameStroke === true &&
     styledSubway.backgroundColor === undefined,
 );
 
@@ -319,8 +320,32 @@ const doubleExitLayout = parseMetroWayfindingLayout(
           frameStroke: false,
         },
         { id: 'sp1', type: 'space', mode: 'flex', units: 1 },
+        {
+          id: 'la',
+          type: 'largeText',
+          value: 'A',
+          frameShape: 'rectangle',
+          frameFillMode: 'none',
+          frameStroke: false,
+        },
+        {
+          id: 'lc',
+          type: 'largeText',
+          value: 'C',
+          frameShape: 'rectangle',
+          frameFillMode: 'none',
+          frameStroke: false,
+        },
         { id: 'd', type: 'divider' },
         { id: 'sp2', type: 'space', mode: 'flex', units: 1 },
+        {
+          id: 'lb',
+          type: 'largeText',
+          value: 'B',
+          frameShape: 'rectangle',
+          frameFillMode: 'none',
+          frameStroke: false,
+        },
         {
           id: 'e2',
           type: 'facility',
@@ -343,12 +368,34 @@ const doubleExitLayout = parseMetroWayfindingLayout(
 );
 const styledDouble = applyMetroWayfindingTemplateStyle(doubleExitLayout, 'classic', {
   remark: '双侧出口编号',
+  exitSides: {
+    left: [{ code: 'A', description: '临东路 路东', hasAccessibleElevator: true }],
+    right: [{ code: 'B', description: '临东路 路西' }],
+  },
 });
 const doubleRow = styledDouble.rows[0]!;
+const doubleExitClassics = doubleRow.filter(
+  (element) => element.type === 'facility' && element.iconId === 'exit-classic',
+);
 check(
-  '旧版双侧出口去掉两端出口标识，分割线改为旧版出口图标',
-  !doubleRow.some((element) => element.type === 'divider') &&
-    doubleRow.filter((element) => element.type === 'facility' && element.iconId === 'exit-classic')
+  '旧版双侧出口在两端箭头与出口文本之间保留两个绿底出字标，中间保留分割线',
+  doubleRow.some((element) => element.type === 'divider') &&
+    doubleExitClassics.length === 2 &&
+    doubleExitClassics.every(
+      (element) => element.type === 'facility' && element.backgroundColor === '#009F3C',
+    ),
+);
+const rightDescription = doubleRow.find(
+  (element) => element.type === 'text' && element.align === 'right',
+);
+check(
+  '旧版双侧出口右对齐描述放在方框编号左侧，电梯图标在出口标识对应侧',
+  rightDescription?.type === 'text' &&
+    rightDescription.rows[0]?.kind === 'main' &&
+    rightDescription.rows[0].segments[0]?.kind === 'text' &&
+    rightDescription.rows[0].segments.at(-1)?.kind === 'boxed' &&
+    rightDescription.rows.length === 2 &&
+    doubleRow.filter((element) => element.type === 'facility' && element.iconId === 'elevator')
       .length === 1,
 );
 
@@ -403,7 +450,15 @@ const exitUpExamples = buildMetroWayfindingTemplateExamples(
   'L1',
 );
 const exitUp = exitUpExamples.find((example) => example.source.remark === '出口与上楼');
-const exitUpRow = exitUp?.project.layout.rows[0] ?? [];
+const modernExitUpRow = exitUp?.project.layout.rows[0] ?? [];
+const exitUpRow =
+  exitUp === undefined
+    ? []
+    : (applyMetroWayfindingTemplateStyle(exitUp.project.layout, 'classic', {
+        remark: exitUp.source.remark,
+        currentExits: exitUp.currentExits,
+        lineColor: exitUp.lineColor,
+      }).rows[0] ?? []);
 const descriptionIndex = exitUpRow.findIndex(
   (element) =>
     element.type === 'text' &&
@@ -415,7 +470,7 @@ check(
   '旧版出口与上楼在出口图标和上楼图标之间加入方框出口描述和弹性空白',
   descriptionIndex > 0 &&
     exitUpRow[descriptionIndex - 1]?.type === 'facility' &&
-    exitUpRow[descriptionIndex + 1]?.type === 'space' &&
+    exitUpRow.some((element) => element.type === 'space' && element.mode === 'flex') &&
     exitUpRow.some(
       (element) =>
         element.type === 'text' &&
@@ -423,10 +478,47 @@ check(
           (row) =>
             row.kind === 'main' &&
             row.segments.some(
-              (segment) => segment.kind === 'text' && segment.value.includes(' / '),
+              (segment) => segment.kind === 'text' && !segment.value.includes(' / '),
             ),
         ),
     ),
+);
+check(
+  '新版出口与上楼不插入出口编号/描述，末尾保留左对齐出口/EXIT',
+  !modernExitUpRow.some(
+    (element) =>
+      element.type === 'text' &&
+      element.rows.some(
+        (row) => row.kind === 'main' && row.segments.some((segment) => segment.kind === 'boxed'),
+      ),
+  ) &&
+    modernExitUpRow.some(
+      (element) =>
+        element.type === 'text' &&
+        element.align === 'left' &&
+        element.rows.some((row) =>
+          row.kind === 'main'
+            ? row.segments.some((segment) => segment.value.trim() === '出口')
+            : row.value.trim() === 'EXIT',
+        ),
+    ),
+);
+
+const leftDescriptionIndex = doubleRow.findIndex(
+  (element) =>
+    element.type === 'text' &&
+    element.align === 'left' &&
+    element.rows.some(
+      (row) => row.kind === 'main' && row.segments.some((segment) => segment.kind === 'boxed'),
+    ),
+);
+const elevatorIndex = doubleRow.findIndex(
+  (element) => element.type === 'facility' && element.iconId === 'elevator',
+);
+const dividerIndex = doubleRow.findIndex((element) => element.type === 'divider');
+check(
+  '旧版双侧出口设施图标位于出口文本和中间分割线之间',
+  leftDescriptionIndex >= 0 && elevatorIndex > leftDescriptionIndex && dividerIndex > elevatorIndex,
 );
 
 const exitClassicAsset = readFileSync(
@@ -438,6 +530,74 @@ check(
   exitClassicAsset.includes('currentColor') &&
     !exitClassicAsset.includes('#009f3c') &&
     exitClassicAsset.includes('viewBox="0 0 150 150"'),
+);
+
+const exteriorExamples = buildMetroWayfindingTemplateExamples(
+  {
+    name: '滂江街',
+    secondaryName: 'PANG JIANG JIE',
+    lines: [{ id: 'L1', name: '1号线', color: '#E4002B', secondaryName: 'Line 1' }],
+    exits: [],
+  },
+  'L1',
+);
+const exterior = exteriorExamples.find((example) => example.source.remark === '站外线路标识');
+check(
+  '旧版站外线路标识使用 1×6 竖向工程',
+  exterior?.classicProject?.canvas.widthM === 1 &&
+    exterior.classicProject.canvas.heightM === 6 &&
+    exterior.classicProject.layout.mode === 'vertical' &&
+    exterior.classicProject.layout.rows[0]?.some(
+      (element) => element.type === 'text' && element.scale === 0.5 && element.align === 'center',
+    ) &&
+    exterior.classicProject.layout.rows[0]?.some(
+      (element) =>
+        element.type === 'combination' &&
+        element.backgroundColor === '#E53935' &&
+        element.foregroundColor === '#FFFFFF' &&
+        element.children.some(
+          (child) =>
+            child.type === 'facility' &&
+            child.iconId === 'subway' &&
+            child.scale === 0.7 &&
+            child.frameShape === 'rectangle' &&
+            child.frameFillMode === 'none',
+        ),
+    ),
+);
+
+const mergedExitExamples = buildMetroWayfindingTemplateExamples(
+  {
+    name: '合并出口站',
+    lines: [{ id: 'L1', name: '1号线', color: '#E4002B' }],
+    exits: [
+      { code: 'A1', direction: 'upwards', description: '同一段描述' },
+      { code: 'A2', direction: 'upwards', description: '同一段描述' },
+      { code: 'B', direction: 'downwards', description: '另一段描述' },
+    ],
+    overGround: false,
+  },
+  'L1',
+);
+const mergedExitUp = mergedExitExamples.find((example) => example.source.remark === '出口与上楼');
+const mergedRow =
+  mergedExitUp === undefined
+    ? []
+    : (applyMetroWayfindingTemplateStyle(mergedExitUp.project.layout, 'classic', {
+        remark: mergedExitUp.source.remark,
+        currentExits: mergedExitUp.currentExits,
+      }).rows[0] ?? []);
+const mergedDescription = mergedRow
+  .flatMap((element) => (element.type === 'text' ? element.rows : []))
+  .flatMap((row) => (row.kind === 'main' ? row.segments : []))
+  .filter((segment) => segment.kind === 'boxed')
+  .map((segment) => segment.value);
+check(
+  '旧版出口描述合并 A1/A2 并去掉重复描述段',
+  mergedDescription.includes('A') &&
+    mergedDescription.includes('B') &&
+    !mergedDescription.includes('A1') &&
+    !mergedDescription.includes('A2'),
 );
 
 if (failed > 0) {

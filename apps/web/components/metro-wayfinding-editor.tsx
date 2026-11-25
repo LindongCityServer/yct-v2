@@ -1588,9 +1588,21 @@ function MetroWayfindingExampleList({
       : availableExamples.filter((example) => example.source.category === activeCategory);
   const styleExample = (example: MetroWayfindingExample): MetroWayfindingExample => {
     if (templateStyle !== 'classic') return example;
+    if (example.classicProject) {
+      return {
+        ...example,
+        project: example.classicProject,
+        summary: summarizeMetroWayfindingLayout(
+          example.classicProject.layout,
+          example.classicProject.canvas,
+        ),
+      };
+    }
     const layout = applyMetroWayfindingTemplateStyle(example.project.layout, 'classic', {
       remark: example.source.remark,
       lineColor: example.lineColor,
+      exitSides: example.exitSides,
+      currentExits: example.currentExits,
     });
     return {
       ...example,
@@ -1671,7 +1683,7 @@ function MetroWayfindingExampleList({
           label={t('metroWayfindingEditor.examples.style')}
           value={templateStyle}
           options={[
-            { value: 'modern', label: t('metroWayfindingEditor.arrowStyle.modern') },
+            { value: 'modern', label: t('metroWayfindingEditor.examples.styleModern') },
             { value: 'classic', label: t('metroWayfindingEditor.examples.styleClassic') },
           ]}
           disabled={disabled}
@@ -5178,7 +5190,7 @@ function MetroFacilityAssetIcon({
   assetName,
   style,
 }: Readonly<{ assetName: string; style?: { transform: string } }>) {
-  const assetUrl = appPath(`/metro-facilities/plain/${assetName}.svg`);
+  const assetUrl = appPath(`/metro-facilities/plain/${assetName}.svg?v=20261125`);
   return (
     <span
       className="metro-wayfinding-facility-asset"
