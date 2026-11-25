@@ -2,6 +2,7 @@ import {
   METRO_WAYFINDING_COMBINATION_GAP,
   METRO_WAYFINDING_COMBINATION_STRIPE_TOP,
   METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH,
+  METRO_WAYFINDING_COMBINATION_VERTICAL_PADDING,
   METRO_WAYFINDING_DIVIDER_WIDTH,
   METRO_WAYFINDING_FOREGROUND,
   METRO_WAYFINDING_GAP,
@@ -25,6 +26,7 @@ import {
   resolveMetroWayfindingCombinationSizing,
   resolveMetroWayfindingElementWidth,
   resolveMetroWayfindingFacilityDefaultDirection,
+  resolveMetroWayfindingLayoutPadding,
   resolveMetroWayfindingLayoutSizing,
   resolveMetroWayfindingTextMetrics,
   resolveMetroWayfindingVerticalLayoutSizing,
@@ -81,12 +83,13 @@ export function renderMetroWayfindingSvg(
   const rowCount = layout.mode === 'double' ? 2 : 1;
   const scale = canvasHeight / (METRO_WAYFINDING_HEIGHT * rowCount);
   const width = canvasWidth / scale;
+  const padding = resolveMetroWayfindingLayoutPadding(layout);
   const rows = Array.from({ length: rowCount }, (_unused, index) =>
-    renderMetroWayfindingRow(layout, layout.rows[index] ?? [], width, index, assets),
+    renderMetroWayfindingRow(layout, layout.rows[index] ?? [], width, index, assets, padding),
   ).join('');
   const rowDivider =
     rowCount === 2 && layout.dividerBetweenRows
-      ? `<rect x="${formatNumber(METRO_WAYFINDING_PADDING)}" y="${formatNumber(METRO_WAYFINDING_HEIGHT - METRO_WAYFINDING_DIVIDER_WIDTH / 2)}" width="${formatNumber(Math.max(width - METRO_WAYFINDING_PADDING * 2, 0))}" height="${METRO_WAYFINDING_DIVIDER_WIDTH}" fill="${normalizeColor(layout.foregroundColor, METRO_WAYFINDING_FOREGROUND)}"/>`
+      ? `<rect x="${formatNumber(padding.start)}" y="${formatNumber(METRO_WAYFINDING_HEIGHT - METRO_WAYFINDING_DIVIDER_WIDTH / 2)}" width="${formatNumber(Math.max(width - padding.start - padding.end, 0))}" height="${METRO_WAYFINDING_DIVIDER_WIDTH}" fill="${normalizeColor(layout.foregroundColor, METRO_WAYFINDING_FOREGROUND)}"/>`
       : '';
   return `<g transform="scale(${formatNumber(scale)})" data-metro-wayfinding="true" data-metro-wayfinding-mode="${layout.mode}"><rect width="${formatNumber(width)}" height="${METRO_WAYFINDING_HEIGHT * rowCount}" fill="${normalizeColor(layout.backgroundColor, '#262626')}"/>${rows}${rowDivider}</g>`;
 }
@@ -100,8 +103,9 @@ function renderMetroWayfindingVertical(
   const width = Math.max(canvasWidth, 1);
   const height = Math.max(canvasHeight, METRO_WAYFINDING_HEIGHT);
   const elements = layout.rows[0] ?? [];
-  const sizing = resolveMetroWayfindingVerticalLayoutSizing(elements, height);
-  let cursorY = METRO_WAYFINDING_PADDING;
+  const padding = resolveMetroWayfindingLayoutPadding(layout);
+  const sizing = resolveMetroWayfindingVerticalLayoutSizing(elements, height, padding);
+  let cursorY = padding.start;
   const children = elements.map((element, index) => {
     const intrinsicElementHeight =
       element.type === 'space' && element.mode === 'flex'
@@ -192,9 +196,11 @@ function renderMetroWayfindingRow(
   width: number,
   rowIndex: number,
   assets: MetroWayfindingSvgAssets,
+  padding: { start: number; end: number },
 ): string {
-  const sizing = resolveMetroWayfindingLayoutSizing(elements, width);
-  let cursor = (width - sizing.totalDisplayWidth) / 2;
+  const sizing = resolveMetroWayfindingLayoutSizing(elements, width, padding);
+  const contentWidth = Math.max(0, width - padding.start - padding.end);
+  let cursor = padding.start + (contentWidth - sizing.totalDisplayWidth) / 2;
   const contentStart = cursor;
   const contentEnd = contentStart + sizing.totalDisplayWidth;
   const backgroundColor = normalizeColor(layout.backgroundColor, '#262626');
@@ -329,16 +335,27 @@ function renderMetroWayfindingElement(
       metroWayfindingIconOptions[0]!;
     const graphic =
       element.type === 'arrow'
-        ? renderMetroArrowAsset(
-            resolveMetroArrowIconAssetName(element.iconId) ?? 'south-west',
-            graphicForeground,
-            element.id,
-            element.framed,
-            element.frameFillMode,
-            frameFillColor,
-            element.frameStroke,
-            assets,
-          )
+        ? element.style === 'classic'
+          ? renderMetroClassicArrow(
+              element.iconId,
+              graphicForeground,
+              element.id,
+              element.framed,
+              element.frameFillMode,
+              frameFillColor,
+              element.frameStroke,
+              assets,
+            )
+          : renderMetroArrowAsset(
+              resolveMetroArrowIconAssetName(element.iconId) ?? 'south-west',
+              graphicForeground,
+              element.id,
+              element.framed,
+              element.frameFillMode,
+              frameFillColor,
+              element.frameStroke,
+              assets,
+            )
         : renderMetroIcon(
             icon.symbol,
             icon.id,
@@ -406,6 +423,7 @@ function renderMetroWayfindingElement(
     textX,
     textAlign,
     textTopAligned,
+    elementHeight,
   );
   return `<g transform="${transform}">${backgroundRect}${rows}</g>`;
 }
@@ -442,8 +460,9 @@ function renderMetroWayfindingCombination(
   const sizing = resolveMetroWayfindingCombinationSizing(element, width / combinationScale);
   const baseWidth = sizing.width;
   const baseHeight = METRO_WAYFINDING_HEIGHT;
-  const childHeight = baseHeight;
-  const childY = 0;
+  // 上下边距减半，左右仍保留 8；组合框外框高度（128 × scale）不变。
+  const childHeight = baseHeight - METRO_WAYFINDING_COMBINATION_VERTICAL_PADDING * 2;
+  const childY = METRO_WAYFINDING_COMBINATION_VERTICAL_PADDING;
   const combinationY = Math.max(0, (elementHeight - baseHeight * combinationScale) / 2);
   const hasFlexibleSpace = element.children.some(
     (child) => child.type === 'space' && child.mode === 'flex',
@@ -523,7 +542,7 @@ function renderMetroVerticalTextRows(
   if (rows.length === 0) {
     return '';
   }
-  const metrics = resolveMetroWayfindingTextMetrics(rows);
+  const metrics = resolveMetroWayfindingTextMetrics(rows, element.scale);
   const columns = rows.map((row) => ({
     row,
     fontSize: row.kind === 'main' ? metrics.mainFontSize : metrics.secondaryFontSize,
@@ -627,17 +646,23 @@ function renderMetroTextRows(
   textX: number,
   textAnchor: string,
   topAligned = false,
+  elementHeight = METRO_WAYFINDING_HEIGHT,
 ): string {
   const rows = topAligned ? element.rows.filter(hasMetroWayfindingTextRowContent) : element.rows;
   if (rows.length === 0) {
     return '';
   }
   const visibleElement = rows.length === element.rows.length ? element : { ...element, rows };
-  const metrics = resolveMetroWayfindingTextMetrics(rows);
+  const metrics = resolveMetroWayfindingTextMetrics(rows, element.scale);
   const rowScales = resolveMetroTextRowScales(visibleElement, width, metrics);
-  let rowTop = topAligned
-    ? 0
-    : (METRO_WAYFINDING_HEIGHT - METRO_WAYFINDING_TEXT_HEIGHT) / 2 + metrics.spacing;
+  const blockHeight = rows.reduce(
+    (height, row, index) =>
+      height +
+      (row.kind === 'main' ? metrics.mainFontSize : metrics.secondaryFontSize) +
+      (index < rows.length - 1 ? metrics.spacing : 0),
+    0,
+  );
+  let rowTop = topAligned ? 0 : Math.max(0, (elementHeight - blockHeight) / 2 + metrics.spacing);
   return rows
     .map((row, index) => {
       const fontSize = row.kind === 'main' ? metrics.mainFontSize : metrics.secondaryFontSize;
@@ -778,11 +803,12 @@ function renderMetroLargeText(
   height: number,
 ): string {
   const frameShape = element.frameShape;
+  const metricScale = Math.max(0.25, Math.min(4, Number(element.scale) || 1));
   const mainFontSize =
-    frameShape !== 'none'
+    (frameShape !== 'none'
       ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
-      : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
-  const suffixFontSize = METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE;
+      : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE) * metricScale;
+  const suffixFontSize = METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE * metricScale;
   const runs = splitMetroLargeTextRuns(element);
   let markup = '';
   let gapTotal = 0;
@@ -791,16 +817,16 @@ function renderMetroLargeText(
     const previous = runs[index - 1];
     const next = runs[index + 1];
     if (run.kind === 'suffix') {
-      if (previous?.kind === 'text') gapTotal += 3;
-      if (next?.kind === 'text') gapTotal += 3;
-      const dx = previous?.kind === 'text' ? 3 : 0;
-      const dy = lowered ? 0 : 13;
+      if (previous?.kind === 'text') gapTotal += 3 * metricScale;
+      if (next?.kind === 'text') gapTotal += 3 * metricScale;
+      const dx = previous?.kind === 'text' ? 3 * metricScale : 0;
+      const dy = lowered ? 0 : 13 * metricScale;
       markup += renderMetroLargeTextRuns(run.value, suffixFontSize, 700, dx, dy);
       lowered = true;
       return;
     }
-    const dx = previous?.kind === 'suffix' ? 3 : 0;
-    const dy = lowered ? -13 : 0;
+    const dx = previous?.kind === 'suffix' ? 3 * metricScale : 0;
+    const dy = lowered ? -13 * metricScale : 0;
     markup += renderMetroLargeTextRuns(run.value, mainFontSize, 400, dx, dy);
     lowered = false;
   });
@@ -992,6 +1018,47 @@ function renderMetroFacilityAsset(
   );
   const scaleTransform = resolveMetroIconScaleTransform(scale);
   return `<g transform="${transform}"><g transform="${scaleTransform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" color="${color}" fill="${color}" aria-hidden="true">${namespacedContent}</svg></g></g>`;
+}
+
+const metroClassicArrowPath =
+  'M0.424316 20.8928L20.9401 0.369168L28.7222 0.306091L10.7137 17.6759L41.4243 17.6759L41.4243 23.4632L10.7137 23.4632L28.7222 41.4717L21.0347 41.5032L0.424316 20.8928Z';
+
+const metroClassicArrowAngles: Record<string, number> = {
+  west: 0,
+  'north-west': 45,
+  north: 90,
+  'north-east': 135,
+  east: 180,
+  'south-east': 225,
+  south: 270,
+  'south-west': 315,
+};
+
+/** 旧版箭头只有八方向，直接复用横向线路图方向版式的箭头路径。 */
+function renderMetroClassicArrow(
+  iconId: string,
+  color: string,
+  instanceId: string,
+  framed: boolean,
+  frameFillMode: MetroWayfindingFrameFillMode,
+  frameFillColor: string,
+  frameStroke: boolean,
+  assets: MetroWayfindingSvgAssets,
+): string {
+  const frame = framed
+    ? renderMetroFacilityFrame(
+        'rectangle',
+        color,
+        instanceId,
+        frameFillMode,
+        frameFillColor,
+        frameStroke,
+        assets,
+      )
+    : '';
+  const angle = metroClassicArrowAngles[iconId] ?? 0;
+  const scaleTransform = resolveMetroIconScaleTransform(framed ? 0.9 : 1);
+  return `${frame}<g transform="${scaleTransform}"><g transform="translate(42.5 64) rotate(${angle}) translate(-21 -21) scale(1.5)"><path d="${metroClassicArrowPath}" fill="${color}" stroke="${color}" stroke-width="0.6"/></g></g>`;
 }
 
 function renderMetroArrowAsset(

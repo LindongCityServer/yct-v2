@@ -6940,6 +6940,13 @@ function CanvasEditor({
     }
   }, [canvas, lockAlignToTile, onChange]);
 
+  // 竖向模板/竖版线路图宽度固定 1 米；即使尺寸模式不是「按长度」，恢复草稿时也强制收敛。
+  useEffect(() => {
+    if (canvas && isVerticalLength && canvas.widthM !== 1) {
+      onChange('widthM', 1);
+    }
+  }, [canvas, isVerticalLength, onChange]);
+
   useEffect(() => {
     if (!canvas || sizeMode !== 'length') {
       return;
@@ -6950,16 +6957,17 @@ function CanvasEditor({
     if (currentLength !== normalizedLength) {
       onChange(isVerticalLength ? 'heightM' : 'widthM', normalizedLength);
     }
-    if (isVerticalLineMap) {
+    if (isVerticalLength) {
+      // 竖向导视牌/竖版线路图宽度固定 1 米；恢复草稿或导入项目时也不能把旧宽度 4 带回来。
       if (canvas.widthM !== 1) {
         onChange('widthM', 1);
       }
     } else {
       const normalizedWidth = Math.min(64, Math.max(1, Math.round(canvas.widthM)));
-      if (isVerticalLength && canvas.widthM !== normalizedWidth) {
+      if (canvas.widthM !== normalizedWidth) {
         onChange('widthM', normalizedWidth);
       }
-      if (!isVerticalLength && canvas.heightM !== fixedHeight) {
+      if (canvas.heightM !== fixedHeight) {
         onChange('heightM', fixedHeight);
       }
     }

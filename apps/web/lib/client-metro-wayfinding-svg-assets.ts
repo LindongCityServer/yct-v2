@@ -70,12 +70,14 @@ function collectAssetRequests(layout: MetroWayfindingLayout): AssetRequest[] {
       return;
     }
     if (element.type === 'arrow') {
-      const assetName = resolveMetroArrowIconAssetName(element.iconId) ?? 'south-west';
-      requests.push({
-        kind: 'arrow',
-        key: assetName,
-        url: appPath(`/metro-arrows/${assetName}.svg`),
-      });
+      if (element.style !== 'classic') {
+        const assetName = resolveMetroArrowIconAssetName(element.iconId) ?? 'south-west';
+        requests.push({
+          kind: 'arrow',
+          key: assetName,
+          url: appPath(`/metro-arrows/${assetName}.svg`),
+        });
+      }
       if (element.framed && element.frameFillMode === 'none') {
         requests.push({
           kind: 'facility',

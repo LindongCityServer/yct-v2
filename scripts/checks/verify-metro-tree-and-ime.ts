@@ -22,6 +22,10 @@ const EDITOR = readFileSync(
   'utf8',
 );
 const CSS = readAppStyles();
+const PANEL = readFileSync(
+  new URL('../../apps/web/components/material-studio-panel.tsx', import.meta.url),
+  'utf8',
+);
 
 let passed = 0;
 let failed = 0;
@@ -62,12 +66,32 @@ check(
     /selectedCombinationChildId/.test(WORKSPACE),
 );
 check(
-  '子元素定位随选中变化 / 子元素删除后清理',
-  /selectedElement\.children\.some\(\(child\) => child\.id === current\)/.test(WORKSPACE),
+  '选中其他元素时清掉子元素定位，组合框内新增时不早清',
+  /selectedElement\?\.type === 'combination' \? current : null/.test(WORKSPACE),
 );
 check(
-  '工作台把子元素定位传给元素属性面板',
-  /combinationChildId=\{selectedCombinationChildId \?\? undefined\}/.test(WORKSPACE),
+  '工作台选中子元素时直接渲染子元素属性面板',
+  /element=\{selectedCombinationChild\}/.test(WORKSPACE) &&
+    /combination-child-update/.test(WORKSPACE) &&
+    /combination-child-duplicate/.test(WORKSPACE),
+);
+check(
+  '组合框子元素有上移 / 下移 / 副本 / 删除操作',
+  /dispatchCombinationChild/.test(WORKSPACE) &&
+    /combination-child-move/.test(WORKSPACE) &&
+    /combination-child-remove/.test(WORKSPACE),
+);
+check(
+  '选中组合框时添加元素进入组合框，旧编辑组合内容入口已移除',
+  /selectedElement\?\.type === 'combination'/.test(WORKSPACE) &&
+    /combination-child-add/.test(WORKSPACE) &&
+    !/metroWayfinding-combination-edit-button/.test(EDITOR),
+);
+check(
+  '恢复竖向导视牌时把宽度收敛为 1 米',
+  /isVerticalLength/.test(PANEL) &&
+    /onChange\('widthM', 1\)/.test(PANEL) &&
+    /layout\.mode === 'vertical' \? 128 :/.test(WORKSPACE),
 );
 check(
   '属性面板把定位转给组合框子元素编辑器',

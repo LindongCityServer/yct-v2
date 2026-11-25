@@ -671,6 +671,25 @@ test('盲盒按对象 → 版式 → 样式等概率，候选数量不影响对�
       `版式 ${layoutKey} 首次抽取应接近 1/3（实际 ${count}/600）`,
     );
   }
+
+  // 地铁站同时有导视牌和普通地铁模板时，先 50% 决定是否抽导视牌。
+  const wayfindingMix: SampleCandidate[] = [
+    make('metro:w', 'line-map', 'new', 'map'),
+    make('metro:w', 'station-name', 'new', 'name'),
+    make('metro:w', 'metro-wayfinding', 'library', 'wayfinding'),
+  ];
+  let wayfindingFirst = 0;
+  for (let index = 0; index < 600; index += 1) {
+    const ordered = orderQqBotMaterialCandidates(
+      wayfindingMix,
+      createQqBotMaterialRandom(`wayfinding${index}`, 'random'),
+    );
+    if (ordered[0]!.layoutKey === 'metro-wayfinding') wayfindingFirst += 1;
+  }
+  assert.ok(
+    wayfindingFirst >= 220 && wayfindingFirst <= 380,
+    `导视牌应先占约 50%（实际 ${wayfindingFirst}/600）`,
+  );
 });
 
 test('物料卡主题色：线路色 → 物料色 → 项目强调色', () => {

@@ -665,7 +665,7 @@ check('沈阳3号线李达—余良按线路左右侧分组，A1/A2 合并为 A'
   assert.deepEqual(largeTextValues(sides).filter(Boolean), ['A', 'B']);
 });
 
-check('双侧出口按整体宽度不足才转两行方框，左侧左对齐、右侧右对齐并交替排', () => {
+check('双侧出口宽度不足时先去掉出口/EXIT 文本，仍放得下就保留并列大文本', () => {
   const lines = [
     { id: 'L1', name: '1号线', color: '#E4002B' },
     { id: 'L2', name: '2号线', color: '#0072BC' },
@@ -687,19 +687,21 @@ check('双侧出口按整体宽度不足才转两行方框，左侧左对齐、�
     'L1',
   );
   const sides = examples.find((example) => example.source.remark === '双侧出口编号');
-  const grids = textElements(sides).filter((element) =>
-    element.rows.some(
-      (row) => row.kind === 'main' && row.segments.some((segment) => segment.kind === 'boxed'),
+  assert.equal(
+    textElements(sides).some((element) =>
+      element.rows.some((row) =>
+        row.kind === 'main'
+          ? row.segments.some((segment) => /^(?:出口|exit)$/iu.test(segment.value.trim()))
+          : /^(?:出口|exit)$/iu.test(row.value.trim()),
+      ),
     ),
+    false,
   );
-  assert.equal(grids.length, 2);
+  assert.equal(boxedGridCodes(sides).length, 6);
+  assert.equal(textElements(sides).length, 2);
   assert.deepEqual(
-    grids.map((grid) => grid.align),
-    ['left', 'right'],
-  );
-  assert.deepEqual(
-    grids.map((grid) =>
-      grid.rows.map((row) =>
+    textElements(sides).map((element) =>
+      element.rows.map((row) =>
         row.kind === 'main'
           ? row.segments.flatMap((segment) => (segment.kind === 'boxed' ? [segment.value] : []))
           : [],

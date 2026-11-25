@@ -49,6 +49,7 @@ import { CheckboxRow } from './ui/checkbox-row';
 import { Field, FieldGroup, Input, Select } from './ui/field';
 import { Modal } from './ui/modal';
 import {
+  applyMetroWayfindingTemplateStyle,
   createMetroWayfindingElement,
   createMetroWayfindingTextRow,
   duplicateMetroWayfindingElement,
@@ -58,6 +59,9 @@ import {
   METRO_WAYFINDING_COMBINATION_MIN_SCALE,
   METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE,
   METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE,
+  METRO_WAYFINDING_TEXT_SCALE_DEFAULT,
+  METRO_WAYFINDING_TEXT_SCALE_MAX,
+  METRO_WAYFINDING_TEXT_SCALE_MIN,
   METRO_WAYFINDING_DIVIDER_WIDTH,
   metroWayfindingArrowOptions,
   metroWayfindingBackgroundPalette,
@@ -81,6 +85,7 @@ import {
   resolveMetroWayfindingTextMetrics,
   reverseMetroWayfindingLayout,
   serializeMetroWayfindingLayout,
+  summarizeMetroWayfindingLayout,
   concatMetroLargeTextValue,
   splitMetroLargeTextRuns,
   type MetroWayfindingElement,
@@ -447,22 +452,22 @@ export function MetroWayfindingEditor({
       setIsProjectDialogOpen(true);
       return;
     }
-    // Alt + 方向键移动选中元素（元素在行内横向排列，左右对应上移/下移）。
-    if (event.altKey && !modifier && !event.shiftKey && shortcutSelected) {
-      if (
-        event.key === 'ArrowUp' ||
-        event.key === 'ArrowDown' ||
-        event.key === 'ArrowLeft' ||
-        event.key === 'ArrowRight'
-      ) {
-        event.preventDefault();
-        dispatchElement(selection.rowIndex, {
-          type: 'move',
-          elementId: shortcutSelected.id,
-          direction: event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? 'up' : 'down',
-        });
-        return;
-      }
+    // Ctrl+[ / Ctrl+] 移动选中元素；不用 Alt+方向键，避免抢浏览器前进后退。
+    if (
+      event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      shortcutSelected &&
+      (event.key === '[' || event.key === ']')
+    ) {
+      event.preventDefault();
+      dispatchElement(selection.rowIndex, {
+        type: 'move',
+        elementId: shortcutSelected.id,
+        direction: event.key === '[' ? 'up' : 'down',
+      });
+      return;
     }
     // 双行版式下切换选中行。
     if (modifier && !event.shiftKey && layout.mode === 'double') {
@@ -1556,6 +1561,7 @@ function MetroWayfindingExampleList({
 }>) {
   const { t } = useI18n();
   const [category, setCategory] = useState<'all' | 'entry' | 'transfer' | 'exit'>('all');
+  const [templateStyle, setTemplateStyle] = useState<'modern' | 'classic'>('modern');
   const categoryOptions = [
     { value: 'all' as const, label: t('metroWayfindingEditor.option.all') },
     { value: 'entry' as const, label: t('metroWayfindingEditor.option.entry') },
@@ -1573,6 +1579,16 @@ function MetroWayfindingExampleList({
     activeCategory === 'all'
       ? examples
       : examples.filter((example) => example.source.category === activeCategory);
+  const styleExample = (example: MetroWayfindingExample): MetroWayfindingExample => {
+    if (templateStyle !== 'classic') return example;
+    const layout = applyMetroWayfindingTemplateStyle(example.project.layout, 'classic');
+    return {
+      ...example,
+      project: { ...example.project, layout },
+      summary: summarizeMetroWayfindingLayout(layout, example.project.canvas),
+    };
+  };
+  const styledExamples = visibleExamples.map(styleExample);
 
   return (
     <section
@@ -1640,9 +1656,19 @@ function MetroWayfindingExampleList({
             </button>
           ))}
         </div>
+        <SegmentedControl
+          label={t('metroWayfindingEditor.examples.style')}
+          value={templateStyle}
+          options={[
+            { value: 'modern', label: t('metroWayfindingEditor.arrowStyle.modern') },
+            { value: 'classic', label: t('metroWayfindingEditor.examples.styleClassic') },
+          ]}
+          disabled={disabled}
+          onChange={(value) => setTemplateStyle(value === 'classic' ? 'classic' : 'modern')}
+        />
       </div>
       <div className="material-template-example-list">
-        {visibleExamples.map((example) => (
+        {styledExamples.map((example) => (
           <MetroWayfindingExampleCard
             key={example.source.id}
             example={example}
@@ -1917,7 +1943,11 @@ export function MetroWayfindingExamplePreviewElement({
   if (element.type === 'arrow') {
     return (
       <span className={`metro-wayfinding-example-preview-element is-icon`} style={style}>
-        <MetroArrowAssetIcon assetName={element.iconId} />
+        {element.style === 'classic' ? (
+          <MetroClassicArrowIcon iconId={element.iconId} />
+        ) : (
+          <MetroArrowAssetIcon assetName={element.iconId} />
+        )}
       </span>
     );
   }
@@ -2101,7 +2131,11 @@ export function MetroWayfindingElementGlyph({
     );
   }
   if (element.type === 'arrow') {
-    return <MetroArrowAssetIcon assetName={element.iconId} />;
+    return element.style === 'classic' ? (
+      <MetroClassicArrowIcon iconId={element.iconId} />
+    ) : (
+      <MetroArrowAssetIcon assetName={element.iconId} />
+    );
   }
   const glyph =
     element.type === 'text'
@@ -2160,7 +2194,11 @@ function MetroWayfindingElementTabContent({
     );
   }
   if (element.type === 'arrow') {
-    return <MetroArrowAssetIcon assetName={element.iconId} />;
+    return element.style === 'classic' ? (
+      <MetroClassicArrowIcon iconId={element.iconId} />
+    ) : (
+      <MetroArrowAssetIcon assetName={element.iconId} />
+    );
   }
   if (element.type === 'text') {
     const alignmentIcon = {
@@ -2580,10 +2618,19 @@ function ArrowElementFields({
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
   const { t } = useI18n();
-  // 5×3 方向网格：先左后上 / 左上 / 上 / 右上 / 先右后上，
-  // 第二行中心为「禁止通行」，第三行为掉头与下方向。
-  // 顺序写死而不是依赖数组顺序，避免以后新增箭头时布局漂移。
-  const arrowGridIds = [
+  const arrowStyle = element.style === 'classic' ? 'classic' : 'modern';
+  const classicArrowIds = [
+    'north-west',
+    'north',
+    'north-east',
+    'west',
+    'east',
+    'south-west',
+    'south',
+    'south-east',
+  ] as const;
+  // 新版 5×3 方向网格；旧版只有八方向，复用同一套方向图标但按 4×2 排布。
+  const modernArrowGridIds = [
     'turn-left-up',
     'north-west',
     'north',
@@ -2600,6 +2647,7 @@ function ArrowElementFields({
     'south-east',
     'u-turn-right',
   ] as const;
+  const arrowGridIds = arrowStyle === 'classic' ? classicArrowIds : modernArrowGridIds;
   const arrowOptionById = new Map(metroWayfindingArrowOptions.map((option) => [option.id, option]));
   const arrowGridOptions = arrowGridIds.flatMap((id) => {
     const option = arrowOptionById.get(id);
@@ -2607,19 +2655,40 @@ function ArrowElementFields({
       ? [
           {
             ...option,
-            arrowAssetName: resolveMetroArrowIconAssetName(option.id),
+            arrowAssetName:
+              arrowStyle === 'classic' ? undefined : resolveMetroArrowIconAssetName(option.id),
           },
         ]
       : [];
   });
+  const changeArrowStyle = (nextStyle: string) => {
+    const style = nextStyle === 'classic' ? 'classic' : 'modern';
+    patch({
+      style,
+      ...(style === 'classic' &&
+      !classicArrowIds.includes(element.iconId as (typeof classicArrowIds)[number])
+        ? { iconId: 'south-west' }
+        : {}),
+    });
+  };
   return (
     <div className="metro-wayfinding-field-grid">
+      <SegmentedControl
+        label={t('metroWayfindingEditor.field.arrowStyle')}
+        value={arrowStyle}
+        options={[
+          { value: 'modern', label: t('metroWayfindingEditor.arrowStyle.modern') },
+          { value: 'classic', label: t('metroWayfindingEditor.arrowStyle.classic') },
+        ]}
+        disabled={disabled}
+        onChange={changeArrowStyle}
+      />
       <IconChoiceGrid
         label={t('metroWayfindingEditor.field.arrow')}
         value={element.iconId}
         options={arrowGridOptions}
         disabled={disabled}
-        columns={5}
+        columns={arrowStyle === 'classic' ? 4 : 5}
         onChange={(iconId) => patch({ iconId })}
       />
       <CheckboxRow
@@ -2645,6 +2714,42 @@ function ArrowElementFields({
   );
 }
 
+function TextScaleField({
+  value,
+  disabled,
+  onChange,
+}: Readonly<{
+  value: number | undefined;
+  disabled: boolean;
+  onChange: (scale: number) => void;
+}>) {
+  const { t } = useI18n();
+  const scale = value ?? METRO_WAYFINDING_TEXT_SCALE_DEFAULT;
+  return (
+    <Field label={t('metroWayfindingEditor.field.textScale')}>
+      <Input
+        type="number"
+        min={METRO_WAYFINDING_TEXT_SCALE_MIN}
+        max={METRO_WAYFINDING_TEXT_SCALE_MAX}
+        step="0.05"
+        value={scale}
+        disabled={disabled}
+        onChange={(event) =>
+          onChange(
+            Math.max(
+              METRO_WAYFINDING_TEXT_SCALE_MIN,
+              Math.min(
+                METRO_WAYFINDING_TEXT_SCALE_MAX,
+                Math.round((Number(event.currentTarget.value) || 1) * 100) / 100,
+              ),
+            ),
+          )
+        }
+      />
+    </Field>
+  );
+}
+
 function TextElementFields({
   element,
   layoutMode,
@@ -2661,7 +2766,7 @@ function TextElementFields({
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
   const { t } = useI18n();
-  const metrics = resolveMetroWayfindingTextMetrics(element.rows);
+  const metrics = resolveMetroWayfindingTextMetrics(element.rows, element.scale);
   const updateRow = (rowId: string, row: MetroWayfindingTextRow) =>
     patch({ rows: element.rows.map((item) => (item.id === rowId ? row : item)) });
   const moveRow = (index: number, direction: 'up' | 'down') => {
@@ -2736,6 +2841,11 @@ function TextElementFields({
             onChange={(writingMode) => patch({ writingMode })}
           />
         ) : null}
+        <TextScaleField
+          value={element.scale}
+          disabled={disabled}
+          onChange={(scale) => patch({ scale })}
+        />
         <output className="metro-wayfinding-text-metrics">
           <span>{t('metroWayfindingEditor.text.dynamicFontSize')}</span>
           <strong>
@@ -4220,6 +4330,11 @@ function LargeTextElementFields({
           patch={patch}
         />
       </div>
+      <TextScaleField
+        value={element.scale}
+        disabled={disabled}
+        onChange={(scale) => patch({ scale })}
+      />
       <FrameShapeControl
         value={element.frameShape}
         disabled={disabled}
@@ -4387,17 +4502,6 @@ function CombinationElementFields({
           disabled={disabled}
           patch={patch}
         />
-        <Button
-          variant="secondary"
-          icon="tune"
-          className="metro-wayfinding-combination-edit-button"
-          disabled={disabled}
-          onClick={() => setIsOpen(true)}
-        >
-          {t('metroWayfindingEditor.combination.editWithCount', {
-            count: element.children.length,
-          })}
-        </Button>
       </div>
       {isOpen ? (
         <EditorDialogPortal>
@@ -5018,6 +5122,23 @@ function MetroFacilityAssetIcon({
   style,
 }: Readonly<{ assetName: string; style?: { transform: string } }>) {
   const assetUrl = appPath(`/metro-facilities/plain/${assetName}.svg`);
+  if (assetName === 'exit-classic') {
+    // 旧版出口图标自带绿底和白色图形，不能再当单色 mask，否则只剩一个绿色方块。
+    return (
+      <span
+        className="metro-wayfinding-facility-asset"
+        aria-hidden="true"
+        style={
+          {
+            background: `url("${assetUrl}") center / contain no-repeat`,
+            WebkitMask: 'none',
+            mask: 'none',
+            ...style,
+          } as CSSProperties
+        }
+      />
+    );
+  }
   return (
     <span
       className="metro-wayfinding-facility-asset"
@@ -5029,6 +5150,36 @@ function MetroFacilityAssetIcon({
         } as CSSProperties
       }
     />
+  );
+}
+
+function MetroClassicArrowIcon({ iconId }: Readonly<{ iconId: string }>) {
+  const angles: Record<string, number> = {
+    west: 0,
+    'north-west': 45,
+    north: 90,
+    'north-east': 135,
+    east: 180,
+    'south-east': 225,
+    south: 270,
+    'south-west': 315,
+  };
+  return (
+    <span
+      className="metro-wayfinding-arrow-asset"
+      aria-hidden="true"
+      style={{ width: '1em', height: '1em', display: 'inline-flex' }}
+    >
+      <svg viewBox="0 0 42 42" width="100%" height="100%">
+        <path
+          d="M0.424316 20.8928L20.9401 0.369168L28.7222 0.306091L10.7137 17.6759L41.4243 17.6759L41.4243 23.4632L10.7137 23.4632L28.7222 41.4717L21.0347 41.5032L0.424316 20.8928Z"
+          fill="currentColor"
+          stroke="currentColor"
+          strokeWidth="0.6"
+          transform={`rotate(${angles[iconId] ?? 0} 21 21)`}
+        />
+      </svg>
+    </span>
   );
 }
 
@@ -5263,6 +5414,56 @@ function reduceMetroWayfindingAction(
     const insertionIndex = action.placement === 'before' ? targetIndex : targetIndex + 1;
     reorderedElements.splice(insertionIndex, 0, element);
     return replaceMetroWayfindingRowElements(layout, action.rowIndex, reorderedElements);
+  }
+  if (
+    action.type === 'combination-child-add' ||
+    action.type === 'combination-child-update' ||
+    action.type === 'combination-child-duplicate' ||
+    action.type === 'combination-child-move' ||
+    action.type === 'combination-child-remove'
+  ) {
+    const parentIndex = elements.findIndex((element) => element.id === action.elementId);
+    const parent = elements[parentIndex];
+    if (!parent || parent.type !== 'combination') {
+      return layout;
+    }
+    const nextChildren = (() => {
+      if (action.type === 'combination-child-add') {
+        return [...parent.children, action.child as MetroWayfindingCombinationChild];
+      }
+      if (action.type === 'combination-child-update') {
+        return parent.children.map((child) =>
+          child.id === action.childId
+            ? ({ ...child, ...action.patch } as MetroWayfindingCombinationChild)
+            : child,
+        );
+      }
+      if (action.type === 'combination-child-duplicate') {
+        const sourceIndex = parent.children.findIndex((child) => child.id === action.childId);
+        if (sourceIndex < 0) return parent.children;
+        const next = [...parent.children];
+        next.splice(sourceIndex + 1, 0, action.child as MetroWayfindingCombinationChild);
+        return next;
+      }
+      if (action.type === 'combination-child-remove') {
+        return parent.children.filter((child) => child.id !== action.childId);
+      }
+      const sourceIndex = parent.children.findIndex((child) => child.id === action.childId);
+      const target = action.direction === 'up' ? sourceIndex - 1 : sourceIndex + 1;
+      if (sourceIndex < 0 || target < 0 || target >= parent.children.length) {
+        return parent.children;
+      }
+      const next = [...parent.children];
+      [next[sourceIndex], next[target]] = [next[target]!, next[sourceIndex]!];
+      return next;
+    })();
+    return replaceMetroWayfindingRowElements(
+      layout,
+      action.rowIndex,
+      elements.map((element, index) =>
+        index === parentIndex ? { ...parent, children: nextChildren } : element,
+      ),
+    );
   }
   const index = elements.findIndex((element) => element.id === action.elementId);
   const target = action.direction === 'up' ? index - 1 : index + 1;

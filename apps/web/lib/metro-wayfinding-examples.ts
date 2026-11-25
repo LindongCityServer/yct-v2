@@ -445,6 +445,20 @@ function exitSlotCode(element: Extract<MetroWayfindingElement, { type: 'largeTex
 }
 
 /**
+ * 出口编号换行前的第一层退让：先去掉「出口 / EXIT」这类纯标签文字。
+ */
+function isExitLabelTextElement(element: MetroWayfindingElement): boolean {
+  if (element.type !== 'text') return false;
+  const values = element.rows.flatMap((row) =>
+    row.kind === 'main' ? row.segments.map((segment) => segment.value) : [row.value],
+  );
+  return (
+    values.some((value) => value.trim()) &&
+    values.every((value) => !value.trim() || /^(?:出口|exit)$/iu.test(value.trim()))
+  );
+}
+
+/**
  * 出口大文本不按数量阈值换行：先把每个出口都排成大文本，等整行自然宽度已经要压缩
  * 一般文本时，才把这组连续大文本换成两行方框文本。分隔线左侧左对齐、右侧右对齐。
  */
@@ -454,12 +468,23 @@ function fitExitSlotRowsForWidth(
   widthM: number,
 ): MetroWayfindingElement[] {
   const sizing = resolveMetroWayfindingLayoutSizing(elements, widthM * 128);
-  if (!sizing.isWidthInsufficient) return elements;
-  const dividerIndex = elements.findIndex((element) => element.type === 'divider');
+  const fits = (value: ReturnType<typeof resolveMetroWayfindingLayoutSizing>) =>
+    !value.isWidthInsufficient && !value.hasUnresolvedOverflow && value.layoutScale >= 0.999;
+  if (fits(sizing)) return elements;
+  // 先尝试去掉两侧「出口 / EXIT」文字；仍不够再把并列大文本换成双行方框。
+  const withoutExitLabels = elements.filter((element) => !isExitLabelTextElement(element));
+  if (withoutExitLabels.length < elements.length) {
+    const withoutLabelsSizing = resolveMetroWayfindingLayoutSizing(withoutExitLabels, widthM * 128);
+    if (fits(withoutLabelsSizing)) {
+      return withoutExitLabels;
+    }
+  }
+  const sourceElements = withoutExitLabels.length < elements.length ? withoutExitLabels : elements;
+  const dividerIndex = sourceElements.findIndex((element) => element.type === 'divider');
   const result: MetroWayfindingElement[] = [];
   let index = 0;
-  while (index < elements.length) {
-    const element = elements[index]!;
+  while (index < sourceElements.length) {
+    const element = sourceElements[index]!;
     if (!isExitSlotLargeText(element)) {
       result.push(element);
       index += 1;
@@ -467,14 +492,16 @@ function fitExitSlotRowsForWidth(
     }
     const start = index;
     const codes: string[] = [];
-    while (index < elements.length && isExitSlotLargeText(elements[index]!)) {
+    while (index < sourceElements.length && isExitSlotLargeText(sourceElements[index]!)) {
       codes.push(
-        exitSlotCode(elements[index]! as Extract<MetroWayfindingElement, { type: 'largeText' }>),
+        exitSlotCode(
+          sourceElements[index]! as Extract<MetroWayfindingElement, { type: 'largeText' }>,
+        ),
       );
       index += 1;
     }
     if (codes.length <= 1) {
-      result.push(...elements.slice(start, index));
+      result.push(...sourceElements.slice(start, index));
       continue;
     }
     const align = dividerIndex < 0 ? 'center' : start > dividerIndex ? 'right' : 'left';

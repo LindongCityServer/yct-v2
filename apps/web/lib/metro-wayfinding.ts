@@ -21,6 +21,9 @@ export const METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE = 0.65;
 export const METRO_WAYFINDING_COMBINATION_STRIPE_SCALE_FACTOR = 0.65;
 export const METRO_WAYFINDING_COMBINATION_MIN_WIDTH = 85;
 export const METRO_WAYFINDING_COMBINATION_PADDING = 8;
+/** 组合框上下内边距：左右仍用 8，上下收到一半，内容更贴近牌面。 */
+export const METRO_WAYFINDING_COMBINATION_VERTICAL_PADDING =
+  METRO_WAYFINDING_COMBINATION_PADDING / 2;
 export const METRO_WAYFINDING_COMBINATION_GAP = 8;
 export const METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH = 24;
 export const METRO_WAYFINDING_COMBINATION_STRIPE_TOP = 20;
@@ -82,6 +85,7 @@ export type MetroFacilityIconAssetName =
   | 'accessible-ramp'
   | 'waiting-room'
   | 'exit'
+  | 'exit-classic'
   | 'subway'
   | 'passenger-service-center'
   | 'ticket-machine'
@@ -234,6 +238,13 @@ export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
     assetName: 'waiting-room',
   },
   { id: 'exit', label: '出口', symbol: 'logout', group: 'facility', assetName: 'exit' },
+  {
+    id: 'exit-classic',
+    label: '出口（旧版）',
+    symbol: 'logout',
+    group: 'facility',
+    assetName: 'exit-classic',
+  },
   { id: 'subway', label: '地铁', symbol: 'subway', group: 'facility', assetName: 'subway' },
   { id: 'airplane', label: '飞机', symbol: 'flight', group: 'facility' },
   { id: 'boat', label: '轮船', symbol: 'directions_boat', group: 'facility' },
@@ -304,6 +315,10 @@ export const metroWayfindingArrowOptions = metroWayfindingIconOptions.filter(
 export type MetroWayfindingTextAlign = 'left' | 'center' | 'right';
 export type MetroWayfindingTextWritingMode = 'horizontal' | 'vertical';
 export type MetroWayfindingSpaceMode = 'fixed' | 'flex';
+export type MetroWayfindingArrowStyle = 'modern' | 'classic';
+export const METRO_WAYFINDING_TEXT_SCALE_MIN = 0.5;
+export const METRO_WAYFINDING_TEXT_SCALE_MAX = 2;
+export const METRO_WAYFINDING_TEXT_SCALE_DEFAULT = 1;
 
 export function resolveMetroFacilityIconAssetName(
   iconId: string,
@@ -525,6 +540,8 @@ export interface MetroWayfindingArrowElement {
   id: string;
   type: 'arrow';
   iconId: string;
+  /** 箭头样式：modern = 新版 15 方向；classic = 旧版 8 方向。 */
+  style?: MetroWayfindingArrowStyle;
   framed: boolean;
   frameFillMode: MetroWayfindingFrameFillMode;
   frameFillColor?: MetroWayfindingColor;
@@ -538,6 +555,8 @@ export interface MetroWayfindingTextElement {
   type: 'text';
   align: MetroWayfindingTextAlign;
   writingMode: MetroWayfindingTextWritingMode;
+  /** 字号倍数，1 = 默认；会同时影响文字内容和占位宽高。 */
+  scale?: number;
   rows: MetroWayfindingTextRow[];
   backgroundColor?: MetroWayfindingColor;
   foregroundColor?: MetroWayfindingColor;
@@ -569,6 +588,8 @@ export interface MetroWayfindingLargeTextElement {
   id: string;
   type: 'largeText';
   value: string;
+  /** 字号倍数，1 = 默认。 */
+  scale?: number;
   /** 仅作**旧存档兜底**：恒等于「末尾」那一个下角标。新数据一律写 `suffixes`。 */
   suffix: string;
   /**
@@ -637,6 +658,10 @@ export interface MetroWayfindingLayout {
   foregroundColor: MetroWayfindingColor;
   mode: MetroWayfindingLayoutMode;
   dividerBetweenRows: boolean;
+  /** 首边距（横向左侧 / 竖向顶部）开关，默认开。 */
+  paddingStart?: boolean;
+  /** 尾边距（横向右侧 / 竖向底部）开关，默认开。 */
+  paddingEnd?: boolean;
   rows: MetroWayfindingElement[][];
 }
 
@@ -856,13 +881,147 @@ export interface MetroWayfindingCombinationSizing {
   totalDisplayWidth: number;
 }
 
+/** 模板库样式：默认新版 / 做过微调的旧版。 */
+export type MetroWayfindingTemplateStyle = 'modern' | 'classic';
+
+const classicArrowIconIdByModernIconId: Record<string, string> = {
+  west: 'west',
+  'north-west': 'north-west',
+  north: 'north',
+  'north-east': 'north-east',
+  east: 'east',
+  'south-east': 'south-east',
+  south: 'south',
+  'south-west': 'south-west',
+  'turn-left-up': 'north-west',
+  'turn-left-down': 'south-west',
+  'turn-right-up': 'north-east',
+  'turn-right-down': 'south-east',
+  'u-turn-left': 'west',
+  'u-turn-right': 'east',
+  'no-entry': 'west',
+};
+
+function collectMetroLineColors(layout: MetroWayfindingLayout): Set<string> {
+  const colors = new Set<string>();
+  const visit = (element: MetroWayfindingElement) => {
+    if (element.type === 'text') {
+      for (const row of element.rows) {
+        if (row.kind === 'main') {
+          for (const segment of row.segments) {
+            if (segment.kind === 'line') colors.add(segment.color);
+          }
+        }
+      }
+      return;
+    }
+    if (element.type === 'combination') {
+      element.children.forEach(visit);
+    }
+  };
+  layout.rows.forEach((row) => row.forEach(visit));
+  return new Set(Array.from(colors).map((color) => color.toUpperCase()));
+}
+
+function isExitOnlyTextElement(element: MetroWayfindingElement): boolean {
+  if (element.type !== 'text') return false;
+  const values = element.rows.flatMap((row) =>
+    row.kind === 'main' ? row.segments.map((segment) => segment.value) : [row.value],
+  );
+  return (
+    values.some((value) => value.trim()) &&
+    values.every((value) => !value.trim() || /^(?:出口|exit)$/iu.test(value.trim()))
+  );
+}
+
+/**
+ * 把模板库示例切换成旧版微调样式：
+ * 箭头改八方向旧版、出口改绿底旧图标并去掉出口/EXIT 文本、单线路地铁图标用线路色。
+ */
+export function applyMetroWayfindingTemplateStyle(
+  layout: MetroWayfindingLayout,
+  style: MetroWayfindingTemplateStyle,
+): MetroWayfindingLayout {
+  if (style !== 'classic') {
+    return layout;
+  }
+  const lineColors = collectMetroLineColors(layout);
+  const singleLineColor = lineColors.size === 1 ? Array.from(lineColors)[0] : undefined;
+  const mapElement = (element: MetroWayfindingElement): MetroWayfindingElement | undefined => {
+    if (isExitOnlyTextElement(element)) {
+      return undefined;
+    }
+    if (element.type === 'arrow') {
+      return {
+        ...element,
+        style: 'classic',
+        iconId: classicArrowIconIdByModernIconId[element.iconId] ?? 'south-west',
+      };
+    }
+    if (element.type === 'facility') {
+      if (element.iconId === 'exit') {
+        return {
+          ...element,
+          iconId: 'exit-classic',
+          direction: undefined,
+          frameShape: 'none',
+          frameFillMode: 'none',
+          frameStroke: false,
+        };
+      }
+      if (element.iconId === 'subway' && singleLineColor) {
+        return {
+          ...element,
+          backgroundColor: singleLineColor,
+          foregroundColor: '#FFFFFF',
+          frameShape: 'none',
+          frameStroke: false,
+        };
+      }
+      return element;
+    }
+    if (element.type === 'combination') {
+      const children = element.children
+        .map((child) => mapElement(child))
+        .filter((child): child is MetroWayfindingElement => Boolean(child));
+      if (children.length === 0) {
+        return undefined;
+      }
+      return { ...element, children: children as MetroWayfindingCombinationChild[] };
+    }
+    return element;
+  };
+  return {
+    ...layout,
+    foregroundColor: '#F2C94C',
+    rows: layout.rows.map((row) =>
+      row.flatMap((element) => {
+        const mapped = mapElement(element);
+        return mapped ? [mapped] : [];
+      }),
+    ),
+  };
+}
+
 export const emptyMetroWayfindingLayout: MetroWayfindingLayout = {
   backgroundColor: METRO_WAYFINDING_BACKGROUND,
   foregroundColor: METRO_WAYFINDING_FOREGROUND,
   mode: 'single',
   dividerBetweenRows: false,
+  paddingStart: true,
+  paddingEnd: true,
   rows: [[]],
 };
+
+/** 首/尾边距开关换算成实际像素；缺省都打开。 */
+export function resolveMetroWayfindingLayoutPadding(
+  layout?: Pick<MetroWayfindingLayout, 'paddingStart' | 'paddingEnd'>,
+): { start: number; end: number } {
+  return {
+    start: layout?.paddingStart === false ? 0 : METRO_WAYFINDING_PADDING,
+    end: layout?.paddingEnd === false ? 0 : METRO_WAYFINDING_PADDING,
+  };
+}
 
 export function createMetroWayfindingId(prefix = 'metro'): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -912,26 +1071,35 @@ export function duplicateMetroWayfindingElement(
 
 export function resolveMetroWayfindingTextMetrics(
   rows: MetroWayfindingTextRow[],
+  scale = METRO_WAYFINDING_TEXT_SCALE_DEFAULT,
 ): MetroWayfindingTextMetrics {
+  const factor = normalizeMetroWayfindingTextScale(scale);
   const mainRowCount = rows.filter((row) => row.kind === 'main').length;
   const secondaryRowCount = rows.length - mainRowCount;
   const heightFactor =
     mainRowCount + (secondaryRowCount * 2) / 3 + (Math.max(rows.length, 1) + 1) / 6;
-  const mainFontSize = METRO_WAYFINDING_TEXT_HEIGHT / Math.max(heightFactor, 1 / 3);
+  const mainFontSize = (METRO_WAYFINDING_TEXT_HEIGHT / Math.max(heightFactor, 1 / 3)) * factor;
   return {
     mainFontSize,
-    secondaryFontSize: Math.min(METRO_WAYFINDING_SECONDARY_TEXT_MAX_HEIGHT, (mainFontSize * 2) / 3),
-    spacing: mainFontSize / 6,
-    contentHeight: METRO_WAYFINDING_TEXT_HEIGHT,
+    secondaryFontSize: Math.min(
+      METRO_WAYFINDING_SECONDARY_TEXT_MAX_HEIGHT * factor,
+      (mainFontSize * 2) / 3,
+    ),
+    spacing: (mainFontSize / 6) * 1,
+    contentHeight: METRO_WAYFINDING_TEXT_HEIGHT * factor,
   };
 }
 
 export function resolveMetroWayfindingLayoutSizing(
   elements: MetroWayfindingElement[],
   canvasWidth: number,
+  padding: { start: number; end: number } = {
+    start: METRO_WAYFINDING_PADDING,
+    end: METRO_WAYFINDING_PADDING,
+  },
 ): MetroWayfindingLayoutSizing {
   const safeCanvasWidth = Math.max(Number.isFinite(canvasWidth) ? canvasWidth : 0, 0);
-  const innerWidth = Math.max(0, safeCanvasWidth - METRO_WAYFINDING_PADDING * 2);
+  const innerWidth = Math.max(0, safeCanvasWidth - padding.start - padding.end);
   const naturalElementWidths = elements.map(resolveMetroWayfindingElementWidth);
   const gapWidth = Math.max(elements.length - 1, 0) * METRO_WAYFINDING_GAP;
   let textWidth = 0;
@@ -996,9 +1164,13 @@ export function resolveMetroWayfindingLayoutSizing(
 export function resolveMetroWayfindingVerticalLayoutSizing(
   elements: MetroWayfindingElement[],
   canvasHeight: number,
+  padding: { start: number; end: number } = {
+    start: METRO_WAYFINDING_PADDING,
+    end: METRO_WAYFINDING_PADDING,
+  },
 ): MetroWayfindingVerticalLayoutSizing {
   const safeCanvasHeight = Math.max(Number.isFinite(canvasHeight) ? canvasHeight : 0, 0);
-  const innerHeight = Math.max(0, safeCanvasHeight - METRO_WAYFINDING_PADDING * 2);
+  const innerHeight = Math.max(0, safeCanvasHeight - padding.start - padding.end);
   const elementHeights = elements.map(resolveMetroWayfindingVerticalElementHeight);
   const gapHeight = Math.max(elements.length - 1, 0) * METRO_WAYFINDING_GAP;
   const verticalTextHeight = elements.reduce(
@@ -1052,7 +1224,7 @@ export function resolveMetroWayfindingVerticalElementHeight(
     return METRO_WAYFINDING_DIVIDER_WIDTH;
   }
   if (element.type === 'largeText') {
-    return METRO_WAYFINDING_TEXT_HEIGHT;
+    return METRO_WAYFINDING_TEXT_HEIGHT * normalizeMetroWayfindingTextScale(element.scale);
   }
   if (element.type === 'combination') {
     return METRO_WAYFINDING_HEIGHT * normalizeMetroWayfindingCombinationScale(element.scale);
@@ -1067,7 +1239,7 @@ export function resolveMetroWayfindingVerticalElementHeight(
   if (rows.length === 0) {
     return 0;
   }
-  const metrics = resolveMetroWayfindingTextMetrics(rows);
+  const metrics = resolveMetroWayfindingTextMetrics(rows, element.scale);
   if (element.writingMode !== 'vertical') {
     return rows.reduce(
       (height, row, index) =>
@@ -1104,7 +1276,7 @@ export function resolveMetroWayfindingElementWidth(element: MetroWayfindingEleme
   if (element.type === 'space') {
     return element.mode === 'fixed' ? Math.max(1, element.units) * METRO_WAYFINDING_GAP : 0;
   }
-  const metrics = resolveMetroWayfindingTextMetrics(element.rows);
+  const metrics = resolveMetroWayfindingTextMetrics(element.rows, element.scale);
   const rowWidths = element.rows.map((row) =>
     row.kind === 'main'
       ? measureMetroWayfindingMainSegments(row.segments, metrics.mainFontSize)
@@ -1264,11 +1436,12 @@ function resolveMetroWayfindingLargeTextWidth(
   element: MetroWayfindingLargeTextElement,
   minimumWidth: number,
 ): number {
+  const metricScale = normalizeMetroWayfindingTextScale(element.scale);
   const mainFontSize =
-    element.frameShape !== 'none'
+    (element.frameShape !== 'none'
       ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
-      : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
-  const suffixFontSize = METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE;
+      : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE) * metricScale;
+  const suffixFontSize = METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE * metricScale;
   const runs = splitMetroLargeTextRuns(element);
   // 每个下角标与**紧邻的正文**之间留 3px：末尾角标只挨一边 → 3px，
   // 夹在正文中间 → 两侧各 3px。角标彼此相邻时不额外加间距。
@@ -1535,7 +1708,7 @@ export function createMetroWayfindingElement(
       // 有变种的图标（楼梯）默认取默认变种 + 默认方向，即「双向 + 向左」组合。
       direction: resolveMetroWayfindingFacilityDefaultDirection(iconId),
       variant: resolveMetroFacilityDefaultVariant(iconId),
-      frameShape: iconId === 'no-entry' ? 'none' : 'rectangle',
+      frameShape: iconId === 'no-entry' || iconId === 'exit-classic' ? 'none' : 'rectangle',
       frameFillMode: 'none',
       frameStroke: false,
       foregroundColor: icon?.defaultForegroundColor,
@@ -1547,6 +1720,7 @@ export function createMetroWayfindingElement(
       id,
       type,
       iconId: arrowId,
+      style: 'modern',
       framed: false,
       frameFillMode: 'none',
       frameStroke: false,
@@ -1558,6 +1732,7 @@ export function createMetroWayfindingElement(
       type,
       align: 'center',
       writingMode: 'horizontal',
+      scale: METRO_WAYFINDING_TEXT_SCALE_DEFAULT,
       rows: [createMetroWayfindingTextRow('main'), createMetroWayfindingTextRow('secondary')],
     };
   }
@@ -1567,6 +1742,7 @@ export function createMetroWayfindingElement(
       type,
       value: '',
       suffix: '',
+      scale: METRO_WAYFINDING_TEXT_SCALE_DEFAULT,
       frameShape: 'rectangle',
       frameFillMode: 'none',
       frameStroke: false,
@@ -1666,6 +1842,8 @@ export function parseMetroWayfindingLayout(value: string): MetroWayfindingLayout
       foregroundColor: normalizeColor(candidate.foregroundColor, METRO_WAYFINDING_FOREGROUND),
       mode,
       dividerBetweenRows: candidate.dividerBetweenRows === true,
+      paddingStart: candidate.paddingStart !== false,
+      paddingEnd: candidate.paddingEnd !== false,
       rows,
     };
   } catch {
@@ -1888,6 +2066,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
     id?: unknown;
     type?: unknown;
     iconId?: unknown;
+    style?: unknown;
     direction?: unknown;
     variant?: unknown;
     framed?: unknown;
@@ -1925,6 +2104,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
         id,
         type,
         iconId,
+        style: normalizeMetroWayfindingArrowStyle(candidate.style),
         framed: candidate.framed === true,
         frameFillMode: normalizeMetroWayfindingFrameFillMode(candidate.frameFillMode),
         frameFillColor: normalizeOptionalColor(candidate.frameFillColor),
@@ -1982,6 +2162,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
           ? textCandidate.align
           : 'center',
       writingMode: textCandidate.writingMode === 'vertical' ? 'vertical' : 'horizontal',
+      scale: normalizeMetroWayfindingTextScale(textCandidate.scale),
       rows,
       backgroundColor,
       foregroundColor,
@@ -1994,6 +2175,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
       id,
       type: 'largeText',
       value,
+      scale: normalizeMetroWayfindingTextScale(largeText.scale),
       // legacy：旧工程只有「末尾角标」，保留字段以便回退到老版本时不丢内容；
       // 真正的读取入口是 `suffixes` + `resolveMetroLargeTextSuffixes`。
       suffix: normalizeString(largeText.suffix, 24),
@@ -2080,6 +2262,21 @@ function normalizeMetroWayfindingCombinationScale(value: unknown): number {
         : METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE,
     ),
   );
+}
+
+export function normalizeMetroWayfindingTextScale(value: unknown): number {
+  const scale = Number(value);
+  if (!Number.isFinite(scale)) {
+    return METRO_WAYFINDING_TEXT_SCALE_DEFAULT;
+  }
+  return Math.max(
+    METRO_WAYFINDING_TEXT_SCALE_MIN,
+    Math.min(METRO_WAYFINDING_TEXT_SCALE_MAX, Math.round(scale * 100) / 100),
+  );
+}
+
+export function normalizeMetroWayfindingArrowStyle(value: unknown): MetroWayfindingArrowStyle {
+  return value === 'classic' ? 'classic' : 'modern';
 }
 
 function formatMetroWayfindingScale(value: number): string {

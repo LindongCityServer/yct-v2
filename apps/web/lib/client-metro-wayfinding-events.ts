@@ -28,6 +28,34 @@ export type MetroWayfindingElementAction =
   | { type: 'remove'; elementId: string }
   | { type: 'move'; elementId: string; direction: 'up' | 'down' }
   | {
+      type: 'combination-child-add';
+      elementId: string;
+      child: MetroWayfindingElement;
+    }
+  | {
+      type: 'combination-child-update';
+      elementId: string;
+      childId: string;
+      patch: Partial<MetroWayfindingElement>;
+    }
+  | {
+      type: 'combination-child-duplicate';
+      elementId: string;
+      childId: string;
+      child: MetroWayfindingElement;
+    }
+  | {
+      type: 'combination-child-move';
+      elementId: string;
+      childId: string;
+      direction: 'up' | 'down';
+    }
+  | {
+      type: 'combination-child-remove';
+      elementId: string;
+      childId: string;
+    }
+  | {
       type: 'reorder';
       elementId: string;
       targetElementId: string;

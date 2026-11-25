@@ -138,7 +138,8 @@ export type QqBotMaterialTemplateId = (typeof qqBotMaterialTemplateIds)[number];
 
 /**
  * 第一层模板入口：与工作台「模板与版式」的 templateGroups 保持一致，仅用于展示分组；
- * /盲盒 实际抽样按「真实对象 → 版式 → 样式」三层等概率（见 orderQqBotMaterialCandidates）。
+ * /盲盒 实际抽样按「真实对象 → 版式 → 样式」分层；地铁站若同时有导视牌和其他
+ * 地铁模板，先以 50% 决定是否抽导视牌，再在选中的组内决定模板（见 orderQqBotMaterialCandidates）。
  */
 export const qqBotMaterialTemplateEntries = [
   {
@@ -2040,7 +2041,17 @@ export function orderQqBotMaterialCandidates<T extends QqBotMaterialSamplingCand
         byLayout.set(candidate.layoutKey, [candidate]);
       }
     }
-    for (const layoutKey of shuffleWithRandom(layoutOrder, rng)) {
+    const wayfindingLayouts = layoutOrder.filter((key) => key === 'metro-wayfinding');
+    const otherLayouts = layoutOrder.filter((key) => key !== 'metro-wayfinding');
+    // 地铁站同时有多种物料时，先 50% 决定要不要抽导视牌；否则导视牌只是
+    // 众多版式中的一个，概率会明显低于一半。
+    const orderedLayoutKeys =
+      wayfindingLayouts.length > 0 && otherLayouts.length > 0
+        ? rng.nextInt(2) === 0
+          ? [...shuffleWithRandom(wayfindingLayouts, rng), ...shuffleWithRandom(otherLayouts, rng)]
+          : [...shuffleWithRandom(otherLayouts, rng), ...shuffleWithRandom(wayfindingLayouts, rng)]
+        : shuffleWithRandom(layoutOrder, rng);
+    for (const layoutKey of orderedLayoutKeys) {
       const layoutCandidates = byLayout.get(layoutKey) ?? [];
       const styleOrder: string[] = [];
       const byStyle = new Map<string, T[]>();

@@ -18,6 +18,8 @@ import {
   metroWayfindingForegroundPalette,
   resolveMetroWayfindingLayoutSizing,
   resolveMetroWayfindingVerticalLayoutSizing,
+  type MetroWayfindingCombinationChild,
+  type MetroWayfindingCombinationElement,
   type MetroWayfindingElement,
   type MetroWayfindingLayout,
   type MetroWayfindingLayoutMode,
@@ -173,7 +175,8 @@ export function TransitWayfindingWorkspace({
   );
 
   const layout = snapshot?.layout ?? initialLayout;
-  const canvasWidthPx = snapshot?.canvasWidth ?? 128;
+  // 竖向模板宽度固定 1 米；旧草稿/分享记录里可能带着默认的 4 米，恢复时先收敛再渲染。
+  const canvasWidthPx = layout.mode === 'vertical' ? 128 : (snapshot?.canvasWidth ?? 128);
   const canvasWidthM = canvasWidthPx / 128;
   const canvasHeightM = snapshot?.canvasHeight ?? 1;
   const rowCount = layout.mode === 'double' ? 2 : 1;
@@ -188,17 +191,22 @@ export function TransitWayfindingWorkspace({
     ? activeElements.findIndex((element) => element.id === selectedElement.id)
     : -1;
   const hasSelection = Boolean(selectedElement);
+  const selectedCombinationChild =
+    selectedElement?.type === 'combination' && selectedCombinationChildId
+      ? selectedElement.children.find((child) => child.id === selectedCombinationChildId)
+      : undefined;
+  const inspectorElement = selectedCombinationChild ?? selectedElement;
   const canvasBackgroundOptions = mergeMetroColorOptions(
     metroWayfindingBackgroundPalette,
     lineColorOptions,
   );
 
-  // 选中别的元素、或子元素已随组合框一起删掉时，清掉子元素定位，避免高亮残留。
+  // 选中别的元素时清掉子元素定位；组合框内新增/删除子元素时保留当前定位，
+  // 等下一帧快照到达再按 id 查找，避免新增子元素刚设置就被旧快照清掉。
   useEffect(() => {
     setSelectedCombinationChildId((current) => {
       if (!current) return current;
-      if (selectedElement?.type !== 'combination') return null;
-      return selectedElement.children.some((child) => child.id === current) ? current : null;
+      return selectedElement?.type === 'combination' ? current : null;
     });
   }, [selectedElement]);
 
@@ -212,6 +220,71 @@ export function TransitWayfindingWorkspace({
       editorId,
       action: { ...action, rowIndex },
     });
+  };
+  const dispatchCombinationChild = (
+    rowIndex: number,
+    parent: MetroWayfindingCombinationElement,
+    action:
+      | { type: 'add'; child: MetroWayfindingCombinationChild }
+      | {
+          type: 'update';
+          childId: string;
+          patch: Partial<MetroWayfindingElement>;
+        }
+      | {
+          type: 'duplicate';
+          childId: string;
+          child: MetroWayfindingCombinationChild;
+        }
+      | { type: 'move'; childId: string; direction: 'up' | 'down' }
+      | { type: 'remove'; childId: string },
+  ) => {
+    const base = { elementId: parent.id };
+    if (action.type === 'add') {
+      dispatchElement(rowIndex, {
+        type: 'combination-child-add',
+        ...base,
+        child: action.child,
+      });
+      setSelectedCombinationChildId(action.child.id);
+      return;
+    }
+    if (action.type === 'update') {
+      dispatchElement(rowIndex, {
+        type: 'combination-child-update',
+        ...base,
+        childId: action.childId,
+        patch: action.patch,
+      });
+      return;
+    }
+    if (action.type === 'duplicate') {
+      dispatchElement(rowIndex, {
+        type: 'combination-child-duplicate',
+        ...base,
+        childId: action.childId,
+        child: action.child,
+      });
+      setSelectedCombinationChildId(action.child.id);
+      return;
+    }
+    if (action.type === 'move') {
+      dispatchElement(rowIndex, {
+        type: 'combination-child-move',
+        ...base,
+        childId: action.childId,
+        direction: action.direction,
+      });
+      return;
+    }
+    dispatchElement(rowIndex, {
+      type: 'combination-child-remove',
+      ...base,
+      childId: action.childId,
+    });
+    if (selectedCombinationChildId === action.childId) {
+      setSelectedCombinationChildId(null);
+    }
   };
   const selectElement = (
     rowIndex: number,
@@ -239,11 +312,21 @@ export function TransitWayfindingWorkspace({
       action: { type: 'replace', layout: { ...layout, ...patch } },
     });
   };
-  const addElement = () => {
+  const addElementOfType = (elementType: MetroWayfindingElement['type']) => {
+    if (selectedElement?.type === 'combination' && isCombinationChildType(elementType)) {
+      dispatchCombinationChild(selectedRowIndex, selectedElement, {
+        type: 'add',
+        child: createMetroWayfindingElement(elementType) as MetroWayfindingCombinationChild,
+      });
+      return;
+    }
     dispatchElement(selectedRowIndex, {
       type: 'add',
-      element: createMetroWayfindingElement('facility'),
+      element: createMetroWayfindingElement(elementType),
     });
+  };
+  const addElement = () => {
+    addElementOfType('facility');
   };
 
   const rowWarnings = visibleRows.map((elements) => {
@@ -265,11 +348,7 @@ export function TransitWayfindingWorkspace({
     icon,
     label: `添加${label}`,
     disabled,
-    onClick: () =>
-      dispatchElement(selectedRowIndex, {
-        type: 'add',
-        element: createMetroWayfindingElement(elementType),
-      }),
+    onClick: () => addElementOfType(elementType),
   });
 
   // 7 种元素各一个添加按钮，平铺在工具栏；新增元素永远落在当前选中行。
@@ -394,13 +473,21 @@ export function TransitWayfindingWorkspace({
     />
   );
 
-  const inspectorTitle = selectedElement
-    ? describeMetroWayfindingElementContent(selectedElement)
+  const inspectorTitle = inspectorElement
+    ? describeMetroWayfindingElementContent(inspectorElement)
     : layout.mode === 'vertical'
       ? '全局属性 · 竖向'
       : `全局属性 · ${layoutModeLabels[layout.mode]}`;
-  const inspectorMeta = selectedElement
-    ? `第 ${selectedRowIndex + 1} 行 · 第 ${selectedElementIndex + 1} 个元素`
+  const inspectorMeta = inspectorElement
+    ? selectedCombinationChild
+      ? `组合框子元素 · 第 ${
+          (selectedElement?.type === 'combination'
+            ? selectedElement.children.findIndex(
+                (child) => child.id === selectedCombinationChild.id,
+              )
+            : 0) + 1
+        } 项`
+      : `第 ${selectedRowIndex + 1} 行 · 第 ${selectedElementIndex + 1} 个元素`
     : `${canvasWidthM} × ${canvasHeightM} 米 · ${totalElementCount} 个元素`;
   const downloadNote = badge?.requiresLogin
     ? '当前未登录：可下载带水印的预览图；登录并验证账号后可下载清晰原图。'
@@ -625,6 +712,61 @@ export function TransitWayfindingWorkspace({
                                               {childIndex + 1}
                                             </span>
                                           </button>
+                                          <EditorLayerRowActions
+                                            actions={[
+                                              {
+                                                id: 'duplicate',
+                                                icon: 'content_copy',
+                                                label: '创建副本',
+                                                disabled,
+                                                onClick: () =>
+                                                  dispatchCombinationChild(rowIndex, element, {
+                                                    type: 'duplicate',
+                                                    childId: child.id,
+                                                    child: duplicateMetroWayfindingElement(
+                                                      child,
+                                                    ) as MetroWayfindingCombinationChild,
+                                                  }),
+                                              },
+                                              {
+                                                id: 'up',
+                                                icon: 'arrow_upward',
+                                                label: '上移',
+                                                disabled: disabled || childIndex === 0,
+                                                onClick: () =>
+                                                  dispatchCombinationChild(rowIndex, element, {
+                                                    type: 'move',
+                                                    childId: child.id,
+                                                    direction: 'up',
+                                                  }),
+                                              },
+                                              {
+                                                id: 'down',
+                                                icon: 'arrow_downward',
+                                                label: '下移',
+                                                disabled:
+                                                  disabled ||
+                                                  childIndex === element.children.length - 1,
+                                                onClick: () =>
+                                                  dispatchCombinationChild(rowIndex, element, {
+                                                    type: 'move',
+                                                    childId: child.id,
+                                                    direction: 'down',
+                                                  }),
+                                              },
+                                              {
+                                                id: 'remove',
+                                                icon: 'delete',
+                                                label: '删除',
+                                                disabled,
+                                                onClick: () =>
+                                                  dispatchCombinationChild(rowIndex, element, {
+                                                    type: 'remove',
+                                                    childId: child.id,
+                                                  }),
+                                              },
+                                            ]}
+                                          />
                                         </div>
                                       </li>
                                     );
@@ -702,18 +844,39 @@ export function TransitWayfindingWorkspace({
                   showSuggestions={false}
                   onAction={(rowIndex, action) => dispatchElement(rowIndex, action)}
                 />
-                <MetroWayfindingElementEditor
-                  backgroundColorOptions={backgroundColorOptions}
-                  combinationChildId={selectedCombinationChildId ?? undefined}
-                  disabled={disabled}
-                  element={selectedElement}
-                  inheritedBackgroundColor={layout.backgroundColor}
-                  inheritedForegroundColor={layout.foregroundColor}
-                  layoutMode={layout.mode}
-                  lineColorOptions={lineColorOptions}
-                  onAction={(action) => dispatchElement(selectedRowIndex, action)}
-                  textSuggestions={textSuggestions}
-                />
+                {selectedCombinationChild && selectedElement.type === 'combination' ? (
+                  <MetroWayfindingElementEditor
+                    backgroundColorOptions={backgroundColorOptions}
+                    disabled={disabled}
+                    element={selectedCombinationChild}
+                    inheritedBackgroundColor={layout.backgroundColor}
+                    inheritedForegroundColor={layout.foregroundColor}
+                    layoutMode={layout.mode}
+                    lineColorOptions={lineColorOptions}
+                    onAction={(action) => {
+                      if (action.type === 'update') {
+                        dispatchCombinationChild(selectedRowIndex, selectedElement, {
+                          type: 'update',
+                          childId: selectedCombinationChild.id,
+                          patch: action.patch,
+                        });
+                      }
+                    }}
+                    textSuggestions={textSuggestions}
+                  />
+                ) : (
+                  <MetroWayfindingElementEditor
+                    backgroundColorOptions={backgroundColorOptions}
+                    disabled={disabled}
+                    element={selectedElement}
+                    inheritedBackgroundColor={layout.backgroundColor}
+                    inheritedForegroundColor={layout.foregroundColor}
+                    layoutMode={layout.mode}
+                    lineColorOptions={lineColorOptions}
+                    onAction={(action) => dispatchElement(selectedRowIndex, action)}
+                    textSuggestions={textSuggestions}
+                  />
+                )}
               </>
             ) : (
               <>
@@ -773,6 +936,24 @@ export function TransitWayfindingWorkspace({
                         }
                       />
                     ) : null}
+                    <CheckboxRow
+                      variant="material"
+                      checked={layout.paddingStart !== false}
+                      disabled={disabled}
+                      label={t('metroWayfindingEditor.field.paddingStart')}
+                      onChange={(event) =>
+                        replaceLayout({ paddingStart: event.currentTarget.checked })
+                      }
+                    />
+                    <CheckboxRow
+                      variant="material"
+                      checked={layout.paddingEnd !== false}
+                      disabled={disabled}
+                      label={t('metroWayfindingEditor.field.paddingEnd')}
+                      onChange={(event) =>
+                        replaceLayout({ paddingEnd: event.currentTarget.checked })
+                      }
+                    />
                   </section>
                   {canvasSettings ? (
                     <section className="transit-visual-inspector-section">
@@ -864,4 +1045,10 @@ export function TransitWayfindingWorkspace({
       ) : null}
     </div>
   );
+}
+
+function isCombinationChildType(
+  type: MetroWayfindingElement['type'],
+): type is 'facility' | 'arrow' | 'text' | 'largeText' | 'space' {
+  return type !== 'combination' && type !== 'divider';
 }
