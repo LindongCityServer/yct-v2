@@ -3,8 +3,10 @@
  * 只做纯函数与同构 SVG 渲染断言，不启动浏览器。
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   applyMetroWayfindingTemplateStyle,
+  hasMetroWayfindingFixedTextSegments,
   parseMetroWayfindingLayout,
   resolveMetroWayfindingElementWidth,
   resolveMetroWayfindingLayoutPadding,
@@ -15,6 +17,7 @@ import {
   type MetroWayfindingLayout,
 } from '../../apps/web/lib/metro-wayfinding';
 import { renderMetroWayfindingSvg } from '../../apps/web/lib/metro-wayfinding-svg';
+import { buildMetroWayfindingTemplateExamples } from '../../apps/web/lib/metro-wayfinding-examples';
 
 let passed = 0;
 let failed = 0;
@@ -235,17 +238,21 @@ const styledArrow = styledRow.find((element) => element.type === 'arrow');
 const styledExit = styledRow.find((element) => element.type === 'facility' && element.id === 'e');
 const styledSubway = styledRow.find((element) => element.type === 'facility' && element.id === 's');
 check(
-  '模板库旧版样式：箭头切旧版、出口换绿底旧图标、去掉出口/EXIT 文本',
+  '模板库旧版样式：箭头切旧版、出口换单色旧图标、去掉出口/EXIT 文本',
   styledArrow?.type === 'arrow' &&
     styledArrow.style === 'classic' &&
+    styledArrow.scale === 0.9 &&
     styledExit?.type === 'facility' &&
     styledExit.iconId === 'exit-classic' &&
-    styledExit.scale === 1 &&
+    styledExit.scale === 0.9 &&
     !styledRow.some((element) => element.type === 'text' && element.id === 't'),
 );
 check(
-  '模板库旧版样式：单线路地铁图标使用线路色',
-  styledSubway?.type === 'facility' && styledSubway.backgroundColor === '#E4002B',
+  '模板库旧版样式：单线路地铁图标使用外框填充线路色，背景跟随导视牌',
+  styledSubway?.type === 'facility' &&
+    styledSubway.frameFillMode === 'color' &&
+    styledSubway.frameFillColor === '#E4002B' &&
+    styledSubway.backgroundColor === undefined,
 );
 
 const classicExitSvg = renderMetroWayfindingSvg(
@@ -285,6 +292,152 @@ const defaultWidth = resolveMetroWayfindingLayoutSizing([textElement], 512);
 check(
   '关闭首尾边距后可用宽度变大',
   paddingWidth.hasUnresolvedOverflow === false && defaultWidth.elementWidths.length === 1,
+);
+
+const doubleExitLayout = parseMetroWayfindingLayout(
+  JSON.stringify({
+    backgroundColor: '#262626',
+    foregroundColor: '#FFFFFF',
+    mode: 'single',
+    dividerBetweenRows: false,
+    rows: [
+      [
+        {
+          id: 'a1',
+          type: 'arrow',
+          iconId: 'west',
+          framed: false,
+          frameFillMode: 'none',
+          frameStroke: false,
+        },
+        {
+          id: 'e1',
+          type: 'facility',
+          iconId: 'exit',
+          frameShape: 'none',
+          frameFillMode: 'none',
+          frameStroke: false,
+        },
+        { id: 'sp1', type: 'space', mode: 'flex', units: 1 },
+        { id: 'd', type: 'divider' },
+        { id: 'sp2', type: 'space', mode: 'flex', units: 1 },
+        {
+          id: 'e2',
+          type: 'facility',
+          iconId: 'exit',
+          frameShape: 'none',
+          frameFillMode: 'none',
+          frameStroke: false,
+        },
+        {
+          id: 'a2',
+          type: 'arrow',
+          iconId: 'east',
+          framed: false,
+          frameFillMode: 'none',
+          frameStroke: false,
+        },
+      ],
+    ],
+  }),
+);
+const styledDouble = applyMetroWayfindingTemplateStyle(doubleExitLayout, 'classic', {
+  remark: '双侧出口编号',
+});
+const doubleRow = styledDouble.rows[0]!;
+check(
+  '旧版双侧出口去掉两端出口标识，分割线改为旧版出口图标',
+  !doubleRow.some((element) => element.type === 'divider') &&
+    doubleRow.filter((element) => element.type === 'facility' && element.iconId === 'exit-classic')
+      .length === 1,
+);
+
+const fixedTextLayout = parseMetroWayfindingLayout(
+  JSON.stringify({
+    backgroundColor: '#262626',
+    foregroundColor: '#FFFFFF',
+    mode: 'single',
+    dividerBetweenRows: false,
+    rows: [
+      [
+        {
+          id: 'fixed',
+          type: 'text',
+          align: 'left',
+          writingMode: 'horizontal',
+          rows: [{ id: 'fr', kind: 'main', segments: [{ kind: 'boxed', value: 'A' }] }],
+        },
+        {
+          id: 'normal',
+          type: 'text',
+          align: 'left',
+          writingMode: 'horizontal',
+          rows: [
+            {
+              id: 'nr',
+              kind: 'main',
+              segments: [{ kind: 'text', value: '一段非常非常长的普通说明文字' }],
+            },
+          ],
+        },
+      ],
+    ],
+  }),
+);
+const fixedTextSizing = resolveMetroWayfindingLayoutSizing(fixedTextLayout.rows[0]!, 220);
+check(
+  '线路编号 / 方框文本不参与空间不足的横向压缩',
+  hasMetroWayfindingFixedTextSegments(fixedTextLayout.rows[0]![0]!) &&
+    fixedTextSizing.textScaleX < 1 &&
+    fixedTextSizing.elementWidths[0] ===
+      resolveMetroWayfindingElementWidth(fixedTextLayout.rows[0]![0]!),
+);
+
+const exitUpExamples = buildMetroWayfindingTemplateExamples(
+  {
+    name: '测试站',
+    lines: [{ id: 'L1', name: '1号线', color: '#E4002B', secondaryName: 'Line 1' }],
+    exits: [{ code: 'A', direction: 'upwards', description: '临东路 路东' }],
+    overGround: false,
+  },
+  'L1',
+);
+const exitUp = exitUpExamples.find((example) => example.source.remark === '出口与上楼');
+const exitUpRow = exitUp?.project.layout.rows[0] ?? [];
+const descriptionIndex = exitUpRow.findIndex(
+  (element) =>
+    element.type === 'text' &&
+    element.rows.some(
+      (row) => row.kind === 'main' && row.segments.some((segment) => segment.kind === 'boxed'),
+    ),
+);
+check(
+  '旧版出口与上楼在出口图标和上楼图标之间加入方框出口描述和弹性空白',
+  descriptionIndex > 0 &&
+    exitUpRow[descriptionIndex - 1]?.type === 'facility' &&
+    exitUpRow[descriptionIndex + 1]?.type === 'space' &&
+    exitUpRow.some(
+      (element) =>
+        element.type === 'text' &&
+        element.rows.some(
+          (row) =>
+            row.kind === 'main' &&
+            row.segments.some(
+              (segment) => segment.kind === 'text' && segment.value.includes(' / '),
+            ),
+        ),
+    ),
+);
+
+const exitClassicAsset = readFileSync(
+  new URL('../../apps/web/public/metro-facilities/plain/exit-classic.svg', import.meta.url),
+  'utf8',
+);
+check(
+  '旧版出口图标为单色素材并保留边距',
+  exitClassicAsset.includes('currentColor') &&
+    !exitClassicAsset.includes('#009f3c') &&
+    exitClassicAsset.includes('viewBox="0 0 150 150"'),
 );
 
 if (failed > 0) {

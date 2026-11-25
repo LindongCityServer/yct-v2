@@ -15,6 +15,7 @@ import {
   estimateMetroWayfindingLargeTextWidth,
   estimateMetroWayfindingTextWidth,
   hasMetroWayfindingTextRowContent,
+  hasMetroWayfindingFixedTextSegments,
   measureMetroWayfindingMainSegments,
   measureMetroWayfindingSecondaryText,
   metroWayfindingIconOptions,
@@ -226,7 +227,9 @@ function renderMetroWayfindingRow(
         ? sizing.flexWidth
         : sizing.elementWidths[index]!;
     const elementWidth =
-      element.type === 'text' ? intrinsicElementWidth * sizing.textScaleX : intrinsicElementWidth;
+      element.type === 'text' && !hasMetroWayfindingFixedTextSegments(element)
+        ? intrinsicElementWidth * sizing.textScaleX
+        : intrinsicElementWidth;
     const isFramedLargeText = element.type === 'largeText' && element.frameShape !== 'none';
     const elementScaleX = isFramedLargeText
       ? 1

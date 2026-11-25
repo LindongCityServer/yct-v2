@@ -1565,6 +1565,10 @@ function MetroWayfindingExampleList({
   const { t } = useI18n();
   const [category, setCategory] = useState<'all' | 'entry' | 'transfer' | 'exit'>('all');
   const [templateStyle, setTemplateStyle] = useState<'modern' | 'classic'>('modern');
+  const availableExamples =
+    templateStyle === 'classic'
+      ? examples.filter((example) => example.source.category !== 'transfer')
+      : examples;
   const categoryOptions = [
     { value: 'all' as const, label: t('metroWayfindingEditor.option.all') },
     { value: 'entry' as const, label: t('metroWayfindingEditor.option.entry') },
@@ -1573,18 +1577,21 @@ function MetroWayfindingExampleList({
   ].filter(
     (option) =>
       option.value === 'all' ||
-      examples.some((example) => example.source.category === option.value),
+      availableExamples.some((example) => example.source.category === option.value),
   );
   const activeCategory = categoryOptions.some((option) => option.value === category)
     ? category
     : 'all';
   const visibleExamples =
     activeCategory === 'all'
-      ? examples
-      : examples.filter((example) => example.source.category === activeCategory);
+      ? availableExamples
+      : availableExamples.filter((example) => example.source.category === activeCategory);
   const styleExample = (example: MetroWayfindingExample): MetroWayfindingExample => {
     if (templateStyle !== 'classic') return example;
-    const layout = applyMetroWayfindingTemplateStyle(example.project.layout, 'classic');
+    const layout = applyMetroWayfindingTemplateStyle(example.project.layout, 'classic', {
+      remark: example.source.remark,
+      lineColor: example.lineColor,
+    });
     return {
       ...example,
       project: { ...example.project, layout },
@@ -1653,8 +1660,9 @@ function MetroWayfindingExampleList({
               {option.label}
               <span>
                 {option.value === 'all'
-                  ? examples.length
-                  : examples.filter((example) => example.source.category === option.value).length}
+                  ? availableExamples.length
+                  : availableExamples.filter((example) => example.source.category === option.value)
+                      .length}
               </span>
             </button>
           ))}
@@ -5171,23 +5179,6 @@ function MetroFacilityAssetIcon({
   style,
 }: Readonly<{ assetName: string; style?: { transform: string } }>) {
   const assetUrl = appPath(`/metro-facilities/plain/${assetName}.svg`);
-  if (assetName === 'exit-classic') {
-    // 旧版出口图标自带绿底和白色图形，不能再当单色 mask，否则只剩一个绿色方块。
-    return (
-      <span
-        className="metro-wayfinding-facility-asset"
-        aria-hidden="true"
-        style={
-          {
-            background: `url("${assetUrl}") center / contain no-repeat`,
-            WebkitMask: 'none',
-            mask: 'none',
-            ...style,
-          } as CSSProperties
-        }
-      />
-    );
-  }
   return (
     <span
       className="metro-wayfinding-facility-asset"

@@ -553,6 +553,21 @@ export function hasMetroWayfindingTextRowContent(row: MetroWayfindingTextRow): b
     : row.value.trim().length > 0;
 }
 
+/**
+ * 含线路编号 chip 或方框文本的普通文本不做横向压缩：
+ * 这些是固定尺寸的信息点，压窄后会变成难以辨认的细条。
+ */
+export function hasMetroWayfindingFixedTextSegments(element: MetroWayfindingElement): boolean {
+  return (
+    element.type === 'text' &&
+    element.rows.some(
+      (row) =>
+        row.kind === 'main' &&
+        row.segments.some((segment) => segment.kind === 'line' || segment.kind === 'boxed'),
+    )
+  );
+}
+
 export type MetroWayfindingFrameShape = 'none' | 'rectangle' | 'circle';
 export type MetroWayfindingFrameFillMode = 'none' | 'inverse' | 'color';
 export type MetroWayfindingCombinationFillMode = MetroWayfindingFrameFillMode | 'stripe';
@@ -982,12 +997,14 @@ function isExitOnlyTextElement(element: MetroWayfindingElement): boolean {
 export function applyMetroWayfindingTemplateStyle(
   layout: MetroWayfindingLayout,
   style: MetroWayfindingTemplateStyle,
+  options: { remark?: string; lineColor?: string } = {},
 ): MetroWayfindingLayout {
   if (style !== 'classic') {
     return layout;
   }
   const lineColors = collectMetroLineColors(layout);
-  const singleLineColor = lineColors.size === 1 ? Array.from(lineColors)[0] : undefined;
+  const singleLineColor =
+    options.lineColor ?? (lineColors.size === 1 ? Array.from(lineColors)[0] : undefined);
   const mapElement = (element: MetroWayfindingElement): MetroWayfindingElement | undefined => {
     if (isExitOnlyTextElement(element)) {
       return undefined;
@@ -997,6 +1014,7 @@ export function applyMetroWayfindingTemplateStyle(
         ...element,
         style: 'classic',
         iconId: classicArrowIconIdByModernIconId[element.iconId] ?? 'south-west',
+        scale: 0.9,
         // 旧版微调只把箭头改黄，文字和其他图标继续继承牌面前景色。
         foregroundColor: '#F2C94C',
       };
@@ -1006,7 +1024,7 @@ export function applyMetroWayfindingTemplateStyle(
         return {
           ...element,
           iconId: 'exit-classic',
-          scale: 1,
+          scale: 0.9,
           direction: undefined,
           frameShape: 'none',
           frameFillMode: 'none',
@@ -1016,9 +1034,11 @@ export function applyMetroWayfindingTemplateStyle(
       if (element.iconId === 'subway' && singleLineColor) {
         return {
           ...element,
-          backgroundColor: singleLineColor,
-          foregroundColor: '#FFFFFF',
-          frameShape: 'none',
+          // 背景继续跟随导视牌；线路色填到图标外框上。
+          backgroundColor: undefined,
+          frameShape: element.frameShape === 'none' ? 'rectangle' : element.frameShape,
+          frameFillMode: 'color',
+          frameFillColor: singleLineColor,
           frameStroke: false,
         };
       }
@@ -1035,15 +1055,39 @@ export function applyMetroWayfindingTemplateStyle(
     }
     return element;
   };
-  return {
-    ...layout,
-    rows: layout.rows.map((row) =>
-      row.flatMap((element) => {
-        const mapped = mapElement(element);
-        return mapped ? [mapped] : [];
-      }),
-    ),
-  };
+  const styledRows = layout.rows.map((row) =>
+    row.flatMap((element) => {
+      const mapped = mapElement(element);
+      return mapped ? [mapped] : [];
+    }),
+  );
+  if (options.remark === '双侧出口编号') {
+    // 旧版双侧出口：两端不放出图标，把中间分割线换成一个旧版出口标识。
+    const classicExit = (id: string): MetroWayfindingFacilityElement => ({
+      id,
+      type: 'facility',
+      iconId: 'exit-classic',
+      scale: 0.9,
+      frameShape: 'none',
+      frameFillMode: 'none',
+      frameStroke: false,
+    });
+    return {
+      ...layout,
+      rows: styledRows.map((row) =>
+        row.flatMap((element) => {
+          if (element.type === 'facility' && element.iconId === 'exit-classic') {
+            return [];
+          }
+          if (element.type === 'divider') {
+            return [classicExit(`classic-divider-${element.id}`)];
+          }
+          return [element];
+        }),
+      ),
+    };
+  }
+  return { ...layout, rows: styledRows };
 }
 
 export const emptyMetroWayfindingLayout: MetroWayfindingLayout = {
@@ -1155,6 +1199,9 @@ export function resolveMetroWayfindingLayoutSizing(
       flexCount += 1;
     } else if (element.type === 'largeText' && element.frameShape !== 'none') {
       // 带方框/圆框的大文本保持原尺寸，宽度不足时只压一般文本。
+      nonTextWidth += naturalElementWidths[index] ?? 0;
+    } else if (hasMetroWayfindingFixedTextSegments(element)) {
+      // 线路编号 chip / 方框出口编号不参与横向压缩。
       nonTextWidth += naturalElementWidths[index] ?? 0;
     } else if (
       element.type === 'text' ||

@@ -94,6 +94,12 @@ check(
     /layout\.mode === 'vertical' \? 128 :/.test(WORKSPACE),
 );
 check(
+  '模板库旧版样式隐藏换乘类模板',
+  /templateStyle === 'classic'/.test(EDITOR) &&
+    /category !== 'transfer'/.test(EDITOR) &&
+    /availableExamples/.test(EDITOR),
+);
+check(
   '属性面板把定位转给组合框子元素编辑器',
   /focusChildId=\{combinationChildId\}/.test(EDITOR) &&
     /const \[selectedChildId, setSelectedChildId\] = useState\(element\.children\[0\]\?\.id \?\? ''\)/.test(

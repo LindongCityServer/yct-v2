@@ -28,6 +28,8 @@ export interface MetroWayfindingExample {
   source: MetroWayfindingExampleSource;
   project: MetroWayfindingProjectFile;
   summary: MetroWayfindingLayoutSummary;
+  /** 当前线路色：模板库旧版样式给单线路地铁图标填外框用。 */
+  lineColor?: string;
 }
 
 export interface MetroWayfindingExampleLine {
@@ -693,6 +695,8 @@ export function buildMetroWayfindingTemplateExamples(
   const sortedCurrentExits = sortedUsableExits(exitContext.current);
   const elevatorExit = sortedCurrentExits.find(hasAccessibleElevatorExit)?.code;
   const firstExitCode = currentExitCodes[0] ?? '';
+  const firstExit = sortedCurrentExits[0];
+  const firstExitDescription = firstExit?.description?.trim() ?? '';
   const examples: MetroWayfindingExample[] = [];
   let index = 0;
   const add = (
@@ -721,6 +725,7 @@ export function buildMetroWayfindingTemplateExamples(
       },
       project,
       summary: summarizeMetroWayfindingLayout(layout, project.canvas),
+      lineColor: selectedLine?.color,
     });
     index += 1;
   };
@@ -1020,12 +1025,26 @@ export function buildMetroWayfindingTemplateExamples(
     4,
   );
   if (!station?.overGround) {
+    const exitDescription = isPlaceholderExitDescription(firstExitDescription)
+      ? '出口'
+      : firstExitDescription || '出口';
+    const exitDescriptionText = firstExitCode
+      ? b.text(
+          [
+            { kind: 'boxed' as const, value: firstExitCode },
+            { kind: 'text' as const, value: ` / ${exitDescription} ` },
+          ],
+          '',
+          'left',
+        )
+      : undefined;
     add(
       'exit',
       '出口与上楼',
       [
         b.arrow('north'),
         b.facility('exit', 'up'),
+        ...(exitDescriptionText ? [exitDescriptionText, b.space('fixed'), b.space()] : []),
         b.facility('escalator', 'left'),
         b.text('出口', 'EXIT', 'left'),
       ],
