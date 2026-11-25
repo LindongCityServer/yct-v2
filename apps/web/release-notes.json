@@ -3,6 +3,55 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.28.1",
+      "releasedAt": "2026-11-25T12:36:54.240Z",
+      "sourceFingerprint": "a4e6e01a39eeaee782a4401c74cc9ff7dfaeb0fe3db241430d42860edd71f85c",
+      "themes": ["materials", "transit", "qqbot"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地铁横版线路图新增「终点站标志」版式（新版 / 旧版）：沿用站名与方向版式的排版，模板库、分享链接与机器人随机物料同步支持"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地铁竖版线路图新增「过渡版」样式（沈阳 2019-2024）：新版页头配旧版浅色主体与两侧轨道，本站和起讫站不额外标注"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地铁导视牌新增旧版站外出口示例（1×6 竖向工程），示例支持新版 / 旧版样式一键切换"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "导视牌元素入口补充设施图标、分割线与组合框，可在工作台直接添加"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复线路图换乘信息串台与丢失：服务器线网不再把公交线路带进线路图；自定义线网在切版式、恢复草稿后保持换乘；刷新按钮区分「未选线路」与「该线路无换乘站」"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复旧版双侧出口描述与电梯图标位置：A1/A2 合并为 A、去掉重复描述，设施图标位于出口文本与分割线之间"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复新版出口与上楼误插出口编号 / 描述，短副文本不再跟随主文本一起压缩，旧版出口图标不再命中旧缓存"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "模板库版式缩略图改用真实模板渲染；横版 / 竖版样式名标注「沈阳2019至今 / 沈阳2010风」；竖版表头字段合并为「表头」分组"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.28.0",
       "releasedAt": "2026-11-23T14:16:09.105Z",
       "sourceFingerprint": "554a9b68649c09131e4cc797cb84e5a406baaf594688f38cbbaf351dc10564d4",
