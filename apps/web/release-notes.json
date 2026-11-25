@@ -5,7 +5,7 @@
     {
       "version": "2.28.0",
       "releasedAt": "2026-11-23T14:16:09.105Z",
-      "sourceFingerprint": "9347edc6dd91f5b9f85e9b48fb8769321675f23d579319ae034774a59d384efb",
+      "sourceFingerprint": "20e449d213cb1f5a056ebba643ab162b99d8226f164e5699073ecf5ca9e3953a",
       "themes": ["qqbot", "materials", "transit"],
       "changes": [
         {
@@ -145,6 +145,11 @@
           "category": "feat",
           "breaking": false,
           "summary": "导视牌图标支持缩放，默认保持原尺寸，最大值 1 撑满牌面高度"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "微调旧版样式里的绿底出口图标改为撑满牌面高度"
         }
       ],
       "bump": "minor"
