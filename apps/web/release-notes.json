@@ -5,7 +5,7 @@
     {
       "version": "2.28.0",
       "releasedAt": "2026-11-23T14:16:09.105Z",
-      "sourceFingerprint": "b40050d6897746703f23893a62c7666b97a8e758d809da795ec3ac39213ff261",
+      "sourceFingerprint": "9347edc6dd91f5b9f85e9b48fb8769321675f23d579319ae034774a59d384efb",
       "themes": ["qqbot", "materials", "transit"],
       "changes": [
         {
@@ -130,6 +130,21 @@
           "category": "fix",
           "breaking": false,
           "summary": "导视牌行内上下移快捷键改为 Ctrl+[ / Ctrl+]"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "旧版样式只将箭头改为黄色，文字与图标保持原前景色"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "旧版箭头改为居中缩放，避免旋转后位置歪斜"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "导视牌图标支持缩放，默认保持原尺寸，最大值 1 撑满牌面高度"
         }
       ],
       "bump": "minor"
