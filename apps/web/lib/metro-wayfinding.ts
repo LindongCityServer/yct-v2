@@ -319,6 +319,43 @@ export type MetroWayfindingArrowStyle = 'modern' | 'classic';
 export const METRO_WAYFINDING_TEXT_SCALE_MIN = 0.5;
 export const METRO_WAYFINDING_TEXT_SCALE_MAX = 2;
 export const METRO_WAYFINDING_TEXT_SCALE_DEFAULT = 1;
+/** 图标原始绘制尺寸（设施 / 箭头素材的 85×85 单元）。 */
+export const METRO_WAYFINDING_ICON_BASE_SIZE = 85;
+/** 图标缩放上限 1 = 撑满 128px 高度；默认 0.66 约等于原始 85px。 */
+export const METRO_WAYFINDING_ICON_SCALE_MIN = 0.25;
+export const METRO_WAYFINDING_ICON_SCALE_MAX = 1;
+export const METRO_WAYFINDING_ICON_SCALE_DEFAULT = 0.66;
+
+export function normalizeMetroWayfindingIconScale(value: unknown): number {
+  const scale = Number(value);
+  if (!Number.isFinite(scale)) {
+    return METRO_WAYFINDING_ICON_SCALE_DEFAULT;
+  }
+  return Math.max(
+    METRO_WAYFINDING_ICON_SCALE_MIN,
+    Math.min(METRO_WAYFINDING_ICON_SCALE_MAX, Math.round(scale * 100) / 100),
+  );
+}
+
+/** 相对于原始 85px 图标的倍率；1 = 原始大小，1.506 = 128px 撑满高度。 */
+export function resolveMetroWayfindingIconScaleFactor(value: unknown): number {
+  return resolveMetroWayfindingIconDisplaySize(value) / METRO_WAYFINDING_ICON_BASE_SIZE;
+}
+
+export function resolveMetroWayfindingIconDisplaySize(value: unknown): number {
+  const scale = normalizeMetroWayfindingIconScale(value);
+  if (scale <= METRO_WAYFINDING_ICON_SCALE_DEFAULT) {
+    return (METRO_WAYFINDING_ICON_BASE_SIZE * scale) / METRO_WAYFINDING_ICON_SCALE_DEFAULT;
+  }
+  // 默认值以上按 85→128 线性放大，保证最大值 1 精确撑满高度。
+  const ratio =
+    (scale - METRO_WAYFINDING_ICON_SCALE_DEFAULT) /
+    (METRO_WAYFINDING_ICON_SCALE_MAX - METRO_WAYFINDING_ICON_SCALE_DEFAULT);
+  return (
+    METRO_WAYFINDING_ICON_BASE_SIZE +
+    (METRO_WAYFINDING_HEIGHT - METRO_WAYFINDING_ICON_BASE_SIZE) * ratio
+  );
+}
 
 export function resolveMetroFacilityIconAssetName(
   iconId: string,
@@ -525,6 +562,8 @@ export interface MetroWayfindingFacilityElement {
   id: string;
   type: 'facility';
   iconId: string;
+  /** 图标缩放，1 = 撑满 128px 高度；默认 85/128 = 原始大小。 */
+  scale?: number;
   direction?: MetroWayfindingIconDirection;
   // 仅对有变种的图标（如楼梯：双向 / 向上 / 向下）有意义。
   variant?: MetroWayfindingIconVariant;
@@ -540,6 +579,8 @@ export interface MetroWayfindingArrowElement {
   id: string;
   type: 'arrow';
   iconId: string;
+  /** 图标缩放，1 = 撑满 128px 高度；默认 85/128 = 原始大小。 */
+  scale?: number;
   /** 箭头样式：modern = 新版 15 方向；classic = 旧版 8 方向。 */
   style?: MetroWayfindingArrowStyle;
   framed: boolean;
@@ -956,6 +997,8 @@ export function applyMetroWayfindingTemplateStyle(
         ...element,
         style: 'classic',
         iconId: classicArrowIconIdByModernIconId[element.iconId] ?? 'south-west',
+        // 旧版微调只把箭头改黄，文字和其他图标继续继承牌面前景色。
+        foregroundColor: '#F2C94C',
       };
     }
     if (element.type === 'facility') {
@@ -993,7 +1036,6 @@ export function applyMetroWayfindingTemplateStyle(
   };
   return {
     ...layout,
-    foregroundColor: '#F2C94C',
     rows: layout.rows.map((row) =>
       row.flatMap((element) => {
         const mapped = mapElement(element);
@@ -1230,7 +1272,7 @@ export function resolveMetroWayfindingVerticalElementHeight(
     return METRO_WAYFINDING_HEIGHT * normalizeMetroWayfindingCombinationScale(element.scale);
   }
   if (element.type === 'facility' || element.type === 'arrow') {
-    return METRO_WAYFINDING_TEXT_HEIGHT;
+    return resolveMetroWayfindingIconDisplaySize(element.scale);
   }
   if (element.type !== 'text') {
     return 0;
@@ -1259,7 +1301,9 @@ export function resolveMetroWayfindingVerticalElementHeight(
 
 export function resolveMetroWayfindingElementWidth(element: MetroWayfindingElement): number {
   if (element.type === 'facility' || element.type === 'arrow' || element.type === 'divider') {
-    return element.type === 'divider' ? METRO_WAYFINDING_DIVIDER_WIDTH : 85;
+    return element.type === 'divider'
+      ? METRO_WAYFINDING_DIVIDER_WIDTH
+      : resolveMetroWayfindingIconDisplaySize(element.scale);
   }
   if (element.type === 'largeText') {
     if (element.frameShape === 'circle') {
@@ -1705,6 +1749,7 @@ export function createMetroWayfindingElement(
       id,
       type,
       iconId,
+      scale: METRO_WAYFINDING_ICON_SCALE_DEFAULT,
       // 有变种的图标（楼梯）默认取默认变种 + 默认方向，即「双向 + 向左」组合。
       direction: resolveMetroWayfindingFacilityDefaultDirection(iconId),
       variant: resolveMetroFacilityDefaultVariant(iconId),
@@ -1720,6 +1765,7 @@ export function createMetroWayfindingElement(
       id,
       type,
       iconId: arrowId,
+      scale: METRO_WAYFINDING_ICON_SCALE_DEFAULT,
       style: 'modern',
       framed: false,
       frameFillMode: 'none',
@@ -2066,6 +2112,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
     id?: unknown;
     type?: unknown;
     iconId?: unknown;
+    scale?: unknown;
     style?: unknown;
     direction?: unknown;
     variant?: unknown;
@@ -2104,6 +2151,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
         id,
         type,
         iconId,
+        scale: normalizeMetroWayfindingIconScale(candidate.scale),
         style: normalizeMetroWayfindingArrowStyle(candidate.style),
         framed: candidate.framed === true,
         frameFillMode: normalizeMetroWayfindingFrameFillMode(candidate.frameFillMode),
@@ -2133,6 +2181,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
       id,
       type,
       iconId,
+      scale: normalizeMetroWayfindingIconScale(candidate.scale),
       direction,
       variant: normalizedVariant,
       frameShape: normalizeMetroWayfindingFrameShape(candidate.frameShape, candidate.framed),

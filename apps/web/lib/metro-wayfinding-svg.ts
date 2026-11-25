@@ -26,6 +26,7 @@ import {
   resolveMetroWayfindingCombinationSizing,
   resolveMetroWayfindingElementWidth,
   resolveMetroWayfindingFacilityDefaultDirection,
+  resolveMetroWayfindingIconScaleFactor,
   resolveMetroWayfindingLayoutPadding,
   resolveMetroWayfindingLayoutSizing,
   resolveMetroWayfindingTextMetrics,
@@ -373,10 +374,13 @@ function renderMetroWayfindingElement(
       element.type === 'arrow'
         ? `data-metro-arrow="${escapeXml(element.iconId)}"`
         : `data-material-symbol="${escapeXml(icon.symbol)}"`;
+    const iconScaleFactor = resolveMetroWayfindingIconScaleFactor(element.scale);
     const positionedGraphic =
-      iconOffsetY === 0
+      Math.abs(iconScaleFactor - 1) < 0.0001 && Math.abs(elementHeight / 2 - 64) < 0.0001
         ? graphic
-        : `<g transform="translate(0 ${formatNumber(iconOffsetY)})">${graphic}</g>`;
+        : `<g transform="translate(${formatNumber(width / 2 - 42.5 * iconScaleFactor)} ${formatNumber(
+            elementHeight / 2 - 64 * iconScaleFactor,
+          )}) scale(${formatNumber(iconScaleFactor)})">${graphic}</g>`;
     return `<g transform="${transform}" ${dataAttribute}>${backgroundRect}${positionedGraphic}</g>`;
   }
   if (element.type === 'largeText') {
@@ -1058,7 +1062,7 @@ function renderMetroClassicArrow(
     : '';
   const angle = metroClassicArrowAngles[iconId] ?? 0;
   const scaleTransform = resolveMetroIconScaleTransform(framed ? 0.9 : 1);
-  return `${frame}<g transform="${scaleTransform}"><g transform="translate(42.5 64) rotate(${angle}) translate(-21 -21) scale(1.5)"><path d="${metroClassicArrowPath}" fill="${color}" stroke="${color}" stroke-width="0.6"/></g></g>`;
+  return `${frame}<g transform="${scaleTransform}"><g transform="translate(42.5 64) rotate(${angle}) scale(1.4) translate(-20.92 -20.92)"><path d="${metroClassicArrowPath}" fill="${color}"/></g></g>`;
 }
 
 function renderMetroArrowAsset(

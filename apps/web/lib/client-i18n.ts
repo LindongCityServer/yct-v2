@@ -909,6 +909,7 @@ export type CommonMessageKey =
   | 'metroWayfindingEditor.field.exitIconDirection'
   | 'metroWayfindingEditor.field.facilityIcon'
   | 'metroWayfindingEditor.field.iconDirection'
+  | 'metroWayfindingEditor.field.iconScale'
   | 'metroWayfindingEditor.field.iconVariant'
   | 'metroWayfindingEditor.field.layout'
   | 'metroWayfindingEditor.field.rowDivider'

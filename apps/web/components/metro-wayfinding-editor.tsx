@@ -57,6 +57,9 @@ import {
   METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE,
   METRO_WAYFINDING_COMBINATION_MAX_SCALE,
   METRO_WAYFINDING_COMBINATION_MIN_SCALE,
+  METRO_WAYFINDING_ICON_SCALE_DEFAULT,
+  METRO_WAYFINDING_ICON_SCALE_MAX,
+  METRO_WAYFINDING_ICON_SCALE_MIN,
   METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE,
   METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE,
   METRO_WAYFINDING_TEXT_SCALE_DEFAULT,
@@ -2530,6 +2533,11 @@ function FacilityElementFields({
         columns={6}
         onChange={selectIcon}
       />
+      <IconScaleField
+        value={element.scale}
+        disabled={disabled}
+        onChange={(scale) => patch({ scale })}
+      />
       {variantOptions.length > 0 ? (
         <SegmentedControl
           label={t('metroWayfindingEditor.field.iconVariant')}
@@ -2691,6 +2699,11 @@ function ArrowElementFields({
         columns={arrowStyle === 'classic' ? 4 : 5}
         onChange={(iconId) => patch({ iconId })}
       />
+      <IconScaleField
+        value={element.scale}
+        disabled={disabled}
+        onChange={(scale) => patch({ scale })}
+      />
       <CheckboxRow
         variant="material"
         className="metro-wayfinding-toggle"
@@ -2711,6 +2724,42 @@ function ArrowElementFields({
         />
       ) : null}
     </div>
+  );
+}
+
+function IconScaleField({
+  value,
+  disabled,
+  onChange,
+}: Readonly<{
+  value: number | undefined;
+  disabled: boolean;
+  onChange: (scale: number) => void;
+}>) {
+  const { t } = useI18n();
+  const scale = value ?? METRO_WAYFINDING_ICON_SCALE_DEFAULT;
+  return (
+    <Field label={t('metroWayfindingEditor.field.iconScale')}>
+      <Input
+        type="number"
+        min={METRO_WAYFINDING_ICON_SCALE_MIN}
+        max={METRO_WAYFINDING_ICON_SCALE_MAX}
+        step="0.01"
+        value={Math.round(scale * 100) / 100}
+        disabled={disabled}
+        onChange={(event) =>
+          onChange(
+            Math.max(
+              METRO_WAYFINDING_ICON_SCALE_MIN,
+              Math.min(
+                METRO_WAYFINDING_ICON_SCALE_MAX,
+                Math.round((Number(event.currentTarget.value) || 1) * 100) / 100,
+              ),
+            ),
+          )
+        }
+      />
+    </Field>
   );
 }
 

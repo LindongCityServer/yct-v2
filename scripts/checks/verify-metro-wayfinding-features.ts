@@ -89,6 +89,54 @@ check(
 );
 check('竖向布局高度随字号倍数变化', resolveMetroWayfindingVerticalElementHeight(textElement) > 0);
 
+const iconDefault = parseMetroWayfindingLayout(
+  JSON.stringify({
+    backgroundColor: '#262626',
+    foregroundColor: '#FFFFFF',
+    mode: 'single',
+    dividerBetweenRows: false,
+    rows: [
+      [
+        {
+          id: 'i',
+          type: 'facility',
+          iconId: 'stairs',
+          frameShape: 'none',
+          frameFillMode: 'none',
+          frameStroke: false,
+        },
+      ],
+    ],
+  }),
+).rows[0]![0]!;
+const iconFullHeight = parseMetroWayfindingLayout(
+  JSON.stringify({
+    backgroundColor: '#262626',
+    foregroundColor: '#FFFFFF',
+    mode: 'single',
+    dividerBetweenRows: false,
+    rows: [
+      [
+        {
+          id: 'i',
+          type: 'facility',
+          iconId: 'stairs',
+          scale: 1,
+          frameShape: 'none',
+          frameFillMode: 'none',
+          frameStroke: false,
+        },
+      ],
+    ],
+  }),
+).rows[0]![0]!;
+check(
+  '图标默认保持原尺寸，缩放为 1 时撑满 128px 高度',
+  Math.round(resolveMetroWayfindingElementWidth(iconDefault)) === 85 &&
+    Math.round(resolveMetroWayfindingElementWidth(iconFullHeight)) === 128 &&
+    Math.round(resolveMetroWayfindingVerticalElementHeight(iconFullHeight)) === 128,
+);
+
 const oldArrowLayout = parseMetroWayfindingLayout(
   JSON.stringify({
     backgroundColor: '#262626',
@@ -178,7 +226,11 @@ const styleLayout = parseMetroWayfindingLayout(
 ) as MetroWayfindingLayout;
 const styled = applyMetroWayfindingTemplateStyle(styleLayout, 'classic');
 const styledRow = styled.rows[0]!;
-check('模板库旧版样式：前景变黄色', styled.foregroundColor === '#F2C94C');
+check(
+  '模板库旧版样式：只有箭头变黄色，牌面前景保持原色',
+  styled.foregroundColor === '#FFFFFF' &&
+    styledRow.find((element) => element.type === 'arrow')?.foregroundColor === '#F2C94C',
+);
 const styledArrow = styledRow.find((element) => element.type === 'arrow');
 const styledExit = styledRow.find((element) => element.type === 'facility' && element.id === 'e');
 const styledSubway = styledRow.find((element) => element.type === 'facility' && element.id === 's');
