@@ -5,7 +5,7 @@
     {
       "version": "2.28.0",
       "releasedAt": "2026-11-23T14:16:09.105Z",
-      "sourceFingerprint": "120d063e6fa8cbb820fd689f00e020e724c6ba2e2f72f4ee026f718f9e652a0e",
+      "sourceFingerprint": "554a9b68649c09131e4cc797cb84e5a406baaf594688f38cbbaf351dc10564d4",
       "themes": ["qqbot", "materials", "transit"],
       "changes": [
         {
@@ -155,6 +155,29 @@
           "category": "fix",
           "breaking": false,
           "summary": "修复 Next 开发服务启动时 instrument 预热把原生 resvg 模块打进浏览器导致的构建报错"
+        },
+        { "category": "fix", "breaking": false, "summary": "旧版出口图标改为单色并保留原始边距" },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "旧版模板地铁图标线路色改为外框填充，背景跟随导视牌"
+        },
+        { "category": "fix", "breaking": false, "summary": "旧版模板箭头与出口图标缩放为 0.9" },
+        { "category": "feat", "breaking": false, "summary": "旧版模板库隐藏换乘类模板" },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "旧版双侧出口用旧版出口图标替代分割线"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "旧版出口与上楼增加方框出口描述与弹性空白"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "线路编号与方框文本不再参与空间不足时的横向压缩"
         }
       ],
       "bump": "minor"
