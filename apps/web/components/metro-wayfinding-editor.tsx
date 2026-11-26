@@ -19,7 +19,10 @@ import {
 import { appPath } from '../lib/app-paths';
 import { useI18n } from '../lib/client-i18n';
 import { findTextContinuation, matchTextContinuation } from '../lib/text-continuation';
-import type { MetroWayfindingExample } from '../lib/metro-wayfinding-examples';
+import {
+  resolveMetroWayfindingExampleStyle,
+  type MetroWayfindingExample,
+} from '../lib/metro-wayfinding-examples';
 import {
   dispatchMetroWayfindingCompositionAction,
   publishMetroWayfindingImportLifecycleEvent,
@@ -49,7 +52,6 @@ import { CheckboxRow } from './ui/checkbox-row';
 import { Field, FieldGroup, Input, Select } from './ui/field';
 import { Modal } from './ui/modal';
 import {
-  applyMetroWayfindingTemplateStyle,
   createMetroWayfindingElement,
   createMetroWayfindingTextRow,
   duplicateMetroWayfindingElement,
@@ -88,7 +90,6 @@ import {
   resolveMetroWayfindingTextMetrics,
   reverseMetroWayfindingLayout,
   serializeMetroWayfindingLayout,
-  summarizeMetroWayfindingLayout,
   concatMetroLargeTextValue,
   splitMetroLargeTextRuns,
   type MetroWayfindingElement,
@@ -1586,31 +1587,9 @@ function MetroWayfindingExampleList({
     activeCategory === 'all'
       ? availableExamples
       : availableExamples.filter((example) => example.source.category === activeCategory);
-  const styleExample = (example: MetroWayfindingExample): MetroWayfindingExample => {
-    if (templateStyle !== 'classic') return example;
-    if (example.classicProject) {
-      return {
-        ...example,
-        project: example.classicProject,
-        summary: summarizeMetroWayfindingLayout(
-          example.classicProject.layout,
-          example.classicProject.canvas,
-        ),
-      };
-    }
-    const layout = applyMetroWayfindingTemplateStyle(example.project.layout, 'classic', {
-      remark: example.source.remark,
-      lineColor: example.lineColor,
-      exitSides: example.exitSides,
-      currentExits: example.currentExits,
-    });
-    return {
-      ...example,
-      project: { ...example.project, layout },
-      summary: summarizeMetroWayfindingLayout(layout, example.project.canvas),
-    };
-  };
-  const styledExamples = visibleExamples.map(styleExample);
+  const styledExamples = visibleExamples.map((example) =>
+    resolveMetroWayfindingExampleStyle(example, templateStyle),
+  );
 
   return (
     <section

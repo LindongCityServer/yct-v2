@@ -7,6 +7,7 @@ import type {
   MetroWayfindingProjectFile,
 } from './metro-wayfinding';
 import {
+  applyMetroWayfindingTemplateStyle,
   createMetroWayfindingId,
   extractMetroWayfindingLineNumber,
   METRO_WAYFINDING_FOREGROUND,
@@ -15,6 +16,7 @@ import {
   METRO_WAYFINDING_TEMPLATE_ID,
   resolveMetroWayfindingLayoutSizing,
   summarizeMetroWayfindingLayout,
+  type MetroWayfindingTemplateStyle,
 } from './metro-wayfinding';
 import { toUppercasePinyin } from './chinese-pinyin';
 
@@ -1301,4 +1303,40 @@ export function buildMetroWayfindingTemplateExamples(
     4,
   );
   return examples;
+}
+
+/**
+ * 把模板库示例切换成指定样式：
+ * - modern：原样返回；
+ * - classic：优先使用示例自带的独立旧版工程（如 1×6 站外线路标识），
+ *   其它示例按工作台同口径套用旧版微调（箭头 / 出口图标 / 单线路地铁图标）。
+ *
+ * 模板库与 QQ 机器人随机物料共用这一处，避免两条路径的旧版效果漂移。
+ */
+export function resolveMetroWayfindingExampleStyle(
+  example: MetroWayfindingExample,
+  style: MetroWayfindingTemplateStyle,
+): MetroWayfindingExample {
+  if (style !== 'classic') {
+    return example;
+  }
+  const classicProject = example.classicProject;
+  if (classicProject) {
+    return {
+      ...example,
+      project: classicProject,
+      summary: summarizeMetroWayfindingLayout(classicProject.layout, classicProject.canvas),
+    };
+  }
+  const layout = applyMetroWayfindingTemplateStyle(example.project.layout, 'classic', {
+    remark: example.source.remark,
+    lineColor: example.lineColor,
+    exitSides: example.exitSides,
+    currentExits: example.currentExits,
+  });
+  return {
+    ...example,
+    project: { ...example.project, layout },
+    summary: summarizeMetroWayfindingLayout(layout, example.project.canvas),
+  };
 }

@@ -18,6 +18,7 @@ import {
   resolveQqBotMaterialKind,
   resolveQqBotMaterialSamplingKeys,
   resolveQqBotMaterialTemplate,
+  resolveQqBotMaterialTemplateIds,
   qqBotMaterialTemplateIds,
   type QqBotMaterialResolvedKind,
 } from '../apps/web/lib/qq-bot-material';
@@ -45,15 +46,15 @@ const kindObjectType: Record<QqBotMaterialResolvedKind, string> = {
   address_sign: 'address',
   bus_stop: 'bus',
   metro_line: 'metro',
-  custom: 'wayfinding',
+  // 导视牌与地铁模板共用「地铁站」对象，不再单独是一种对象类型。
+  custom: 'metro',
 };
 
 const objectTypeLabel: Record<string, string> = {
   road: '道路',
   address: '带地址 POI',
   bus: '公交站',
-  metro: '地铁线路',
-  wayfinding: '导视牌站点',
+  metro: '地铁站',
 };
 
 function pct(value: number, total: number): string {
@@ -75,12 +76,7 @@ const result = await previewQqBotMaterialSampling({
   dataSource,
   seedPrefix,
 });
-const kindFilters = new Set(
-  qqBotMaterialTemplateIds.filter((templateId) => {
-    const templateKind = resolveQqBotMaterialKind(templateId);
-    return kind === 'random' || templateKind === kind;
-  }),
-);
+const kindFilters = new Set(resolveQqBotMaterialTemplateIds(result.kind));
 
 console.log(
   `随机物料抽样审计：kind=${kind} · dataSource=${dataSource} · ${result.rounds} 次 · ${result.source.name}`,
@@ -137,8 +133,8 @@ const terminalCoverage =
 console.log('\n=== 诊断摘要 ===');
 console.log(
   `- 道路 + 公交占对象池 ${pct(objectCountOf('road') + objectCountOf('bus'), result.pool.objectCount)}；` +
-    `地铁线路只有 ${objectCountOf('metro')} 个对象（${pct(objectCountOf('metro'), result.pool.objectCount)}），` +
-    `带地址 POI 有 ${objectCountOf('address')} 个。`,
+    `地铁站只有 ${objectCountOf('metro')} 个对象（${pct(objectCountOf('metro'), result.pool.objectCount)}），` +
+    `带地址 POI 有 ${objectCountOf('address')} 个；地铁站对象同时承载导视牌与地铁模板。`,
 );
 console.log(
   `- ${layoutCountOf('1')} 个对象只有 1 个版式（${pct(layoutCountOf('1'), result.pool.objectCount)}），` +
@@ -160,12 +156,16 @@ const templateRows = qqBotMaterialTemplateIds
     const { layoutKey, styleKey } = resolveQqBotMaterialSamplingKeys(templateId);
     const objectCount = result.pool.templateObjectCounts[templateId] ?? 0;
     const familyObjectCount = result.pool.objectTypeCounts[kindObjectType[templateKind]] ?? 0;
+    const styleKeys =
+      templateKind === 'custom' ? ['wayfinding-modern', 'wayfinding-classic'] : [styleKey];
     return {
       templateId,
       title: template.title,
       kind: templateKind,
       layoutKey,
-      styleKey,
+      // 导视牌在样式层分新版 / 旧版两个候选，这里不能只显示默认值。
+      styleKey: styleKeys.join(' / '),
+      styleKeys,
       objectCount,
       familyObjectCount,
       candidateCount: result.pool.templateCandidateCounts[templateId] ?? 0,
@@ -209,7 +209,7 @@ line('样式', '可用对象数', '候选数', '抽样数', '抽样占比');
 for (const [styleKey, objectCount] of Object.entries(result.pool.styleObjectCounts).sort(
   (left, right) => (result.styleCounts[right[0]] ?? 0) - (result.styleCounts[left[0]] ?? 0),
 )) {
-  if (!templateRows.some((row) => row.styleKey === styleKey)) {
+  if (!templateRows.some((row) => row.styleKeys.includes(styleKey))) {
     continue;
   }
   line(

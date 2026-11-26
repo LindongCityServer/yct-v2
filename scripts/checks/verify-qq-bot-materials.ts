@@ -13,6 +13,7 @@
  * 7. 随机抽样 3 次；
  * 8. 示例线网分支（networkLineKey + networkGeometry / networkNodeId）与许可署名；
  * 9. 每个牌面 PNG 非空、长边 ≤1280、尺寸 / 比例与画布一致、≤300 KB。
+ * 10. 地铁站对象：导视牌先占 50%，导视牌新版 / 旧版各半；`/地铁` 模板集合包含导视牌。
  *
  * 数据口径：地图服务 / 线网为空或拉取失败只记 SKIP / FIXTURE 并继续，
  * 不把环境问题算成代码失败；invalid_request / render_failed 等代码错误一定失败。
@@ -41,6 +42,7 @@ import {
   resolveQqBotMaterialKind,
   resolveQqBotMaterialSlug,
   resolveQqBotMaterialTemplate,
+  resolveQqBotMaterialTemplateIds,
   resolveQqBotMaterialThemeColor,
   tryAcquireQqBotMaterialRenderSlot,
   verifyQqBotMaterialSignature,
@@ -73,6 +75,11 @@ import {
   renderMaterialTemplateToPng,
   renderMaterialTemplateToSvg,
 } from '../../apps/web/lib/material-renderer';
+import {
+  buildMetroWayfindingTemplateExamples,
+  resolveMetroWayfindingExampleStyle,
+  type MetroWayfindingExampleStation,
+} from '../../apps/web/lib/metro-wayfinding-examples';
 import {
   METRO_WAYFINDING_TEMPLATE_ID,
   serializeMetroWayfindingLayout,
@@ -537,6 +544,18 @@ test('第一层模板入口覆盖 22 个内部模板且不重叠', () => {
   assert.equal(metroEntry?.templateIds.length, 8);
 });
 
+test('/地铁 的模板集合包含导视牌（与机器人菜单一致）', () => {
+  const metroTemplates = resolveQqBotMaterialTemplateIds('metro_line');
+  assert.equal(metroTemplates.length, 13, '/地铁 应覆盖 12 个地铁模板 + 导视牌');
+  assert.ok(metroTemplates.includes(METRO_WAYFINDING_TEMPLATE_ID), '/地铁 应能抽到导视牌');
+  assert.deepEqual(
+    resolveQqBotMaterialTemplateIds('custom'),
+    [METRO_WAYFINDING_TEMPLATE_ID],
+    '/导视牌 指令仍只抽导视牌模板',
+  );
+  assert.equal(resolveQqBotMaterialTemplateIds('random').length, 22);
+});
+
 test('seed 归一化、编号前缀与画布尺寸策略', () => {
   assert.equal(normalizeQqBotMaterialSeed('7F3A2B'), '7f3a2b');
   assert.match(normalizeQqBotMaterialSeed(), /^[0-9a-f]{6}$/u);
@@ -672,23 +691,76 @@ test('盲盒按对象 → 版式 → 样式等概率，候选数量不影响对�
     );
   }
 
-  // 地铁站同时有导视牌和普通地铁模板时，先 50% 决定是否抽导视牌。
-  const wayfindingMix: SampleCandidate[] = [
-    make('metro:w', 'line-map', 'new', 'map'),
-    make('metro:w', 'station-name', 'new', 'name'),
-    make('metro:w', 'metro-wayfinding', 'library', 'wayfinding'),
+  // 地铁站对象：导视牌先占 50%，导视牌内部再按新版 / 旧版各半。
+  const stationMix: SampleCandidate[] = [
+    make('metro:w', 'metro-line-map', 'new', 'map-new'),
+    make('metro:w', 'metro-line-map', 'classic', 'map-old'),
+    make('metro:w', 'metro-line-map-vertical', 'new', 'vertical'),
+    make('metro:w', 'metro-terminus', 'new', 'terminus'),
+    make('metro:w', 'metro-station-name', 'new', 'name'),
+    make('metro:w', 'metro-direction', 'new', 'direction'),
+    make('metro:w', 'metro-platform', 'single', 'platform'),
+    make('metro:w', 'metro-wayfinding', 'wayfinding-modern', 'wayfinding-modern'),
+    make('metro:w', 'metro-wayfinding', 'wayfinding-classic', 'wayfinding-classic'),
   ];
   let wayfindingFirst = 0;
-  for (let index = 0; index < 600; index += 1) {
+  let classicFirst = 0;
+  for (let index = 0; index < 800; index += 1) {
     const ordered = orderQqBotMaterialCandidates(
-      wayfindingMix,
+      stationMix,
       createQqBotMaterialRandom(`wayfinding${index}`, 'random'),
     );
-    if (ordered[0]!.layoutKey === 'metro-wayfinding') wayfindingFirst += 1;
+    const first = ordered[0]!;
+    if (first.layoutKey === 'metro-wayfinding') {
+      wayfindingFirst += 1;
+    }
+    if (first.styleKey === 'wayfinding-classic') {
+      classicFirst += 1;
+    }
   }
   assert.ok(
-    wayfindingFirst >= 220 && wayfindingFirst <= 380,
-    `导视牌应先占约 50%（实际 ${wayfindingFirst}/600）`,
+    wayfindingFirst >= 340 && wayfindingFirst <= 460,
+    `导视牌应先占约 50%（实际 ${wayfindingFirst}/800）`,
+  );
+  assert.ok(
+    classicFirst >= 130 && classicFirst <= 270,
+    `旧版导视牌应约占 25%（实际 ${classicFirst}/800）`,
+  );
+});
+
+test('导视牌旧版样式：独立旧版工程与 classic 微调都可用', () => {
+  const station: MetroWayfindingExampleStation = {
+    name: '测试站',
+    lines: [
+      {
+        id: 'line-1',
+        name: '1号线',
+        color: '#E4007F',
+        terminalStations: [{ name: '甲站' }, { name: '乙站' }],
+      },
+    ],
+  };
+  const examples = buildMetroWayfindingTemplateExamples(station, 'line-1');
+  assert.ok(examples.length > 0, '示例不应为空');
+
+  const exterior = examples.find((example) => example.classicProject);
+  assert.ok(exterior, '站外线路标识应带 1×6 旧版工程');
+  const classicExterior = resolveMetroWayfindingExampleStyle(exterior, 'classic');
+  assert.equal(classicExterior.project.canvas.widthM, 1);
+  assert.equal(classicExterior.project.canvas.heightM, 6);
+  const modernExterior = resolveMetroWayfindingExampleStyle(exterior, 'modern');
+  assert.equal(modernExterior.project, exterior.project, '新版应原样返回');
+
+  const arrowExample = examples.find((example) =>
+    example.project.layout.rows.some((row) => row.some((element) => element.type === 'arrow')),
+  );
+  assert.ok(arrowExample, '应有带箭头的示例');
+  const classicArrow = resolveMetroWayfindingExampleStyle(arrowExample, 'classic');
+  assert.ok(
+    classicArrow.project.layout.rows.some((row) =>
+      row.some((element) => element.type === 'arrow' && element.style === 'classic'),
+    ),
+    '旧版微调应把箭头切换到 classic',
   );
 });
 

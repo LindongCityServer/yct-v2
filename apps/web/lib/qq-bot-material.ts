@@ -72,13 +72,18 @@ import {
 } from './material-transit-network-sample';
 import {
   buildMetroWayfindingTemplateExamples,
+  resolveMetroWayfindingExampleStyle,
   type MetroWayfindingExample,
   type MetroWayfindingExampleExit,
   type MetroWayfindingExampleLine,
   type MetroWayfindingExampleLineExits,
   type MetroWayfindingExampleStation,
 } from './metro-wayfinding-examples';
-import { METRO_WAYFINDING_TEMPLATE_ID, serializeMetroWayfindingLayout } from './metro-wayfinding';
+import {
+  METRO_WAYFINDING_TEMPLATE_ID,
+  serializeMetroWayfindingLayout,
+  type MetroWayfindingTemplateStyle,
+} from './metro-wayfinding';
 import { readTransitStationDetails } from './transit-station-details';
 import {
   getShenyangSampleStationProfile,
@@ -144,8 +149,9 @@ export type QqBotMaterialTemplateId = (typeof qqBotMaterialTemplateIds)[number];
 
 /**
  * 第一层模板入口：与工作台「模板与版式」的 templateGroups 保持一致，仅用于展示分组；
- * /盲盒 实际抽样按「真实对象 → 版式 → 样式」分层；地铁站若同时有导视牌和其他
- * 地铁模板，先以 50% 决定是否抽导视牌，再在选中的组内决定模板（见 orderQqBotMaterialCandidates）。
+ * /盲盒 实际抽样按「真实对象 → 版式 → 样式」分层。地铁模板与导视牌共用同一个
+ * 「地铁站」对象，所以抽到地铁站时先以 50% 决定是否抽导视牌，再在选中的组内决定
+ * 模板；/地铁 的模板集合同样包含导视牌（见 orderQqBotMaterialCandidates）。
  */
 export const qqBotMaterialTemplateEntries = [
   {
@@ -468,6 +474,35 @@ export function resolveQqBotMaterialKind(
   templateId: QqBotMaterialTemplateId,
 ): QqBotMaterialResolvedKind {
   return qqBotMaterialKindByTemplateId[templateId];
+}
+
+/**
+ * 模板是否属于某个指令族。
+ *
+ * `/地铁`（metro_line）同时包含导视牌（custom）：机器人菜单与文档一直把
+ * 导视牌算在 `/地铁` 里，随机池也按同一个「地铁站」对象抽样。
+ */
+export function isQqBotMaterialTemplateInKind(
+  templateId: QqBotMaterialTemplateId,
+  kind: QqBotMaterialKind,
+): boolean {
+  if (kind === 'random') {
+    return true;
+  }
+  const templateKind = resolveQqBotMaterialKind(templateId);
+  if (kind === 'metro_line') {
+    return templateKind === 'metro_line' || templateKind === 'custom';
+  }
+  return templateKind === kind;
+}
+
+/** 指令族实际会抽取的模板集合（random 返回全集）。 */
+export function resolveQqBotMaterialTemplateIds(
+  kind: QqBotMaterialKind,
+): QqBotMaterialTemplateId[] {
+  return qqBotMaterialTemplateIds.filter((templateId) =>
+    isQqBotMaterialTemplateInKind(templateId, kind),
+  );
 }
 
 /** 模板的二维码短名（固定映射）。 */
@@ -810,8 +845,18 @@ const qqBotMaterialLayoutStyleByTemplateId: Record<
   [METRO_DIRECTION_NEW_TEMPLATE_ID]: { layoutKey: 'metro-direction', styleKey: 'new' },
   [METRO_DIRECTION_OLD_TEMPLATE_ID]: { layoutKey: 'metro-direction', styleKey: 'classic' },
   [METRO_PLATFORM_SIGN_TEMPLATE_ID]: { layoutKey: 'metro-platform', styleKey: 'single' },
-  [METRO_WAYFINDING_TEMPLATE_ID]: { layoutKey: 'metro-wayfinding', styleKey: 'library' },
+  // 导视牌在候选池里按新版 / 旧版各建一个候选，这里的 styleKey 只是默认展示值。
+  [METRO_WAYFINDING_TEMPLATE_ID]: {
+    layoutKey: 'metro-wayfinding',
+    styleKey: 'wayfinding-modern',
+  },
 };
+
+/** 导视牌样式层：新版 / 旧版各占一半，与工作台模板库的切换口径一致。 */
+const qqBotMaterialWayfindingStyles = [
+  { styleKey: 'wayfinding-modern', style: 'modern' },
+  { styleKey: 'wayfinding-classic', style: 'classic' },
+] as const satisfies ReadonlyArray<{ styleKey: string; style: MetroWayfindingTemplateStyle }>;
 
 export function resolveQqBotMaterialSamplingKeys(templateId: QqBotMaterialTemplateId): {
   layoutKey: string;
@@ -880,6 +925,32 @@ interface MutableWayfindingStation {
   exits?: MetroWayfindingExampleExit[];
   lineExits?: MetroWayfindingExampleLineExits[];
   overGround?: boolean;
+}
+
+/** 地铁站对象上的线路上下文：server 用 stationSourceId，sample 用 nodeId。 */
+interface MetroStationLineLink {
+  /** server 是线路 id，sample 是 lineKey。 */
+  id: string;
+  name: string;
+  color?: string;
+  stationSourceId?: string;
+  nodeId?: string;
+  /** 该站之后是否还有站（方向 / 站台版式需要「下一站」）。 */
+  hasNextStation: boolean;
+  /** 线路总站数，用于卡片摘要。 */
+  stationCount: number;
+}
+
+/**
+ * 第一层地铁对象：一个地铁站（按站名合并，换乘站只算一个对象）。
+ *
+ * 地铁模板和导视牌必须共用 `metro:<站名>` 这个 objectKey，`/盲盒` 的
+ * 「同一地铁站先 50% 决定是否抽导视牌」才会生效；两边各建一个对象的话，
+ * orderQqBotMaterialCandidates 里的 50% 分支永远不会触发。
+ */
+interface MetroStationObject {
+  name: string;
+  lines: MetroStationLineLink[];
 }
 
 interface SampleMaterialDataSet {
@@ -1418,6 +1489,34 @@ function createServerBusStopCandidates(
   return { candidates };
 }
 
+/** 服务器地铁站对象：同名站合并，每条线路保留该站的 stationSourceId 与终点判断。 */
+function buildServerMetroStationObjects(
+  metroLines: readonly MaterialTransitLineOption[],
+): MetroStationObject[] {
+  const stationByName = new Map<string, MetroStationObject>();
+  for (const line of metroLines) {
+    line.stations.forEach((station, stationIndex) => {
+      const name = station.stationName.trim();
+      if (!name) {
+        return;
+      }
+      const current = stationByName.get(name) ?? { name, lines: [] };
+      if (!current.lines.some((link) => link.id === line.id)) {
+        current.lines.push({
+          id: line.id,
+          name: line.name,
+          color: line.color,
+          stationSourceId: station.stationSourceId,
+          hasNextStation: stationIndex < line.stations.length - 1,
+          stationCount: line.stationCount,
+        });
+      }
+      stationByName.set(name, current);
+    });
+  }
+  return Array.from(stationByName.values());
+}
+
 function createServerMetroCandidates(
   templateId: QqBotMaterialTemplateId,
   template: MaterialTemplateVersion,
@@ -1432,36 +1531,46 @@ function createServerMetroCandidates(
   if (!metroLines.length) {
     return { candidates: [], reason: '没有站点数 ≥2 的已发布地铁线路' };
   }
-  const candidates = metroLines.map((line) => ({
-    templateId,
-    template,
-    objectKey: `metro:${line.id}`,
-    ...resolveQqBotMaterialSamplingKeys(templateId),
-    async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
-      // 站名 / 方向 / 站台版式需要「下一站」，尽量避开线路终点站，避免牌面出现「下一站 终点站」。
-      const stationCandidates =
-        templateUsesNextStation(template) && line.stations.length > 1
-          ? line.stations.slice(0, -1)
-          : line.stations;
-      const station = pickSeeded(rng, stationCandidates);
-      const resolved = await resolveTransitLineMaterialInput({
-        lineId: line.id,
-        stationSourceId: station.stationSourceId,
-        fields: template.fields,
-      });
-      const values = resolved.values;
-      return {
-        values,
-        summary: buildMetroCardSummary({
-          templateId,
-          template,
-          line,
-          stationName: station.stationName,
+  const needsNextStation = templateUsesNextStation(template);
+  const candidates: MaterialCandidate[] = [];
+  for (const station of buildServerMetroStationObjects(metroLines)) {
+    // 站名 / 方向 / 站台版式需要「下一站」：该站是线路终点时这个版式不出现。
+    const eligibleLines = station.lines.filter(
+      (line) => line.stationSourceId && (!needsNextStation || line.hasNextStation),
+    );
+    if (!eligibleLines.length) {
+      continue;
+    }
+    candidates.push({
+      templateId,
+      template,
+      // 与导视牌共用同一个地铁站对象键，50% 分支见 orderQqBotMaterialCandidates。
+      objectKey: `metro:${station.name}`,
+      ...resolveQqBotMaterialSamplingKeys(templateId),
+      async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
+        const line = pickSeeded(rng, eligibleLines);
+        if (!line.stationSourceId) {
+          throw new MaterialCandidateRejectedError('站点缺少 stationSourceId。');
+        }
+        const resolved = await resolveTransitLineMaterialInput({
+          lineId: line.id,
+          stationSourceId: line.stationSourceId,
+          fields: template.fields,
+        });
+        const values = resolved.values;
+        return {
           values,
-        }),
-      };
-    },
-  }));
+          summary: buildMetroCardSummary({
+            templateId,
+            template,
+            line,
+            stationName: station.name,
+            values,
+          }),
+        };
+      },
+    });
+  }
   return { candidates };
 }
 
@@ -1612,6 +1721,19 @@ function buildServerWayfindingStations(
   });
 }
 
+/** 旧版模板库不提供换乘类示例，随机旧版同样不抽，保持与工作台一致。 */
+function pickMetroWayfindingExamples(
+  station: MetroWayfindingExampleStation,
+  lineId: string,
+  style: MetroWayfindingTemplateStyle,
+): MetroWayfindingExample[] {
+  const examples = buildMetroWayfindingTemplateExamples(station, lineId);
+  if (style !== 'classic') {
+    return examples;
+  }
+  return examples.filter((example) => example.source.category !== 'transfer');
+}
+
 function createServerWayfindingCandidates(
   templateId: QqBotMaterialTemplateId,
   template: MaterialTemplateVersion,
@@ -1620,32 +1742,42 @@ function createServerWayfindingCandidates(
   if (data.transitLinesError) {
     return { candidates: [], reason: `地铁线路数据不可用：${data.transitLinesError}` };
   }
-  const metroLines = (data.transitLines ?? []).filter((line) => line.mode === 'metro');
+  const metroLines = (data.transitLines ?? []).filter(
+    (line) => line.mode === 'metro' && line.stations.length >= 2,
+  );
   const stations = buildServerWayfindingStations(metroLines, data.stationDetails ?? []);
   if (!stations.length) {
     return { candidates: [], reason: '没有可用于导视牌示例的地铁站点' };
   }
-  const candidates = stations.map((station) => ({
-    templateId,
-    template,
-    objectKey: `wayfinding:${station.name}`,
-    ...resolveQqBotMaterialSamplingKeys(templateId),
-    async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
-      const line = pickSeeded(rng, station.lines);
-      const examples = buildMetroWayfindingTemplateExamples(station, line.id);
-      if (!examples.length) {
-        throw new MaterialCandidateRejectedError('导视牌模板库没有可用示例。');
-      }
-      const example = pickSeeded(rng, examples);
-      return buildWayfindingPreparedMaterial({
-        station,
-        lineName: line.name,
-        lineColor: line.color,
-        example,
+  const { layoutKey } = resolveQqBotMaterialSamplingKeys(templateId);
+  const candidates: MaterialCandidate[] = [];
+  for (const station of stations) {
+    for (const { styleKey, style } of qqBotMaterialWayfindingStyles) {
+      candidates.push({
+        templateId,
         template,
+        // 与地铁模板共用同一个地铁站对象键，50% 分支见 orderQqBotMaterialCandidates。
+        objectKey: `metro:${station.name}`,
+        layoutKey,
+        styleKey,
+        async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
+          const line = pickSeeded(rng, station.lines);
+          const examples = pickMetroWayfindingExamples(station, line.id, style);
+          if (!examples.length) {
+            throw new MaterialCandidateRejectedError('导视牌模板库没有可用示例。');
+          }
+          const example = pickSeeded(rng, examples);
+          return buildWayfindingPreparedMaterial({
+            station,
+            lineName: line.name,
+            lineColor: line.color,
+            example: resolveMetroWayfindingExampleStyle(example, style),
+            template,
+          });
+        },
       });
-    },
-  }));
+    }
+  }
   return { candidates };
 }
 
@@ -1782,41 +1914,80 @@ function buildSampleMaterialDataSet(sample: MaterialTransitNetworkSample): Sampl
   return { sample, lines, wayfindingStations: Array.from(stationByName.values()) };
 }
 
+/** 示例线网地铁站对象：同名站合并，每条线路保留节点 id 与终点判断。 */
+function buildSampleMetroStationObjects(
+  lines: readonly SampleMaterialLine[],
+): MetroStationObject[] {
+  const stationByName = new Map<string, MetroStationObject>();
+  for (const line of lines) {
+    line.stations.forEach((station, stationIndex) => {
+      const name = station.name.trim();
+      if (!name) {
+        return;
+      }
+      const current = stationByName.get(name) ?? { name, lines: [] };
+      if (!current.lines.some((link) => link.id === line.lineKey)) {
+        current.lines.push({
+          id: line.lineKey,
+          name: line.label,
+          color: line.color,
+          nodeId: station.id,
+          hasNextStation: stationIndex < line.stations.length - 1,
+          stationCount: line.stations.length,
+        });
+      }
+      stationByName.set(name, current);
+    });
+  }
+  return Array.from(stationByName.values());
+}
+
 function buildSampleMetroCandidate(
   templateId: QqBotMaterialTemplateId,
   template: MaterialTemplateVersion,
   data: SampleMaterialDataSet,
 ): MaterialCandidate[] {
-  return data.lines.map((line) => ({
-    templateId,
-    template,
-    objectKey: `metro:${line.lineKey}`,
-    ...resolveQqBotMaterialSamplingKeys(templateId),
-    async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
-      const stationCandidates =
-        templateUsesNextStation(template) && line.stations.length > 1
-          ? line.stations.slice(0, -1)
-          : line.stations;
-      const station = pickSeeded(rng, stationCandidates);
-      const resolved = await resolveTransitLineMaterialInput({
-        lineId: '',
-        networkLineKey: line.lineKey,
-        networkNodeId: station.id,
-        fields: template.fields,
-        networkGeometry: data.sample.snapshot,
-      });
-      return {
-        values: resolved.values,
-        summary: buildMetroCardSummary({
-          templateId,
-          template,
-          line: { name: line.label, stationCount: line.stations.length },
-          stationName: station.name,
+  const needsNextStation = templateUsesNextStation(template);
+  const candidates: MaterialCandidate[] = [];
+  for (const station of buildSampleMetroStationObjects(data.lines)) {
+    const eligibleLines = station.lines.filter(
+      (line) => line.nodeId && (!needsNextStation || line.hasNextStation),
+    );
+    if (!eligibleLines.length) {
+      continue;
+    }
+    candidates.push({
+      templateId,
+      template,
+      // 与导视牌共用同一个地铁站对象键，50% 分支见 orderQqBotMaterialCandidates。
+      objectKey: `metro:${station.name}`,
+      ...resolveQqBotMaterialSamplingKeys(templateId),
+      async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
+        const line = pickSeeded(rng, eligibleLines);
+        if (!line.nodeId) {
+          throw new MaterialCandidateRejectedError('示例线网站点缺少节点 id。');
+        }
+        const resolved = await resolveTransitLineMaterialInput({
+          lineId: '',
+          networkLineKey: line.id,
+          networkNodeId: line.nodeId,
+          fields: template.fields,
+          networkGeometry: data.sample.snapshot,
+        });
+        return {
           values: resolved.values,
-        }),
-      };
-    },
-  }));
+          summary: buildMetroCardSummary({
+            templateId,
+            template,
+            line,
+            stationName: station.name,
+            values: resolved.values,
+          }),
+        };
+      },
+    });
+  }
+  return candidates;
 }
 
 function buildSampleWayfindingCandidates(
@@ -1824,27 +1995,36 @@ function buildSampleWayfindingCandidates(
   template: MaterialTemplateVersion,
   data: SampleMaterialDataSet,
 ): MaterialCandidate[] {
-  return data.wayfindingStations.map((station) => ({
-    templateId,
-    template,
-    objectKey: `wayfinding:${station.name}`,
-    ...resolveQqBotMaterialSamplingKeys(templateId),
-    async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
-      const line = pickSeeded(rng, station.lines);
-      const examples = buildMetroWayfindingTemplateExamples(station, line.id);
-      if (!examples.length) {
-        throw new MaterialCandidateRejectedError('导视牌模板库没有可用示例。');
-      }
-      const example = pickSeeded(rng, examples);
-      return buildWayfindingPreparedMaterial({
-        station,
-        lineName: line.name,
-        lineColor: line.color,
-        example,
+  const { layoutKey } = resolveQqBotMaterialSamplingKeys(templateId);
+  const candidates: MaterialCandidate[] = [];
+  for (const station of data.wayfindingStations) {
+    for (const { styleKey, style } of qqBotMaterialWayfindingStyles) {
+      candidates.push({
+        templateId,
         template,
+        // 与地铁模板共用同一个地铁站对象键，50% 分支见 orderQqBotMaterialCandidates。
+        objectKey: `metro:${station.name}`,
+        layoutKey,
+        styleKey,
+        async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
+          const line = pickSeeded(rng, station.lines);
+          const examples = pickMetroWayfindingExamples(station, line.id, style);
+          if (!examples.length) {
+            throw new MaterialCandidateRejectedError('导视牌模板库没有可用示例。');
+          }
+          const example = pickSeeded(rng, examples);
+          return buildWayfindingPreparedMaterial({
+            station,
+            lineName: line.name,
+            lineColor: line.color,
+            example: resolveMetroWayfindingExampleStyle(example, style),
+            template,
+          });
+        },
       });
-    },
-  }));
+    }
+  }
+  return candidates;
 }
 
 function createSampleCandidates(
@@ -1989,7 +2169,7 @@ function normalizeQqBotMaterialRequest(
     if (!isQqBotMaterialTemplateId(templateId)) {
       throw new QqBotMaterialError('invalid_request', `未知的物料模板：${templateId}。`);
     }
-    if (kind !== 'random' && resolveQqBotMaterialKind(templateId) !== kind) {
+    if (!isQqBotMaterialTemplateInKind(templateId, kind)) {
       throw new QqBotMaterialError(
         'invalid_request',
         `模板 ${templateId} 不属于 ${kind} 族，请检查 kind 与 templateId 的对应关系。`,
@@ -1997,12 +2177,7 @@ function normalizeQqBotMaterialRequest(
     }
     templateIds = [templateId];
   } else {
-    templateIds =
-      kind === 'random'
-        ? [...qqBotMaterialTemplateIds]
-        : qqBotMaterialTemplateIds.filter(
-            (templateId) => resolveQqBotMaterialKind(templateId) === kind,
-          );
+    templateIds = resolveQqBotMaterialTemplateIds(kind);
   }
 
   if (dataSource === 'sample') {
@@ -2035,8 +2210,9 @@ function normalizeQqBotMaterialRequest(
 
 /**
  * 盲盒抽样顺序分三层：
- * 1. 先按真实数据对象等概率（道路 / 带门牌号地点 / 公交站方向 / 地铁线路 / 导视牌站点）；
- * 2. 同一对象内按版式等概率（如地铁线路的横版图、竖版图、站名、方向、站台牌）；
+ * 1. 先按真实数据对象等概率（道路 / 带门牌号地点 / 公交站方向 / 地铁站）；
+ * 2. 同一对象内先分导视牌与其他版式：地铁站同时有导视牌和普通地铁模板时，
+ *    导视牌先占 50%，其余版式再均分剩下的 50%；
  * 3. 同一版式内按样式等概率（新版 / 旧版、方块 / 拟真、默认 / 怀旧）。
  *
  * 这样候选多的模板不会因为「候选数量」占掉额外概率；指定族指令（/站牌、/地铁 等）
@@ -2080,8 +2256,9 @@ export function orderQqBotMaterialCandidates<T extends QqBotMaterialSamplingCand
     }
     const wayfindingLayouts = layoutOrder.filter((key) => key === 'metro-wayfinding');
     const otherLayouts = layoutOrder.filter((key) => key !== 'metro-wayfinding');
-    // 地铁站同时有多种物料时，先 50% 决定要不要抽导视牌；否则导视牌只是
-    // 众多版式中的一个，概率会明显低于一半。
+    // 地铁站同时有导视牌和普通地铁模板时，先 50% 决定要不要抽导视牌；否则导视牌
+    // 只是众多版式中的一个，概率会明显低于一半。前提是两类候选共用
+    // `metro:<站名>` 这个 objectKey（见 createServerMetroCandidates / 导视牌候选）。
     const orderedLayoutKeys =
       wayfindingLayouts.length > 0 && otherLayouts.length > 0
         ? rng.nextInt(2) === 0
