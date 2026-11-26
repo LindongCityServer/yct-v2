@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
 import { subscribeMaterialStudioActionBlocked } from '../lib/client-material-studio-events';
@@ -17,6 +16,7 @@ import { defineShortcut } from '../lib/editor/shortcut-builders';
 import type { EditorTool } from '../lib/editor/types';
 import { useEditorPanels } from '../lib/editor/use-editor-panels';
 import { useEditorShortcuts } from '../lib/editor/use-editor-shortcuts';
+import { useEditorViewport } from '../lib/editor/use-editor-viewport';
 import { EditorHeaderToolbar } from './editor/editor-header-toolbar';
 import { EditorHeaderToolsPortal } from './editor/editor-header-tools-portal';
 import { EditorInspectorEntry } from './editor/editor-inspector-entry';
@@ -165,9 +165,8 @@ export function TransitMaterialFormWorkspace({
   const [activeTool, setActiveTool] = useState<'select' | 'pan'>('select');
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isSpacePanning, setIsSpacePanning] = useState(false);
   const stageRef = useRef<HTMLElement | null>(null);
-  const panStateRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const transformRef = useRef<HTMLDivElement | null>(null);
 
   const resetView = useCallback(() => {
     setZoom(1);
@@ -180,78 +179,21 @@ export function TransitMaterialFormWorkspace({
     defineShortcut('canvasFit', resetView),
   ]);
 
-  // 滚轮缩放需要非被动监听，否则浏览器会忽略 preventDefault。
-  useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) {
-      return undefined;
-    }
-    const handleWheel = (event: WheelEvent) => {
-      event.preventDefault();
-      const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
-      setZoom((current) => Math.min(4, Math.max(0.4, current * factor)));
-    };
-    stage.addEventListener('wheel', handleWheel, { passive: false });
-    return () => stage.removeEventListener('wheel', handleWheel);
-  }, []);
-
-  // 空格临时手型：不改变当前工具，松开即恢复。
-  useEffect(() => {
-    const isEditable = (target: EventTarget | null) =>
-      target instanceof HTMLElement &&
-      (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName));
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code === 'Space' && !isEditable(event.target)) {
-        setIsSpacePanning(true);
-      }
-    };
-    const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.code === 'Space') {
-        setIsSpacePanning(false);
-      }
-    };
-    const handleBlur = () => setIsSpacePanning(false);
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    window.addEventListener('blur', handleBlur);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('blur', handleBlur);
-    };
-  }, []);
-
-  const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
-    const isPanGesture =
-      event.button === 1 || (event.button === 0 && (isSpacePanning || activeTool === 'pan'));
-    if (!isPanGesture) {
-      return;
-    }
-    event.preventDefault();
-    panStateRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const handlePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
-    const state = panStateRef.current;
-    if (!state || state.pointerId !== event.pointerId) {
-      return;
-    }
-    const deltaX = event.clientX - state.x;
-    const deltaY = event.clientY - state.y;
-    panStateRef.current = { ...state, x: event.clientX, y: event.clientY };
-    setPan((current) => ({ x: current.x + deltaX, y: current.y + deltaY }));
-  };
-
-  const endPan = (event: ReactPointerEvent<HTMLElement>) => {
-    if (panStateRef.current?.pointerId !== event.pointerId) {
-      return;
-    }
-    panStateRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  };
+  // 滚轮缩放、空格 / 中键 / 手型工具拖拽平移、双指捏合缩放与两指平移统一走视口 Hook。
+  const viewport = useEditorViewport({
+    zoom,
+    pan,
+    minZoom: 0.4,
+    maxZoom: 4,
+    panEnabled: activeTool === 'pan',
+    disabled,
+    stageRef,
+    transformRef,
+    onChange: (next) => {
+      setZoom(next.zoom);
+      setPan(next.pan);
+    },
+  });
 
   // 预览 / 提交失败等动作拦截统一转成 toast，避免错误被静默吞掉。
   useEffect(
@@ -443,18 +385,16 @@ export function TransitMaterialFormWorkspace({
       }`}
     >
       <section
-        className={`transit-material-preview-stage${isSpacePanning ? ' is-pan-ready' : ''}${
+        className={`transit-material-preview-stage${viewport.spacePanning ? ' is-pan-ready' : ''}${
           activeTool === 'pan' ? ' is-pan-tool' : ''
-        }`}
+        }${viewport.gesturing ? ' is-gesturing' : ''}`}
         aria-label={`${title}预览`}
         ref={stageRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={endPan}
-        onPointerCancel={endPan}
+        {...viewport.stageProps}
       >
         <div
           className="transit-material-preview-zoom"
+          ref={transformRef}
           style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
         >
           <div className={`transit-material-preview-frame${isRendering ? ' is-rendering' : ''}`}>

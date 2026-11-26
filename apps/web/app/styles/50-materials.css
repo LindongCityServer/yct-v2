@@ -1271,6 +1271,10 @@
   display: grid;
   place-items: center;
   overflow: auto;
+  /* 画布自己接管触屏手势：手型工具单指平移、双指捏合缩放与两指平移，
+     不让浏览器把拖动升级成页面滚动 / 页面缩放（否则 pointer 流会被 cancel）。 */
+  touch-action: none;
+  overscroll-behavior: contain;
   padding-top: calc(var(--editor-top-inset) + 84px);
   padding-right: calc(var(--editor-right-panel-width) + var(--yct-space-4));
   padding-bottom: 88px;
@@ -1398,6 +1402,17 @@
 }
 
 .transit-material-preview-stage.is-pan-tool:active {
+  cursor: grabbing;
+}
+
+/* 手型工具下热区让位给画布拖拽，免得拖完顺手选中一个字段。 */
+.transit-material-preview-stage.is-pan-tool .transit-material-region-layer {
+  pointer-events: none;
+}
+
+/* 拖拽 / 捏合期间统一显示抓手，触屏没有 hover 也要有按压反馈。 */
+.transit-material-preview-stage.is-gesturing,
+.metro-wayfinding-canvas.is-gesturing {
   cursor: grabbing;
 }
 

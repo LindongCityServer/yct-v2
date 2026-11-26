@@ -9,7 +9,6 @@ import {
   type CSSProperties,
   type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { useI18n } from '../lib/client-i18n';
 import {
@@ -39,6 +38,7 @@ import {
   type MetroWayfindingTextRow,
 } from '../lib/metro-wayfinding';
 import { describeMetroWayfindingElementContent } from '../lib/metro-wayfinding-content';
+import { useEditorViewport } from '../lib/editor/use-editor-viewport';
 import { renderMetroWayfindingSvg } from '../lib/metro-wayfinding-svg';
 import { EditorZoomControls } from './editor/editor-zoom-controls';
 import { Button } from './ui/button';
@@ -56,6 +56,19 @@ const CANVAS_PX_PER_METER = 128;
 const CANVAS_MIN_ZOOM = 0.2;
 const CANVAS_MAX_ZOOM = 6;
 const INLINE_INPUT_HEIGHT = 14;
+
+/**
+ * 画布上需要保留原生交互的控件：缩放条、内联输入框和空白态的按钮。
+ * 牌面命中框（`.metro-wayfinding-canvas-hit`）故意排除在外——它们铺满整块牌面，
+ * 只有让它们让位，双指手势才能从牌面上直接起手。
+ */
+const CANVAS_INTERACTIVE_SELECTOR =
+  '.editor-zoom-controls, .metro-wayfinding-canvas-inline-input, ' +
+  'button:not(.metro-wayfinding-canvas-hit), input, select, textarea, a[href], [contenteditable="true"]';
+
+function isCanvasInteractiveTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest(CANVAS_INTERACTIVE_SELECTOR));
+}
 
 interface CanvasLineBandGeometry {
   kind: 'text-main' | 'text-secondary' | 'large-text' | 'large-suffix';
@@ -282,12 +295,11 @@ export function MetroWayfindingCanvas({
 }>) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const transformRef = useRef<HTMLDivElement | null>(null);
   const signRef = useRef<HTMLDivElement | null>(null);
   const [fitScale, setFitScale] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isSpacePanning, setIsSpacePanning] = useState(false);
-  const panStateRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const [dragging, setDragging] = useState<{ rowIndex: number; elementId: string } | null>(null);
   const [dropHint, setDropHint] = useState<{
     rowIndex: number;
@@ -393,77 +405,22 @@ export function MetroWayfindingCanvas({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [resetView]);
 
-  // 空格临时手型：不改变当前工具，松开即恢复。
-  useEffect(() => {
-    const isEditable = (target: EventTarget | null) =>
-      target instanceof HTMLElement &&
-      (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName));
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code === 'Space' && !isEditable(event.target)) {
-        setIsSpacePanning(true);
-      }
-    };
-    const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.code === 'Space') {
-        setIsSpacePanning(false);
-      }
-    };
-    const handleBlur = () => setIsSpacePanning(false);
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    window.addEventListener('blur', handleBlur);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('blur', handleBlur);
-    };
-  }, []);
-
-  // 滚轮缩放需要非被动监听，否则浏览器会忽略 preventDefault。
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container || disabled) {
-      return undefined;
-    }
-    const handleWheel = (event: WheelEvent) => {
-      event.preventDefault();
-      const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
-      setZoom((current) => Math.min(CANVAS_MAX_ZOOM, Math.max(CANVAS_MIN_ZOOM, current * factor)));
-    };
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => container.removeEventListener('wheel', handleWheel);
-  }, [disabled]);
-
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const isPanGesture = event.button === 1 || (event.button === 0 && (isSpacePanning || panTool));
-    if (!isPanGesture) {
-      return;
-    }
-    event.preventDefault();
-    panStateRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const state = panStateRef.current;
-    if (!state || state.pointerId !== event.pointerId) {
-      return;
-    }
-    const deltaX = event.clientX - state.x;
-    const deltaY = event.clientY - state.y;
-    panStateRef.current = { ...state, x: event.clientX, y: event.clientY };
-    setPan((current) => ({ x: current.x + deltaX, y: current.y + deltaY }));
-  };
-
-  const endPan = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (panStateRef.current?.pointerId !== event.pointerId) {
-      return;
-    }
-    panStateRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  };
+  // 滚轮缩放、空格 / 中键 / 手型工具拖拽平移、双指捏合缩放与两指平移统一走视口 Hook。
+  const viewport = useEditorViewport({
+    zoom,
+    pan,
+    minZoom: CANVAS_MIN_ZOOM,
+    maxZoom: CANVAS_MAX_ZOOM,
+    panEnabled: panTool,
+    disabled,
+    stageRef: containerRef,
+    transformRef,
+    onChange: (next) => {
+      setZoom(next.zoom);
+      setPan(next.pan);
+    },
+    isInteractiveTarget: isCanvasInteractiveTarget,
+  });
 
   /** 只更新文本元素中的一行，保留其他行不变。 */
   const updateTextRow = (box: CanvasElementBox, rowId: string, value: string) => {
@@ -693,14 +650,11 @@ export function MetroWayfindingCanvas({
 
   return (
     <div
-      className={`metro-wayfinding-canvas${isSpacePanning ? ' is-pan-ready' : ''}${
+      className={`metro-wayfinding-canvas${viewport.spacePanning ? ' is-pan-ready' : ''}${
         panTool ? ' is-pan-tool' : ''
-      }${disabled ? ' is-disabled' : ''}`}
+      }${disabled ? ' is-disabled' : ''}${viewport.gesturing ? ' is-gesturing' : ''}`}
       ref={containerRef}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={endPan}
-      onPointerCancel={endPan}
+      {...viewport.stageProps}
       onClick={(event) => {
         if (disabled || panTool) {
           return;
@@ -719,6 +673,7 @@ export function MetroWayfindingCanvas({
     >
       <div
         className="metro-wayfinding-canvas-stage"
+        ref={transformRef}
         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})` }}
       >
         <div
