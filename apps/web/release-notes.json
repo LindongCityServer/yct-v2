@@ -3,6 +3,25 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.28.2",
+      "releasedAt": "2026-11-26T03:15:37.546Z",
+      "sourceFingerprint": "5ff4a71c16f7e220176b5f8a73253e7d677e5cc0a5a8a1c8abd949b1175e1f95",
+      "themes": ["materials", "qqbot"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "QQ 机器人物料盲盒支持地铁导视牌旧版样式（1×6 站外线路标识等），同一地铁站随机时导视牌与其它地铁模板各占一半"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "物料工作台画布在触屏上手型工具可正常拖动，并支持双指捏合缩放与两指平移"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.28.1",
       "releasedAt": "2026-11-25T12:36:54.240Z",
       "sourceFingerprint": "a4e6e01a39eeaee782a4401c74cc9ff7dfaeb0fe3db241430d42860edd71f85c",
