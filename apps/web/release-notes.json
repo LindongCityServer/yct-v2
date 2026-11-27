@@ -3,6 +3,50 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.28.3",
+      "releasedAt": "2026-11-27T06:25:13.734Z",
+      "sourceFingerprint": "1173bed4b9e19f916ba3b04e494fa4eb5c7657d38bf2bf18137fe0272be1e8ce",
+      "themes": ["qqbot", "materials", "transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "今日运势卡片签文区按文案配手绘表情，正文变长时插图自动缩小"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "天气卡片主题色改为「天气现象 × 昼夜阶段」天空色矩阵，按日出日落动态过渡并按气温微调冷暖，夜间天气图标换成月亮版"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复高德天气按区县查询时市名被区名顶替，沈阳铁西与鞍山铁西的天气和预警不再串号"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "QQ 机器人问一问新增首段先发、可配置并发上限与事件探针"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复沈阳示例线网旧版 / 过渡样式在 1、2 号线历史区段外被抽中"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "竖版公交站牌站点多时保持字号并纵向压扁，下一站与首末站文本避让右侧小字和箭头"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复横版公交线路详情走向图在未测绘道路区域聚成放射状"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.28.2",
       "releasedAt": "2026-11-26T03:15:37.546Z",
       "sourceFingerprint": "5ff4a71c16f7e220176b5f8a73253e7d677e5cc0a5a8a1c8abd949b1175e1f95",
