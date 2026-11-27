@@ -119,6 +119,7 @@ export const materialTemplateFieldSchema = z
         layoutWidth: z.number().positive().max(32_768),
         layoutHeight: z.number().positive().max(32_768),
         fontSize: z.number().positive().max(8_192).optional(),
+        defaultScaleY: z.number().positive().max(1).optional(),
         maxLetterSpacing: z.number().nonnegative().max(1_024).optional(),
         suffixFieldKey: fieldKeySchema.optional(),
         currentIndexFieldKey: fieldKeySchema.optional(),

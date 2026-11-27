@@ -53,12 +53,13 @@
 文本字段可以配置 `textFit` 后，在 SVG 中使用对应字段的排字变量：
 
 - `{{fit.字段键.letterSpacing}}`：宽度有余量时增加的字间距。
-- `{{fit.字段键.scaleX}}`：文本超宽时小于 `1`，用于压缩字宽；正常情况下为 `1`。
+- `{{fit.字段键.scaleX}}`：文本超宽时小于 `1`，用于压缩字宽；配置了 `defaultScaleX` 时，未超宽也会按该值固定压缩。
 
 特殊字形文本可以配置 `glyph`，并在 SVG 中使用 `{{glyph.字段键}}`。当前内置渲染器包括：
 
 - `nostalgic_digits`：怀旧楼牌数字轮廓，只接受阿拉伯数字。
 - `chill_jinshu_vertical`：使用内置金属宋字体竖排道路名称；高度有余量时增加纵向字距，高度不足时压缩字高。
+- `transit_station_list`：公交竖版站序（两列）；`defaultScaleY` 为模板自带的固定纵向压缩，行高不足时在此基础上继续压扁，字号保持到压缩上限后才缩小。
 
 `glyph` 会展开为服务端生成的受信任 SVG 路径。管理员模板不能自行传入路径源码，也不能把普通文本字段直接作为 SVG 节点插入。
 
@@ -101,7 +102,7 @@
 
 `select` 字段必须提供 `options`，每项包含 `value` 和 `label`。字段键不可重复。
 
-`textFit` 只适用于 `text` 字段，数值使用源 SVG 的 `viewBox` 坐标：`maxWidth` 是文字可占用的最大宽度，`fontSize` 应与该 `<text>` 的 `font-size` 一致，`maxLetterSpacing` 为可选的最大字间距。`additionalFields` 可以列出需要与主字段共同参与测宽的其他文本字段及其字号，适合门牌主号与附标使用不同字高、但需要整体横向压缩的排版。使用时将三个变量同时写入对应排版组，例如：
+`textFit` 只适用于 `text` 字段，数值使用源 SVG 的 `viewBox` 坐标：`maxWidth` 是文字可占用的最大宽度，`fontSize` 应与该 `<text>` 的 `font-size` 一致，`maxLetterSpacing` 为可选的最大字间距，`defaultScaleX` 为可选的自带横向压缩比例（未超宽时也按该值压窄，超宽时再继续压缩）。`additionalFields` 可以列出需要与主字段共同参与测宽的其他文本字段及其字号，适合门牌主号与附标使用不同字高、但需要整体横向压缩的排版。使用时将三个变量同时写入对应排版组，例如：
 
 ```svg
 <text

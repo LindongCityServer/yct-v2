@@ -1027,7 +1027,8 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             label: '下一站',
             kind: 'text',
             maxLength: 24,
-            textFit: { maxWidth: 58, fontSize: 7, maxLetterSpacing: 0 },
+            // 右侧要避开「下一站」小字并留出边距：上限 48 让长站名继续横向压缩。
+            textFit: { maxWidth: 48, fontSize: 7, maxLetterSpacing: 0, defaultScaleX: 0.9 },
           },
           {
             key: 'routeStationState',
@@ -1060,9 +1061,11 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             maxLength: 24,
             textFit: {
-              maxWidth: 66,
+              // 起终点组里还有「→」，留出箭头宽度后再压缩；默认再横向压到 90%。
+              maxWidth: 58,
               fontSize: 5,
               maxLetterSpacing: 0,
+              defaultScaleX: 0.9,
               additionalFields: [{ fieldKey: 'routeTerminal', fontSize: 5 }],
             },
           },
@@ -1099,6 +1102,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
               layoutWidth: 96,
               layoutHeight: 79,
               fontSize: 5,
+              defaultScaleY: 0.9,
               currentIndexFieldKey: 'currentStationIndex',
             },
           },

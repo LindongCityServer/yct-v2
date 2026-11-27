@@ -1689,6 +1689,8 @@ export interface MaterialGlyphConfig {
   layoutWidth: number;
   layoutHeight: number;
   fontSize?: number;
+  /** 未触发自动缩放时的默认纵向压缩（例如站点列表固定压到 0.9）。 */
+  defaultScaleY?: number;
   maxLetterSpacing?: number;
   suffixFieldKey?: string;
   currentIndexFieldKey?: string;

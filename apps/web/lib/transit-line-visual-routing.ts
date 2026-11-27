@@ -76,7 +76,11 @@ const allMapTravelModes: readonly MapTravelMode[] = ['walk', 'taxi', 'bus', 'coa
 
 /**
  * 站点/途径点到路网的接入段是直线，距离越大越像“横穿街区”。
- * 因此优先吸附最近的道路（吸附半径内），并给接入距离加权，避免为了缩短路网里程而绕到远处的道路上。
+ * 因此只吸附吸附半径内的道路，并给接入距离加权，避免为了缩短路网里程而绕到远处的道路上。
+ *
+ * 超出半径时**不再退回全局最近道路**：未测绘道路的区域里，线路每个区间都会被拉到
+ * 远处的同一个路口，横版线路详情的走向图会变成以该路口为中心的放射状。
+ * 这种情况按直线段处理，并计入 `unresolvedSegmentCount`。
  */
 const maxRoadAccessDistance = 60;
 const roadAccessDistanceWeight = 3;
@@ -512,8 +516,15 @@ function findRoadAccessCandidates(
   const nearbyCandidates = candidates.filter(
     (candidate) => candidate.distanceToPoint <= maxRoadAccessDistance,
   );
-  const candidatePool = nearbyCandidates.length > 0 ? nearbyCandidates : candidates;
-  const byScore = [...candidatePool].sort((left, right) => left.score - right.score).slice(0, limit);
+  // 半径内没有道路时直接回退直线：全局最近道路可能远在另一个街区，把区间接过去
+  // 会让整条线路的走向图都汇聚到同一个点（放射状），比直线更误导。
+  if (nearbyCandidates.length === 0) {
+    return [];
+  }
+  const candidatePool = nearbyCandidates;
+  const byScore = [...candidatePool]
+    .sort((left, right) => left.score - right.score)
+    .slice(0, limit);
   const byDistance = [...candidatePool]
     .sort((left, right) => left.distanceToPoint - right.distanceToPoint)
     .slice(0, limit);

@@ -258,7 +258,16 @@ function renderTransitStationList(
   const leftCount = Math.ceil(stations.length / 2);
   const rowCount = Math.max(leftCount, stations.length - leftCount);
   const rowHeight = config.layoutHeight / rowCount;
-  const fontSize = Math.min(config.fontSize ?? 5, rowHeight * 0.72);
+  const preferredFontSize = config.fontSize ?? 5;
+  // 行高不够时优先把字纵向压扁，而不是把字号整体缩小：
+  // 竖版站牌的站名列本来就会横向压缩，保持字宽比整体缩小更易辨认。
+  // `defaultScaleY` 是模板自带的固定纵向压缩（未超行高时也生效），
+  // 行高更紧时继续压，最多到 0.55；再挤才缩小字号。
+  const baseScaleY = config.defaultScaleY ?? 1;
+  const verticalAllowance = rowHeight * 0.72;
+  const fitScaleY = Math.max(0.55, Math.min(1, verticalAllowance / preferredFontSize));
+  const verticalScale = Math.min(baseScaleY, fitScaleY);
+  const fontSize = Math.min(preferredFontSize, verticalAllowance / verticalScale);
   const columnWidth = config.layoutWidth / 2;
   // 站名列表按列宽的 90% 撑满字间距，给相邻列留出呼吸空间。
   const maxTextWidth = (columnWidth - 4) * 0.9;
@@ -268,7 +277,13 @@ function renderTransitStationList(
     const x = columnWidth * (isLeft ? 0.5 : 1.5);
     const y = rowHeight * (row + 0.7);
     const color = index === currentIndex ? '#C11111' : '#1D2F78';
-    return renderTransitStationName(station, x, y, maxTextWidth, fontSize, color, assets);
+    const content = renderTransitStationName(station, x, y, maxTextWidth, fontSize, color, assets);
+    if (verticalScale >= 0.999) {
+      return content;
+    }
+    // 以字形视觉中心为锚点做纵向缩放，保证基线位置和行距不变。
+    const centerY = y - fontSize * 0.34;
+    return `<g transform="translate(0 ${formatNumber(centerY)}) scale(1 ${formatNumber(verticalScale)}) translate(0 -${formatNumber(centerY)})">${content}</g>`;
   });
   return `<g>${paths.join('')}</g>`;
 }

@@ -1,5 +1,10 @@
 import { UnminedCustomMarkerProvider } from '@yct/adapters';
-import type { MapGeometry, MapMarkerSnapshot, MaterialTemplateField } from '@yct/contracts';
+import type {
+  MapGeometry,
+  MapMarkerSnapshot,
+  MapMarkerSpatialMetadata,
+  MaterialTemplateField,
+} from '@yct/contracts';
 import {
   getMapRoadMarkerKind,
   isMapRoadStartOnSignLeft,
@@ -26,6 +31,8 @@ export interface MaterialLocationOption {
 
 interface MaterialLocationEntry extends MaterialLocationOption {
   geometry: MapGeometry;
+  /** 保留标记的空间元数据（跨层 / 方向 / 通行方式），供走向图路网复用。 */
+  spatial?: MapMarkerSpatialMetadata;
   addressRoadMarkerId?: string;
   iconFileName?: string;
   description?: string;
@@ -144,8 +151,27 @@ export async function resolveMaterialRoadSideHint(
   };
 }
 
+/**
+ * 线路走向图用的道路/地点标记。
+ *
+ * 必须和 `listMaterialLocations()` 用同一份合并结果：静态 uNmINeD 标记只有 Point，
+ * 道路是由同名端点（`createRoadEndpointEntries`）或已发布 POI 的线几何提供的。
+ * 直接返回原始静态标记会让路网图几乎没有可用的道路段，公交走向图只能吸附到
+ * 零星几条线状道路，未覆盖区域就会出现“所有区间汇聚到同一路口”的放射状。
+ */
 export async function listMaterialMapMarkers(): Promise<MapMarkerSnapshot['markers']> {
-  return readStaticLocationMarkers();
+  const entries = await readMaterialLocations();
+  return entries.map((entry) => ({
+    id: entry.id,
+    label: entry.label,
+    categoryId: entry.categoryId,
+    geometry: entry.geometry,
+    ...(entry.spatial ? { spatial: entry.spatial } : {}),
+    ...(entry.iconFileName ? { iconFileName: entry.iconFileName } : {}),
+    ...(entry.description ? { description: entry.description } : {}),
+    ...(entry.address ? { address: entry.address } : {}),
+    ...(entry.addressRoadMarkerId ? { addressRoadMarkerId: entry.addressRoadMarkerId } : {}),
+  }));
 }
 
 export async function resolveMaterialLocationInput(input: {
@@ -264,6 +290,7 @@ async function loadMaterialLocations(
     address: marker.address,
     addressRoadMarkerId: marker.addressRoadMarkerId,
     geometry: marker.geometry,
+    spatial: marker.spatial,
     iconFileName: marker.iconFileName,
     description: marker.description,
   }));
@@ -277,6 +304,7 @@ async function loadMaterialLocations(
       address: poi.address,
       addressRoadMarkerId: poi.addressRoadMarkerId,
       geometry: poi.geometry,
+      spatial: poi.spatial,
       iconFileName: poi.iconFileName,
       description: poi.description,
     })),
