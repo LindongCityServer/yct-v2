@@ -2,7 +2,7 @@
   "family": "Material Symbols Outlined",
   "axes": "opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
   "source": "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
-  "iconCount": 321,
+  "iconCount": 328,
   "icons": [
     "accessible",
     "accessible_forward",
@@ -62,6 +62,7 @@
     "child_care",
     "circle",
     "close",
+    "cloud",
     "cloud_off",
     "cloud_sync",
     "cloud_upload",
@@ -121,6 +122,7 @@
     "flight",
     "flight_takeoff",
     "flip",
+    "foggy",
     "folder_open",
     "format_align_center",
     "format_align_left",
@@ -194,6 +196,7 @@
     "pan_tool",
     "park",
     "partly_cloudy_day",
+    "partly_cloudy_night",
     "passkey",
     "payments",
     "pending",
@@ -220,6 +223,7 @@
     "qr_code_scanner",
     "radio_button_checked",
     "radio_button_unchecked",
+    "rainy",
     "ramp_right",
     "receipt_long",
     "rectangle",
@@ -272,6 +276,7 @@
     "straighten",
     "subscript",
     "subway",
+    "sunny",
     "support_agent",
     "swap_horiz",
     "swap_vert",
@@ -285,6 +290,7 @@
     "text_fields",
     "text_rotate_vertical",
     "text_rotation_none",
+    "thunderstorm",
     "timeline",
     "title",
     "toc",
@@ -318,6 +324,7 @@
     "warning",
     "water",
     "wc",
+    "weather_snowy",
     "web",
     "web_asset",
     "west",
@@ -326,5 +333,5 @@
     "wifi_off",
     "woman"
   ],
-  "fontBytes": 290960
+  "fontBytes": 301884
 }
