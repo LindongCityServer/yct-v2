@@ -207,8 +207,13 @@ export async function fetchWeatherReport({
   const alertItems = includeAlerts ? await alertItemsPromise : [];
   const alerts = includeAlerts ? pickWeatherAlerts(alertItems, report.alertLocation ?? {}) : [];
   // 天气本身缓存 10–60 分钟，但昼夜阶段必须按当前时刻重算，否则傍晚会继续用白天的主题色。
+  // minutes 用于卡片在天空色矩阵之间做连续取色（日出/日落之间的渐变）。
   const sun = report.sun
-    ? { ...report.sun, phase: resolveDayPhase(report.sun, timestamp) }
+    ? {
+        ...report.sun,
+        phase: resolveDayPhase(report.sun, timestamp),
+        minutes: localMinuteOfDay(timestamp),
+      }
     : undefined;
   return {
     ...report,
@@ -290,6 +295,38 @@ function resolveWeatherLocationLabels(input) {
   };
 }
 
+/**
+ * 高德 geocode 返回用户命中地址的省 / 市 / 区；weatherInfo 的 city 只表示
+ * “查询到的区域名”：查询区县 adcode 时会直接返回区名（city=110101 → 东城区），
+ * 不能当市名用，否则沈阳铁西 / 鞍山铁西都会写成“辽宁铁西”，同省重名就分不开。
+ * 所以优先用 geocode 的行政区划，天气接口字段只在 geocode 缺省时兜底。
+ */
+function resolveAmapAdministrativeNames({ location, live, forecast }) {
+  const geocodeProvince = textValue(location?.province);
+  const geocodeCity = textValue(location?.city);
+  const geocodeDistrict = textValue(location?.district);
+  const weatherProvince = textValue(live?.province) || textValue(forecast?.province);
+  const weatherArea = textValue(live?.city) || textValue(forecast?.city);
+  const weatherCity = isAmapDistrictName(weatherArea, geocodeDistrict) ? '' : weatherArea;
+  return {
+    provinceName: geocodeProvince || weatherProvince,
+    cityName: geocodeCity || weatherCity,
+    districtName: geocodeDistrict,
+  };
+}
+
+/** 天气接口按区县 adcode 查询时 city 返回区名；和 geocode 的 district 对得上就不当市名。 */
+function isAmapDistrictName(areaName, districtName) {
+  const area = textValue(areaName);
+  if (!area) {
+    return false;
+  }
+  if (districtName && stripWeatherAdminSuffix(area) === stripWeatherAdminSuffix(districtName)) {
+    return true;
+  }
+  return /(?:区|县|旗)$/u.test(area);
+}
+
 function resolveWttrLocationLabels(query, regionLabel, areaLabel) {
   const isMunicipality = weatherMunicipalities.has(regionLabel);
   return resolveWeatherLocationLabels({
@@ -343,9 +380,14 @@ async function requestAmapWeather(city, amapKey, { timeoutMs, fetchImpl, now = D
   }
 
   const report = shortTime(live?.reporttime || forecast?.reporttime);
-  const provinceName = live?.province || forecast?.province || location.province;
-  const cityName = live?.city || forecast?.city || location.city;
-  const districtName = location.district;
+  // 高德天气接口的 city 是“查询到的区域名”：按区县 adcode 查询时返回区名本身
+  // （例如 city=110101 → 东城区），直接当市名会把“沈阳市铁西区”写成“辽宁铁西”。
+  // geocode 返回的省 / 市 / 区才是用户查询命中的完整行政区划，优先用它补全。
+  const { provinceName, cityName, districtName } = resolveAmapAdministrativeNames({
+    location,
+    live,
+    forecast,
+  });
   const place = formatAmapPlace({
     province: provinceName,
     city: cityName,
@@ -634,7 +676,8 @@ function pickWeatherAlerts(items, location) {
 /**
  * 预警标题归属判断：
  * - 标题命中城市：直接算本地；
- * - 只命中区县：必须同时命中省或市，避免「铁西区」跨省重复；
+ * - 只命中区县：必须同时命中省，且区名前面的市名就是当前城市，
+ *   避免「铁西区」跨市 / 跨省重复（沈阳铁西、鞍山铁西、四平铁西）；
  * - 只命中省：若省名后面紧跟另一个市/区/县则排除，否则视为全省预警保留。
  */
 function isAlertForLocation(title, { province, city, district }) {
@@ -645,7 +688,7 @@ function isAlertForLocation(title, { province, city, district }) {
     return true;
   }
   if (hasDistrict) {
-    return hasProvince;
+    return hasProvince && isDistrictAlertForCity(title, province, city, district);
   }
   if (!hasProvince) {
     return false;
@@ -659,6 +702,24 @@ function isAlertForLocation(title, { province, city, district }) {
     Boolean(city && otherPlace.startsWith(city)) ||
     Boolean(district && otherPlace.startsWith(district))
   );
+}
+
+/**
+ * 同省同名区县（沈阳铁西 / 鞍山铁西）的预警标题都会出现“铁西”，
+ * 还要看区名前面的市名是不是当前城市，否则预警会串到另一张卡片上。
+ * 标题里没写市名时无法区分，按原来的省级规则处理。
+ */
+function isDistrictAlertForCity(title, province, city, district) {
+  if (!city) {
+    return true;
+  }
+  const provinceIndex = title.indexOf(province);
+  const districtIndex = title.indexOf(district);
+  const between = title.slice(provinceIndex + province.length, districtIndex);
+  const cityName = stripWeatherAdminSuffix(
+    between.replace(/^(?:特别行政区|自治区|自治州|自治县|自治旗|省|市|地区|盟|旗|区|县)+/u, ''),
+  );
+  return !cityName || cityName === city;
 }
 
 /** 行政区名去掉通用后缀，保留 2 字以上关键词，用于兼容旧调用和排查。 */

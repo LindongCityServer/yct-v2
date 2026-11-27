@@ -85,6 +85,53 @@ test('解析白名单和数值参数', () => {
   assert.equal(config.yct.providerId, 'glm');
 });
 
+test('问一问并发默认 3，可配置且拒绝越界值', () => {
+  const fallback = loadConfig({
+    env: completeEnv,
+    envPath: join(tmpdir(), 'no-such-qq-bot.env'),
+  });
+  assert.deepEqual(fallback.problems, []);
+  assert.equal(fallback.config.qq.maxConcurrency, 3);
+
+  const custom = loadConfig({
+    env: { ...completeEnv, QQ_BOT_MAX_CONCURRENCY: '8' },
+    envPath: join(tmpdir(), 'no-such-qq-bot.env'),
+  });
+  assert.deepEqual(custom.problems, []);
+  assert.equal(custom.config.qq.maxConcurrency, 8);
+
+  const invalid = loadConfig({
+    env: { ...completeEnv, QQ_BOT_MAX_CONCURRENCY: '0' },
+    envPath: join(tmpdir(), 'no-such-qq-bot.env'),
+  });
+  assert.match(invalid.problems.join('\n'), /QQ_BOT_MAX_CONCURRENCY/);
+});
+
+test('首段先发和事件探针默认关闭，可按需打开', () => {
+  const base = loadConfig({
+    env: completeEnv,
+    envPath: join(tmpdir(), 'no-such-qq-bot.env'),
+  });
+  assert.deepEqual(base.problems, []);
+  assert.equal(base.config.reply.streamFirst, false);
+  assert.equal(base.config.reply.streamMinChars, 100);
+  assert.equal(base.config.qq.trace, false);
+
+  const custom = loadConfig({
+    env: {
+      ...completeEnv,
+      QQ_BOT_STREAM_FIRST: '1',
+      QQ_BOT_STREAM_MIN_CHARS: '60',
+      QQ_BOT_TRACE: '1',
+    },
+    envPath: join(tmpdir(), 'no-such-qq-bot.env'),
+  });
+  assert.deepEqual(custom.problems, []);
+  assert.equal(custom.config.reply.streamFirst, true);
+  assert.equal(custom.config.reply.streamMinChars, 60);
+  assert.equal(custom.config.qq.trace, true);
+});
+
 test('full 风格默认保留参考标题，聊天模式有字数上限', () => {
   const { config, problems } = loadConfig({
     env: { ...completeEnv, QQ_BOT_STYLE: 'full' },

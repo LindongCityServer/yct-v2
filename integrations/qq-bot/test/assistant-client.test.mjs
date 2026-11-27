@@ -112,6 +112,47 @@ test('askAssistant 传能力位并读取范围拦截原因', async () => {
   }
 });
 
+test('流式片段回调能拿到累积文本和重置信号', async () => {
+  const server = createServer((request, response) => {
+    request.resume();
+    request.on('end', () => {
+      response.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8' });
+      response.write('event: delta\ndata: {"text":"15 路"}\n\n');
+      response.write('event: delta\ndata: {"text":" 经过中华路。"}\n\n');
+      response.write('event: reset\ndata: {}\n\n');
+      response.write('event: delta\ndata: {"text":"21 路 经过中华路。"}\n\n');
+      response.write('event: done\ndata: {"ok":true}\n\n');
+      response.end();
+    });
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const { port } = server.address();
+
+  const seen = [];
+  try {
+    const result = await askAssistant({
+      baseUrl: `http://127.0.0.1:${port}`,
+      apiKey: 'sk-test',
+      providerId: 'deepseek',
+      model: 'deepseek-v4-flash',
+      locale: 'zh-CN',
+      messages: [{ role: 'user', content: '中华路有哪些公交站' }],
+      onDelta: (payload) => seen.push(payload),
+    });
+
+    assert.equal(result.text, '21 路 经过中华路。');
+    assert.deepEqual(seen, [
+      { text: '15 路' },
+      { text: '15 路 经过中华路。' },
+      { text: '', reset: true },
+      { text: '21 路 经过中华路。' },
+    ]);
+  } finally {
+    server.close();
+  }
+});
+
 test('接口返回错误时抛出可直接展示的 AssistantError', async () => {
   const server = createServer((request, response) => {
     request.resume();

@@ -181,6 +181,147 @@ test('群消息先发提示，再按被动回复序号发送答案', async () =>
   assert.equal(sends[1].payload.msg_seq, 2);
 });
 
+test('并发上限读取配置，未配置时回退到 3', () => {
+  const logger = { debug() {}, info() {}, warn() {}, error() {} };
+  const custom = new QQBot({
+    api: {},
+    config: createConfig({ qq: { maxConcurrency: 8 } }),
+    logger,
+  });
+  assert.equal(custom.queue.maxGlobal, 8);
+
+  const fallback = new QQBot({ api: {}, config: createConfig(), logger });
+  assert.equal(fallback.queue.maxGlobal, 3);
+});
+
+test('回答完成日志带排队和各阶段耗时', async () => {
+  const lines = [];
+  const logger = {
+    debug: (...args) => lines.push(args.map(String).join(' ')),
+    info: (...args) => lines.push(args.map(String).join(' ')),
+    warn: (...args) => lines.push(args.map(String).join(' ')),
+    error: (...args) => lines.push(args.map(String).join(' ')),
+  };
+  const { bot, queue } = createSetup();
+  bot.logger = logger;
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', { ...groupEvent, id: 'msg-timing' });
+  await queue.settle();
+
+  const text = lines.join('\n');
+  assert.match(text, /回答问题（group，\d+ 字，历史 0 条，排队 \d+ms）/);
+  const done = lines.find((line) => line.includes('回答完成'));
+  assert.ok(done, '应有回答完成日志');
+  assert.match(done, /用时 \d+ms/);
+  assert.match(done, /排队 \d+ms，问一问 \d+ms，精炼 \d+ms，发送 \d+ms/);
+});
+
+test('本地指令日志带处理耗时', async () => {
+  const lines = [];
+  const logger = {
+    debug: (...args) => lines.push(args.map(String).join(' ')),
+    info: (...args) => lines.push(args.map(String).join(' ')),
+    warn: (...args) => lines.push(args.map(String).join(' ')),
+    error: (...args) => lines.push(args.map(String).join(' ')),
+  };
+  const { bot } = createSetup();
+  bot.logger = logger;
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', {
+    ...groupEvent,
+    id: 'msg-command-timing',
+    content: '签到',
+  });
+
+  assert.match(lines.join('\n'), /指令处理完成：\d+ms/);
+});
+
+test('事件探针默认关闭，打开后每条事件打一行打码 trace', async () => {
+  const lines = [];
+  const logger = {
+    debug: (...args) => lines.push(args.map(String).join(' ')),
+    info: (...args) => lines.push(args.map(String).join(' ')),
+    warn: (...args) => lines.push(args.map(String).join(' ')),
+    error: (...args) => lines.push(args.map(String).join(' ')),
+  };
+  const quiet = createSetup();
+  quiet.bot.logger = logger;
+  await quiet.bot.handleEvent('GROUP_AT_MESSAGE_CREATE', { ...groupEvent, id: 'msg-no-trace' });
+  await quiet.queue.settle();
+  assert.equal(
+    lines.some((line) => line.includes('[trace]')),
+    false,
+  );
+
+  lines.length = 0;
+  const traced = createSetup({ config: createConfig({ qq: { trace: true } }) });
+  traced.bot.logger = logger;
+  await traced.bot.handleEvent('GROUP_AT_MESSAGE_CREATE', { ...groupEvent, id: 'msg-trace' });
+  await traced.queue.settle();
+
+  const trace = lines.find((line) => line.includes('[trace] GROUP_AT_MESSAGE_CREATE'));
+  assert.ok(trace, '应打一行 trace');
+  assert.match(trace, /msg=msg-trace/);
+  assert.match(trace, /group=grou…-1/);
+  assert.match(trace, /len=11/);
+  assert.equal(trace.includes('group-1'), false);
+});
+
+test('开启首段先发时先发第一个完整句子，再发剩余内容', async () => {
+  const parts = ['15 路经过中华路，', '还有 21 路和 33 路。', '高峰期大约 8 分钟一班。'];
+  let calls = 0;
+  const assistantImpl = async (options) => {
+    calls += 1;
+    let text = '';
+    for (const part of parts) {
+      text += part;
+      options.onDelta?.({ text });
+    }
+    return { text, references: [], followups: [], error: '' };
+  };
+  const { bot, sends, queue } = createSetup({
+    config: createConfig({ reply: { streamFirst: true, streamMinChars: 10 } }),
+    assistantImpl,
+  });
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', { ...groupEvent, id: 'msg-stream' });
+  await queue.settle();
+
+  assert.equal(calls, 1);
+  assert.equal(sends.length, 3);
+  assert.equal(sends[0].payload.msg_seq, 1);
+  assert.match(sends[1].payload.content, /15 路经过中华路，还有 21 路和 33 路。/);
+  assert.equal(sends[1].payload.msg_seq, 2);
+  assert.match(sends[2].payload.content, /高峰期大约 8 分钟一班。/);
+  assert.equal(sends[2].payload.msg_seq, 3);
+  // 完整回答只出现一次，没有因为先发而重复。
+  const all = sends.map((send) => send.payload.content).join('\n');
+  assert.equal(all.split('21 路和 33 路').length - 1, 1);
+});
+
+test('首段先发默认关闭时仍是一次性发送', async () => {
+  let calls = 0;
+  const assistantImpl = async (options) => {
+    calls += 1;
+    options.onDelta?.({ text: '15 路经过中华路。' });
+    options.onDelta?.({ text: '15 路经过中华路。高峰期 8 分钟一班。' });
+    return {
+      text: '15 路经过中华路。高峰期 8 分钟一班。',
+      references: [],
+      followups: [],
+      error: '',
+    };
+  };
+  const { bot, sends, queue } = createSetup({ assistantImpl });
+
+  await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', { ...groupEvent, id: 'msg-no-stream' });
+  await queue.settle();
+
+  assert.equal(calls, 1);
+  assert.equal(sends.length, 2);
+  assert.match(sends[1].payload.content, /15 路经过中华路。高峰期 8 分钟一班。/);
+});
+
 test('同一条消息重复推送时只回答一次', async () => {
   const { bot, sends, queue, getCalls } = createSetup();
   await bot.handleEvent('GROUP_AT_MESSAGE_CREATE', groupEvent);

@@ -105,13 +105,13 @@ test('预警列表带有左右和上下内边距', () => {
   assert.match(svg, /<g transform="translate\(48,440\)" data-alert-icon="air">/u);
 });
 
-test('天气主题色随昼夜和气温变化', () => {
+test('天气主题色按现象和昼夜取天空色，再随气温做色温偏移', () => {
   const headerColor = (input) => {
     const svg = buildQqBotCardSvg({
       type: 'weather',
       place: '上海',
       date: '2026-11-24',
-      current: { temp: input.temp, condition: '晴' },
+      current: { temp: input.temp, condition: input.condition ?? '晴' },
       days: [],
       sun: input.sun,
     });
@@ -120,12 +120,249 @@ test('天气主题色随昼夜和气温变化', () => {
     )?.[1];
   };
   const day = headerColor({ temp: '15', sun: { phase: 'day' } });
+  const dawn = headerColor({ temp: '15', sun: { phase: 'dawn' } });
+  const dusk = headerColor({ temp: '15', sun: { phase: 'dusk' } });
   const night = headerColor({ temp: '15', sun: { phase: 'night' } });
   const hot = headerColor({ temp: '35', sun: { phase: 'day' } });
   const cold = headerColor({ temp: '-8', sun: { phase: 'day' } });
-  assert.ok(day && night && hot && cold);
+  const rain = headerColor({ temp: '15', condition: '小雨', sun: { phase: 'day' } });
+  const thunder = headerColor({ temp: '15', condition: '雷阵雨', sun: { phase: 'day' } });
+  for (const [label, color] of Object.entries({
+    day,
+    dawn,
+    dusk,
+    night,
+    hot,
+    cold,
+    rain,
+    thunder,
+  })) {
+    assert.match(color ?? '', /^#[0-9a-f]{6}$/u, `${label} 主题色应为合法色值`);
+  }
   assert.notEqual(day, night, '夜间主题色应与白天不同');
+  assert.notEqual(dawn, day, '清晨主题色应与白天不同');
+  assert.notEqual(dusk, day, '傍晚主题色应与白天不同');
+  assert.notEqual(dawn, dusk, '清晨与傍晚主题色应不同');
   assert.notEqual(hot, cold, '高温与低温主题色应不同');
+  assert.notEqual(rain, day, '雨与晴的主题色应不同');
+  assert.notEqual(thunder, rain, '雷与雨的主题色应不同');
+});
+
+test('所有天空色在任意气温下图标都保持白色且对比度达标', () => {
+  const whiteContrast = (hex) => {
+    const channel = (index) => {
+      const value = Number.parseInt(hex.slice(index, index + 2), 16) / 255;
+      return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+    return 1.05 / (luminance + 0.05);
+  };
+  const conditions = ['晴', '多云', '阴', '小雨', '小雪', '霾', '雷阵雨', '未知'];
+  const phases = ['dawn', 'day', 'dusk', 'night'];
+  const temperatures = ['-20', '-10', '0', '17', '25', '32', '38'];
+  let checked = 0;
+  for (const condition of conditions) {
+    for (const phase of phases) {
+      for (const temp of temperatures) {
+        const svg = buildQqBotCardSvg({
+          type: 'weather',
+          place: '上海',
+          date: '2026-11-24',
+          current: { temp, condition },
+          days: [],
+          sun: { sunrise: '06:32', sunset: '16:58', phase },
+        });
+        const header = svg.slice(svg.indexOf('<g font-family'), svg.indexOf('现在'));
+        const tile = /<rect x="40" y="40"[^>]*fill="(#[0-9a-f]{6})"/u.exec(header)?.[1];
+        const icon = /<path d="[^"]+" fill="(#[0-9a-fA-F]{6})"\/>/u.exec(header)?.[1];
+        assert.equal(
+          icon?.toUpperCase(),
+          '#FFFFFF',
+          `${condition} ${phase} ${temp}° 图标应保持白色`,
+        );
+        assert.ok(
+          whiteContrast(tile ?? '#000000') >= 3,
+          `${condition} ${phase} ${temp}° 主题色 ${tile} 白图标对比度不足`,
+        );
+        checked += 1;
+      }
+    }
+  }
+  assert.equal(checked, 224);
+});
+
+test('连续取色过程中图标也保持白色且对比度达标', () => {
+  const whiteContrast = (hex) => {
+    const channel = (index) => {
+      const value = Number.parseInt(hex.slice(index, index + 2), 16) / 255;
+      return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+    return 1.05 / (luminance + 0.05);
+  };
+  const conditions = ['晴', '多云', '阴', '小雨', '小雪', '霾', '雷阵雨', '未知'];
+  let checked = 0;
+  for (const condition of conditions) {
+    for (let minutes = 300; minutes <= 1180; minutes += 20) {
+      const svg = buildQqBotCardSvg({
+        type: 'weather',
+        place: '上海',
+        date: '2026-11-24',
+        current: { temp: '17', condition },
+        days: [],
+        sun: { sunrise: '06:30', sunset: '16:30', phase: 'day', minutes },
+      });
+      const header = svg.slice(svg.indexOf('<g font-family'), svg.indexOf('现在'));
+      const tile = /<rect x="40" y="40"[^>]*fill="(#[0-9a-f]{6})"/u.exec(header)?.[1];
+      const icon = /<path d="[^"]+" fill="(#[0-9a-fA-F]{6})"\/>/u.exec(header)?.[1];
+      assert.equal(icon?.toUpperCase(), '#FFFFFF', `${condition} ${minutes}分 图标应保持白色`);
+      assert.ok(
+        whiteContrast(tile ?? '#000000') >= 3,
+        `${condition} ${minutes}分 主题色 ${tile} 白图标对比度不足`,
+      );
+      checked += 1;
+    }
+  }
+  assert.equal(checked, 8 * 45);
+});
+
+test('夜间把带太阳的天气图标换成月亮', () => {
+  const build = (condition, phase) =>
+    buildQqBotCardSvg({
+      type: 'weather',
+      place: '上海',
+      date: '2026-11-24',
+      current: { temp: '8', condition },
+      days: [],
+      sun: { sunrise: '06:32', sunset: '16:58', phase },
+    });
+  // Material Symbols 路径前缀，用来确认选中了月亮图标。
+  const clearNight = 'M484-80q-84 0-157.5-32t-128-86.5';
+  const partlyCloudyNight = 'M504-465Zm20 385H420';
+  const sunny = 'M440-760v-160h80v160h-80Zm266 110-56-56';
+  const partlyCloudyDay = 'M440-760v-160h80v160h-80Zm266 110-55-55';
+  const clearNightSvg = build('晴', 'night');
+  assert.ok(clearNightSvg.includes(clearNight), '晴的夜间大图标应换成月亮');
+  assert.ok(clearNightSvg.includes(partlyCloudyNight), '夜间卡片角落图标应换成月+云');
+  assert.ok(!clearNightSvg.includes(sunny), '晴的夜间图标不应再出现太阳');
+  const cloudyNightSvg = build('多云', 'night');
+  assert.ok(cloudyNightSvg.includes(partlyCloudyNight), '多云的夜间图标应换成月+云');
+  assert.ok(!cloudyNightSvg.includes(partlyCloudyDay), '多云的夜间图标不应再出现太阳');
+  const clearDaySvg = build('晴', 'day');
+  assert.ok(clearDaySvg.includes(sunny), '白天晴仍用太阳图标');
+});
+
+test('天空色按当前时刻在矩阵锚点之间连续插值，且走色相过渡', () => {
+  const headerColor = (minutes, phase = 'day') => {
+    const svg = buildQqBotCardSvg({
+      type: 'weather',
+      place: '上海',
+      date: '2026-11-24',
+      current: { temp: '17', condition: '晴' },
+      days: [],
+      sun: { sunrise: '06:30', sunset: '16:30', phase, minutes },
+    });
+    return /<rect x="40" y="40" width="88" height="88" rx="14" fill="(#[0-9a-f]{6})"/u.exec(
+      svg,
+    )?.[1];
+  };
+  const rgb = (hex) => [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16));
+  const hue = (hex) => {
+    const [r, g, b] = rgb(hex).map((value) => value / 255);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    if (delta === 0) {
+      return 0;
+    }
+    const raw =
+      max === r ? ((g - b) / delta) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+    return (raw * 60 + 360) % 360;
+  };
+  const close = (actual, expected, tolerance = 3) =>
+    rgb(actual).every((value, index) => Math.abs(value - rgb(expected)[index]) <= tolerance);
+  const whiteContrast = (hex) => {
+    const channel = (index) => {
+      const value = Number.parseInt(hex.slice(index, index + 2), 16) / 255;
+      return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+    return 1.05 / (luminance + 0.05);
+  };
+  const dawn = headerColor(420, 'dawn'); // 日出后 30 分钟，正好是清晨锚点
+  const day = headerColor(510); // 日出后 2 小时，正好是白天锚点
+  const noon = headerColor(690); // 11:30，日出日落中点，正午锚点
+  const dusk = headerColor(1020, 'dusk'); // 日落后 30 分钟，正好是傍晚锚点
+  assert.ok(close(dawn, '#D7758D'), `清晨锚点应接近矩阵清晨色（实际 ${dawn}）`);
+  assert.ok(close(day, '#3B86C9'), `白天锚点应接近矩阵白天色（实际 ${day}）`);
+  assert.ok(close(noon, '#6098CA'), `正午锚点应是保留饱和度的提亮色（实际 ${noon}）`);
+  assert.ok(close(dusk, '#C9761B'), `傍晚锚点应接近矩阵傍晚色（实际 ${dusk}）`);
+  assert.ok(
+    whiteContrast(noon) < whiteContrast(day) - 0.4,
+    `正午应比白天更亮（对比度 ${whiteContrast(noon).toFixed(2)} vs ${whiteContrast(day).toFixed(2)}）`,
+  );
+  // 上午/下午远离正午时回到更饱和的白天色
+  const morning = headerColor(540);
+  const afternoon = headerColor(840);
+  assert.ok(!close(morning, noon, 6) && !close(afternoon, noon, 6), '远离正午时应回到白天色');
+  assert.ok(
+    whiteContrast(morning) > whiteContrast(noon) + 0.2 &&
+      whiteContrast(afternoon) > whiteContrast(noon) + 0.2,
+    '上午/下午应比正午更饱和、更暗',
+  );
+  const dawnToDay = headerColor(465, 'dawn'); // 清晨与白天锚点之间
+  assert.ok(!close(dawnToDay, '#D7758D') && !close(dawnToDay, '#3B86C9'), '中间时刻应是插值色');
+  assert.ok(
+    hue(dawnToDay) > 240 && hue(dawnToDay) < 330,
+    `清晨到白天应走紫红色相过渡（实际色相 ${hue(dawnToDay).toFixed(0)}）`,
+  );
+  const dayToDusk = headerColor(975, 'dusk'); // 白天与傍晚锚点之间
+  assert.ok(
+    hue(dayToDusk) > 250 && hue(dayToDusk) < 350,
+    `白天到傍晚应走紫红色相、不经过黄绿（实际色相 ${hue(dayToDusk).toFixed(0)}）`,
+  );
+});
+
+test('傍晚到夜间的色相过渡不经过黄绿', () => {
+  const conditions = ['晴', '多云', '阴', '小雨', '小雪', '霾', '雷阵雨', '未知'];
+  const hueOf = (hex) => {
+    const rgb = [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16) / 255);
+    const [r, g, b] = rgb;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    if (delta === 0) {
+      return 0;
+    }
+    const raw =
+      max === r ? ((g - b) / delta) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+    return (raw * 60 + 360) % 360;
+  };
+  const headerColor = (condition, minutes) => {
+    const svg = buildQqBotCardSvg({
+      type: 'weather',
+      place: '上海',
+      date: '2026-11-24',
+      current: { temp: '17', condition },
+      days: [],
+      sun: { sunrise: '06:30', sunset: '16:30', phase: 'night', minutes },
+    });
+    return /<rect x="40" y="40" width="88" height="88" rx="14" fill="(#[0-9a-f]{6})"/u.exec(
+      svg,
+    )?.[1];
+  };
+  // 傍晚锚点（日落后 30 分钟）到夜间锚点（日落后 2 小时）之间采样，
+  // 只能走橙 → 红 → 紫 → 蓝，不能经过黄绿（色相约 70°–170°）。
+  for (const condition of conditions) {
+    for (let minutes = 1020; minutes <= 1200; minutes += 15) {
+      const color = headerColor(condition, minutes);
+      const hue = hueOf(color);
+      assert.ok(
+        hue < 70 || hue > 170,
+        `${condition} ${minutes}分 的色相 ${hue.toFixed(0)}° 落进了黄绿区间（${color}）`,
+      );
+    }
+  }
 });
 
 test('天气卡片经过接口归一化后仍保留预警和日出日落', () => {
@@ -214,6 +451,45 @@ test('长昵称不会截掉页眉日期和页脚时间', () => {
   });
   assert.match(svg, /· 2026\.11\.20<\/text>/u);
   assert.match(svg, /· 11-20 07:30<\/text>/u);
+});
+
+test('签文卡按文案配手绘插图，未收录的签文保持纯文字', () => {
+  const withSticker = buildQqBotCardSvg({
+    type: 'fortune',
+    name: '测试',
+    score: 88,
+    text: '宜出门',
+    date: '2026-11-27',
+    reset: false,
+  });
+  assert.match(
+    withSticker,
+    /<image x="[\d.]+" y="[\d.]+" width="168" height="168" href="data:image\/png;base64,/u,
+  );
+
+  const withoutSticker = buildQqBotCardSvg({
+    type: 'fortune',
+    name: '测试',
+    score: 88,
+    // 故意的非签文文本，保证不会命中插图映射。
+    text: '未收录的测试签文',
+    date: '2026-11-27',
+    reset: false,
+  });
+  assert.doesNotMatch(withoutSticker, /data:image\/png;base64,/u);
+});
+
+test('签文插图忽略标点差异匹配', () => {
+  const svg = buildQqBotCardSvg({
+    type: 'fortune',
+    name: '测试',
+    score: 88,
+    // 文案列表写作「宜拍下偶遇的喵~」，去掉波浪号也要能配上图。
+    text: '宜拍下偶遇的喵',
+    date: '2026-11-27',
+    reset: false,
+  });
+  assert.match(svg, /data:image\/png;base64,/u);
 });
 
 test('机器人在本地渲染卡片 PNG', async () => {

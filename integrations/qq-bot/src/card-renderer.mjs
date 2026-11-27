@@ -4,6 +4,119 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Resvg } from "@resvg/resvg-js";
+
+// apps/web/lib/qq-bot-fortune-stickers.ts
+var FORTUNE_STICKER_GROUPS = [
+  // 出门、赶路：一个冲出门框的小人，跑食堂、走班都说得通。
+  {
+    file: "yi-chu-men.png",
+    texts: ["\u5B9C\u51FA\u95E8", "\u5B9C\u5916\u51FA\u6D3B\u52A8", "\u5B9C\u8DD1\u53BB\u98DF\u5802\u62A2\u996D", "\u5B9C\u8D70\u73ED\u8BFE\u6362\u79D1"]
+  },
+  // 摄像头：屏幕前的 REC，开摄像头和网课掉线共用。
+  { file: "yi-shang-ke-kai-she-xiang-tou.png", texts: ["\u5B9C\u4E0A\u8BFE\u5F00\u6444\u50CF\u5934", "\u4E0A\u7F51\u8BFE\u7F51\u65AD\u4E86"] },
+  // 网课摸鱼：趴在桌上睡着的小人。
+  { file: "yi-shang-wang-ke.png", texts: ["\u5B9C\u4E0A\u7F51\u8BFE"] },
+  // 写作业：坐在桌前写字，英语和语文都算。
+  { file: "yi-xie-ying-yu-zuo-ye.png", texts: ["\u5B9C\u5199\u82F1\u8BED\u4F5C\u4E1A", "\u5B9C\u5148\u5199\u8BED\u6587\u4F5C\u4E1A"] },
+  // 背历史：捧着书的小人。
+  { file: "yi-bei-li-shi.png", texts: ["\u5B9C\u80CC\u5386\u53F2\uFF08\u5927\u5618\uFF09"] },
+  // 睡觉：抱枕头的小人。
+  { file: "yi-shui-lan-jiao.png", texts: ["\u5B9C\u7761\u61D2\u89C9"] },
+  { file: "yi-zao-shui-zao-qi.png", texts: ["\u5B9C\u65E9\u7761\u65E9\u8D77"] },
+  { file: "yi-dao-li-xi-tou.png", texts: ["\u5B9C\u5012\u7ACB\u6D17\u5934"] },
+  { file: "yi-fei-shang-tian-he-tai-yang-jian-jian-bing.png", texts: ["\u5B9C\u98DE\u4E0A\u5929\u548C\u592A\u9633\u80A9\u5E76\u80A9"] },
+  // 星星：站在楼顶看夜空的小人。
+  { file: "yi-kan-xing-xing.png", texts: ["\u5B9C\u62AC\u5934\u770B\u661F\u661F"] },
+  // 纪录片：坐在投影机前的小人。
+  { file: "yi-kan-ji-lu-pian.png", texts: ["\u5B9C\u770B\u7EAA\u5F55\u7247"] },
+  // 淫梦梗：昏睡红茶和「先辈雷普」出自同一套梗，端杯子的小人正好共用。
+  { file: "yi-he-hun-shui-hong-cha.png", texts: ["\u5B9C\u559D\u660F\u7761\u7EA2\u8336", "\u53C8\u662F\u88AB\u5148\u8F88\u96F7\u666E\u7684\u4E00\u5929\u5462"] },
+  // 多喝热水：端着冒热气的杯子。
+  { file: "yi-duo-he-re-shui.png", texts: ["\u591A\u559D\u70ED\u6C34"] },
+  // 猫：偶遇的喵、喵喵喵，以及「笑一个~」这种对着小动物拍照的签文。
+  {
+    file: "yi-pai-xia-ou-yu-de-miao.png",
+    texts: ["\u5B9C\u62CD\u4E0B\u5076\u9047\u7684\u55B5~", "\u55B5\u55B5\u55B5\uFF1F", "\u7B11\u4E00\u4E2A~"]
+  },
+  // 汪：只给「偶遇的汪」。
+  { file: "yi-pai-xia-ou-yu-de-wang.png", texts: ["\u5B9C\u62CD\u4E0B\u5076\u9047\u7684\u6C6A~"] },
+  // 唱歌：张嘴加音符。
+  { file: "yi-chang-tan-te.png", texts: ["\u5B9C\u5531\u300A\u5FD0\u5FD1\u300B"] },
+  // 吟诗：托腮想词的小人。
+  { file: "yi-yin-shi-yi-shou.png", texts: ["\u5B9C\u541F\u8BD7\u4E00\u9996"] },
+  // 举着手机：唱歌、开黑都是这块屏幕。
+  { file: "yi-chang-hua-wei-mei.png", texts: ["\u5B9C\u5531\u300A\u534E\u4E3A\u7F8E\u300B", "\u5B9C\u6253\u738B\u8005"] },
+  // 篮球梗：只因你太美本来就是唱跳篮球，打篮球和梦到蔡徐坤都用它。
+  {
+    file: "yi-chang-zhi-yin-ni-tai-mei.png",
+    texts: ["\u5B9C\u5531\u300A\u53EA\u56E0\u4F60\u592A\u7F8E\u300B", "\u5B9C\u5531\u9E21\u4F60\u592A\u7F8E", "\u5B9C\u6253\u7BEE\u7403\u{1F3C0}", "\u505A\u68A6\u68A6\u5230\u8521\u5F90\u5764"]
+  },
+  // 牛：唱歌那张画了牛头，只留给《雨后轻风有香》。
+  { file: "yi-chang-yu-hou-qing-feng-you-xiang.png", texts: ["\u5B9C\u5531\u300A\u96E8\u540E\u8F7B\u98CE\u6709\u9999\u300B"] },
+  // 牛肉面：对着空碗发火的小人。
+  { file: "chi-niu-rou-mian.png", texts: ["\u5403\u725B\u8089\u9762\u6CA1\u6709\u725B\u8089"] },
+  // 「V我50」是肯德基疯狂星期四梗，图里画的是薯条桶；V550 读起来就是「V我50」，
+  // 所以车次那条也用这张。
+  { file: "yi-v-wo-50.png", texts: ["\u5B9CV\u621150", "\u5B9C\u4E58\u5750V550\u6B21\u5217\u8F66"] },
+  // 手机和账号/群聊：号没了、被禁言、退群、多人运动（不是）都用它。
+  {
+    file: "ni-hao-mei-le.png",
+    texts: ["\u4F60\u53F7\u6CA1\u4E86", "\u5B9C\u88AB\u7981\u8A00", "\u5B9C\u9000\u7FA4", "\u5B9C\u591A\u4EBA\u8FD0\u52A8\uFF08\u4E0D\u662F"]
+  },
+  // 企鹅（QQ）：给「宜发说说」，QQ 空间那点事。
+  { file: "qi-e.png", texts: ["\u5B9C\u53D1\u8BF4\u8BF4"] },
+  // 发红包：给管理、给群员都用同一张。
+  { file: "yi-fa-hong-bao.png", texts: ["\u5B9C\u7ED9\u7BA1\u7406\u53D1\u7EA2\u5305", "\u5B9C\u7ED9\u7FA4\u5458\u53D1\u7EA2\u5305"] },
+  // 关心脸：只留「你还好吗」。
+  { file: "ni-hai-hao-ma.png", texts: ["\u4F60\u8FD8\u597D\u5417"] },
+  // 抱臂围观：你自己看着办、我就静静地看着你、诸事不宜。
+  {
+    file: "ni-zi-ji-kan-zhe-ban.png",
+    texts: ["\u4F60\u81EA\u5DF1\u770B\u7740\u529E", "\u6211\u5C31\u9759\u9759\u5730\u770B\u7740\u4F60", "\u5B9C...\u989D...\u8BF8\u4E8B\u4E0D\u5B9C"]
+  },
+  // 瞪大眼的兔子：胆子肥嘟嘟、开学通知、谈恋爱时的紧张；「云打屁股」那种话也归这张，
+  // 毕竟敢这么说的人胆子也挺肥嘟嘟的。
+  {
+    file: "ni-de-dan-zi-zen-me-fei-du-du-de.png",
+    texts: ["\u4F60\u7684\u80C6\u5B50\u600E\u4E48\u80A5\u561F\u561F\u7684", "\u8BE5\u5F00\u5B66\u4E86\u5427", "\u5B9C\u8C08\u604B\u7231", "\u5B9C\u4E91\u6253\u5C41\u80A1"]
+  },
+  // 跳舞：跳舞本身、「秀啊」，以及「宜看土味视频」。
+  {
+    file: "tiao-yi-zhi-wu-rang-da-jia-le-yi-le.png",
+    texts: ["\u8DF3\u4E00\u652F\u821E\u8BA9\u5927\u5BB6\u4E50\u4E00\u4E50", "\u79C0\u554A", "\u5B9C\u770B\u571F\u5473\u89C6\u9891"]
+  },
+  // 思考脸：hmmm、我也不知道、省略号。
+  { file: "hmmm.png", texts: ["hmmm", "\u5B9C...\u989D...\u6211\u4E5F\u4E0D\u77E5\u9053", "......"] },
+  // 点赞：NB、夸群主/管理员、正道的光。
+  {
+    file: "wu-cao-nb.png",
+    texts: ["\u96FE\u8349\uFF0CNB", "\u5B9C\u5938\u7FA4\u4E3B", "\u5B9C\u5938\u7BA1\u7406\u5458", "\u6B63\u9053\u7684\u5149\uFF0C\u7167\u5230\u5927\u5730\u4E0A"]
+  },
+  // 奥利给：举拳大喊的小人。
+  { file: "yi-ao-li-gei.png", texts: ["\u5B9C\u5965\u5229\u7ED9"] }
+];
+var FORTUNE_STICKER_FILES = Object.fromEntries(
+  FORTUNE_STICKER_GROUPS.flatMap((group) => group.texts.map((text) => [text, group.file]))
+);
+function normalizeFortuneText(value) {
+  return value.normalize("NFKC").toLowerCase().replace(/[^\p{Script=Han}a-z0-9]/gu, "");
+}
+var normalizedStickerFiles = /* @__PURE__ */ new Map();
+for (const [text, fileName] of Object.entries(FORTUNE_STICKER_FILES)) {
+  const key = normalizeFortuneText(text);
+  if (!normalizedStickerFiles.has(key)) {
+    normalizedStickerFiles.set(key, fileName);
+  }
+}
+function resolveFortuneStickerFile(text) {
+  const exact = FORTUNE_STICKER_FILES[text];
+  if (exact) {
+    return exact;
+  }
+  return normalizedStickerFiles.get(normalizeFortuneText(text)) ?? null;
+}
+
+// apps/web/lib/qq-bot-card.ts
 var colors = {
   primary: "#168F78",
   secondary: "#2584E8",
@@ -36,6 +149,8 @@ var materialIconPaths = {
   history: "M480-120q-138 0-240.5-91.5T122-440h82q14 104 92.5 172T480-200q117 0 198.5-81.5T760-480q0-117-81.5-198.5T480-760q-69 0-129 32t-101 88h110v80H120v-240h80v94q51-64 124.5-99T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-120Zm112-192L440-464v-216h80v184l128 128-56 56Z",
   leaderboard: "M160-200h160v-320H160v320Zm240 0h160v-560H400v560Zm240 0h160v-240H640v240ZM80-120v-480h240v-240h320v320h240v400H80Z",
   partly_cloudy_day: "M440-760v-160h80v160h-80Zm266 110-56-56 113-114 56 57-113 113Zm54 210v-80h160v80H760Zm3 299L650-254l56-56 114 112-57 57ZM254-650 141-763l57-57 112 114-56 56Zm-14 450h180q25 0 42.5-17.5T480-260q0-25-17-42.5T421-320h-51l-20-48q-14-33-44-52.5T240-440q-50 0-85 35t-35 85q0 50 35 85t85 35Zm0 80q-83 0-141.5-58.5T40-320q0-83 58.5-141.5T240-520q60 0 109.5 32.5T423-400q58 0 97.5 43T560-254q-2 57-42.5 95.5T420-120H240Zm320-134q-5-20-10-39t-10-39q45-19 72.5-59t27.5-89q0-66-47-113t-113-47q-60 0-105 39t-53 99q-20-5-41-9t-41-9q14-88 82.5-144T480-720q100 0 170 70t70 170q0 77-44 138.5T560-254Zm-79-226Z",
+  clear_night: "M484-80q-84 0-157.5-32t-128-86.5Q144-253 112-326.5T80-484q0-146 93-257.5T410-880q-18 99 11 193.5T521-521q71 71 165.5 100T880-410q-26 144-138 237T484-80Zm0-80q88 0 163-44t118-121q-86-8-163-43.5T464-465q-61-61-97-138t-43-163q-77 43-120.5 118.5T160-484q0 135 94.5 229.5T484-160Zm-20-305Z",
+  partly_cloudy_night: "M504-465Zm20 385H420l20-12.5q20-12.5 43.5-28t43.5-28l20-12.5q81-6 149.5-49T805-325q-86-8-163-43.5T504-465q-61-61-97-138t-43-163q-77 43-120.5 118.5T200-484v12l-12 5.5q-12 5.5-26.5 11.5T135-443.5l-12 5.5q-2-11-2.5-23t-.5-23q0-146 93-257.5T450-880q-18 99 11 193.5T561-521q71 71 165.5 100T920-410q-26 144-138 237T524-80Zm-284-80h180q25 0 42.5-17.5T480-220q0-25-17-42.5T422-280h-52l-20-48q-14-33-44-52.5T240-400q-50 0-85 34.5T120-280q0 50 35 85t85 35Zm0 80q-83 0-141.5-58.5T40-280q0-83 58.5-141.5T240-480q60 0 109.5 32.5T423-360q57 2 97 42.5t40 97.5q0 58-41 99t-99 41H240Z",
   public: "M324-111.5Q251-143 197-197t-85.5-127Q80-397 80-480t31.5-156Q143-709 197-763t127-85.5Q397-880 480-880t156 31.5Q709-817 763-763t85.5 127Q880-563 880-480t-31.5 156Q817-251 763-197t-127 85.5Q563-80 480-80t-156-31.5ZM440-162v-78q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 121 79.5 212T440-162Zm276-102q41-45 62.5-100.5T800-480q0-98-54.5-179T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h240q17 0 28.5 11.5T600-440v120h40q26 0 47 15.5t29 40.5Z",
   restart_alt: "M440-122q-121-15-200.5-105.5T160-440q0-66 26-126.5T260-672l57 57q-38 34-57.5 79T240-440q0 88 56 155.5T440-202v80Zm80 0v-80q87-16 143.5-83T720-440q0-100-70-170t-170-70h-3l44 44-56 56-140-140 140-140 56 56-44 44h3q134 0 227 93t93 227q0 121-79.5 211.5T520-122Z",
   translate: "m476-80 182-480h84L924-80h-84l-43-122H603L560-80h-84ZM160-200l-56-56 202-202q-35-35-63.5-80T190-640h84q20 39 40 68t48 58q33-33 68.5-92.5T484-720H40v-80h280v-80h80v80h280v80H564q-21 72-63 148t-83 116l96 98-30 82-122-125-202 201Zm468-72h144l-72-204-72 204Z",
@@ -174,7 +289,8 @@ function normalizeCard(input) {
       const sun = card.sun && typeof card.sun === "object" ? {
         sunrise: cleanText(card.sun.sunrise, 8),
         sunset: cleanText(card.sun.sunset, 8),
-        phase: cleanText(card.sun.phase, 8)
+        phase: cleanText(card.sun.phase, 8),
+        minutes: normalizeMinutes(card.sun.minutes)
       } : void 0;
       return {
         type: "weather",
@@ -405,7 +521,7 @@ function buildWeatherCard(card) {
         94,
         0,
         38,
-        weatherColor(day.condition ?? "")
+        weatherSkyColor(day.condition, "day")
       ),
       `<text x="146" y="28" font-size="24" font-weight="700" fill="${colors.text}">${escapeXml(day.low || "--")}\xB0 ~ ${escapeXml(day.high || "--")}\xB0</text>`,
       `<text x="300" y="28" font-size="18" fill="${colors.textSecondary}">${escapeXml(shortText(day.condition || "\u5929\u6C14\u672A\u77E5", 12))}</text>`,
@@ -439,7 +555,13 @@ function buildWeatherCard(card) {
     `<text x="${summaryX}" y="122" font-size="30" font-weight="700" fill="${colors.text}">${escapeXml(theme.conditionLabel)}</text>`,
     details ? `<text x="${summaryX}" y="164" font-size="16" fill="${colors.textSecondary}">${escapeXml(details)}</text>` : "",
     sunText ? `<text x="28" y="238" font-size="14" fill="${colors.textSecondary}">${escapeXml(sunText)}</text>` : "",
-    renderMaterialIconPath(weatherIconName(card.current.condition), 520, 190, 104, color),
+    renderMaterialIconPath(
+      weatherIconName(card.current.condition, card.sun?.phase),
+      520,
+      190,
+      104,
+      color
+    ),
     card.updated ? `<text x="612" y="42" text-anchor="end" font-size="13" fill="${colors.textMuted}">${escapeXml(card.updated)}</text>` : "",
     "</g>",
     alertSvg,
@@ -449,7 +571,7 @@ function buildWeatherCard(card) {
   return buildFrame({
     height: 700 + alertBlockHeight + Math.max(0, forecastDays.length - 2) * 70,
     color,
-    icon: "partly_cloudy_day",
+    icon: card.sun?.phase === "night" ? "partly_cloudy_night" : "partly_cloudy_day",
     title: `${card.place}\u5929\u6C14`,
     eyebrow: `\u5929\u6C14${card.region ? ` \xB7 ${card.region}` : ""} \xB7 ${displayDate(card.date)}`,
     footer: card.footer || "\u6570\u636E\u6765\u81EA\u516C\u5F00\u5929\u6C14\u670D\u52A1",
@@ -637,6 +759,7 @@ function buildFortuneCard(card) {
     ...lines.map(
       (line, index) => `<text x="24" y="${78 + index * 32}" font-size="22" fill="${colors.textSecondary}">${escapeXml(line)}</text>`
     ),
+    renderFortuneSticker(card.text, lines.length),
     "</g>",
     `<text x="40" y="520" font-size="14" fill="${colors.textMuted}">${card.reset ? "\u5DF2\u91CD\u62BD\uFF0C\u4ECA\u65E5\u7ED3\u679C\u5DF2\u66F4\u65B0\u3002" : "\u4ECA\u65E5\u7ED3\u679C\u56FA\u5B9A\uFF0C\u53EF\u53D1\u9001\u300C\u91CD\u7F6E\u8FD0\u52BF\u300D\u91CD\u62BD\u3002"}</text>`
   ].join("");
@@ -649,6 +772,19 @@ function buildFortuneCard(card) {
     footer: card.footer || "\u4EC5\u4F9B\u5A31\u4E50",
     body
   });
+}
+function renderFortuneSticker(text, lineCount) {
+  const fileName = resolveFortuneStickerFile(text);
+  const href = fileName ? getFortuneStickerDataUri(fileName) : null;
+  if (!href) {
+    return "";
+  }
+  const textBottom = 78 + Math.max(0, lineCount - 1) * 32 + 10;
+  const size = Math.min(168, 280 - 16 - (textBottom + 8));
+  if (size < 64) {
+    return "";
+  }
+  return `<image x="${320 - 20 - size}" y="${280 - 16 - size}" width="${size}" height="${size}" href="${href}"/>`;
 }
 function buildPoiCard(card) {
   const color = normalizeSignageColor(card.color) ?? colors.secondary;
@@ -1202,6 +1338,33 @@ function getCardTemplateDataUri(fileName) {
     return null;
   }
 }
+var stickerCache = /* @__PURE__ */ new Map();
+function getFortuneStickerDataUri(fileName) {
+  if (stickerCache.has(fileName)) {
+    return stickerCache.get(fileName) ?? null;
+  }
+  const configuredDir = process.env.QQ_BOT_CARD_ASSET_DIR?.trim();
+  const candidates = [
+    ...configuredDir ? [resolve(configuredDir, "fortune-stickers", fileName)] : [],
+    resolve(process.cwd(), "assets", "fortune-stickers", fileName),
+    resolve(process.cwd(), "public", "fortune-stickers", fileName),
+    resolve(process.cwd(), "apps", "web", "public", "fortune-stickers", fileName),
+    resolve(process.cwd(), "..", "..", "apps", "web", "public", "fortune-stickers", fileName)
+  ];
+  const stickerPath = candidates.find((candidate) => existsSync(candidate));
+  if (!stickerPath) {
+    stickerCache.set(fileName, null);
+    return null;
+  }
+  try {
+    const dataUri = `data:image/png;base64,${readFileSync(stickerPath).toString("base64")}`;
+    stickerCache.set(fileName, dataUri);
+    return dataUri;
+  } catch {
+    stickerCache.set(fileName, null);
+    return null;
+  }
+}
 var brandLogoDataUri;
 function renderBrandLogo(x, y, size) {
   const dataUri = getBrandLogoDataUri();
@@ -1272,6 +1435,20 @@ function wrapPlainText(value, maxChars, maxLines) {
       break;
     }
   }
+  const truncated = chars.length > maxChars * maxLines;
+  if (!truncated && lines.length > 1) {
+    const perLine = Math.ceil(chars.length / lines.length);
+    lines.length = 0;
+    let start = 0;
+    while (start < chars.length) {
+      let end = Math.min(chars.length, start + perLine);
+      while (end < chars.length && end - start < maxChars && ".\u2026".includes(chars[end])) {
+        end += 1;
+      }
+      lines.push(chars.slice(start, end).join(""));
+      start = end;
+    }
+  }
   for (let index = 1; index < lines.length; index += 1) {
     if (/^[，。、；：！？]/u.test(lines[index])) {
       const [punctuation, ...rest] = Array.from(lines[index]);
@@ -1279,104 +1456,246 @@ function wrapPlainText(value, maxChars, maxLines) {
       lines[index] = rest.join("");
     }
   }
-  if (chars.length > maxChars * maxLines) {
+  if (truncated) {
     lines[lines.length - 1] = `${lines[lines.length - 1].slice(0, -1)}\u2026`;
   }
   return lines.length > 0 ? lines : ["\u4ECA\u5929\u9002\u5408\u6309\u81EA\u5DF1\u7684\u8282\u594F\u6765\u3002"];
 }
-function weatherIconName(condition) {
+function weatherIconName(condition, phase) {
+  const text = String(condition ?? "");
+  const dayIcon = /雷/u.test(text) ? "thunderstorm" : /雪/u.test(text) ? "weather_snowy" : /雨/u.test(text) ? "rainy" : /雾|霾/u.test(text) ? "foggy" : /阴/u.test(text) ? "cloud" : /云/u.test(text) ? "partly_cloudy_day" : /晴/u.test(text) ? "sunny" : "partly_cloudy_day";
+  if (phase === "night") {
+    if (dayIcon === "sunny") {
+      return "clear_night";
+    }
+    if (dayIcon === "partly_cloudy_day") {
+      return "partly_cloudy_night";
+    }
+  }
+  return dayIcon;
+}
+var weatherSkyColors = {
+  clear: {
+    dawn: "#D7758D",
+    day: "#3B86C9",
+    noon: "#6098CA",
+    dusk: "#C9761B",
+    night: "#22304A"
+  },
+  cloud: {
+    dawn: "#C46E93",
+    day: "#3B9ADA",
+    noon: "#499AD1",
+    dusk: "#C4842A",
+    night: "#2B5478"
+  },
+  overcast: {
+    dawn: "#AF888E",
+    day: "#8F9499",
+    noon: "#8F9499",
+    dusk: "#B28B52",
+    night: "#333A44"
+  },
+  rain: {
+    dawn: "#B582A2",
+    day: "#4C6A8A",
+    noon: "#7C95B1",
+    dusk: "#AD8A4E",
+    night: "#29384C"
+  },
+  snow: {
+    dawn: "#B780B7",
+    day: "#6F93A8",
+    noon: "#7997A9",
+    dusk: "#BB8835",
+    night: "#35485E"
+  },
+  fog: {
+    dawn: "#B18981",
+    day: "#7C7B6E",
+    noon: "#949489",
+    dusk: "#B7894D",
+    night: "#3B3A38"
+  },
+  thunder: {
+    dawn: "#B182BF",
+    day: "#5D5296",
+    noon: "#958DBC",
+    dusk: "#C17C1D",
+    night: "#2D2A4A"
+  },
+  other: {
+    dawn: "#CF7D7D",
+    day: "#2584E8",
+    noon: "#4F96E1",
+    dusk: "#C68325",
+    night: "#243349"
+  }
+};
+function weatherSkyKey(condition) {
   const text = String(condition ?? "");
   if (/雷/u.test(text)) {
-    return "thunderstorm";
-  }
-  if (/雪/u.test(text)) {
-    return "weather_snowy";
-  }
-  if (/雨/u.test(text)) {
-    return "rainy";
-  }
-  if (/雾|霾/u.test(text)) {
-    return "foggy";
-  }
-  if (/阴/u.test(text)) {
-    return "cloud";
-  }
-  if (/云/u.test(text)) {
-    return "partly_cloudy_day";
-  }
-  if (/晴/u.test(text)) {
-    return "sunny";
-  }
-  return "partly_cloudy_day";
-}
-function weatherColor(...conditions) {
-  const text = conditions.join(" ");
-  if (/雷/u.test(text)) {
-    return "#6A5ACD";
+    return "thunder";
   }
   if (/雪|冰|冻/u.test(text)) {
-    return "#3E91B5";
+    return "snow";
   }
   if (/雨/u.test(text)) {
-    return "#2F6FCB";
+    return "rain";
   }
   if (/雾|霾|沙|尘/u.test(text)) {
-    return "#6F7775";
+    return "fog";
   }
   if (/阴/u.test(text)) {
-    return "#5D7186";
+    return "overcast";
   }
   if (/云/u.test(text)) {
-    return "#4B82C4";
+    return "cloud";
   }
   if (/晴/u.test(text)) {
-    return "#D98A1E";
+    return "clear";
   }
-  return "#2584E8";
+  return "other";
+}
+function weatherSkyColor(condition, phase) {
+  const palette = weatherSkyColors[weatherSkyKey(condition)];
+  if (phase === "dawn") {
+    return palette.dawn;
+  }
+  if (phase === "dusk") {
+    return palette.dusk;
+  }
+  if (phase === "night") {
+    return palette.night;
+  }
+  return palette.day;
+}
+function weatherSkyColorAtTime(condition, sun) {
+  const palette = weatherSkyColors[weatherSkyKey(condition)];
+  const sunrise = parseClockMinutes(sun?.sunrise);
+  const sunset = parseClockMinutes(sun?.sunset);
+  const minutes = typeof sun?.minutes === "number" && Number.isFinite(sun.minutes) ? sun.minutes : null;
+  const dayLength = sunrise === null || sunset === null ? 0 : sunset - sunrise;
+  if (sunrise === null || sunset === null || minutes === null || dayLength < 240) {
+    return weatherSkyColor(condition, sun?.phase);
+  }
+  const solarNoon = Math.round((sunrise + sunset) / 2);
+  const anchors = [
+    { minute: sunrise - 60, color: palette.night },
+    { minute: sunrise + 30, color: palette.dawn },
+    { minute: sunrise + 120, color: palette.day },
+    { minute: solarNoon, color: palette.noon },
+    { minute: sunset - 120, color: palette.day },
+    { minute: sunset + 30, color: palette.dusk },
+    { minute: sunset + 120, color: palette.night }
+  ];
+  const ordered = anchors.every(
+    (anchor, index) => index === 0 || anchor.minute > anchors[index - 1].minute
+  );
+  if (!ordered || minutes <= anchors[0].minute || minutes >= anchors[anchors.length - 1].minute) {
+    return minutes === null ? weatherSkyColor(condition, sun?.phase) : palette.night;
+  }
+  for (let index = 1; index < anchors.length; index += 1) {
+    const previous = anchors[index - 1];
+    const next = anchors[index];
+    if (minutes <= next.minute) {
+      const ratio = (minutes - previous.minute) / (next.minute - previous.minute);
+      const transition = index === 5 ? "day-dusk" : index === 6 ? "dusk-night" : void 0;
+      return blendSkyColors(previous.color, next.color, ratio, transition);
+    }
+  }
+  return palette.night;
+}
+function shiftWeatherColorByTemperature(color, temperature) {
+  const warmth = clampNumber((temperature - 17) / 20, -1, 1);
+  const [red, green, blue] = parseHexColor(color);
+  const targetLuminance = relativeLuminance([red, green, blue]);
+  const depth = clampNumber(rgbToHsl(red, green, blue).l / 45, 0.5, 1);
+  const shifted = rgbToHsl(
+    clampChannel(red + warmth * 16 * depth),
+    clampChannel(green + warmth * 4 * depth),
+    clampChannel(blue - warmth * 18 * depth)
+  );
+  let low = 0;
+  let high = 100;
+  let result = hslToHex(shifted);
+  for (let step = 0; step < 14; step += 1) {
+    const middle = (low + high) / 2;
+    const candidate = hslToHex({ h: shifted.h, s: shifted.s, l: middle });
+    if (relativeLuminance(parseHexColor(candidate)) > targetLuminance) {
+      high = middle;
+    } else {
+      low = middle;
+    }
+    result = candidate;
+  }
+  return result;
+}
+function relativeLuminance([red, green, blue]) {
+  const channel = (value) => {
+    const normalized = value / 255;
+    return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue);
+}
+function parseClockMinutes(value) {
+  const match = /^(\d{1,2}):(\d{2})$/u.exec(String(value ?? ""));
+  if (!match) {
+    return null;
+  }
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours > 23 || minutes > 59) {
+    return null;
+  }
+  return hours * 60 + minutes;
+}
+function blendSkyColors(from, to, weight, transition) {
+  const fromHsl = rgbToHsl(...parseHexColor(from));
+  const toHsl = rgbToHsl(...parseHexColor(to));
+  const ratio = clampNumber(weight, 0, 1);
+  let delta = toHsl.h - fromHsl.h;
+  const warmDayToDusk = transition === "day-dusk" && fromHsl.h >= 150 && fromHsl.h <= 270 && toHsl.h <= 90;
+  const warmDuskToNight = transition === "dusk-night" && fromHsl.h <= 120 && toHsl.h >= 180 && delta > 0;
+  if (warmDayToDusk && delta < 0) {
+    delta += 360;
+  } else if (warmDuskToNight) {
+    delta -= 360;
+  } else if (delta > 180) {
+    delta -= 360;
+  } else if (delta < -180) {
+    delta += 360;
+  }
+  const color = hslToHex({
+    h: (fromHsl.h + delta * ratio + 360) % 360,
+    // 色相跨度大时中间段降一点饱和度，避免蓝橙/蓝粉过渡中段出现霓虹紫。
+    s: (fromHsl.s + (toHsl.s - fromHsl.s) * ratio) * (1 - clampNumber((Math.abs(delta) - 100) / 260, 0, 0.3) * Math.sin(Math.PI * ratio)),
+    l: fromHsl.l + (toHsl.l - fromHsl.l) * ratio
+  });
+  return ensureWhiteIconContrast(color);
+}
+function ensureWhiteIconContrast(color) {
+  const [red, green, blue] = parseHexColor(color);
+  const hsl = rgbToHsl(red, green, blue);
+  const luminanceLimit = 1.05 / 3.05 - 0.05;
+  let lightness = hsl.l;
+  let result = color;
+  while (lightness > 4 && relativeLuminance(parseHexColor(result)) > luminanceLimit) {
+    lightness -= 0.5;
+    result = hslToHex({ h: hsl.h, s: hsl.s, l: lightness });
+  }
+  return result;
 }
 function resolveWeatherTheme(card) {
-  const base = weatherColor(card.current.condition, ...card.days.map((day) => day.condition ?? ""));
-  const phase = String(card.sun?.phase ?? "");
-  let color = base;
-  if (phase === "night") {
-    color = blendHexColor("#22304A", base, 0.22);
-  } else if (phase === "dawn") {
-    color = blendHexColor("#C96F52", base, 0.38);
-  } else if (phase === "dusk") {
-    color = blendHexColor("#9C5570", base, 0.38);
-  }
+  const sky = weatherSkyColorAtTime(card.current.condition, card.sun);
   const temperature = Number.parseFloat(card.current.temp.replace(/[−－]/gu, "-"));
-  const temperatureColor = Number.isFinite(temperature) ? weatherTemperatureColor(temperature) : color;
-  if (Number.isFinite(temperature)) {
-    color = blendHexColor(color, temperatureColor, 0.2);
-  }
+  const phase = String(card.sun?.phase ?? "");
   const phaseLabel = phase === "night" ? "\u591C\u95F4" : phase === "dawn" ? "\u6E05\u6668" : phase === "dusk" ? "\u508D\u665A" : "";
   return {
-    color,
+    color: Number.isFinite(temperature) ? shiftWeatherColorByTemperature(sky, temperature) : sky,
     phaseLabel,
     conditionLabel: phaseLabel ? `${card.current.condition} \xB7 ${phaseLabel}` : card.current.condition
   };
-}
-function weatherTemperatureColor(temperature) {
-  if (temperature <= -10) {
-    return "#3E8FCC";
-  }
-  if (temperature <= 0) {
-    return "#4A9AD4";
-  }
-  if (temperature <= 10) {
-    return "#3D7EDB";
-  }
-  if (temperature <= 18) {
-    return "#2E9E8F";
-  }
-  if (temperature <= 25) {
-    return "#2F9D6F";
-  }
-  if (temperature <= 30) {
-    return "#D98A2B";
-  }
-  return "#D9543F";
 }
 function weatherAlertColor(level) {
   switch (String(level ?? "").trim()) {
@@ -1423,22 +1742,54 @@ function weatherAlertIconName(alert) {
   }
   return "warning";
 }
-function blendHexColor(from, to, weightTo) {
-  const parse = (value) => {
-    const match = /^#([0-9a-fA-F]{6})$/u.exec(value);
-    if (!match) {
-      return [0, 0, 0];
-    }
-    const numeric = Number.parseInt(match[1], 16);
-    return [numeric >> 16 & 255, numeric >> 8 & 255, numeric & 255];
-  };
-  const weight = Math.max(0, Math.min(1, weightTo));
-  const fromRgb = parse(from);
-  const toRgb = parse(to);
-  const mixed = fromRgb.map(
-    (channel, index) => Math.round(channel + (toRgb[index] - channel) * weight)
-  );
-  return `#${mixed.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+function parseHexColor(value) {
+  const match = /^#([0-9a-fA-F]{6})$/u.exec(value);
+  if (!match) {
+    return [0, 0, 0];
+  }
+  const numeric = Number.parseInt(match[1], 16);
+  return [numeric >> 16 & 255, numeric >> 8 & 255, numeric & 255];
+}
+function clampChannel(value) {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+function rgbToHsl(red, green, blue) {
+  const r = red / 255;
+  const g = green / 255;
+  const b = blue / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  const lightness = (max + min) / 2;
+  if (delta === 0) {
+    return { h: 0, s: 0, l: lightness * 100 };
+  }
+  const saturation = delta / (1 - Math.abs(2 * lightness - 1));
+  let hue;
+  if (max === r) {
+    hue = (g - b) / delta % 6;
+  } else if (max === g) {
+    hue = (b - r) / delta + 2;
+  } else {
+    hue = (r - g) / delta + 4;
+  }
+  return { h: (hue * 60 + 360) % 360, s: saturation * 100, l: lightness * 100 };
+}
+function hslToHex(hsl) {
+  const hue = (hsl.h % 360 + 360) % 360;
+  const saturation = clampNumber(hsl.s, 0, 100) / 100;
+  const lightness = clampNumber(hsl.l, 0, 100) / 100;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const secondary = chroma * (1 - Math.abs(hue / 60 % 2 - 1));
+  const match = Math.floor(hue / 60) % 6;
+  const offset = lightness - chroma / 2;
+  const channels = match === 0 ? [chroma, secondary, 0] : match === 1 ? [secondary, chroma, 0] : match === 2 ? [0, chroma, secondary] : match === 3 ? [0, secondary, chroma] : match === 4 ? [secondary, 0, chroma] : [chroma, 0, secondary];
+  return `#${channels.map(
+    (channel) => clampChannel((channel + offset) * 255).toString(16).padStart(2, "0")
+  ).join("")}`;
 }
 function wrapDescription(description) {
   const lines = [];
@@ -1547,6 +1898,10 @@ function normalizeRows(value, normalize, limit = 10) {
     return null;
   }
   return value.slice(0, limit).filter((row) => Boolean(row) && typeof row === "object").map(normalize);
+}
+function normalizeMinutes(value) {
+  const minutes = Number(value);
+  return Number.isFinite(minutes) && minutes >= 0 && minutes < 24 * 60 ? Math.round(minutes) : void 0;
 }
 function cleanText(value, maxLength) {
   return String(value ?? "").replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim().slice(0, maxLength);

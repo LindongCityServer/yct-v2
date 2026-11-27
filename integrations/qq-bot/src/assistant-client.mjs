@@ -119,8 +119,21 @@ export async function askAssistant({
   timeoutMs = 120_000,
   fetchImpl = fetch,
   logger,
+  onDelta,
 }) {
   const startedAt = Date.now();
+  let firstDeltaAt = 0;
+  // 片段回调只负责通知，出错不能把整条流打断。
+  const emitDelta = (payload) => {
+    if (typeof onDelta !== 'function') {
+      return;
+    }
+    try {
+      onDelta(payload);
+    } catch (error) {
+      logger?.warn('处理流式片段失败：', error);
+    }
+  };
   const endpoint = `${baseUrl.replace(/\/+$/, '')}/api/assistant/chat`;
   const contextToken = createAccountContextToken({
     ldpassUserId: accountContext?.ldpassUserId,
@@ -174,11 +187,17 @@ export async function askAssistant({
           break;
         case 'delta':
           if (typeof data?.text === 'string') {
+            if (!firstDeltaAt && data.text) {
+              firstDeltaAt = Date.now();
+            }
             result.text += data.text;
+            emitDelta({ text: result.text });
           }
           break;
         case 'reset':
           result.text = '';
+          firstDeltaAt = 0;
+          emitDelta({ text: '', reset: true });
           break;
         case 'references':
           if (Array.isArray(data?.references)) {
@@ -211,7 +230,7 @@ export async function askAssistant({
   }
   logger?.debug(
     `问一问回答完成：${result.text.length} 字，引用 ${result.references.length} 条，` +
-      `用时 ${Date.now() - startedAt}ms。`,
+      `首字 ${firstDeltaAt ? firstDeltaAt - startedAt : 0}ms，用时 ${Date.now() - startedAt}ms。`,
   );
   return result;
 }

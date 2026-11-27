@@ -81,7 +81,13 @@ export class QQBot {
         logger,
       });
     this.store = store ?? new ConversationStore();
-    this.queue = queue ?? new ConversationQueue({ maxGlobal: 3, maxPendingPerKey: 2, logger });
+    this.queue =
+      queue ??
+      new ConversationQueue({
+        maxGlobal: config.qq?.maxConcurrency ?? 3,
+        maxPendingPerKey: 2,
+        logger,
+      });
     this.userLimiter = new SlidingWindowLimiter({ limit: config.qq.userQpm });
     this.groupLimiter = new SlidingWindowLimiter({ limit: config.qq.groupQpm });
     this.groupNotices = loadGroupNotices(config.groupNoticesPath);
@@ -277,10 +283,41 @@ export class QQBot {
     return true;
   }
 
+  /**
+   * 排障探针：QQ_BOT_TRACE=1 时把每条网关事件打一行。
+   * 放在所有过滤之前，所以“有 trace 没回答”= 机器人收到了但被后面某步拦下，
+   * “没有 trace”= 事件根本没到进程，可以直接去查平台侧。
+   */
+  traceEvent(type, data) {
+    if (!this.config.qq?.trace) {
+      return;
+    }
+    const groupId =
+      data.group_openid ??
+      data.group?.openid ??
+      (typeof data.group_id === 'string' ? data.group_id : '');
+    const userId =
+      data.author?.member_openid ??
+      data.author?.user_openid ??
+      data.author?.id ??
+      data.member_openid ??
+      data.user_openid ??
+      data.openid ??
+      '';
+    const content = typeof data.content === 'string' ? data.content : '';
+    const attachments = Array.isArray(data.attachments) ? data.attachments.length : 0;
+    this.logger.info(
+      `[trace] ${type} msg=${data.id ?? '-'} group=${maskOpenId(groupId)} ` +
+        `user=${maskOpenId(userId)} role=${data.author?.member_role ?? '-'} ` +
+        `len=${content.length} att=${attachments}`,
+    );
+  }
+
   async handleEvent(type, data) {
     if (!data || typeof data !== 'object') {
       return;
     }
+    this.traceEvent(type, data);
     switch (type) {
       case 'GROUP_AT_MESSAGE_CREATE':
         this.recordGroupStats(data, 'at');
@@ -568,6 +605,12 @@ export class QQBot {
       typeof data.author?.member_openid === 'string' ? data.author.member_openid : '';
     const userId = memberOpenId || data.author?.id || '';
     if (!groupOpenid || !userId) {
+      if (this.config.qq?.trace) {
+        this.logger.info(
+          `[trace] 丢弃：群消息缺少 group_openid 或成员 id（msg=${data.id ?? '-'}，` +
+            `group=${maskOpenId(groupOpenid)}）`,
+        );
+      }
       return;
     }
     if (!this.seenGroups.has(groupOpenid)) {
@@ -578,6 +621,11 @@ export class QQBot {
       );
     }
     if (this.config.qq.groupAllowlist.size > 0 && !this.config.qq.groupAllowlist.has(groupOpenid)) {
+      if (this.config.qq?.trace) {
+        this.logger.info(
+          `[trace] 丢弃：群 ${maskOpenId(groupOpenid)} 不在白名单（msg=${data.id ?? '-'}）`,
+        );
+      }
       this.logger.debug(`群 ${maskOpenId(groupOpenid)} 不在白名单，忽略。`);
       return;
     }
@@ -732,6 +780,7 @@ export class QQBot {
     }
 
     // 本地快捷指令（随机数、算式、电码、天气、对联、签到、统计）不经过问一问。
+    const commandStartedAt = Date.now();
     const local = await this.command({
       text: incoming,
       config: this.config,
@@ -744,7 +793,9 @@ export class QQBot {
       materialSourceStore: this.materialSourceStore,
       signage: this.signage,
     });
+    const commandMs = Date.now() - commandStartedAt;
     if (local?.handled) {
+      this.logger.info(`指令处理完成：${commandMs}ms${local.card ? '（含卡片）' : ''}。`);
       const reply = clipCommandReply(local.reply);
       const card = local.card ? decorateCommandCard(local.card, context, target) : null;
       // 手机 QQ 不渲染 Markdown 图片。群聊先主动发卡片、再发被动文字：
@@ -807,15 +858,85 @@ export class QQBot {
     }
 
     const question = incoming.slice(0, this.config.reply.maxQuestionChars);
+    const enqueuedAt = Date.now();
     const accepted = this.queue.submit(conversationKey, () =>
-      this.answer({ target, messageId, userId, conversationKey, question, maxReplies, policy }),
+      this.answer({
+        target,
+        messageId,
+        userId,
+        conversationKey,
+        question,
+        maxReplies,
+        policy,
+        enqueuedAt,
+      }),
     );
     if (!accepted) {
       await this.safeReply(target, messageId, 1, '排队的问题有点多，请稍后再试。');
     }
   }
 
-  async answer({ target, messageId, userId, conversationKey, question, maxReplies, policy }) {
+  async answer({
+    target,
+    messageId,
+    userId,
+    conversationKey,
+    question,
+    maxReplies,
+    policy,
+    enqueuedAt,
+  }) {
+    const startedAt = Date.now();
+    // 排队时间不在 startedAt 里：排在队列里时还没进这个方法，用户感知的等待比日志大。
+    const queuedMs = enqueuedAt ? Math.max(0, startedAt - enqueuedAt) : 0;
+    const timings = { assistant: 0, condense: 0, send: 0 };
+    // 流式首段：模型还在生成时，先把第一个完整句子发出去，缩短感知等待。
+    const streamFirst = Boolean(this.config.reply.streamFirst) && maxReplies > 1;
+    const streamMinChars = this.config.reply.streamMinChars ?? 100;
+    let streamPrefix = '';
+    let streamTask = null;
+    const maybeStreamFirst = (partial) => {
+      if (!streamFirst || streamTask || typeof partial !== 'string' || !partial) {
+        return;
+      }
+      // 先发提示还没发出去时不要抢 msg_seq=1，否则会和提示撞号被平台去重。
+      if (this.config.reply.ack && !ackSent) {
+        return;
+      }
+      if (partial.length < streamMinChars) {
+        return;
+      }
+      const cutIndex = sentenceCutIndex(
+        partial,
+        streamMinChars,
+        this.config.reply.chatMaxChars ?? 360,
+      );
+      if (!cutIndex) {
+        return;
+      }
+      const rawPrefix = partial.slice(0, cutIndex);
+      // 表格、代码块必须等完整，切开会让 QQ 里出现半截格式。
+      if (rawPrefix.includes('|') || rawPrefix.includes('```')) {
+        return;
+      }
+      const chunk = prepareAnswerText(rawPrefix, []);
+      if (!chunk.trim()) {
+        return;
+      }
+      streamPrefix = rawPrefix;
+      streamTask = send(chunk)
+        .then((ok) => {
+          if (!ok) {
+            streamPrefix = '';
+          }
+          return ok;
+        })
+        .catch((error) => {
+          this.logger.warn('首段先发失败，改为整段发送：', error);
+          streamPrefix = '';
+          return false;
+        });
+    };
     const activePolicy = policy ?? this.moduleStore.resolve('');
     let seq = 0;
     let ackSent = false;
@@ -830,7 +951,12 @@ export class QQBot {
         this.logger.warn(`被动回复次数已达上限（${maxReplies}），剩余内容未发送。`);
         return false;
       }
-      return this.safeReply(target, messageId, seq, content);
+      const sendStartedAt = Date.now();
+      try {
+        return await this.safeReply(target, messageId, seq, content);
+      } finally {
+        timings.send += Date.now() - sendStartedAt;
+      }
     };
     const startAck = () => {
       if (ackSent) {
@@ -867,15 +993,15 @@ export class QQBot {
       }
     }
 
-    const startedAt = Date.now();
     const history = this.store.get(conversationKey);
     this.logger.info(
-      `回答问题（${target.kind}，${question.length} 字，历史 ${history.length} 条）。`,
+      `回答问题（${target.kind}，${question.length} 字，历史 ${history.length} 条，排队 ${queuedMs}ms）。`,
     );
 
     const accountContext = await this.resolveAccountContext(target, userId);
 
     let result;
+    const assistantStartedAt = Date.now();
     try {
       result = await this.assistant({
         baseUrl: this.config.yct.baseUrl,
@@ -895,15 +1021,31 @@ export class QQBot {
         accountContextSecret: this.config.link?.contextSecret,
         timeoutMs: this.config.reply.answerTimeoutMs,
         logger: this.logger,
+        onDelta: (payload) => {
+          if (!payload?.reset) {
+            maybeStreamFirst(payload?.text ?? '');
+          }
+        },
       });
     } catch (error) {
+      timings.assistant = Date.now() - assistantStartedAt;
       await settleAck();
-      this.logger.error('问一问请求失败：', error);
+      this.logger.error(`问一问请求失败（耗时 ${timings.assistant}ms）：`, error);
       await send(friendlyError(error));
       return;
     }
 
+    timings.assistant = Date.now() - assistantStartedAt;
     await settleAck();
+
+    const streamStarted = streamTask ? await streamTask : false;
+    let prefixSent = Boolean(streamStarted && streamPrefix);
+    if (prefixSent && !result.text.startsWith(streamPrefix)) {
+      // 极少见：模型重写或 reset 过。已发出的内容收不回来，只能保证剩余内容完整。
+      this.logger.warn('首段先发的内容和最终回答对不上，剩余部分按整段处理。');
+      prefixSent = false;
+    }
+    const remainingText = prefixSent ? result.text.slice(streamPrefix.length) : result.text;
 
     if (result.error) {
       await send(result.error);
@@ -924,10 +1066,12 @@ export class QQBot {
     }
 
     // 长回答先让模型精炼一次；失败时 composeAnswer 仍会按整句取舍，不会硬截半句。
-    let answerText = result.text;
+    // 首段已经发出去时只精炼剩余部分，避免用户先看到的内容又被改写一遍。
+    let answerText = remainingText;
     if (this.config.reply.style === 'chat' && this.config.reply.condense) {
-      const prepared = prepareAnswerText(result.text, result.references);
+      const prepared = prepareAnswerText(remainingText, result.references);
       if (prepared.length > this.config.reply.condenseThreshold) {
+        const condenseStartedAt = Date.now();
         try {
           const condensed = await this.condense({
             providerId: this.config.yct.providerId,
@@ -946,6 +1090,7 @@ export class QQBot {
         } catch (error) {
           this.logger.warn('精炼回答失败，改用本地按句取舍：', error);
         }
+        timings.condense = Date.now() - condenseStartedAt;
       }
     }
 
@@ -965,9 +1110,20 @@ export class QQBot {
       appendSources: this.config.reply.appendSources,
       followupSuggestions: this.config.reply.followups,
       links: this.config.reply.links,
-      maxSegments: Math.max(1, maxReplies - (this.config.reply.ack ? 1 : 0)),
+      maxSegments: Math.max(1, maxReplies - seq),
     });
     if (segments.length === 0) {
+      if (prefixSent) {
+        // 首段已经覆盖了全部内容，不必再发“没有可读内容”。
+        this.store.append(conversationKey, 'user', question);
+        this.store.append(conversationKey, 'assistant', streamPrefix);
+        this.logger.info(
+          `回答完成（首段已含全部内容）：${result.text.length} 字，用时 ${Date.now() - startedAt}ms` +
+            `（排队 ${queuedMs}ms，问一问 ${timings.assistant}ms，精炼 ${timings.condense}ms，` +
+            `发送 ${timings.send}ms）。`,
+        );
+        return;
+      }
       await send('问一问没有返回可读内容，请换个问法再试。');
       return;
     }
@@ -1006,10 +1162,16 @@ export class QQBot {
 
     if (sent > 0) {
       this.store.append(conversationKey, 'user', question);
-      this.store.append(conversationKey, 'assistant', segments.join('\n'));
+      this.store.append(
+        conversationKey,
+        'assistant',
+        prefixSent ? `${streamPrefix}${segments.join('\n')}` : segments.join('\n'),
+      );
       this.logger.info(
-        `回答完成${answerImage ? '（含配图）' : ''}：${result.text.length} 字，发送 ${sent}/${segments.length} 段，` +
-          `用时 ${Date.now() - startedAt}ms。`,
+        `回答完成${prefixSent ? '（首段已先发）' : ''}${answerImage ? '（含配图）' : ''}：` +
+          `${result.text.length} 字，发送 ${sent}/${segments.length} 段，` +
+          `用时 ${Date.now() - startedAt}ms（排队 ${queuedMs}ms，问一问 ${timings.assistant}ms，` +
+          `精炼 ${timings.condense}ms，发送 ${timings.send}ms）。`,
       );
     }
   }
@@ -1107,15 +1269,18 @@ export class QQBot {
     }
 
     try {
+      const renderStartedAt = Date.now();
       const png = await this.cardRenderer(card, {
         allowedImageHosts: [this.config.yct.publicBaseUrl, ...this.config.reply.imageHosts].filter(
           Boolean,
         ),
       });
+      const renderMs = Date.now() - renderStartedAt;
       if (!png || png.length === 0) {
         this.logger.warn(`指令卡片渲染结果为空：${card.type}`);
         return false;
       }
+      const uploadStartedAt = Date.now();
       if (target.kind === 'group') {
         const fileInfo = await this.api.uploadGroupImageData(target.openid, png);
         await this.api.sendGroupImage(
@@ -1131,7 +1296,8 @@ export class QQBot {
         });
       }
       this.logger.info(
-        `指令卡片已在机器人本地渲染并发送（${active ? '主动' : '被动'}）：${card.type}`,
+        `指令卡片已在机器人本地渲染并发送（${active ? '主动' : '被动'}，渲染 ${renderMs}ms，` +
+          `上传发送 ${Date.now() - uploadStartedAt}ms）：${card.type}`,
       );
       return true;
     } catch (error) {
@@ -1220,6 +1386,20 @@ function shanghaiClock() {
   }).formatToParts(new Date());
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${values.month}-${values.day} ${values.hour}:${values.minute}`;
+}
+
+/**
+ * 在流式文本里找一个可以安全断开的句子边界，返回切断位置（不含）。
+ * 只在 minChars–maxChars 之间找，避免把一句话切成两半或者第一段就刷屏。
+ */
+function sentenceCutIndex(text, minChars, maxChars) {
+  const limit = Math.min(text.length, Math.max(minChars, maxChars));
+  for (let index = limit; index > minChars; index -= 1) {
+    if ('。！？；!?;\n'.includes(text[index - 1])) {
+      return index;
+    }
+  }
+  return 0;
 }
 
 function clipCommandReply(value) {

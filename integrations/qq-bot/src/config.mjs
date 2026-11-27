@@ -15,9 +15,13 @@ const defaults = {
   QQ_BOT_INTENTS: '33554432',
   QQ_BOT_USER_QPM: '6',
   QQ_BOT_GROUP_QPM: '20',
+  QQ_BOT_MAX_CONCURRENCY: '3',
   QQ_BOT_MAX_QUESTION_CHARS: '1000',
   QQ_BOT_SEGMENT_CHARS: '900',
   QQ_BOT_ACK: '1',
+  QQ_BOT_STREAM_FIRST: '0',
+  QQ_BOT_STREAM_MIN_CHARS: '100',
+  QQ_BOT_TRACE: '0',
   QQ_BOT_STYLE: 'chat',
   QQ_BOT_CHAT_MAX_CHARS: '360',
   QQ_BOT_CONDENSE: '1',
@@ -276,6 +280,12 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
       groupAliases: splitPairs(read('QQ_BOT_GROUP_ALIASES')),
       userQpm: toInteger(read, 'QQ_BOT_USER_QPM', 6, problems, { min: 1, max: 120 }),
       groupQpm: toInteger(read, 'QQ_BOT_GROUP_QPM', 20, problems, { min: 1, max: 120 }),
+      maxConcurrency: toInteger(read, 'QQ_BOT_MAX_CONCURRENCY', 3, problems, {
+        min: 1,
+        max: 50,
+      }),
+      // 排障用：把每条网关事件的类型、打码后的群/成员和长度打到 info 日志。
+      trace: toBoolean(read, 'QQ_BOT_TRACE', false),
     },
     yct: {
       baseUrl,
@@ -355,6 +365,12 @@ export function loadConfig({ env = process.env, envPath = defaultEnvPath } = {})
       condenseChars,
       // 超过这个长度才额外调用一次模型做改写，短回答不增加延迟。
       condenseThreshold: Math.max(160, condenseChars + 60),
+      // 流式首段：模型还在生成时，先把第一个完整句子发出去，缩短感知等待。
+      streamFirst: toBoolean(read, 'QQ_BOT_STREAM_FIRST', false),
+      streamMinChars: toInteger(read, 'QQ_BOT_STREAM_MIN_CHARS', 100, problems, {
+        min: 40,
+        max: 400,
+      }),
       // 聊天风格默认不附参考标题，避免一条短回答后面跟一段像报告的小字。
       appendSources: toBoolean(read, 'QQ_BOT_APPEND_SOURCES', !chatStyle),
       links: toBoolean(read, 'QQ_BOT_LINKS', false),
@@ -483,6 +499,8 @@ export function describeConfig(config) {
     `QQ API：${config.qq.apiBase}`,
     `Intents：${config.qq.intents}`,
     `群白名单：${config.qq.groupAllowlist.size > 0 ? [...config.qq.groupAllowlist].map(maskOpenId).join(',') : '不限制'}`,
+    `问一问并发：${config.qq.maxConcurrency}（超出的排队，同一会话最多挂 2 条）`,
+    `事件探针：${config.qq.trace ? '开（每条事件打一行 [trace]）' : '关'}`,
     `问一问地址：${config.yct.baseUrl}/api/assistant/chat`,
     `模型：${config.yct.providerId} / ${config.yct.model}`,
     `模型 Key：${maskSecret(config.yct.apiKey)}`,
@@ -524,5 +542,6 @@ export function describeConfig(config) {
     `二次精炼：${config.reply.condense ? `开，目标 ${config.reply.condenseChars} 字` : '关'}`,
     `单段字数：${config.reply.segmentChars}，回答超时：${config.reply.answerTimeoutMs} ms`,
     `先发提示：${config.reply.ack ? '开' : '关'}，附参考标题：${config.reply.appendSources ? '开' : '关'}`,
+    `首段先发：${config.reply.streamFirst ? `开（至少 ${config.reply.streamMinChars} 字成句）` : '关'}`,
   ].join('\n');
 }

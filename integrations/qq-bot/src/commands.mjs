@@ -1803,6 +1803,10 @@ function buildWeatherCardFromReport(report, date) {
           sunrise: String(report.sun.sunrise ?? ''),
           sunset: String(report.sun.sunset ?? ''),
           phase: String(report.sun.phase ?? ''),
+          minutes:
+            typeof report.sun.minutes === 'number' && Number.isFinite(report.sun.minutes)
+              ? report.sun.minutes
+              : undefined,
         }
       : undefined,
     footer: '数据来自公开天气服务',

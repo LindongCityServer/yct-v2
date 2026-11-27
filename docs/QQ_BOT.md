@@ -117,6 +117,10 @@ QQ 是聊天窗口，长回答会刷屏、Markdown 符号会原样显示、引�
 | `QQ_BOT_GROUP_ALLOWLIST`      | 空                          | 只响应这些群 openid，逗号或空格分隔；空表示不限制                            |
 | `QQ_BOT_USER_QPM`             | `6`                         | 每个用户每分钟最多提问次数                                                   |
 | `QQ_BOT_GROUP_QPM`            | `20`                        | 每个群每分钟最多提问次数                                                     |
+| `QQ_BOT_MAX_CONCURRENCY`      | `3`                         | 同时处理的问一问数量；超出的排队，单会话最多再挂 2 条                        |
+| `QQ_BOT_TRACE`                | `0`                         | 排障用：每条网关事件打一行 `[trace]`（打码后的群/成员、消息 id、内容长度）   |
+| `QQ_BOT_STREAM_FIRST`         | `0`                         | 流式首段：模型还在生成时先发第一个完整句子，缩短等待                         |
+| `QQ_BOT_STREAM_MIN_CHARS`     | `100`                       | 首段先发的最小字数，且必须以句号/问号等结尾；表格和代码块会等完整            |
 | `QQ_BOT_STYLE`                | `chat`                      | `chat` 为简短聊天风格；`full` 使用网页版完整格式                             |
 | `QQ_BOT_CHAT_MAX_CHARS`       | `360`                       | chat 模式下客户端兜底上限；提示词已经要求更短                                |
 | `QQ_BOT_CONDENSE`             | `1`                         | 长回答超过阈值时再调用一次模型精炼，关掉可省一次调用                         |
@@ -133,7 +137,7 @@ QQ 是聊天窗口，长回答会刷屏、Markdown 符号会原样显示、引�
 | `QQ_BOT_IMAGES`               | `1`                         | 是否把回答引用里的运营封面作为主动图片发送；需要 `YCT_PUBLIC_BASE_URL`       |
 | `QQ_BOT_CARDS`                | `1`                         | 是否在机器人本地渲染并发送指令结果卡片                                       |
 | `QQ_BOT_CARD_FONT_DIR`        | 空（使用 `assets/fonts`）   | 卡片字体目录；部署时可由 `qqbot:card:assets` 生成                            |
-| `QQ_BOT_CARD_ASSET_DIR`       | 空（使用 `assets`）         | 卡片品牌图标和格纸模板目录                                                   |
+| `QQ_BOT_CARD_ASSET_DIR`       | 空（使用 `assets`）         | 卡片品牌图标、格纸模板和签文插图目录                                         |
 | `QQ_BOT_BILIBILI`             | `1`                         | 识别消息里的 B 站视频链接，回复标题、UP 主、链接和封面                       |
 | `QQ_BOT_FORTUNE_TEXTS_PATH`   | `data/fortune-texts.txt`    | 今日运势文案，一行一条；修改后重启机器人                                     |
 | `QQ_BOT_GROUP_NOTICES_PATH`   | `data/group-notices.json`   | 按群配置的入群/被踢/退群文案                                                 |
@@ -228,8 +232,10 @@ C:\node-v24\node.exe -v
 ```
 
 机器人卡片直接读取 `integrations\qq-bot\assets\card-templates\telegram-row.svg` 和
-`answer-sheet-row.svg`，由 `pnpm qqbot:card:assets` 从网页同源资源同步；网页发版不再影响机器人卡片。
-如果模板或字体缺失，卡片仍可渲染，但电码/GB2312 格纸底图会退回无底图版本。
+`answer-sheet-row.svg`，以及 `assets\fortune-stickers\` 下的签文插图，由 `pnpm qqbot:card:assets`
+从网页同源资源同步；网页发版不再影响机器人卡片。
+如果模板或字体缺失，卡片仍可渲染，但电码/GB2312 格纸底图会退回无底图版本；签文插图缺失时
+今日运势卡只显示文字。
 
 ### 5.3 先跑自检
 
@@ -310,7 +316,10 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\install-qq-bot-task.ps1 -Uninsta
   `state/module-audit.jsonl`；没有配置文件时按注册表默认值。权限、锁定和问一问范围划分见
   [QQ_BOT_GROUP_MODULES.md](./QQ_BOT_GROUP_MODULES.md)。
 - **运势文案**：默认读取 `data/fortune-texts.txt`，一行一条，可直接编辑；状态里只保存文案索引，
-  修改文件后重启机器人即可生效。
+  修改文件后重启机器人即可生效。签文区右下角会按文案配一张手绘表情：图片放在
+  `apps/web/public/fortune-stickers/`，文案到文件名的对照表在
+  `apps/web/lib/qq-bot-fortune-stickers.ts`；一张手绘可以覆盖多条语义相近的签文，
+  没有配图的签文只显示文字，正文变长时插图会自动缩小。
 - **玩家进出播报**：设置 `QQ_BOT_PLAYER_EVENTS=1` 后，每 `QQ_BOT_PLAYER_POLL_MS` 轮询站内
   `/api/map/player-locations`，只在在线名单变化时发消息；首次轮询只建基线，不补发历史，
   机器人启动时已经在线的人不会触发“进服”。**具体发到哪些群由 `/模块 开 玩家进出播报` 决定**，
@@ -382,7 +391,8 @@ Content-Type: application/json
 - **指令卡片**：除签到、帮助、关于机器人和新对话外，本地指令会在文字后附一张 720px 宽的 PNG，
   版式对齐地图分享卡片（主题色淡面性色块、Material Symbols 图标、原始 `yct-logo-wordmark.svg`
   字标，页脚显示来源、发送人和发送时间）；电码/GB2312 直接使用
-  `apps/web/public/card-templates/` 里的 SVG 行模板；需要 `YCT_PUBLIC_BASE_URL` 和
+  `apps/web/public/card-templates/` 里的 SVG 行模板，今日运势会按签文配
+  `apps/web/public/fortune-stickers/` 里的手绘表情；需要 `YCT_PUBLIC_BASE_URL` 和
   `QQ_BOT_CARDS=1`，会占用一次被动回复。
 - **指令卡片**：`QQ_BOT_CARDS=1` 时，机器人在本地渲染 PNG 并直接上传；不再需要网页卡片路由，
   也不再依赖 `YCT_PUBLIC_BASE_URL`。卡片封面/二维码在机器人进程内预取。
@@ -396,12 +406,21 @@ Content-Type: application/json
 - **必须 @ 机器人**：群聊只处理 `GROUP_AT_MESSAGE_CREATE`。如果开放平台开启了「接收所有消息」，
   机器人会看到 `GROUP_MESSAGE_CREATE`，但只在日志里提醒一次，不会逐条回答。
 - **去重**：平台可能重复推送同一条消息，机器人按消息 id 在 10 分钟内只回答一次。
-- **限流**：默认每个用户 6 次/分钟、每个群 20 次/分钟，全局最多同时处理 3 个问题，
-  同一会话排队最多 2 条，超过会直接提示稍后再试。
+- **限流**：默认每个用户 6 次/分钟、每个群 20 次/分钟；同时处理的问题数由
+  `QQ_BOT_MAX_CONCURRENCY` 控制（默认 3），超出的按会话排队，同一会话最多再挂 2 条，
+  超过会直接提示稍后再试。QPM 很少成为瓶颈，真正限制吞吐的是「并发数 ÷ 单次回答耗时」。
 - **上下文**：群聊按「群 + 用户」、单聊按用户保存最近 3 轮，30 分钟无活动自动过期；
   发送「新对话」「重置」清空，发送「帮助」查看说明。
 - **精炼**：回答超过阈值（默认 240 字）时再调用一次模型，改写成 180 字左右的群聊消息；
   失败或关闭时本地按整句取舍。二次调用会增加约 1-3 秒和少量 token，可用 `QQ_BOT_CONDENSE=0` 关闭。
+- **首段先发**：`QQ_BOT_STREAM_FIRST=1` 时，模型还在生成就先发第一个完整句子（至少
+  `QQ_BOT_STREAM_MIN_CHARS` 字并以句号/问号等结尾），剩余内容随后再发；表格和代码块会等完整，
+  精炼只作用于剩余部分，群聊会多占一次被动回复。
+- **事件探针**：`QQ_BOT_TRACE=1` 时每条网关事件打一行 `[trace]`，含事件类型、消息 id、
+  打码后的群/成员、角色和内容长度。它放在所有过滤之前，所以“有 trace 没回答”是机器人内部拦截，
+  “没有 trace”是事件根本没到进程。不改配置时也可以用只读脚本
+  `node integrations/qq-bot/scripts/watch-state.mjs` 盯 `state/qq-bot-state.json` 的群消息计数：
+  有人 @ 后计数不涨，同样说明事件没有进进程。
 - **长度**：精炼后再按 `QQ_BOT_SEGMENT_CHARS` 切段；硬上限 360 字（`QQ_BOT_CHAT_MAX_CHARS`），
   超出被动回复次数时截断并提示。
 - **卡片指令**：网页版的地点列表、线路条、班次卡会按引用还原成纯文本列表；引用缺失时只跳过那一块，
@@ -435,7 +454,9 @@ Content-Type: application/json
 | `40034100`                  | 主动消息频控                                         | 本适配不应出现；检查是否误用了不带 `msg_id` 的发送                                                                    |
 | `40034101` / `40054003`     | 机器人不在群 / 被移出                                | 重新把机器人拉进群                                                                                                    |
 | `40054005`                  | 消息被去重                                           | 同一 `msg_id + msg_seq` 重复发送；重启后仍出现说明两次提问拿到了同一消息 id                                           |
-| 群里 @ 了但没反应           | 没 @、不在白名单、群或成员不在沙箱、事件权限没批     | 看 `logs\qq-bot-*.log` 里是否收到事件；对照第 2 节                                                                    |
+| 群里 @ 了但没反应           | 没 @、不在白名单、群或成员不在沙箱、事件权限没批     | 开 `QQ_BOT_TRACE=1` 让他 @ 一次：没有 `[trace]` 行就是事件没到，查平台侧；有 trace 再对照第 2 节                      |
+| 回答要几十秒、群里排队      | 问一问要跑检索和工具调用；并发满了就排队             | 看日志「回答完成…（排队/问一问/精炼/发送）」：问一问占大头查网页服务和模型，排队占大头调 `QQ_BOT_MAX_CONCURRENCY`     |
+| 指令出图慢                  | 本地渲染和上传各占一段时间                           | 看「指令处理完成：…ms」和「指令卡片…渲染 …ms，上传发送 …ms」；物料盲盒走网页渲染                                      |
 | 问一问返回 401              | `YCT_ASSISTANT_KEY` 缺失或失效                       | 重新填 Key，`--ask` 验证                                                                                              |
 | `/天气` 提示城市查不到      | 高德/wttr 没有该地名                                 | 把 `QQ_BOT_WEATHER_CITY` 改成真实城市，例如 `上海`                                                                    |
 | `/天气` 报 INVALID_USER_KEY | 高德 Key 类型不对、额度用完或启用了域名白名单        | 确认是高德「Web 服务」Key，并在控制台检查配额和域名限制                                                               |
@@ -489,7 +510,8 @@ Content-Type: application/json
   更新机器人时保留；不要提交到仓库或放进公开日志。
 - 模型 Key 有额度，建议上线后配置 `QQ_BOT_GROUP_ALLOWLIST` 和较低的 `QQ_BOT_USER_QPM`。
 - 机器人只读问一问，不写数据库、不改站点数据、不读取账号或后台信息。
-- 日志会打印打码后的群/用户 openid、回答长度和错误码，但不打印 AppSecret、模型 Key、完整回答、
+- 日志会打印打码后的群/用户 openid、回答长度、错误码，以及排队和各阶段耗时
+  （问一问、精炼、发送、卡片渲染/上传），但不打印 AppSecret、模型 Key、完整回答、
   绑定 token/链接或确认码。
 
 ## 10. 上线检查清单

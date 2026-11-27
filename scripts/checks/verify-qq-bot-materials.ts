@@ -44,6 +44,7 @@ import {
   resolveQqBotMaterialTemplate,
   resolveQqBotMaterialTemplateIds,
   resolveQqBotMaterialThemeColor,
+  resolveShenyangSampleLegacyStyleLineKeys,
   tryAcquireQqBotMaterialRenderSlot,
   verifyQqBotMaterialSignature,
   type QqBotMaterialKind,
@@ -554,6 +555,53 @@ test('/地铁 的模板集合包含导视牌（与机器人菜单一致）', () 
     '/导视牌 指令仍只抽导视牌模板',
   );
   assert.equal(resolveQqBotMaterialTemplateIds('random').length, 22);
+});
+
+test('沈阳示例线网：旧版 / 过渡样式只覆盖 1、2 号线历史区段', () => {
+  const lineKeys = resolveShenyangSampleLegacyStyleLineKeys([
+    {
+      lineKey: 'shenyang:sy1',
+      stations: [
+        { name: '十三号街' },
+        { name: '铁西广场' },
+        { name: '青年大街' },
+        { name: '黎明广场' },
+        { name: '双马' },
+      ],
+    },
+    {
+      lineKey: 'shenyang:sy2',
+      stations: [
+        { name: '桃仙机场' },
+        { name: '全运路' },
+        { name: '青年大街' },
+        { name: '航空航天大学' },
+        { name: '蒲田路' },
+      ],
+    },
+    { lineKey: 'shenyang:sy3', stations: [{ name: '十三号街' }] },
+  ]);
+
+  for (const name of ['十三号街', '铁西广场', '黎明广场']) {
+    assert.deepEqual([...(lineKeys.get(name) ?? [])], ['shenyang:sy1'], name);
+  }
+  for (const name of ['全运路', '航空航天大学']) {
+    assert.deepEqual([...(lineKeys.get(name) ?? [])], ['shenyang:sy2'], name);
+  }
+  assert.deepEqual(
+    [...(lineKeys.get('青年大街') ?? [])].sort(),
+    ['shenyang:sy1', 'shenyang:sy2'],
+    '1、2 号线换乘站两条历史区段都允许',
+  );
+  for (const name of ['双马', '桃仙机场', '蒲田路']) {
+    assert.equal(lineKeys.has(name), false, `${name} 不应允许旧版 / 过渡样式`);
+  }
+
+  // 区段端点缺失时不猜测整条线，避免数据变更后误放开全部车站。
+  const missingBoundary = resolveShenyangSampleLegacyStyleLineKeys([
+    { lineKey: 'shenyang:sy1', stations: [{ name: '十三号街' }] },
+  ]);
+  assert.equal(missingBoundary.size, 0);
 });
 
 test('seed 归一化、编号前缀与画布尺寸策略', () => {

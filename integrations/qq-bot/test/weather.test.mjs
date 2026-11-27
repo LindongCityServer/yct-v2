@@ -317,6 +317,7 @@ test('天气报告带日出日落、昼夜阶段和预警信息', async () => {
     sunrise: '06:30',
     sunset: '16:58',
     phase: 'day',
+    minutes: 12 * 60,
   });
   assert.equal(report.alerts.length, 1);
   assert.equal(report.alerts[0].level, '蓝色');
@@ -386,6 +387,7 @@ test('高德报告按经纬度计算日出日落', async () => {
   assert.match(report.sun.sunrise, /^06:\d\d$/);
   assert.match(report.sun.sunset, /^16:\d\d$/);
   assert.equal(report.sun.phase, 'day');
+  assert.equal(report.sun.minutes, 12 * 60);
   assert.ok(report.alertKeywords.includes('上海'));
   assert.ok(report.alertKeywords.includes('浦东'));
 });
@@ -519,4 +521,212 @@ test('天气报告支持多地标题、5 天预报和按地点过滤的全部预
   assert.ok(report.alerts.every((alert) => !alert.title.includes('四平')));
   assert.ok(report.alerts.every((alert) => !alert.title.includes('上海')));
   assert.match(report.text, /辽宁.*沈阳市铁西区天气/u);
+});
+
+test('高德按区县查询时用 geocode 补全市名，同省同名区县不再混在一起', async () => {
+  clearWeatherCache();
+  const now = () => Date.parse('2026-11-27T08:31:00+08:00');
+  const places = {
+    沈阳铁西: { adcode: '210106', city: '沈阳市', district: '铁西区', temperature: '8' },
+    鞍山铁西: { adcode: '210303', city: '鞍山市', district: '铁西区', temperature: '7' },
+  };
+  const placeByAdcode = (adcode) => Object.values(places).find((place) => place.adcode === adcode);
+  const fetchImpl = async (url) => {
+    if (url.includes('/geocode/geo')) {
+      const address = new URL(url).searchParams.get('address');
+      const place = places[address];
+      return jsonResponse({
+        status: '1',
+        geocodes: [
+          {
+            adcode: place.adcode,
+            province: '辽宁省',
+            city: place.city,
+            district: place.district,
+            location: '123.35,41.8',
+          },
+        ],
+      });
+    }
+    if (url.includes('extensions=base')) {
+      const place = placeByAdcode(new URL(url).searchParams.get('city'));
+      // 高德按区县 adcode 查询时返回的 city 是区名，不是地级市。
+      return jsonResponse({
+        status: '1',
+        lives: [
+          {
+            province: '辽宁省',
+            city: place.district,
+            weather: '多云',
+            temperature: place.temperature,
+            humidity: '83',
+            winddirection: '西南',
+            windpower: '4',
+            reporttime: '2026-11-27 08:31:00',
+          },
+        ],
+      });
+    }
+    if (url.includes('nmc.cn/rest/findAlarm')) {
+      return jsonResponse({
+        code: 0,
+        data: {
+          page: {
+            list: [
+              {
+                alertid: 'a1',
+                issuetime: '2026/11/26 20:19',
+                title: '辽宁省沈阳市铁西区气象台发布大风蓝色预警信号',
+              },
+              {
+                alertid: 'a2',
+                issuetime: '2026/11/26 20:19',
+                title: '辽宁省气象台发布其它气象灾害橙色预警',
+              },
+              {
+                alertid: 'a3',
+                issuetime: '2026/11/26 20:19',
+                title: '吉林省四平市铁西区气象台发布暴雨蓝色预警信号',
+              },
+            ],
+          },
+          provinceAlarms: [],
+        },
+      });
+    }
+    const place = placeByAdcode(new URL(url).searchParams.get('city'));
+    return jsonResponse({
+      status: '1',
+      forecasts: [
+        {
+          province: '辽宁省',
+          city: place.district,
+          adcode: place.adcode,
+          reporttime: '2026-11-27 08:31:00',
+          casts: [
+            {
+              date: '2026-11-27',
+              dayweather: '多云',
+              nightweather: '多云',
+              daytemp: '10',
+              nighttemp: '-3',
+            },
+            {
+              date: '2026-11-28',
+              dayweather: '多云',
+              nightweather: '晴',
+              daytemp: '3',
+              nighttemp: '-8',
+            },
+          ],
+        },
+      ],
+    });
+  };
+
+  const shenyang = await fetchWeatherReport({
+    city: '沈阳铁西',
+    amapKey: 'amap-key',
+    fetchImpl,
+    now,
+  });
+  const anshan = await fetchWeatherReport({
+    city: '鞍山铁西',
+    amapKey: 'amap-key',
+    fetchImpl,
+    now,
+  });
+
+  assert.equal(shenyang.cardPlace, '铁西');
+  assert.equal(shenyang.regionLabel, '辽宁沈阳');
+  assert.match(shenyang.text, /^辽宁省沈阳市铁西区天气/u);
+  assert.deepEqual(shenyang.location, { province: '辽宁省', city: '沈阳市', district: '铁西区' });
+
+  assert.equal(anshan.cardPlace, '铁西');
+  assert.equal(anshan.regionLabel, '辽宁鞍山');
+  assert.match(anshan.text, /^辽宁省鞍山市铁西区天气/u);
+
+  // 同名区县预警不串卡：沈阳卡片保留沈阳铁西 + 省级预警，排除四平和鞍山。
+  assert.ok(shenyang.alerts.some((alert) => alert.title.includes('沈阳市铁西区')));
+  assert.ok(shenyang.alerts.some((alert) => alert.title.includes('辽宁省气象台')));
+  assert.ok(shenyang.alerts.every((alert) => !alert.title.includes('四平')));
+  assert.ok(anshan.alerts.some((alert) => alert.title.includes('辽宁省气象台')));
+  assert.ok(anshan.alerts.every((alert) => !alert.title.includes('沈阳市铁西区')));
+});
+
+test('高德直辖市按区县查询时天气接口返回的区名不会顶替市名', async () => {
+  clearWeatherCache();
+  const now = () => Date.parse('2026-11-27T08:31:00+08:00');
+  const fetchImpl = async (url) => {
+    if (url.includes('/geocode/geo')) {
+      return jsonResponse({
+        status: '1',
+        geocodes: [
+          {
+            adcode: '310115',
+            province: '上海市',
+            // 直辖市的区级地址可能拿不到 city 字段。
+            city: [],
+            district: '浦东新区',
+            location: '121.55,31.22',
+          },
+        ],
+      });
+    }
+    if (url.includes('extensions=base')) {
+      return jsonResponse({
+        status: '1',
+        lives: [
+          {
+            province: '上海',
+            // 按区县 adcode 查询时 city 是区名。
+            city: '浦东新区',
+            weather: '晴',
+            temperature: '15',
+            humidity: '68',
+            winddirection: '西北',
+            windpower: '≤3',
+            reporttime: '2026-11-27 08:31:00',
+          },
+        ],
+      });
+    }
+    return jsonResponse({
+      status: '1',
+      forecasts: [
+        {
+          province: '上海',
+          city: '浦东新区',
+          reporttime: '2026-11-27 08:31:00',
+          casts: [
+            {
+              date: '2026-11-27',
+              dayweather: '晴',
+              nightweather: '晴',
+              daytemp: '18',
+              nighttemp: '13',
+            },
+            {
+              date: '2026-11-28',
+              dayweather: '晴',
+              nightweather: '晴',
+              daytemp: '17',
+              nighttemp: '12',
+            },
+          ],
+        },
+      ],
+    });
+  };
+
+  const report = await fetchWeatherReport({
+    city: '浦东',
+    amapKey: 'amap-key',
+    fetchImpl,
+    now,
+    includeAlerts: false,
+  });
+  assert.equal(report.cardPlace, '浦东');
+  assert.equal(report.regionLabel, '上海浦东');
+  assert.match(report.text, /^上海市浦东新区天气/u);
 });

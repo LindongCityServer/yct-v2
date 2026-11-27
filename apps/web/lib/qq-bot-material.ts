@@ -957,6 +957,8 @@ interface SampleMaterialDataSet {
   sample: MaterialTransitNetworkSample;
   lines: SampleMaterialLine[];
   wayfindingStations: MetroWayfindingExampleStation[];
+  /** 站点 → 允许套用旧版 / 过渡样式的线路键（沈阳示例线网历史区段）。 */
+  legacyStyleLineKeysByStation: Map<string, Set<string>>;
 }
 
 const qqBotTransitDirections: readonly MaterialTransitDirection[] = [
@@ -1850,6 +1852,50 @@ function assertSampleLicense(sample: MaterialTransitNetworkSample): void {
   }
 }
 
+/**
+ * 沈阳示例线网里旧版（2010 风）/ 过渡（2019-2024）样式只在这些历史区段生效：
+ * - 1 号线：十三号街 — 黎明广场
+ * - 2 号线：全运路 — 航空航天大学（示例站序是南→北，允许反向区间）
+ * 按站名解析区段，避免 RMP 站序调整后写死下标。
+ */
+const shenyangSampleLegacyStyleSegments = [
+  { lineKey: 'shenyang:sy1', from: '十三号街', to: '黎明广场' },
+  { lineKey: 'shenyang:sy2', from: '全运路', to: '航空航天大学' },
+] as const;
+
+/** 解析示例线网中允许旧版 / 过渡样式的「站点 → 线路键」，供候选过滤与回归检查。 */
+export function resolveShenyangSampleLegacyStyleLineKeys(
+  lines: ReadonlyArray<{
+    lineKey: string;
+    stations: ReadonlyArray<{ name: string }>;
+  }>,
+): Map<string, Set<string>> {
+  const lineKeysByStation = new Map<string, Set<string>>();
+  for (const segment of shenyangSampleLegacyStyleSegments) {
+    const line = lines.find((item) => item.lineKey === segment.lineKey);
+    if (!line) {
+      continue;
+    }
+    const fromIndex = line.stations.findIndex((station) => station.name.trim() === segment.from);
+    const toIndex = line.stations.findIndex((station) => station.name.trim() === segment.to);
+    if (fromIndex < 0 || toIndex < 0) {
+      continue;
+    }
+    const start = Math.min(fromIndex, toIndex);
+    const end = Math.max(fromIndex, toIndex);
+    for (let index = start; index <= end; index += 1) {
+      const stationName = line.stations[index]?.name.trim();
+      if (!stationName) {
+        continue;
+      }
+      const lineKeys = lineKeysByStation.get(stationName) ?? new Set<string>();
+      lineKeys.add(line.lineKey);
+      lineKeysByStation.set(stationName, lineKeys);
+    }
+  }
+  return lineKeysByStation;
+}
+
 function buildSampleMaterialDataSet(sample: MaterialTransitNetworkSample): SampleMaterialDataSet {
   const options = listMaterialTransitNetworkLines(sample.snapshot);
   const lines: SampleMaterialLine[] = [];
@@ -1911,7 +1957,12 @@ function buildSampleMaterialDataSet(sample: MaterialTransitNetworkSample): Sampl
       }
     }
   }
-  return { sample, lines, wayfindingStations: Array.from(stationByName.values()) };
+  return {
+    sample,
+    lines,
+    wayfindingStations: Array.from(stationByName.values()),
+    legacyStyleLineKeysByStation: resolveShenyangSampleLegacyStyleLineKeys(lines),
+  };
 }
 
 /** 示例线网地铁站对象：同名站合并，每条线路保留节点 id 与终点判断。 */
@@ -1942,16 +1993,33 @@ function buildSampleMetroStationObjects(
   return Array.from(stationByName.values());
 }
 
+/** 旧版 / 过渡样式模板：示例线网只允许历史区段的车站与线路抽中。 */
+function isLegacyStyleTemplate(templateId: QqBotMaterialTemplateId): boolean {
+  const { styleKey } = resolveQqBotMaterialSamplingKeys(templateId);
+  return styleKey === 'classic' || styleKey === 'transition';
+}
+
 function buildSampleMetroCandidate(
   templateId: QqBotMaterialTemplateId,
   template: MaterialTemplateVersion,
   data: SampleMaterialDataSet,
 ): MaterialCandidate[] {
   const needsNextStation = templateUsesNextStation(template);
+  const legacyLineKeysByStation = isLegacyStyleTemplate(templateId)
+    ? data.legacyStyleLineKeysByStation
+    : undefined;
   const candidates: MaterialCandidate[] = [];
   for (const station of buildSampleMetroStationObjects(data.lines)) {
+    const allowedLineKeys = legacyLineKeysByStation?.get(station.name);
+    // 旧版 / 过渡样式只覆盖 1、2 号线的历史区段，其它站不进入候选池。
+    if (legacyLineKeysByStation && !allowedLineKeys) {
+      continue;
+    }
     const eligibleLines = station.lines.filter(
-      (line) => line.nodeId && (!needsNextStation || line.hasNextStation),
+      (line) =>
+        line.nodeId &&
+        (!needsNextStation || line.hasNextStation) &&
+        (!allowedLineKeys || allowedLineKeys.has(line.id)),
     );
     if (!eligibleLines.length) {
       continue;
@@ -1999,6 +2067,12 @@ function buildSampleWayfindingCandidates(
   const candidates: MaterialCandidate[] = [];
   for (const station of data.wayfindingStations) {
     for (const { styleKey, style } of qqBotMaterialWayfindingStyles) {
+      // 旧版导视牌同样只在 1、2 号线历史区段的车站出现。
+      const allowedLineKeys =
+        style === 'classic' ? data.legacyStyleLineKeysByStation.get(station.name) : undefined;
+      if (style === 'classic' && !allowedLineKeys) {
+        continue;
+      }
       candidates.push({
         templateId,
         template,
@@ -2007,7 +2081,10 @@ function buildSampleWayfindingCandidates(
         layoutKey,
         styleKey,
         async prepare(rng: QqBotMaterialRandom): Promise<PreparedMaterial> {
-          const line = pickSeeded(rng, station.lines);
+          const lineCandidates = allowedLineKeys
+            ? station.lines.filter((line) => allowedLineKeys.has(line.id))
+            : station.lines;
+          const line = pickSeeded(rng, lineCandidates);
           const examples = pickMetroWayfindingExamples(station, line.id, style);
           if (!examples.length) {
             throw new MaterialCandidateRejectedError('导视牌模板库没有可用示例。');

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
+import { resolveFortuneStickerFile } from './qq-bot-fortune-stickers';
 
 /**
  * QQ 机器人指令结果卡片。
@@ -64,6 +65,10 @@ const materialIconPaths: Record<string, string> = {
     'M160-200h160v-320H160v320Zm240 0h160v-560H400v560Zm240 0h160v-240H640v240ZM80-120v-480h240v-240h320v320h240v400H80Z',
   partly_cloudy_day:
     'M440-760v-160h80v160h-80Zm266 110-56-56 113-114 56 57-113 113Zm54 210v-80h160v80H760Zm3 299L650-254l56-56 114 112-57 57ZM254-650 141-763l57-57 112 114-56 56Zm-14 450h180q25 0 42.5-17.5T480-260q0-25-17-42.5T421-320h-51l-20-48q-14-33-44-52.5T240-440q-50 0-85 35t-35 85q0 50 35 85t85 35Zm0 80q-83 0-141.5-58.5T40-320q0-83 58.5-141.5T240-520q60 0 109.5 32.5T423-400q58 0 97.5 43T560-254q-2 57-42.5 95.5T420-120H240Zm320-134q-5-20-10-39t-10-39q45-19 72.5-59t27.5-89q0-66-47-113t-113-47q-60 0-105 39t-53 99q-20-5-41-9t-41-9q14-88 82.5-144T480-720q100 0 170 70t70 170q0 77-44 138.5T560-254Zm-79-226Z',
+  clear_night:
+    'M484-80q-84 0-157.5-32t-128-86.5Q144-253 112-326.5T80-484q0-146 93-257.5T410-880q-18 99 11 193.5T521-521q71 71 165.5 100T880-410q-26 144-138 237T484-80Zm0-80q88 0 163-44t118-121q-86-8-163-43.5T464-465q-61-61-97-138t-43-163q-77 43-120.5 118.5T160-484q0 135 94.5 229.5T484-160Zm-20-305Z',
+  partly_cloudy_night:
+    'M504-465Zm20 385H420l20-12.5q20-12.5 43.5-28t43.5-28l20-12.5q81-6 149.5-49T805-325q-86-8-163-43.5T504-465q-61-61-97-138t-43-163q-77 43-120.5 118.5T200-484v12l-12 5.5q-12 5.5-26.5 11.5T135-443.5l-12 5.5q-2-11-2.5-23t-.5-23q0-146 93-257.5T450-880q-18 99 11 193.5T561-521q71 71 165.5 100T920-410q-26 144-138 237T524-80Zm-284-80h180q25 0 42.5-17.5T480-220q0-25-17-42.5T422-280h-52l-20-48q-14-33-44-52.5T240-400q-50 0-85 34.5T120-280q0 50 35 85t85 35Zm0 80q-83 0-141.5-58.5T40-280q0-83 58.5-141.5T240-480q60 0 109.5 32.5T423-360q57 2 97 42.5t40 97.5q0 58-41 99t-99 41H240Z',
   public:
     'M324-111.5Q251-143 197-197t-85.5-127Q80-397 80-480t31.5-156Q143-709 197-763t127-85.5Q397-880 480-880t156 31.5Q709-817 763-763t85.5 127Q880-563 880-480t-31.5 156Q817-251 763-197t-127 85.5Q563-80 480-80t-156-31.5ZM440-162v-78q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 121 79.5 212T440-162Zm276-102q41-45 62.5-100.5T800-480q0-98-54.5-179T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h240q17 0 28.5 11.5T600-440v120h40q26 0 47 15.5t29 40.5Z',
   restart_alt:
@@ -183,6 +188,8 @@ export interface WeatherSun {
   sunset?: string;
   /** day / dawn / dusk / night；用于主题色与“夜间”标签。 */
   phase?: string;
+  /** 查询时刻的当地分钟数（0-1439），用于在天空色矩阵之间做连续插值。 */
+  minutes?: number;
 }
 
 export interface WeatherCard {
@@ -425,6 +432,7 @@ export function normalizeCard(input: unknown): QqBotCard | null {
               sunrise: cleanText((card.sun as Record<string, unknown>).sunrise, 8),
               sunset: cleanText((card.sun as Record<string, unknown>).sunset, 8),
               phase: cleanText((card.sun as Record<string, unknown>).phase, 8),
+              minutes: normalizeMinutes((card.sun as Record<string, unknown>).minutes),
             }
           : undefined;
       return {
@@ -685,7 +693,7 @@ function buildWeatherCard(card: WeatherCard): string {
           94,
           0,
           38,
-          weatherColor(day.condition ?? ''),
+          weatherSkyColor(day.condition, 'day'),
         ),
         `<text x="146" y="28" font-size="24" font-weight="700" fill="${colors.text}">${escapeXml(day.low || '--')}° ~ ${escapeXml(day.high || '--')}°</text>`,
         `<text x="300" y="28" font-size="18" fill="${colors.textSecondary}">${escapeXml(shortText(day.condition || '天气未知', 12))}</text>`,
@@ -734,7 +742,13 @@ function buildWeatherCard(card: WeatherCard): string {
     sunText
       ? `<text x="28" y="238" font-size="14" fill="${colors.textSecondary}">${escapeXml(sunText)}</text>`
       : '',
-    renderMaterialIconPath(weatherIconName(card.current.condition), 520, 190, 104, color),
+    renderMaterialIconPath(
+      weatherIconName(card.current.condition, card.sun?.phase),
+      520,
+      190,
+      104,
+      color,
+    ),
     card.updated
       ? `<text x="612" y="42" text-anchor="end" font-size="13" fill="${colors.textMuted}">${escapeXml(card.updated)}</text>`
       : '',
@@ -747,7 +761,7 @@ function buildWeatherCard(card: WeatherCard): string {
   return buildFrame({
     height: 700 + alertBlockHeight + Math.max(0, forecastDays.length - 2) * 70,
     color,
-    icon: 'partly_cloudy_day',
+    icon: card.sun?.phase === 'night' ? 'partly_cloudy_night' : 'partly_cloudy_day',
     title: `${card.place}天气`,
     eyebrow: `天气${card.region ? ` · ${card.region}` : ''} · ${displayDate(card.date)}`,
     footer: card.footer || '数据来自公开天气服务',
@@ -957,6 +971,7 @@ function buildFortuneCard(card: FortuneCard): string {
       (line, index) =>
         `<text x="24" y="${78 + index * 32}" font-size="22" fill="${colors.textSecondary}">${escapeXml(line)}</text>`,
     ),
+    renderFortuneSticker(card.text, lines.length),
     '</g>',
     `<text x="40" y="520" font-size="14" fill="${colors.textMuted}">${card.reset ? '已重抽，今日结果已更新。' : '今日结果固定，可发送「重置运势」重抽。'}</text>`,
   ].join('');
@@ -970,6 +985,26 @@ function buildFortuneCard(card: FortuneCard): string {
     footer: card.footer || '仅供娱乐',
     body,
   });
+}
+
+/**
+ * 签文区右下的手绘插图。
+ *
+ * 插图随正文行数收缩，始终贴着面板右下角，和左上角的「签文」标题形成对角构图；
+ * 正文长到剩余高度不足 64px 时干脆不画，宁可留白也不压字。
+ */
+function renderFortuneSticker(text: string, lineCount: number): string {
+  const fileName = resolveFortuneStickerFile(text);
+  const href = fileName ? getFortuneStickerDataUri(fileName) : null;
+  if (!href) {
+    return '';
+  }
+  const textBottom = 78 + Math.max(0, lineCount - 1) * 32 + 10;
+  const size = Math.min(168, 280 - 16 - (textBottom + 8));
+  if (size < 64) {
+    return '';
+  }
+  return `<image x="${320 - 20 - size}" y="${280 - 16 - size}" width="${size}" height="${size}" href="${href}"/>`;
 }
 
 function buildPoiCard(card: PoiCard): string {
@@ -1658,6 +1693,36 @@ function getCardTemplateDataUri(fileName: string): string | null {
   }
 }
 
+const stickerCache = new Map<string, string | null>();
+
+/** 签文插图与卡片模板同样支持 FILE/ASSET_DIR 覆盖，先找部署包里的 assets 再找 public。 */
+function getFortuneStickerDataUri(fileName: string): string | null {
+  if (stickerCache.has(fileName)) {
+    return stickerCache.get(fileName) ?? null;
+  }
+  const configuredDir = process.env.QQ_BOT_CARD_ASSET_DIR?.trim();
+  const candidates = [
+    ...(configuredDir ? [resolve(configuredDir, 'fortune-stickers', fileName)] : []),
+    resolve(process.cwd(), 'assets', 'fortune-stickers', fileName),
+    resolve(process.cwd(), 'public', 'fortune-stickers', fileName),
+    resolve(process.cwd(), 'apps', 'web', 'public', 'fortune-stickers', fileName),
+    resolve(process.cwd(), '..', '..', 'apps', 'web', 'public', 'fortune-stickers', fileName),
+  ];
+  const stickerPath = candidates.find((candidate) => existsSync(candidate));
+  if (!stickerPath) {
+    stickerCache.set(fileName, null);
+    return null;
+  }
+  try {
+    const dataUri = `data:image/png;base64,${readFileSync(stickerPath).toString('base64')}`;
+    stickerCache.set(fileName, dataUri);
+    return dataUri;
+  } catch {
+    stickerCache.set(fileName, null);
+    return null;
+  }
+}
+
 let brandLogoDataUri: string | null | undefined;
 
 function renderBrandLogo(x: number, y: number, size: number): string {
@@ -1732,6 +1797,22 @@ function wrapPlainText(value: string, maxChars: number, maxLines: number): strin
       break;
     }
   }
+  const truncated = chars.length > maxChars * maxLines;
+  // 多行时按行数均分，避免「宜...额...我也不知道」被切成 12 + 1、末行只剩一个字。
+  // 均分点落在省略号中间时往后挪，别让下一行以「.」开头。
+  if (!truncated && lines.length > 1) {
+    const perLine = Math.ceil(chars.length / lines.length);
+    lines.length = 0;
+    let start = 0;
+    while (start < chars.length) {
+      let end = Math.min(chars.length, start + perLine);
+      while (end < chars.length && end - start < maxChars && '.…'.includes(chars[end])) {
+        end += 1;
+      }
+      lines.push(chars.slice(start, end).join(''));
+      start = end;
+    }
+  }
   for (let index = 1; index < lines.length; index += 1) {
     if (/^[，。、；：！？]/u.test(lines[index])) {
       const [punctuation, ...rest] = Array.from(lines[index]);
@@ -1739,122 +1820,339 @@ function wrapPlainText(value: string, maxChars: number, maxLines: number): strin
       lines[index] = rest.join('');
     }
   }
-  if (chars.length > maxChars * maxLines) {
+  if (truncated) {
     lines[lines.length - 1] = `${lines[lines.length - 1].slice(0, -1)}…`;
   }
   return lines.length > 0 ? lines : ['今天适合按自己的节奏来。'];
 }
 
-function weatherIconName(condition?: string): string {
+/** 天气图标：夜间把带太阳的图标换成月亮版（晴 → 月亮，多云 → 月+云）。 */
+function weatherIconName(condition?: string, phase?: string): string {
   const text = String(condition ?? '');
-  if (/雷/u.test(text)) {
-    return 'thunderstorm';
+  const dayIcon = /雷/u.test(text)
+    ? 'thunderstorm'
+    : /雪/u.test(text)
+      ? 'weather_snowy'
+      : /雨/u.test(text)
+        ? 'rainy'
+        : /雾|霾/u.test(text)
+          ? 'foggy'
+          : /阴/u.test(text)
+            ? 'cloud'
+            : /云/u.test(text)
+              ? 'partly_cloudy_day'
+              : /晴/u.test(text)
+                ? 'sunny'
+                : 'partly_cloudy_day';
+  if (phase === 'night') {
+    if (dayIcon === 'sunny') {
+      return 'clear_night';
+    }
+    if (dayIcon === 'partly_cloudy_day') {
+      return 'partly_cloudy_night';
+    }
   }
-  if (/雪/u.test(text)) {
-    return 'weather_snowy';
-  }
-  if (/雨/u.test(text)) {
-    return 'rainy';
-  }
-  if (/雾|霾/u.test(text)) {
-    return 'foggy';
-  }
-  if (/阴/u.test(text)) {
-    return 'cloud';
-  }
-  if (/云/u.test(text)) {
-    return 'partly_cloudy_day';
-  }
-  if (/晴/u.test(text)) {
-    return 'sunny';
-  }
-  return 'partly_cloudy_day';
+  return dayIcon;
 }
 
-function weatherColor(...conditions: string[]): string {
-  const text = conditions.join(' ');
-  if (/雷/u.test(text)) {
-    return '#6A5ACD';
-  }
-  if (/雪|冰|冻/u.test(text)) {
-    return '#3E91B5';
-  }
-  if (/雨/u.test(text)) {
-    return '#2F6FCB';
-  }
-  if (/雾|霾|沙|尘/u.test(text)) {
-    return '#6F7775';
-  }
-  if (/阴/u.test(text)) {
-    return '#5D7186';
-  }
-  if (/云/u.test(text)) {
-    return '#4B82C4';
-  }
-  if (/晴/u.test(text)) {
-    return '#D98A1E';
-  }
-  return '#2584E8';
+/** 天气现象分组：主题色按「现象 × 昼夜阶段」查天空色表，不再把昼夜色混进现象色。 */
+type WeatherSkyKey = 'clear' | 'cloud' | 'overcast' | 'rain' | 'snow' | 'fog' | 'thunder' | 'other';
+
+interface WeatherSkyPalette {
+  dawn: string;
+  day: string;
+  /** 正午前后单独提亮：保留饱和度、加明度，只在正午锚点附近出现。 */
+  noon: string;
+  dusk: string;
+  night: string;
 }
 
 /**
- * 天气主题色：先取天气现象，再叠加当地昼夜阶段与气温。
- * 夜间压成深蓝、清晨偏暖橙、傍晚偏绛紫；气温再按冷 / 热轻微染色，
- * 让同一张卡片在晴天早晨、雨夜和高温天看起来有区别。
+ * 天空色矩阵：行是天气现象，列是昼夜阶段（清晨 / 白天 / 正午 / 傍晚 / 夜间）。
+ * 每个格子都是手选色：清晨统一偏粉、白天保持饱和、正午前后提亮（保留饱和度再加明度）、傍晚偏橙金。
+ * 所有色值都按「白图标对比度 ≥ 3:1」挑选（正午色是能保证对比度的最亮值），气温偏移又保持相对亮度不变，
+ * 所以天气卡片的图标始终是白色，不会反色。
+ */
+const weatherSkyColors: Record<WeatherSkyKey, WeatherSkyPalette> = {
+  clear: {
+    dawn: '#D7758D',
+    day: '#3B86C9',
+    noon: '#6098CA',
+    dusk: '#C9761B',
+    night: '#22304A',
+  },
+  cloud: {
+    dawn: '#C46E93',
+    day: '#3B9ADA',
+    noon: '#499AD1',
+    dusk: '#C4842A',
+    night: '#2B5478',
+  },
+  overcast: {
+    dawn: '#AF888E',
+    day: '#8F9499',
+    noon: '#8F9499',
+    dusk: '#B28B52',
+    night: '#333A44',
+  },
+  rain: {
+    dawn: '#B582A2',
+    day: '#4C6A8A',
+    noon: '#7C95B1',
+    dusk: '#AD8A4E',
+    night: '#29384C',
+  },
+  snow: {
+    dawn: '#B780B7',
+    day: '#6F93A8',
+    noon: '#7997A9',
+    dusk: '#BB8835',
+    night: '#35485E',
+  },
+  fog: {
+    dawn: '#B18981',
+    day: '#7C7B6E',
+    noon: '#949489',
+    dusk: '#B7894D',
+    night: '#3B3A38',
+  },
+  thunder: {
+    dawn: '#B182BF',
+    day: '#5D5296',
+    noon: '#958DBC',
+    dusk: '#C17C1D',
+    night: '#2D2A4A',
+  },
+  other: {
+    dawn: '#CF7D7D',
+    day: '#2584E8',
+    noon: '#4F96E1',
+    dusk: '#C68325',
+    night: '#243349',
+  },
+};
+
+/** 天气描述归到天空色矩阵的一行，优先级和天气图标一致。 */
+function weatherSkyKey(condition?: string): WeatherSkyKey {
+  const text = String(condition ?? '');
+  if (/雷/u.test(text)) {
+    return 'thunder';
+  }
+  if (/雪|冰|冻/u.test(text)) {
+    return 'snow';
+  }
+  if (/雨/u.test(text)) {
+    return 'rain';
+  }
+  if (/雾|霾|沙|尘/u.test(text)) {
+    return 'fog';
+  }
+  if (/阴/u.test(text)) {
+    return 'overcast';
+  }
+  if (/云/u.test(text)) {
+    return 'cloud';
+  }
+  if (/晴/u.test(text)) {
+    return 'clear';
+  }
+  return 'other';
+}
+
+/** 天空色（离散阶段）：缺省按白天列；预报行的小图标固定用白天列。 */
+function weatherSkyColor(condition: string | undefined, phase: string | undefined): string {
+  const palette = weatherSkyColors[weatherSkyKey(condition)];
+  if (phase === 'dawn') {
+    return palette.dawn;
+  }
+  if (phase === 'dusk') {
+    return palette.dusk;
+  }
+  if (phase === 'night') {
+    return palette.night;
+  }
+  return palette.day;
+}
+
+/**
+ * 当前时刻的天空色：以日出 / 日落为锚点，在天空色矩阵的列之间插值，
+ * 让清晨、白天、正午、傍晚、夜间之间是渐变而不是硬切。
+ * 卡片带精确时间（sun.minutes）时用插值；只有阶段或时间异常时退回离散阶段色。
+ * 锚点：日出前 1h 起由夜转清晨 → 日出后 30min 为清晨色 → 日出后 2h 为白天色；
+ * 正午（日出日落中点）提亮 → 日落前 2h 回到白天色 →
+ * 日落后 30min 为傍晚色 → 日落后 2h 回到夜间色。
+ */
+function weatherSkyColorAtTime(condition: string | undefined, sun: WeatherSun | undefined): string {
+  const palette = weatherSkyColors[weatherSkyKey(condition)];
+  const sunrise = parseClockMinutes(sun?.sunrise);
+  const sunset = parseClockMinutes(sun?.sunset);
+  const minutes =
+    typeof sun?.minutes === 'number' && Number.isFinite(sun.minutes) ? sun.minutes : null;
+  const dayLength = sunrise === null || sunset === null ? 0 : sunset - sunrise;
+  if (sunrise === null || sunset === null || minutes === null || dayLength < 240) {
+    return weatherSkyColor(condition, sun?.phase);
+  }
+  const solarNoon = Math.round((sunrise + sunset) / 2);
+  const anchors = [
+    { minute: sunrise - 60, color: palette.night },
+    { minute: sunrise + 30, color: palette.dawn },
+    { minute: sunrise + 120, color: palette.day },
+    { minute: solarNoon, color: palette.noon },
+    { minute: sunset - 120, color: palette.day },
+    { minute: sunset + 30, color: palette.dusk },
+    { minute: sunset + 120, color: palette.night },
+  ];
+  const ordered = anchors.every(
+    (anchor, index) => index === 0 || anchor.minute > anchors[index - 1]!.minute,
+  );
+  if (!ordered || minutes <= anchors[0]!.minute || minutes >= anchors[anchors.length - 1]!.minute) {
+    return minutes === null ? weatherSkyColor(condition, sun?.phase) : palette.night;
+  }
+  for (let index = 1; index < anchors.length; index += 1) {
+    const previous = anchors[index - 1]!;
+    const next = anchors[index]!;
+    if (minutes <= next.minute) {
+      const ratio = (minutes - previous.minute) / (next.minute - previous.minute);
+      const transition = index === 5 ? 'day-dusk' : index === 6 ? 'dusk-night' : undefined;
+      return blendSkyColors(previous.color, next.color, ratio, transition);
+    }
+  }
+  return palette.night;
+}
+
+/**
+ * 气温偏移：在天空色上做色温 / 色调位移，而不是混一层颜色。
+ * - 色温：冷端减红加蓝、热端加红减蓝（类似白平衡），幅度随偏离 17℃ 的距离增长；
+ * - 偏移后把 HSL 明度校准回原来的相对亮度：只变冷暖不变明度，
+ *   白图标对比度不随气温变化，天气卡片也就不会反色。
+ * 17℃ 左右为中性；±20℃ 对应最大偏移。
+ */
+function shiftWeatherColorByTemperature(color: string, temperature: number): string {
+  const warmth = clampNumber((temperature - 17) / 20, -1, 1);
+  const [red, green, blue] = parseHexColor(color);
+  const targetLuminance = relativeLuminance([red, green, blue]);
+  // 夜间 / 深色天空本身就压着亮度，色温位移按明度收一点，避免深蓝被推成中性灰。
+  const depth = clampNumber(rgbToHsl(red, green, blue).l / 45, 0.5, 1);
+  const shifted = rgbToHsl(
+    clampChannel(red + warmth * 16 * depth),
+    clampChannel(green + warmth * 4 * depth),
+    clampChannel(blue - warmth * 18 * depth),
+  );
+  let low = 0;
+  let high = 100;
+  let result = hslToHex(shifted);
+  for (let step = 0; step < 14; step += 1) {
+    const middle = (low + high) / 2;
+    const candidate = hslToHex({ h: shifted.h, s: shifted.s, l: middle });
+    if (relativeLuminance(parseHexColor(candidate)) > targetLuminance) {
+      high = middle;
+    } else {
+      low = middle;
+    }
+    result = candidate;
+  }
+  return result;
+}
+
+function relativeLuminance([red, green, blue]: [number, number, number]): number {
+  const channel = (value: number): number => {
+    const normalized = value / 255;
+    return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue);
+}
+
+function parseClockMinutes(value?: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/u.exec(String(value ?? ''));
+  if (!match) {
+    return null;
+  }
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours > 23 || minutes > 59) {
+    return null;
+  }
+  return hours * 60 + minutes;
+}
+
+/**
+ * 天空色插值：色相沿色环过渡，饱和度和明度线性插值。
+ * 蓝 → 橙如果直接按 RGB 混会经过灰色（互补色相消），
+ * 所以「白天 → 傍晚」固定走蓝 → 紫 → 红 → 橙的暖色方向，
+ * 「傍晚 → 夜间」同样走橙 → 红 → 紫 → 蓝的暖色方向，避免经过黄绿。
+ */
+function blendSkyColors(
+  from: string,
+  to: string,
+  weight: number,
+  transition?: 'day-dusk' | 'dusk-night',
+): string {
+  const fromHsl = rgbToHsl(...parseHexColor(from));
+  const toHsl = rgbToHsl(...parseHexColor(to));
+  const ratio = clampNumber(weight, 0, 1);
+  let delta = toHsl.h - fromHsl.h;
+  const warmDayToDusk =
+    transition === 'day-dusk' && fromHsl.h >= 150 && fromHsl.h <= 270 && toHsl.h <= 90;
+  const warmDuskToNight =
+    transition === 'dusk-night' && fromHsl.h <= 120 && toHsl.h >= 180 && delta > 0;
+  if (warmDayToDusk && delta < 0) {
+    delta += 360;
+  } else if (warmDuskToNight) {
+    delta -= 360;
+  } else if (delta > 180) {
+    delta -= 360;
+  } else if (delta < -180) {
+    delta += 360;
+  }
+  const color = hslToHex({
+    h: (fromHsl.h + delta * ratio + 360) % 360,
+    // 色相跨度大时中间段降一点饱和度，避免蓝橙/蓝粉过渡中段出现霓虹紫。
+    s:
+      (fromHsl.s + (toHsl.s - fromHsl.s) * ratio) *
+      (1 - clampNumber((Math.abs(delta) - 100) / 260, 0, 0.3) * Math.sin(Math.PI * ratio)),
+    l: fromHsl.l + (toHsl.l - fromHsl.l) * ratio,
+  });
+  return ensureWhiteIconContrast(color);
+}
+
+/**
+ * 插值后压一道对比度底线：色相 / 明度过渡可能把颜色抬亮，
+ * 保证天气卡片的白图标对比度始终 ≥ 3:1，不会反色。
+ */
+function ensureWhiteIconContrast(color: string): string {
+  const [red, green, blue] = parseHexColor(color);
+  const hsl = rgbToHsl(red, green, blue);
+  const luminanceLimit = 1.05 / 3.05 - 0.05;
+  let lightness = hsl.l;
+  let result = color;
+  while (lightness > 4 && relativeLuminance(parseHexColor(result)) > luminanceLimit) {
+    lightness -= 0.5;
+    result = hslToHex({ h: hsl.h, s: hsl.s, l: lightness });
+  }
+  return result;
+}
+
+/**
+ * 天气主题色：按当前时刻在天空色矩阵里插值，再按气温做保持亮度的色温偏移。
+ * 昼夜阶段已经写在矩阵里，所以不拿预报现象一起混色，避免“今天晴、后天雨”把晴天的天空染成雨色。
  */
 function resolveWeatherTheme(card: WeatherCard): {
   color: string;
   phaseLabel: string;
   conditionLabel: string;
 } {
-  const base = weatherColor(card.current.condition, ...card.days.map((day) => day.condition ?? ''));
-  const phase = String(card.sun?.phase ?? '');
-  let color = base;
-  if (phase === 'night') {
-    color = blendHexColor('#22304A', base, 0.22);
-  } else if (phase === 'dawn') {
-    color = blendHexColor('#C96F52', base, 0.38);
-  } else if (phase === 'dusk') {
-    color = blendHexColor('#9C5570', base, 0.38);
-  }
+  const sky = weatherSkyColorAtTime(card.current.condition, card.sun);
   const temperature = Number.parseFloat(card.current.temp.replace(/[−－]/gu, '-'));
-  const temperatureColor = Number.isFinite(temperature)
-    ? weatherTemperatureColor(temperature)
-    : color;
-  if (Number.isFinite(temperature)) {
-    color = blendHexColor(color, temperatureColor, 0.2);
-  }
+  const phase = String(card.sun?.phase ?? '');
   const phaseLabel =
     phase === 'night' ? '夜间' : phase === 'dawn' ? '清晨' : phase === 'dusk' ? '傍晚' : '';
   return {
-    color,
+    color: Number.isFinite(temperature) ? shiftWeatherColorByTemperature(sky, temperature) : sky,
     phaseLabel,
     conditionLabel: phaseLabel
       ? `${card.current.condition} · ${phaseLabel}`
       : card.current.condition,
   };
-}
-
-function weatherTemperatureColor(temperature: number): string {
-  if (temperature <= -10) {
-    return '#3E8FCC';
-  }
-  if (temperature <= 0) {
-    return '#4A9AD4';
-  }
-  if (temperature <= 10) {
-    return '#3D7EDB';
-  }
-  if (temperature <= 18) {
-    return '#2E9E8F';
-  }
-  if (temperature <= 25) {
-    return '#2F9D6F';
-  }
-  if (temperature <= 30) {
-    return '#D98A2B';
-  }
-  return '#D9543F';
 }
 
 function weatherAlertColor(level?: string): string {
@@ -1905,22 +2203,73 @@ function weatherAlertIconName(alert: WeatherAlert): string {
   return 'warning';
 }
 
-function blendHexColor(from: string, to: string, weightTo: number): string {
-  const parse = (value: string): [number, number, number] => {
-    const match = /^#([0-9a-fA-F]{6})$/u.exec(value);
-    if (!match) {
-      return [0, 0, 0];
-    }
-    const numeric = Number.parseInt(match[1]!, 16);
-    return [(numeric >> 16) & 0xff, (numeric >> 8) & 0xff, numeric & 0xff];
-  };
-  const weight = Math.max(0, Math.min(1, weightTo));
-  const fromRgb = parse(from);
-  const toRgb = parse(to);
-  const mixed = fromRgb.map((channel, index) =>
-    Math.round(channel + (toRgb[index]! - channel) * weight),
-  );
-  return `#${mixed.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+function parseHexColor(value: string): [number, number, number] {
+  const match = /^#([0-9a-fA-F]{6})$/u.exec(value);
+  if (!match) {
+    return [0, 0, 0];
+  }
+  const numeric = Number.parseInt(match[1]!, 16);
+  return [(numeric >> 16) & 0xff, (numeric >> 8) & 0xff, numeric & 0xff];
+}
+
+function clampChannel(value: number): number {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function rgbToHsl(red: number, green: number, blue: number): { h: number; s: number; l: number } {
+  const r = red / 255;
+  const g = green / 255;
+  const b = blue / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  const lightness = (max + min) / 2;
+  if (delta === 0) {
+    return { h: 0, s: 0, l: lightness * 100 };
+  }
+  const saturation = delta / (1 - Math.abs(2 * lightness - 1));
+  let hue: number;
+  if (max === r) {
+    hue = ((g - b) / delta) % 6;
+  } else if (max === g) {
+    hue = (b - r) / delta + 2;
+  } else {
+    hue = (r - g) / delta + 4;
+  }
+  return { h: (hue * 60 + 360) % 360, s: saturation * 100, l: lightness * 100 };
+}
+
+function hslToHex(hsl: { h: number; s: number; l: number }): string {
+  const hue = ((hsl.h % 360) + 360) % 360;
+  const saturation = clampNumber(hsl.s, 0, 100) / 100;
+  const lightness = clampNumber(hsl.l, 0, 100) / 100;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const secondary = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const match = Math.floor(hue / 60) % 6;
+  const offset = lightness - chroma / 2;
+  const channels =
+    match === 0
+      ? [chroma, secondary, 0]
+      : match === 1
+        ? [secondary, chroma, 0]
+        : match === 2
+          ? [0, chroma, secondary]
+          : match === 3
+            ? [0, secondary, chroma]
+            : match === 4
+              ? [secondary, 0, chroma]
+              : [chroma, 0, secondary];
+  return `#${channels
+    .map((channel) =>
+      clampChannel((channel + offset) * 255)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
 }
 
 function wrapDescription(description: string[]): string[] {
@@ -2080,6 +2429,14 @@ function normalizeRows<T>(
     .slice(0, limit)
     .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object')
     .map(normalize);
+}
+
+/** 当地分钟数 0-1439；非法值返回 undefined，主题色会退回离散阶段色。 */
+function normalizeMinutes(value: unknown): number | undefined {
+  const minutes = Number(value);
+  return Number.isFinite(minutes) && minutes >= 0 && minutes < 24 * 60
+    ? Math.round(minutes)
+    : undefined;
 }
 
 function cleanText(value: unknown, maxLength: number): string {
